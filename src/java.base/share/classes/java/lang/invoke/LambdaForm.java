@@ -314,6 +314,7 @@ class LambdaForm {
         GET_DOUBLE_VOLATILE("getDoubleVolatile"),
         PUT_DOUBLE_VOLATILE("putDoubleVolatile"),
         TRY_FINALLY("tryFinally"),
+        TABLE_SWITCH("tableSwitch"),
         COLLECT("collect"),
         COLLECTOR("collector"),
         CONVERT("convert"),
@@ -705,6 +706,38 @@ class LambdaForm {
         //   t_{n+1}:L=MethodHandleImpl.tryFinally(*, *, t_{n})
         //   t_{n+2}:?=MethodHandle.invokeBasic(*, t_{n+1})
         return isMatchingIdiom(pos, "tryFinally", 2);
+    }
+
+    /**
+     * Check if i-th name is a start of the tableSwitch idiom.
+     */
+    boolean isTableSwitch(int pos) {
+        // tableSwitch idiom:
+        //   t_{n}:L=MethodHandle.invokeBasic(...)     // cases
+        //   t_{n+1}:L=MethodHandle.invokeBasic(...)   // args
+        //   t_{n+2}:L=MethodHandleImpl.tableSwitch(*, *, t_{n}, t_{n+1})
+        //   t_{n+3}:?=MethodHandle.invokeBasic(*, t_{n+2})
+        if (pos + 3 >= names.length)  return false;
+
+        final int POS_COLLECT_CASES = pos;
+        final int POS_COLLECT_ARGS  = pos + 1;
+        final int POS_TABLE_SWITCH  = pos + 2;
+        final int POS_UNBOX_RESULT  = pos + 3;
+
+        Name collectCases = names[POS_COLLECT_CASES];
+        Name collectArgs  = names[POS_COLLECT_ARGS];
+        Name tableSwitch  = names[POS_TABLE_SWITCH];
+        Name unboxResult  = names[POS_UNBOX_RESULT];
+        return tableSwitch.refersTo(MethodHandleImpl.class, "tableSwitch") &&
+                collectCases.isInvokeBasic() &&
+                collectArgs.isInvokeBasic() &&
+                unboxResult.isInvokeBasic() &&
+                tableSwitch.lastUseIndex(collectCases) == 2 &&    // t_{n+2}:L=MethodHandleImpl.<invoker>(*, *, t_{n}, *);
+                tableSwitch.lastUseIndex(collectArgs)  == 3 &&    // t_{n+2}:L=MethodHandleImpl.<invoker>(*, *, *, t_{n+1});
+                lastUseIndex(collectCases) == POS_TABLE_SWITCH && // t_{n} is local: used only in t_{n+2}
+                lastUseIndex(collectArgs)  == POS_TABLE_SWITCH && // t_{n+1} is local: used only in t_{n+2}
+                unboxResult.lastUseIndex(tableSwitch) == 1 &&     // t_{n+3}:?=MethodHandle.invokeBasic(*, t_{n+2})
+                lastUseIndex(tableSwitch) == POS_UNBOX_RESULT;    // t_{n+2} is local: used only in t_{n+3}
     }
 
     /**
