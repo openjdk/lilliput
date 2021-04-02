@@ -85,6 +85,7 @@
   declare_constant(VM_Version::CPU_CLWB)                            \
   declare_constant(VM_Version::CPU_AVX512_VBMI2)                    \
   declare_constant(VM_Version::CPU_AVX512_VBMI)                     \
-  declare_constant(VM_Version::CPU_HV)
+  declare_constant(VM_Version::CPU_HV)                              \
+  declare_constant(VM_Version::CPU_SERIALIZE)
 
 #endif // CPU_X86_VMSTRUCTS_X86_HPP
