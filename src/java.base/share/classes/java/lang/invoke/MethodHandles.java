@@ -7770,9 +7770,17 @@ assertEquals("boojum", (String) catTrace.invokeExact("boo", "jum"));
      * together with the selector value, to the selected method handle when invoking it.
      *
      * @param fallback the fallback method handle that is called when the selector is not
-     *                 within the range {@code [0, N)}
-     * @param targets array of target method handles
-     * @return the table switch method handle
+     *                 within the range {@code [0, N)}.
+     * @param targets array of target method handles.
+     * @return the table switch method handle.
+     * @throws NullPointerException if {@code fallback}, the {@code targets} array, or any
+     *                              any of the elements of the {@code targets} array are
+     *                              {@code null}.
+     * @throws IllegalArgumentException if the {@code targets} array is empty, if the leading
+     *                                  parameter of the fallback handle or any of the target
+     *                                  handles is not {@code int}, or if the types of
+     *                                  the fallback handle and all of target handles are
+     *                                  not the same.
      */
     public static MethodHandle tableSwitch(MethodHandle fallback, MethodHandle... targets) {
         Objects.requireNonNull(fallback);

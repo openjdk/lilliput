@@ -92,12 +92,12 @@ public class MethodHandlesTableSwitchRandom {
 
     @Param({
         "0",
-        //"150"
+        "150"
     })
     public int offset;
 
     @Param({
-        //"true",
+        "true",
         "false"
     })
     public boolean sorted;
