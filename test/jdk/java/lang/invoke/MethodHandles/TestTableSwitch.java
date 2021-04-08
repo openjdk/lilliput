@@ -23,14 +23,17 @@
 
 /*
  * @test
- * @run testng TestTableSwitch
+ * @run testng/othervm -Xverify:all TestTableSwitch
  */
 
+import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.IntConsumer;
 import java.util.function.IntFunction;
 
@@ -50,24 +53,103 @@ public class TestTableSwitch {
         }
     }
 
-    public static MethodHandle simpleTestCase(String message) {
-        return MethodHandles.dropArguments(MethodHandles.constant(String.class, message), 0, int.class);
+    public static MethodHandle simpleTestCase(String value) {
+        return simpleTestCase(String.class, value);
     }
 
-    @Test
-    public void testNonVoidHandles() throws Throwable {
+    public static MethodHandle simpleTestCase(Class<?> type, Object value) {
+        return MethodHandles.dropArguments(MethodHandles.constant(type, value), 0, int.class);
+    }
+
+    public static Object testValue(Class<?> type) {
+        if (type == String.class) {
+            return "X";
+        } else if (type == byte.class) {
+            return (byte) 42;
+        } else if (type == short.class) {
+            return (short) 84;
+        } else if (type == char.class) {
+            return 'Y';
+        } else if (type == int.class) {
+            return 168;
+        } else if (type == long.class) {
+            return 336L;
+        } else if (type == float.class) {
+            return 42F;
+        } else if (type == double.class) {
+            return 84D;
+        } else if (type == boolean.class) {
+            return true;
+        }
+        return null;
+    }
+
+    static final Class<?>[] TEST_TYPES = {
+        Object.class,
+        String.class,
+        byte.class,
+        short.class,
+        char.class,
+        int.class,
+        long.class,
+        float.class,
+        double.class,
+        boolean.class
+    };
+
+    public static Object[] testArguments(int caseNum, List<Class<?>> additionalTypes) {
+        Object[] args = new Object[additionalTypes.size() + 1];
+        args[0] = caseNum;
+        int insertPos = 1;
+        for (Class<?> additionalType : additionalTypes) {
+            args[insertPos++] = testValue(additionalType);
+        }
+        return args;
+    }
+
+    @DataProvider
+    public static Object[][] nonVoidCases() {
+        List<Object[]> tests = new ArrayList<>();
+
+        for (Class<?> returnType : TEST_TYPES) {
+            for (int numCases = 1; numCases < 5; numCases++) {
+                tests.add(new Object[] { returnType, numCases, List.of() });
+                tests.add(new Object[] { returnType, numCases, List.of(TEST_TYPES) });
+            }
+        }
+
+        return tests.toArray(Object[][]::new);
+    }
+
+    @Test(dataProvider = "nonVoidCases")
+    public void testNonVoidHandles(Class<?> type, int numCases, List<Class<?>> additionalTypes) throws Throwable {
+        MethodHandle collector = MethodHandles.empty(MethodType.methodType(void.class, additionalTypes));
+
+        Object defaultReturnValue = testValue(type);
+        MethodHandle defaultCase = simpleTestCase(type, defaultReturnValue);
+        defaultCase = MethodHandles.collectArguments(defaultCase, 1, collector);
+        Object[] returnValues = new Object[numCases];
+        MethodHandle[] cases = new MethodHandle[numCases];
+        for (int i = 0; i < cases.length; i++) {
+            Object returnValue = testValue(type);
+            returnValues[i] = returnValue;
+            MethodHandle theCase = simpleTestCase(type, returnValue);
+            theCase = MethodHandles.collectArguments(theCase, 1, collector);
+            cases[i] = theCase;
+        }
+
         MethodHandle mhSwitch = MethodHandles.tableSwitch(
-            /* default: */ simpleTestCase("Default"),
-            /* case 0: */  simpleTestCase("Case 1"),
-            /* case 1: */  simpleTestCase("Case 2"),
-            /* case 2: */  simpleTestCase("Case 3")
+            defaultCase,
+            cases
         );
 
-        assertEquals((String) mhSwitch.invokeExact((int) -1), "Default");
-        assertEquals((String) mhSwitch.invokeExact((int) 0), "Case 1");
-        assertEquals((String) mhSwitch.invokeExact((int) 1), "Case 2");
-        assertEquals((String) mhSwitch.invokeExact((int) 2), "Case 3");
-        assertEquals((String) mhSwitch.invokeExact((int) 3), "Default");
+        assertEquals(mhSwitch.invokeWithArguments(testArguments(-1, additionalTypes)), defaultReturnValue);
+
+        for (int i = 0; i < numCases; i++) {
+            assertEquals(mhSwitch.invokeWithArguments(testArguments(i, additionalTypes)), returnValues[i]);
+        }
+
+        assertEquals(mhSwitch.invokeWithArguments(testArguments(numCases, additionalTypes)), defaultReturnValue);
     }
 
     @Test
@@ -109,7 +191,7 @@ public class TestTableSwitch {
     @Test(expectedExceptions = IllegalArgumentException.class,
           expectedExceptionsMessageRegExp = ".*Not enough cases.*")
     public void testNotEnoughCases() {
-        MethodHandles.tableSwitch(simpleTestCase("default"), simpleTestCase("case"));
+        MethodHandles.tableSwitch(simpleTestCase("default"));
     }
 
     @Test(expectedExceptions = IllegalArgumentException.class,

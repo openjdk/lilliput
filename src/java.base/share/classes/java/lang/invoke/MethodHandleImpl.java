@@ -50,6 +50,8 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
@@ -1399,7 +1401,7 @@ abstract class MethodHandleImpl {
                             .getDeclaredMethod("profileBoolean", boolean.class, int[].class));
                 case NF_tableSwitch:
                     return new NamedFunction(MethodHandleImpl.class
-                            .getDeclaredMethod("tableSwitch", int.class, MethodHandle.class, Object[].class, Object[].class));
+                            .getDeclaredMethod("tableSwitch", int.class, MethodHandle.class, CasesHolder.class, Object[].class));
                 default:
                     throw new InternalError("Undefined function: " + func);
             }
@@ -1958,30 +1960,29 @@ abstract class MethodHandleImpl {
         return lform;
     }
 
-    static MethodHandle makeTableSwitch(MethodType type, MethodHandle defaultCase, MethodHandle[] caseActions) {
-        Class<?>[] collectCasesParams = new Class<?>[caseActions.length];
-        Arrays.fill(collectCasesParams, MethodHandle.class);
-        MethodType collectCasesType = MethodType.methodType(Object.class, collectCasesParams);
-        MethodHandle collectCases = varargsArray(caseActions.length).asType(collectCasesType);
+    // use a wrapper because we need this array to be @Stable
+    static class CasesHolder {
+        @Stable
+        final MethodHandle[] cases;
 
+        public CasesHolder(MethodHandle[] cases) {
+            this.cases = cases;
+        }
+    }
+
+    static MethodHandle makeTableSwitch(MethodType type, MethodHandle defaultCase, MethodHandle[] caseActions) {
         MethodType varargsType = type.changeReturnType(Object[].class);
         MethodHandle collectArgs = varargsArray(type.parameterCount()).asType(varargsType);
 
         MethodHandle unboxResult = unboxResultHandle(type.returnType());
 
-        BoundMethodHandle.SpeciesData data = BoundMethodHandle.SPECIALIZER.findSpecies("LLLL" + "L".repeat(caseActions.length));
-        LambdaForm form = makeTableSwitchForm(type.basicType(), data, collectCasesType, caseActions.length);
+        BoundMethodHandle.SpeciesData data = BoundMethodHandle.speciesData_LLLL();
+        LambdaForm form = makeTableSwitchForm(type.basicType(), data, caseActions.length);
         BoundMethodHandle mh;
-        Object[] args = new Object[caseActions.length + 6];
-        args[0] = type;
-        args[1] = form;
-        args[2] = defaultCase;
-        args[3] = collectCases;
-        args[4] = collectArgs;
-        args[5] = unboxResult;
-        System.arraycopy(caseActions, 0, args, 6, caseActions.length);
+        CasesHolder caseHolder =  new CasesHolder(caseActions);
         try {
-            mh = (BoundMethodHandle) data.factory().invokeWithArguments(args);
+            mh = (BoundMethodHandle) data.factory().invokeBasic(type, form, (Object) defaultCase, (Object) collectArgs,
+                                                                (Object) unboxResult, (Object) caseHolder);
         } catch (Throwable ex) {
             throw uncaughtException(ex);
         }
@@ -1989,13 +1990,44 @@ abstract class MethodHandleImpl {
         return mh;
     }
 
+    private static class TableSwitchCacheKey {
+        private final MethodType basicType;
+        private final int numberOfCases;
+
+        public TableSwitchCacheKey(MethodType basicType, int numberOfCases) {
+            this.basicType = basicType;
+            this.numberOfCases = numberOfCases;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            TableSwitchCacheKey that = (TableSwitchCacheKey) o;
+            return numberOfCases == that.numberOfCases && Objects.equals(basicType, that.basicType);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(basicType, numberOfCases);
+        }
+    }
+
+    private static final Map<TableSwitchCacheKey, LambdaForm> TABLE_SWITCH_LAMBDA_FORM_CACHE = new ConcurrentHashMap<>();
+
     private static LambdaForm makeTableSwitchForm(MethodType basicType, BoundMethodHandle.SpeciesData data,
-                                                  MethodType collectCasesType, int numCases) {
+                                                  int numCases) {
         MethodType lambdaType = basicType.invokerType();
 
-        // TODO caching: Can not be done based on the basic type of the arguments alone, since number of cases could be different.
-        // We can not simply mix the cases into the basic type, since there is no way to tell where the argument types
-        // end and where the case types begin, which could lead to arguments being treated as cases or vice versa.
+        // We need to cache based on the basic type X number of cases,
+        // since the number of cases is used when generating bytecode.
+        // This also means that we can't use the cache in MethodTypeForm,
+        // which only uses the basic type as a key.
+        TableSwitchCacheKey key = new TableSwitchCacheKey(basicType, numCases);
+        LambdaForm lform = TABLE_SWITCH_LAMBDA_FORM_CACHE.get(key);
+        if (lform != null) {
+            return lform;
+        }
 
         final int THIS_MH       = 0;
         final int ARG_BASE      = 1;  // start of incoming arguments
@@ -2004,47 +2036,27 @@ abstract class MethodHandleImpl {
         assert ARG_SWITCH_ON < ARG_LIMIT;
 
         int nameCursor = ARG_LIMIT;
-        final int GET_COLLECT_CASES = nameCursor++;
         final int GET_COLLECT_ARGS  = nameCursor++;
         final int GET_DEFAULT_CASE  = nameCursor++;
         final int GET_UNBOX_RESULT  = nameCursor++;
-        final int GET_CASE_BASE     = nameCursor;
-        nameCursor                  += numCases;
-        final int GET_CASE_LIMIT    = nameCursor;
-        final int BOXED_CASES       = nameCursor++;
+        final int GET_CASES         = nameCursor++;
         final int BOXED_ARGS        = nameCursor++;
         final int TABLE_SWITCH      = nameCursor++;
         final int UNBOXED_RESULT    = nameCursor++;
 
         int fieldCursor = 0;
         final int FIELD_DEFAULT_CASE  = fieldCursor++;
-        final int FIELD_COLLECT_CASES = fieldCursor++;
         final int FIELD_COLLECT_ARGS  = fieldCursor++;
         final int FIELD_UNBOX_RESULT  = fieldCursor++;
-        final int FIELD_CASES_BASE    = fieldCursor;
-        fieldCursor                   += numCases;
-        final int FIELD_CASES_LIMIT   = fieldCursor;
-        assert fieldCursor == numCases + 4;
+        final int FIELD_CASES         = fieldCursor++;
 
         Name[] names = arguments(nameCursor - ARG_LIMIT, lambdaType);
 
         names[THIS_MH] = names[THIS_MH].withConstraint(data);
         names[GET_DEFAULT_CASE] = new Name(data.getterFunction(FIELD_DEFAULT_CASE), names[THIS_MH]);
-        names[GET_COLLECT_CASES] = new Name(data.getterFunction(FIELD_COLLECT_CASES), names[THIS_MH]);
         names[GET_COLLECT_ARGS]  = new Name(data.getterFunction(FIELD_COLLECT_ARGS), names[THIS_MH]);
         names[GET_UNBOX_RESULT]  = new Name(data.getterFunction(FIELD_UNBOX_RESULT), names[THIS_MH]);
-
-        for (int src = FIELD_CASES_BASE, dst = GET_CASE_BASE; src < FIELD_CASES_LIMIT; src++, dst++) {
-            names[dst] = new Name(data.getterFunction(src), names[THIS_MH]);
-        }
-
-        {
-            MethodHandle invokeBasic = MethodHandles.basicInvoker(collectCasesType);
-            Object[] args = new Object[invokeBasic.type().parameterCount()];
-            args[0] = names[GET_COLLECT_CASES];
-            System.arraycopy(names, GET_CASE_BASE, args, 1, GET_CASE_LIMIT - GET_CASE_BASE);
-            names[BOXED_CASES] = new Name(new NamedFunction(invokeBasic, Intrinsic.TABLE_SWITCH), args);
-        }
+        names[GET_CASES] = new Name(data.getterFunction(FIELD_CASES), names[THIS_MH]);
 
         {
             MethodType collectArgsType = basicType.changeReturnType(Object.class);
@@ -2052,12 +2064,12 @@ abstract class MethodHandleImpl {
             Object[] args = new Object[invokeBasic.type().parameterCount()];
             args[0] = names[GET_COLLECT_ARGS];
             System.arraycopy(names, ARG_BASE, args, 1, ARG_LIMIT - ARG_BASE);
-            names[BOXED_ARGS] = new Name(new NamedFunction(invokeBasic), args);
+            names[BOXED_ARGS] = new Name(new NamedFunction(invokeBasic, Intrinsic.TABLE_SWITCH, numCases), args);
         }
 
         {
             Object[] tfArgs = new Object[]{
-                names[ARG_SWITCH_ON], names[GET_DEFAULT_CASE], names[BOXED_CASES], names[BOXED_ARGS]};
+                names[ARG_SWITCH_ON], names[GET_DEFAULT_CASE], names[GET_CASES], names[BOXED_ARGS]};
             names[TABLE_SWITCH] = new Name(getFunction(NF_tableSwitch), tfArgs);
         }
 
@@ -2067,16 +2079,19 @@ abstract class MethodHandleImpl {
             names[UNBOXED_RESULT] = new Name(invokeBasic, unboxArgs);
         }
 
-        return new LambdaForm(lambdaType.parameterCount(), names, Kind.TABLE_SWITCH);
+        lform = new LambdaForm(lambdaType.parameterCount(), names, Kind.TABLE_SWITCH);
+        LambdaForm prev = TABLE_SWITCH_LAMBDA_FORM_CACHE.putIfAbsent(key, lform);
+        return prev != null ? prev : lform;
     }
 
     @Hidden
-    static Object tableSwitch(int input, MethodHandle defaultCase, Object[] caseActions, Object[] args) throws Throwable {
+    static Object tableSwitch(int input, MethodHandle defaultCase, CasesHolder holder, Object[] args) throws Throwable {
+        MethodHandle[] caseActions = holder.cases;
         MethodHandle selectedCase;
         if (input < 0 || input >= caseActions.length) {
             selectedCase = defaultCase;
         } else {
-            selectedCase = (MethodHandle) caseActions[input];
+            selectedCase = caseActions[input];
         }
         return selectedCase.invokeWithArguments(args);
     }

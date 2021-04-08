@@ -866,8 +866,9 @@ class InvokerBytecodeGenerator {
                     continue;
                 case TABLE_SWITCH:
                     assert lambdaForm.isTableSwitch(i);
-                    onStack = emitTableSwitch(i);
-                    i += 3; // jump to the end of the TS idiom
+                    int numCases = (Integer) name.function.intrinsicData();
+                    onStack = emitTableSwitch(i, numCases);
+                    i += 2; // jump to the end of the TS idiom
                     continue;
                 case LOOP:
                     assert lambdaForm.isLoop(i);
@@ -1398,19 +1399,22 @@ class InvokerBytecodeGenerator {
         }
     }
 
-    private Name emitTableSwitch(int pos) {
-        Name cases   = lambdaForm.names[pos];
-        Name args    = lambdaForm.names[pos+1];
-        Name invoker = lambdaForm.names[pos+2];
-        Name result  = lambdaForm.names[pos+3];
-
-        int numCases = cases.arguments.length - 1; // -1 drop collector
+    private Name emitTableSwitch(int pos, int numCases) {
+        Name args    = lambdaForm.names[pos];
+        Name invoker = lambdaForm.names[pos+1];
+        Name result  = lambdaForm.names[pos+2];
 
         Class<?> returnType = result.function.resolvedHandle().type().returnType();
         MethodType caseType = args.function.resolvedHandle().type()
             .dropParameterTypes(0,1) // drop collector
             .changeReturnType(returnType);
         String caseDescriptor = caseType.basicType().toMethodDescriptorString();
+
+        emitPushArgument(invoker, 2); // push cases
+        mv.visitFieldInsn(Opcodes.GETFIELD, "java/lang/invoke/MethodHandleImpl$CasesHolder", "cases",
+            "[Ljava/lang/invoke/MethodHandle;");
+        int casesLocal = extendLocalsMap(new Class<?>[] { MethodHandle[].class });
+        emitStoreInsn(L_TYPE, casesLocal);
 
         Label endLabel = new Label();
         Label defaultLabel = new Label();
@@ -1430,9 +1434,15 @@ class InvokerBytecodeGenerator {
 
         for (int i = 0; i < numCases; i++) {
             mv.visitLabel(caseLabels[i]);
-            emitPushArgument(cases, i + 1); // push case MH, +1 to skip collector
+            // Load the particular case:
+            emitLoadInsn(L_TYPE, casesLocal);
+            emitIconstInsn(i);
+            mv.visitInsn(Opcodes.AALOAD);
+
+            // invoke it:
             emitPushArguments(args, 1); // again, skip collector
             mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, MH, "invokeBasic", caseDescriptor, false);
+
             mv.visitJumpInsn(Opcodes.GOTO, endLabel);
         }
 
