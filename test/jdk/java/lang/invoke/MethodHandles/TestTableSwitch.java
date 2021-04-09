@@ -29,6 +29,7 @@
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
+import javax.management.ObjectName;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
@@ -42,12 +43,15 @@ import static org.testng.Assert.assertEquals;
 public class TestTableSwitch {
 
     static final MethodHandle MH_IntConsumer_accept;
+    static final MethodHandle MH_check;
 
     static {
         try {
             MethodHandles.Lookup lookup = MethodHandles.lookup();
             MH_IntConsumer_accept = lookup.findVirtual(IntConsumer.class, "accept",
                     MethodType.methodType(void.class, int.class));
+            MH_check = lookup.findStatic(TestTableSwitch.class, "check",
+                    MethodType.methodType(void.class, List.class, Object[].class));
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -97,12 +101,12 @@ public class TestTableSwitch {
         boolean.class
     };
 
-    public static Object[] testArguments(int caseNum, List<Class<?>> additionalTypes) {
-        Object[] args = new Object[additionalTypes.size() + 1];
+    public static Object[] testArguments(int caseNum, List<Object> testValues) {
+        Object[] args = new Object[testValues.size() + 1];
         args[0] = caseNum;
         int insertPos = 1;
-        for (Class<?> additionalType : additionalTypes) {
-            args[insertPos++] = testValue(additionalType);
+        for (Object testValue : testValues) {
+            args[insertPos++] = testValue;
         }
         return args;
     }
@@ -121,9 +125,16 @@ public class TestTableSwitch {
         return tests.toArray(Object[][]::new);
     }
 
+    private static void check(List<Object> testValues, Object[] collectedValues) {
+        assertEquals(collectedValues, testValues.toArray());
+    }
+
     @Test(dataProvider = "nonVoidCases")
     public void testNonVoidHandles(Class<?> type, int numCases, List<Class<?>> additionalTypes) throws Throwable {
-        MethodHandle collector = MethodHandles.empty(MethodType.methodType(void.class, additionalTypes));
+        MethodHandle collector = MH_check;
+        List<Object> testArguments = new ArrayList<>();
+        collector = MethodHandles.insertArguments(collector, 0, testArguments);
+        collector = collector.asCollector(Object[].class, additionalTypes.size());
 
         Object defaultReturnValue = testValue(type);
         MethodHandle defaultCase = simpleTestCase(type, defaultReturnValue);
@@ -143,13 +154,17 @@ public class TestTableSwitch {
             cases
         );
 
-        assertEquals(mhSwitch.invokeWithArguments(testArguments(-1, additionalTypes)), defaultReturnValue);
-
-        for (int i = 0; i < numCases; i++) {
-            assertEquals(mhSwitch.invokeWithArguments(testArguments(i, additionalTypes)), returnValues[i]);
+        for (Class<?> additionalType : additionalTypes) {
+            testArguments.add(testValue(additionalType));
         }
 
-        assertEquals(mhSwitch.invokeWithArguments(testArguments(numCases, additionalTypes)), defaultReturnValue);
+        assertEquals(mhSwitch.invokeWithArguments(testArguments(-1, testArguments)), defaultReturnValue);
+
+        for (int i = 0; i < numCases; i++) {
+            assertEquals(mhSwitch.invokeWithArguments(testArguments(i, testArguments)), returnValues[i]);
+        }
+
+        assertEquals(mhSwitch.invokeWithArguments(testArguments(numCases, testArguments)), defaultReturnValue);
     }
 
     @Test
