@@ -149,6 +149,7 @@ class OptoRuntime : public AllStatic {
 
   static address _slow_arraycopy_Java;
   static address _register_finalizer_Java;
+  static address _jfr_r_Java;
 
   //
   // Implementation of runtime methods
@@ -303,6 +304,8 @@ private:
   static const TypeFunc* osr_end_Type();
 
   static const TypeFunc* register_finalizer_Type();
+
+  static const TypeFunc* jfr_enqueue_klass_Type();
 
   // Dtrace support
   static const TypeFunc* dtrace_method_entry_exit_Type();
