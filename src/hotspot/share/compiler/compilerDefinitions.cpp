@@ -560,7 +560,7 @@ void CompilerConfig::ergo_initialize() {
   return;
 #endif
 
-  if (!is_compilation_mode_selected()) {
+  if (!is_compilation_mode_selected() && is_tiered()) {
 #if defined(_WINDOWS) && !defined(_LP64)
     if (FLAG_IS_DEFAULT(NeverActAsServerClassMachine)) {
       FLAG_SET_ERGO(NeverActAsServerClassMachine, true);
