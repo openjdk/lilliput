@@ -40,8 +40,6 @@ public:
 
 class HeapObjectStatistics : public CHeapObj<mtGC> {
 private:
-  static const int HISTOGRAM_SIZE = 16;
-
   static HeapObjectStatistics* _instance;
 
   HeapObjectStatisticsTask _task;
