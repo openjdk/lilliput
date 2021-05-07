@@ -146,7 +146,6 @@ void HeapObjectStatistics::visit_object(oop obj) {
   if (obj->mark().is_locked()) {
     increase_counter(_num_locked);
   }
-  size_t size = obj->size();
   increase_counter(_lds, obj->size());
 }
 
