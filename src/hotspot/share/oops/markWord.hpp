@@ -42,7 +42,7 @@
 //  64 bits:
 //  --------
 //  unused:32 hash:25 -->|  age:4    biased_lock:1 lock:2 (normal object)
-//  JavaThread*:54 epoch:2  age:4    biased_lock:1 lock:2 (biased object)
+//  JavaThread*:55 epoch:2  age:4    biased_lock:1 lock:2 (biased object)
 //
 //  - hash contains the identity hash value: largest value is
 //    31 bits, see os::random().  Also, 64-bit vm's require
