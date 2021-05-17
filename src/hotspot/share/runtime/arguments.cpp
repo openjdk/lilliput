@@ -4105,6 +4105,11 @@ jint Arguments::apply_ergo() {
   }
   UseBiasedLocking = false;
 
+  if (!FLAG_IS_DEFAULT(UseCompressedClassPointers) && !UseCompressedClassPointers) {
+    warning("Compressed class pointers are required with Lilliput build; ignoring UsCompressedClassPointers flag." );
+  }
+  UseCompressedClassPointers = true;
+
   return JNI_OK;
 }
 
