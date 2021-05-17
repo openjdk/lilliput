@@ -78,7 +78,7 @@ public class TestSizeTransitions {
                   LOG_TAGS_REGEX,
                   SIZE_TRANSITION_REGEX);
 
-   // matches +coops metaspace size transitions
+  // matches +coops metaspace size transitions
   private static final String COMPRESSED_KLASS_POINTERS_REGEX =
     String.format("^%s.* Metaspace: %s NonClass: %s Class: %s$",
                   LOG_TAGS_REGEX,
