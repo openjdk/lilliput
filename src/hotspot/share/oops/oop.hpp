@@ -294,11 +294,6 @@ class oopDesc {
   inline markWord displaced_mark() const;
   inline void     set_displaced_mark(markWord m);
 
-  // Checks if the mark word needs to be preserved
-  inline bool mark_must_be_preserved() const;
-  inline bool mark_must_be_preserved(markWord m) const;
-  inline bool mark_must_be_preserved_for_promotion_failure(markWord m) const;
-
   static bool has_klass_gap();
 
   // for code generation

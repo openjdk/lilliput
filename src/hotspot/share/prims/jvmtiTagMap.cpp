@@ -1441,10 +1441,8 @@ inline void ObjectMarker::mark(oop o) {
   // object's mark word
   markWord mark = o->mark();
 
-  if (o->mark_must_be_preserved(mark)) {
-    _saved_mark_stack->push(mark);
-    _saved_oop_stack->push(o);
-  }
+  _saved_mark_stack->push(mark);
+  _saved_oop_stack->push(o);
 
   // mark the object
   o->set_mark(markWord::prototype().set_marked());

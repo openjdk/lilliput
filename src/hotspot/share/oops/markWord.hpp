@@ -236,30 +236,6 @@ class markWord {
   // is transient and *should* be short-lived).
   static markWord INFLATING() { return zero(); }    // inflate-in-progress
 
-  // Should this header be preserved during GC?
-  template <typename KlassProxy>
-  inline bool must_be_preserved(KlassProxy klass) const;
-
-  // Should this header (including its age bits) be preserved in the
-  // case of a promotion failure during scavenge?
-  // Note that we special case this situation. We want to avoid
-  // calling BiasedLocking::preserve_marks()/restore_marks() (which
-  // decrease the number of mark words that need to be preserved
-  // during GC) during each scavenge. During scavenges in which there
-  // is no promotion failure, we actually don't need to call the above
-  // routines at all, since we don't mutate and re-initialize the
-  // marks of promoted objects using init_mark(). However, during
-  // scavenges which result in promotion failure, we do re-initialize
-  // the mark words of objects, meaning that we should have called
-  // these mark word preservation routines. Currently there's no good
-  // place in which to call them in any of the scavengers (although
-  // guarded by appropriate locks we could make one), but the
-  // observation is that promotion failures are quite rare and
-  // reducing the number of mark words preserved during them isn't a
-  // high priority.
-  template <typename KlassProxy>
-  inline bool must_be_preserved_for_promotion_failure(KlassProxy klass) const;
-
   // WARNING: The following routines are used EXCLUSIVELY by
   // synchronization functions. They are not really gc safe.
   // They must get updated if markWord layout get changed.

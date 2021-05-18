@@ -30,20 +30,9 @@
 #include "oops/oop.inline.hpp"
 #include "utilities/stack.inline.hpp"
 
-inline bool PreservedMarks::should_preserve_mark(oop obj, markWord m) const {
-  return obj->mark_must_be_preserved_for_promotion_failure(m);
-}
-
 inline void PreservedMarks::push(oop obj, markWord m) {
-  assert(should_preserve_mark(obj, m), "pre-condition");
   OopAndMarkWord elem(obj, m);
   _stack.push(elem);
-}
-
-inline void PreservedMarks::push_if_necessary(oop obj, markWord m) {
-  if (should_preserve_mark(obj, m)) {
-    push(obj, m);
-  }
 }
 
 inline void PreservedMarks::init_forwarded_mark(oop obj) {

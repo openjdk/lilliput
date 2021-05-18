@@ -41,9 +41,7 @@ inline void MarkSweep::mark_object(oop obj) {
   markWord mark = obj->mark();
   obj->set_mark(markWord::prototype().set_marked());
 
-  if (obj->mark_must_be_preserved(mark)) {
-    preserve_mark(obj, mark);
-  }
+  preserve_mark(obj, mark);
 }
 
 template <class T> inline void MarkSweep::mark_and_push(T* p) {

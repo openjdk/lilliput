@@ -117,7 +117,6 @@ void G1FullGCCompactionPoint::forward(oop object, size_t size) {
       // Make sure object has the correct mark-word set or that it will be
       // fixed when restoring the preserved marks.
       assert(object->mark() == markWord::prototype_for_klass(object->klass()) || // Correct mark
-             object->mark_must_be_preserved() || // Will be restored by PreservedMarksSet
              (UseBiasedLocking && object->has_bias_pattern()), // Will be restored by BiasedLocking
              "should have correct prototype obj: " PTR_FORMAT " mark: " PTR_FORMAT " prototype: " PTR_FORMAT,
              p2i(object), object->mark().value(), markWord::prototype_for_klass(object->klass()).value());
