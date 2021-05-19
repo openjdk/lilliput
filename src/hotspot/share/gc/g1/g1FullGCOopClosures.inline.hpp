@@ -79,10 +79,6 @@ template <class T> inline void G1AdjustClosure::adjust_pointer(T* p) {
   oop forwardee = obj->forwardee();
   if (forwardee == NULL) {
     // Not forwarded, return current reference.
-    assert(obj->mark() == markWord::prototype_for_klass(obj->klass()) || // Correct mark
-           (UseBiasedLocking && obj->has_bias_pattern()), // Will be restored by BiasedLocking
-           "Must have correct prototype or be preserved, obj: " PTR_FORMAT ", mark: " PTR_FORMAT ", prototype: " PTR_FORMAT,
-           p2i(obj), obj->mark().value(), markWord::prototype_for_klass(obj->klass()).value());
     return;
   }
 
