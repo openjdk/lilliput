@@ -541,6 +541,7 @@ void Klass::remove_unshareable_info() {
     ResourceMark rm;
     log_trace(cds, unshareable)("remove: %s", external_name());
   }
+
   set_subklass(NULL);
   set_next_sibling(NULL);
   set_next_link(NULL);
