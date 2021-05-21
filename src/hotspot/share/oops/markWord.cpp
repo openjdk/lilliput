@@ -114,12 +114,9 @@ markWord markWord::set_narrow_klass(const narrowKlass nklass) const {
 }
 
 markWord markWord::set_klass(const Klass* klass) const {
-  if (UseCompressedClassPointers) {
-    // TODO: Don't cast to non-const, change CKP::encode() to accept const Klass* instead.
-    narrowKlass nklass = CompressedKlassPointers::encode(const_cast<Klass*>(klass));
-    return set_narrow_klass(nklass);
-  } else {
-    return markWord(value());
-  }
+  assert(UseCompressedClassPointers, "expect compressed klass pointers");
+  // TODO: Don't cast to non-const, change CKP::encode() to accept const Klass* instead.
+  narrowKlass nklass = CompressedKlassPointers::encode(const_cast<Klass*>(klass));
+  return set_narrow_klass(nklass);
 }
 #endif
