@@ -64,6 +64,7 @@
  */
 
 class SlidingForwarding : public CHeapObj<mtGC> {
+#ifdef _LP64
 private:
   // How many bits we use for the compressed pointer (we are going to need one more bit to indicate target region, and
   // two lowest bits to mark objects as forwarded)
@@ -87,15 +88,16 @@ private:
   size_t region_index_containing(HeapWord* addr);
   bool region_contains(HeapWord* region_base, HeapWord* addr);
 
+  uintptr_t encode_forwarding(HeapWord* original, HeapWord* target);
+  HeapWord* decode_forwarding(HeapWord* original, uintptr_t encoded);
+
+#endif
+
 public:
   SlidingForwarding(MemRegion heap, size_t num_regions);
   ~SlidingForwarding();
 
   void clear();
-
-  uintptr_t encode_forwarding(HeapWord* original, HeapWord* target);
-  HeapWord* decode_forwarding(HeapWord* original, uintptr_t encoded);
-
   void forward_to(oop original, oop target);
   oop forwardee(oop original);
 };
