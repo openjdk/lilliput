@@ -24,6 +24,7 @@
 
 #include "precompiled.hpp"
 #include "gc/shared/preservedMarks.inline.hpp"
+#include "gc/shared/slidingForwarding.hpp"
 #include "gc/shared/workgroup.hpp"
 #include "memory/allocation.inline.hpp"
 #include "memory/resourceArea.hpp"
@@ -47,6 +48,18 @@ void PreservedMarks::adjust_during_full_gc() {
     oop obj = elem->get_oop();
     if (obj->is_forwarded()) {
       elem->set_oop(obj->forwardee());
+    }
+  }
+}
+
+void PreservedMarks::adjust_during_full_gc(SlidingForwarding* forwarding) {
+  StackIterator<OopAndMarkWord, mtGC> iter(_stack);
+  while (!iter.is_empty()) {
+    OopAndMarkWord* elem = iter.next_addr();
+
+    oop obj = elem->get_oop();
+    if (obj->is_forwarded()) {
+      elem->set_oop(forwarding->forwardee(obj));
     }
   }
 }

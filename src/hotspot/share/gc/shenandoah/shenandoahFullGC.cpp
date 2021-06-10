@@ -27,6 +27,7 @@
 #include "compiler/oopMap.hpp"
 #include "gc/shared/gcTraceTime.inline.hpp"
 #include "gc/shared/preservedMarks.inline.hpp"
+#include "gc/shared/slidingForwarding.hpp"
 #include "gc/shared/tlab_globals.hpp"
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
 #include "gc/shenandoah/shenandoahConcurrentGC.hpp"
@@ -184,6 +185,7 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
     // The rest of prologue:
     BiasedLocking::preserve_marks();
     _preserved_marks->init(heap->workers()->active_workers());
+    heap->forwarding()->clear();
 
     assert(heap->has_forwarded_objects() == has_forwarded_objects, "This should not change");
   }
@@ -296,6 +298,7 @@ void ShenandoahFullGC::phase1_mark_heap() {
 class ShenandoahPrepareForCompactionObjectClosure : public ObjectClosure {
 private:
   PreservedMarks*          const _preserved_marks;
+  SlidingForwarding*       const _forwarding;
   ShenandoahHeap*          const _heap;
   GrowableArray<ShenandoahHeapRegion*>& _empty_regions;
   int _empty_regions_pos;
@@ -308,6 +311,7 @@ public:
                                               GrowableArray<ShenandoahHeapRegion*>& empty_regions,
                                               ShenandoahHeapRegion* to_region) :
     _preserved_marks(preserved_marks),
+    _forwarding(ShenandoahHeap::heap()->forwarding()),
     _heap(ShenandoahHeap::heap()),
     _empty_regions(empty_regions),
     _empty_regions_pos(0),
@@ -361,7 +365,7 @@ public:
     assert(_compact_point + obj_size <= _to_region->end(), "must fit");
     shenandoah_assert_not_forwarded(NULL, p);
     _preserved_marks->push_if_necessary(p, p->mark());
-    p->forward_to(cast_to_oop(_compact_point));
+    _forwarding->forward_to(p, cast_to_oop(_compact_point));
     _compact_point += obj_size;
   }
 };
@@ -373,7 +377,7 @@ private:
   ShenandoahHeapRegionSet** const _worker_slices;
 
 public:
-  ShenandoahPrepareForCompactionTask(PreservedMarksSet *preserved_marks, ShenandoahHeapRegionSet **worker_slices) :
+  ShenandoahPrepareForCompactionTask(PreservedMarksSet* preserved_marks, ShenandoahHeapRegionSet **worker_slices) :
     AbstractGangTask("Shenandoah Prepare For Compaction"),
     _preserved_marks(preserved_marks),
     _heap(ShenandoahHeap::heap()), _worker_slices(worker_slices) {
@@ -435,6 +439,7 @@ public:
 
 void ShenandoahFullGC::calculate_target_humongous_objects() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
+  SlidingForwarding* forwarding = heap->forwarding();
 
   // Compute the new addresses for humongous objects. We need to do this after addresses
   // for regular objects are calculated, and we know what regions in heap suffix are
@@ -469,7 +474,7 @@ void ShenandoahFullGC::calculate_target_humongous_objects() {
       if (start >= to_begin && start != r->index()) {
         // Fits into current window, and the move is non-trivial. Record the move then, and continue scan.
         _preserved_marks->get(0)->push_if_necessary(old_obj, old_obj->mark());
-        old_obj->forward_to(cast_to_oop(heap->get_region(start)->bottom()));
+        forwarding->forward_to(old_obj, cast_to_oop(heap->get_region(start)->bottom()));
         to_end = start;
         continue;
       }
@@ -720,7 +725,8 @@ void ShenandoahFullGC::phase2_calculate_target_addresses(ShenandoahHeapRegionSet
 
 class ShenandoahAdjustPointersClosure : public MetadataVisitingOopIterateClosure {
 private:
-  ShenandoahHeap* const _heap;
+  ShenandoahHeap*           const _heap;
+  SlidingForwarding*        const _forwarding;
   ShenandoahMarkingContext* const _ctx;
 
   template <class T>
@@ -730,7 +736,7 @@ private:
       oop obj = CompressedOops::decode_not_null(o);
       assert(_ctx->is_marked(obj), "must be marked");
       if (obj->is_forwarded()) {
-        oop forw = obj->forwardee();
+        oop forw = _forwarding->forwardee(obj);
         RawAccess<IS_NOT_NULL>::oop_store(p, forw);
       }
     }
@@ -739,6 +745,7 @@ private:
 public:
   ShenandoahAdjustPointersClosure() :
     _heap(ShenandoahHeap::heap()),
+    _forwarding(_heap->forwarding()),
     _ctx(ShenandoahHeap::heap()->complete_marking_context()) {}
 
   void do_oop(oop* p)       { do_oop_work(p); }
@@ -798,7 +805,8 @@ public:
     ShenandoahParallelWorkerSession worker_session(worker_id);
     ShenandoahAdjustPointersClosure cl;
     _rp->roots_do(worker_id, &cl);
-    _preserved_marks->get(worker_id)->adjust_during_full_gc();
+    SlidingForwarding* forwarding = ShenandoahHeap::heap()->forwarding();
+    _preserved_marks->get(worker_id)->adjust_during_full_gc(forwarding);
   }
 };
 
@@ -828,19 +836,20 @@ void ShenandoahFullGC::phase3_update_references() {
 
 class ShenandoahCompactObjectsClosure : public ObjectClosure {
 private:
-  ShenandoahHeap* const _heap;
-  uint            const _worker_id;
+  ShenandoahHeap*    const _heap;
+  SlidingForwarding* const _forwarding;
+  uint               const _worker_id;
 
 public:
   ShenandoahCompactObjectsClosure(uint worker_id) :
-    _heap(ShenandoahHeap::heap()), _worker_id(worker_id) {}
+    _heap(ShenandoahHeap::heap()), _forwarding(_heap->forwarding()), _worker_id(worker_id) {}
 
   void do_object(oop p) {
     assert(_heap->complete_marking_context()->is_marked(p), "must be marked");
     size_t size = (size_t)p->size();
     if (p->is_forwarded()) {
       HeapWord* compact_from = cast_from_oop<HeapWord*>(p);
-      HeapWord* compact_to = cast_from_oop<HeapWord*>(p->forwardee());
+      HeapWord* compact_to = cast_from_oop<HeapWord*>(_forwarding->forwardee(p));
       Copy::aligned_conjoint_words(compact_from, compact_to, size);
       oop new_obj = cast_to_oop(compact_to);
       new_obj->init_mark();
@@ -935,6 +944,7 @@ void ShenandoahFullGC::compact_humongous_objects() {
   // sliding costs. We may consider doing this in parallel in future.
 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
+  SlidingForwarding* forwarding = heap->forwarding();
 
   for (size_t c = heap->num_regions(); c > 0; c--) {
     ShenandoahHeapRegion* r = heap->get_region(c - 1);
@@ -949,7 +959,7 @@ void ShenandoahFullGC::compact_humongous_objects() {
 
       size_t old_start = r->index();
       size_t old_end   = old_start + num_regions - 1;
-      size_t new_start = heap->heap_region_index_containing(old_obj->forwardee());
+      size_t new_start = heap->heap_region_index_containing(forwarding->forwardee(old_obj));
       size_t new_end   = new_start + num_regions - 1;
       assert(old_start != new_start, "must be real move");
       assert(r->is_stw_move_allowed(), "Region " SIZE_FORMAT " should be movable", r->index());
