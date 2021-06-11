@@ -37,7 +37,7 @@ SlidingForwarding::SlidingForwarding(MemRegion heap, size_t region_size_words_sh
   _num_regions(((heap.end() - heap.start()) >> region_size_words_shift) + 1),
   _region_size_words_shift(region_size_words_shift),
   _target_base_table(NEW_C_HEAP_ARRAY(HeapWord*, _num_regions * 2, mtGC)) {
-  assert(region_size_words_shift <= NUM_BITS, "regions must not be larger than maximum addressing bits allow");
+  assert(region_size_words_shift <= NUM_COMPRESSED_BITS, "regions must not be larger than maximum addressing bits allow");
 #else
 {
 #endif
