@@ -67,7 +67,7 @@ size_t SlidingForwarding::region_index_containing(HeapWord* addr) {
 }
 
 bool SlidingForwarding::region_contains(HeapWord* region_base, HeapWord* addr) {
-  return (addr - region_base) < (1 << _region_size_words_shift);
+  return (addr - region_base) < (1L << _region_size_words_shift);
 }
 
 uintptr_t SlidingForwarding::encode_forwarding(HeapWord* original, HeapWord* target) {
@@ -77,14 +77,14 @@ uintptr_t SlidingForwarding::encode_forwarding(HeapWord* original, HeapWord* tar
   HeapWord* encode_base = _target_base_table[base_table_idx];
   uintptr_t flag = 0;
   if (encode_base == UNUSED_BASE) {
-    encode_base = _heap_start + target_idx * (1 << _region_size_words_shift);
+    encode_base = _heap_start + target_idx * (1L << _region_size_words_shift);
     _target_base_table[base_table_idx] = encode_base;
   } else if (!region_contains(encode_base, target)) {
     base_table_idx++;
     flag = 1;
     encode_base = _target_base_table[base_table_idx];
     if (encode_base == UNUSED_BASE) {
-      encode_base = _heap_start + target_idx * (1 << _region_size_words_shift);
+      encode_base = _heap_start + target_idx * (1L << _region_size_words_shift);
       _target_base_table[base_table_idx] = encode_base;
     }
   }
