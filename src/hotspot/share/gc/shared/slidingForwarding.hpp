@@ -97,6 +97,7 @@ private:
 #endif
 
 public:
+  SlidingForwarding(MemRegion heap);
   SlidingForwarding(MemRegion heap, size_t num_regions);
   ~SlidingForwarding();
 

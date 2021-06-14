@@ -31,13 +31,25 @@
 HeapWord* const SlidingForwarding::UNUSED_BASE = reinterpret_cast<HeapWord*>(0x1);
 #endif
 
+SlidingForwarding::SlidingForwarding(MemRegion heap)
+#ifdef _LP64
+: _heap_start(heap.start()),
+  _num_regions(((heap.end() - heap.start()) >> NUM_COMPRESSED_BITS) + 1),
+  _region_size_words_shift(NUM_COMPRESSED_BITS),
+  _target_base_table(NEW_C_HEAP_ARRAY(HeapWord*, _num_regions * 2, mtGC)) {
+  assert(_region_size_words_shift <= NUM_COMPRESSED_BITS, "regions must not be larger than maximum addressing bits allow");
+#else
+{
+#endif
+}
+
 SlidingForwarding::SlidingForwarding(MemRegion heap, size_t region_size_words_shift)
 #ifdef _LP64
 : _heap_start(heap.start()),
   _num_regions(((heap.end() - heap.start()) >> region_size_words_shift) + 1),
   _region_size_words_shift(region_size_words_shift),
   _target_base_table(NEW_C_HEAP_ARRAY(HeapWord*, _num_regions * 2, mtGC)) {
-  assert(region_size_words_shift <= NUM_COMPRESSED_BITS, "regions must not be larger than maximum addressing bits allow");
+  assert(_region_size_words_shift <= NUM_COMPRESSED_BITS, "regions must not be larger than maximum addressing bits allow");
 #else
 {
 #endif

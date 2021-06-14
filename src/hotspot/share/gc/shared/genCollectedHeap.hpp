@@ -35,6 +35,7 @@ class AdaptiveSizePolicy;
 class CardTableRS;
 class GCPolicyCounters;
 class GenerationSpec;
+class SlidingForwarding;
 class StrongRootsScope;
 class SubTasksDone;
 class WorkGang;
@@ -87,6 +88,8 @@ private:
 
   // In support of ExplicitGCInvokesConcurrent functionality
   unsigned int _full_collections_completed;
+
+  SlidingForwarding* _forwarding;
 
   // Collects the given generation.
   void collect_generation(Generation* gen, bool full, size_t size, bool is_tlab,
@@ -331,6 +334,10 @@ public:
   // asserted to be this type.
   static GenCollectedHeap* heap();
 
+  SlidingForwarding* forwarding() const {
+    return _forwarding;
+  }
+
   // The ScanningOption determines which of the roots
   // the closure is applied to:
   // "SO_None" does none;
@@ -433,6 +440,7 @@ private:
   // Return true if we need to perform full collection.
   bool should_do_full_collection(size_t size, bool full,
                                  bool is_tlab, GenerationType max_gen) const;
+
 };
 
 #endif // SHARE_GC_SHARED_GENCOLLECTEDHEAP_HPP
