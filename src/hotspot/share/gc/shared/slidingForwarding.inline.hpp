@@ -33,6 +33,18 @@ template <int NUM_REGION_BITS>
 HeapWord* const SlidingForwarding<NUM_REGION_BITS>::UNUSED_BASE = reinterpret_cast<HeapWord*>(0x1);
 #endif
 
+SlidingForwarding::SlidingForwarding(MemRegion heap)
+#ifdef _LP64
+: _heap_start(heap.start()),
+  _num_regions(((heap.end() - heap.start()) >> NUM_COMPRESSED_BITS) + 1),
+  _region_size_words_shift(NUM_COMPRESSED_BITS),
+  _target_base_table(NEW_C_HEAP_ARRAY(HeapWord*, _num_regions * 2, mtGC)) {
+  assert(_region_size_words_shift <= NUM_COMPRESSED_BITS, "regions must not be larger than maximum addressing bits allow");
+#else
+{
+#endif
+}
+
 template <int NUM_REGION_BITS>
 SlidingForwarding<NUM_REGION_BITS>::SlidingForwarding(MemRegion heap, size_t region_size_words_shift)
 #ifdef _LP64
