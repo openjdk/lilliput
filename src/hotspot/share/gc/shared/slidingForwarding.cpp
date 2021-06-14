@@ -96,7 +96,7 @@ uintptr_t SlidingForwarding::encode_forwarding(HeapWord* original, HeapWord* tar
 }
 
 HeapWord* SlidingForwarding::decode_forwarding(HeapWord* original, uintptr_t encoded) {
-  assert(encoded & markWord::marked_value == markWord::marked_value, "must be marked as forwarded");
+  assert((encoded & markWord::marked_value) == markWord::marked_value, "must be marked as forwarded");
   size_t orig_idx = region_index_containing(original);
   size_t flag = (encoded >> REGION_INDICATOR_FLAG_SHIFT) & 1;
   size_t base_table_idx = orig_idx * 2 + flag;
