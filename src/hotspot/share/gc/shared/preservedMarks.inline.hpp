@@ -62,4 +62,17 @@ void PreservedMarks::OopAndMarkWord::set_mark() const {
   _o->set_mark(_m);
 }
 
+template <int NUM_REGION_BITS>
+void PreservedMarks::adjust_during_full_gc(SlidingForwarding<NUM_REGION_BITS>* forwarding) {
+  StackIterator<OopAndMarkWord, mtGC> iter(_stack);
+  while (!iter.is_empty()) {
+    OopAndMarkWord* elem = iter.next_addr();
+
+    oop obj = elem->get_oop();
+    if (obj->is_forwarded()) {
+      elem->set_oop(forwarding->forwardee(obj));
+    }
+  }
+}
+
 #endif // SHARE_GC_SHARED_PRESERVEDMARKS_INLINE_HPP

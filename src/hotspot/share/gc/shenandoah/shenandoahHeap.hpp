@@ -62,6 +62,7 @@ class ShenandoahPacer;
 class ShenandoahReferenceProcessor;
 class ShenandoahVerifier;
 class ShenandoahWorkGang;
+template<int N>
 class SlidingForwarding;
 class VMStructs;
 
@@ -228,7 +229,7 @@ private:
   size_t    _num_regions;
   ShenandoahHeapRegion** _regions;
   ShenandoahRegionIterator _update_refs_iterator;
-  SlidingForwarding* _forwarding;
+  SlidingForwarding<1>* _forwarding;
 
 public:
 
@@ -245,7 +246,7 @@ public:
   void heap_region_iterate(ShenandoahHeapRegionClosure* blk) const;
   void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* blk) const;
 
-  SlidingForwarding* forwarding() const { return _forwarding; }
+  SlidingForwarding<1>* forwarding() const { return _forwarding; }
 
 // ---------- GC state machinery
 //

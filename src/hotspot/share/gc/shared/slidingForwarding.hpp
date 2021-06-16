@@ -63,21 +63,22 @@
  * - Decode the target address by using the target base address and the compressed address bits.
  */
 
+template <int NUM_REGION_BITS>
 class SlidingForwarding : public CHeapObj<mtGC> {
 #ifdef _LP64
 private:
 
   static const uintptr_t ONE = 1ULL;
 
+  // We need the lowest two bits to indicate a forwarded object.
+  static const int BASE_SHIFT = 2;
+
+  // The compressed address bits start here.
+  static const int COMPRESSED_BITS_SHIFT = BASE_SHIFT + NUM_REGION_BITS;
+
   // How many bits we use for the compressed pointer (we are going to need one more bit to indicate target region, and
   // two lowest bits to mark objects as forwarded)
-  static const int NUM_COMPRESSED_BITS = 29;
-
-  // The compressed address bits start here
-  static const int COMPRESSED_BITS_SHIFT = 3;
-
-  // The region indicator flag is here.
-  static const int REGION_INDICATOR_FLAG_SHIFT = 2;
+  static const int NUM_COMPRESSED_BITS = 32 - BASE_SHIFT - NUM_REGION_BITS;
 
   // Indicates an usused base address in the target base table. We cannot use 0, because that may already be
   // a valid base address in zero-based heaps. 0x1 is safe because heap base addresses must be aligned by 2^X.

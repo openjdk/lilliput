@@ -19,8 +19,10 @@
  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
  * or visit www.oracle.com if you need additional information or have any
  * questions.
- *2,q
  */
+
+#ifndef SHARE_GC_SHARED_SLIDINGFORWARDING_INLINE_HPP
+#define SHARE_GC_SHARED_SLIDINGFORWARDING_INLINE_HPP
 
 #include "precompiled.hpp"
 #include "gc/shared/slidingForwarding.hpp"
@@ -28,30 +30,34 @@
 #include "oops/oop.inline.hpp"
 
 #ifdef _LP64
-HeapWord* const SlidingForwarding::UNUSED_BASE = reinterpret_cast<HeapWord*>(0x1);
+template <int NUM_REGION_BITS>
+HeapWord* const SlidingForwarding<NUM_REGION_BITS>::UNUSED_BASE = reinterpret_cast<HeapWord*>(0x1);
 #endif
 
-SlidingForwarding::SlidingForwarding(MemRegion heap, size_t region_size_words_shift)
+template <int NUM_REGION_BITS>
+SlidingForwarding<NUM_REGION_BITS>::SlidingForwarding(MemRegion heap, size_t region_size_words_shift)
 #ifdef _LP64
 : _heap_start(heap.start()),
   _num_regions(((heap.end() - heap.start()) >> region_size_words_shift) + 1),
   _region_size_words_shift(region_size_words_shift),
-  _target_base_table(NEW_C_HEAP_ARRAY(HeapWord*, _num_regions * 2, mtGC)) {
+  _target_base_table(NEW_C_HEAP_ARRAY(HeapWord*, _num_regions * (ONE << NUM_REGION_BITS), mtGC)) {
   assert(region_size_words_shift <= NUM_COMPRESSED_BITS, "regions must not be larger than maximum addressing bits allow");
 #else
 {
 #endif
 }
 
-SlidingForwarding::~SlidingForwarding() {
+template <int NUM_REGION_BITS>
+SlidingForwarding<NUM_REGION_BITS>::~SlidingForwarding() {
 #ifdef _LP64
   FREE_C_HEAP_ARRAY(HeapWord*, _target_base_table);
 #endif
 }
 
-void SlidingForwarding::clear() {
+template <int NUM_REGION_BITS>
+void SlidingForwarding<NUM_REGION_BITS>::clear() {
 #ifdef _LP64
-  size_t max = _num_regions * 2;
+  size_t max = _num_regions * (ONE << NUM_REGION_BITS);
   for (size_t i = 0; i < max; i++) {
     _target_base_table[i] = UNUSED_BASE;
   }
@@ -59,53 +65,56 @@ void SlidingForwarding::clear() {
 }
 
 #ifdef _LP64
-size_t SlidingForwarding::region_index_containing(HeapWord* addr) const {
+template <int NUM_REGION_BITS>
+size_t SlidingForwarding<NUM_REGION_BITS>::region_index_containing(HeapWord* addr) const {
   assert(addr >= _heap_start, "sanity: addr: " PTR_FORMAT " heap base: " PTR_FORMAT, p2i(addr), p2i(_heap_start));
   size_t index = ((size_t) (addr - _heap_start)) >> _region_size_words_shift;
   assert(index < _num_regions, "Region index is in bounds: " PTR_FORMAT, p2i(addr));
   return index;
 }
 
-bool SlidingForwarding::region_contains(HeapWord* region_base, HeapWord* addr) const {
+template <int NUM_REGION_BITS>
+bool SlidingForwarding<NUM_REGION_BITS>::region_contains(HeapWord* region_base, HeapWord* addr) const {
   return (addr - region_base) < (ptrdiff_t)(ONE << _region_size_words_shift);
 }
 
-uintptr_t SlidingForwarding::encode_forwarding(HeapWord* original, HeapWord* target) {
+template <int NUM_REGION_BITS>
+uintptr_t SlidingForwarding<NUM_REGION_BITS>::encode_forwarding(HeapWord* original, HeapWord* target) {
   size_t orig_idx = region_index_containing(original);
   size_t base_table_idx = orig_idx * 2;
   size_t target_idx = region_index_containing(target);
-  HeapWord* encode_base = _target_base_table[base_table_idx];
-  uintptr_t flag = 0;
-  if (encode_base == UNUSED_BASE) {
-    encode_base = _heap_start + target_idx * (ONE << _region_size_words_shift);
-    _target_base_table[base_table_idx] = encode_base;
-  } else if (!region_contains(encode_base, target)) {
-    base_table_idx++;
-    flag = 1;
-    encode_base = _target_base_table[base_table_idx];
+  HeapWord* encode_base;
+  uintptr_t region_idx;
+  for (region_idx = 0; region_idx < (ONE << NUM_REGION_BITS); region_idx++) {
+    encode_base = _target_base_table[base_table_idx + region_idx];
     if (encode_base == UNUSED_BASE) {
       encode_base = _heap_start + target_idx * (ONE << _region_size_words_shift);
-      _target_base_table[base_table_idx] = encode_base;
+      _target_base_table[base_table_idx + region_idx] = encode_base;
+      break;
+    } else if (region_contains(encode_base, target)) {
+      break;
     }
   }
   assert(region_contains(encode_base, target), "region must contain target");
   uintptr_t encoded = (((uintptr_t)(target - encode_base)) << COMPRESSED_BITS_SHIFT) |
-                      (flag << REGION_INDICATOR_FLAG_SHIFT) | markWord::marked_value;
+                      (region_idx << BASE_SHIFT) | markWord::marked_value;
   assert(target == decode_forwarding(original, encoded), "must be reversible");
   return encoded;
 }
 
-HeapWord* SlidingForwarding::decode_forwarding(HeapWord* original, uintptr_t encoded) {
+template <int NUM_REGION_BITS>
+HeapWord* SlidingForwarding<NUM_REGION_BITS>::decode_forwarding(HeapWord* original, uintptr_t encoded) {
   assert((encoded & markWord::marked_value) == markWord::marked_value, "must be marked as forwarded");
   size_t orig_idx = region_index_containing(original);
-  size_t flag = (encoded >> REGION_INDICATOR_FLAG_SHIFT) & 1;
-  size_t base_table_idx = orig_idx * 2 + flag;
+  size_t region_idx = (encoded >> BASE_SHIFT) & right_n_bits(NUM_REGION_BITS);
+  size_t base_table_idx = orig_idx * 2 + region_idx;
   HeapWord* decoded = _target_base_table[base_table_idx] + (encoded >> COMPRESSED_BITS_SHIFT);
   return decoded;
 }
 #endif
 
-void SlidingForwarding::forward_to(oop original, oop target) {
+template <int NUM_REGION_BITS>
+void SlidingForwarding<NUM_REGION_BITS>::forward_to(oop original, oop target) {
 #ifdef _LP64
   markWord header = original->mark();
   uintptr_t encoded = encode_forwarding(cast_from_oop<HeapWord*>(original), cast_from_oop<HeapWord*>(target));
@@ -117,7 +126,8 @@ void SlidingForwarding::forward_to(oop original, oop target) {
 #endif
 }
 
-oop SlidingForwarding::forwardee(oop original) {
+template <int NUM_REGION_BITS>
+oop SlidingForwarding<NUM_REGION_BITS>::forwardee(oop original) {
 #ifdef _LP64
   markWord header = original->mark();
   uintptr_t encoded = header.value() & ~markWord::klass_mask_in_place;
@@ -127,3 +137,5 @@ oop SlidingForwarding::forwardee(oop original) {
   return original->forwardee();
 #endif
 }
+
+#endif // SHARE_GC_SHARED_SLIDINGFORWARDING_INLINE_HPP
