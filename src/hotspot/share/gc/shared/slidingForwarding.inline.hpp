@@ -75,7 +75,7 @@ size_t SlidingForwarding<NUM_REGION_BITS>::region_index_containing(HeapWord* add
 
 template <int NUM_REGION_BITS>
 bool SlidingForwarding<NUM_REGION_BITS>::region_contains(HeapWord* region_base, HeapWord* addr) const {
-  return (addr - region_base) < (ptrdiff_t)(ONE << _region_size_words_shift);
+  return uintptr_t(addr - region_base) < (ONE << _region_size_words_shift);
 }
 
 template <int NUM_REGION_BITS>
