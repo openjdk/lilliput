@@ -32,6 +32,7 @@ class G1CollectedHeap;
 class G1FullCollector;
 class G1CMBitMap;
 class G1FullGCMarker;
+template <int N>
 class SlidingForwarding;
 
 // Below are closures used by the G1 Full GC.
@@ -80,7 +81,7 @@ public:
 
 class G1AdjustClosure : public BasicOopIterateClosure {
   G1FullCollector* _collector;
-  const SlidingForwarding* const _forwarding;
+  const SlidingForwarding<5>* const _forwarding;
   template <class T> inline void adjust_pointer(T* p);
 public:
   G1AdjustClosure(G1FullCollector* collector) :

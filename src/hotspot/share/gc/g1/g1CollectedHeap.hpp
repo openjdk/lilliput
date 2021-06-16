@@ -98,6 +98,7 @@ class G1HeapVerifier;
 class G1HeapSizingPolicy;
 class G1HeapSummary;
 class G1EvacSummary;
+template <int N>
 class SlidingForwarding;
 
 typedef OverflowTaskQueue<ScannerTask, mtGC>           G1ScannerTasksQueue;
@@ -238,7 +239,7 @@ private:
   // Helper for monitoring and management support.
   G1MonitoringSupport* _g1mm;
 
-  SlidingForwarding* _forwarding;
+  SlidingForwarding<5>* _forwarding;
 
   // Records whether the region at the given index is (still) a
   // candidate for eager reclaim.  Only valid for humongous start
@@ -269,7 +270,7 @@ public:
 
   bool should_do_eager_reclaim() const;
 
-  SlidingForwarding* forwarding() const {
+  SlidingForwarding<5>* forwarding() const {
     return _forwarding;
   }
 

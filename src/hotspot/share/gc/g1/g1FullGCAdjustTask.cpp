@@ -96,7 +96,7 @@ void G1FullGCAdjustTask::work(uint worker_id) {
 
   // Adjust preserved marks first since they are not balanced.
   G1FullGCMarker* marker = collector()->marker(worker_id);
-  const SlidingForwarding* const forwarding = G1CollectedHeap::heap()->forwarding();
+  const SlidingForwarding<5>* const forwarding = G1CollectedHeap::heap()->forwarding();
   marker->preserved_stack()->adjust_during_full_gc(forwarding);
 
   // Adjust the weak roots.

@@ -288,7 +288,6 @@ void G1FullCollector::phase2_prepare_compaction() {
 
   // To avoid OOM when there is memory left.
   if (!task.has_freed_regions()) {
-    _heap->forwarding()->clear();
     task.prepare_serial_compaction();
   }
 }

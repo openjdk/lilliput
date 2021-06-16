@@ -107,9 +107,16 @@ uintptr_t SlidingForwarding<NUM_REGION_BITS>::encode_forwarding(HeapWord* origin
       break;
     }
   }
-  assert(target >= encode_base, "target must be above encode base, target:" PTR_FORMAT ", encoded_base: " PTR_FORMAT ",  target_idx: " SIZE_FORMAT ", heap start: " PTR_FORMAT,
-         p2i(target), p2i(encode_base), target_idx, p2i(_heap_start));
-  assert(region_contains(encode_base, target), "region must contain target: original: " PTR_FORMAT ", target: " PTR_FORMAT ", encode_base: " PTR_FORMAT, p2i(original), p2i(target), p2i(encode_base));
+  if (region_idx >= (ONE << NUM_REGION_BITS)) {
+    tty->print_cr("target: " PTR_FORMAT, p2i(target));
+    for (region_idx = 0; region_idx < (ONE << NUM_REGION_BITS); region_idx++) {
+      tty->print_cr("region_idx: " INTPTR_FORMAT ", encode_base: " PTR_FORMAT, region_idx, p2i(_target_base_table[base_table_idx + region_idx]));
+    }
+  }
+  assert(region_idx < (ONE << NUM_REGION_BITS), "need to have found an encoding base");
+  assert(target >= encode_base, "target must be above encode base, target:" PTR_FORMAT ", encoded_base: " PTR_FORMAT ",  target_idx: " SIZE_FORMAT ", heap start: " PTR_FORMAT ", region_idx: " INTPTR_FORMAT,
+         p2i(target), p2i(encode_base), target_idx, p2i(_heap_start), region_idx);
+  assert(region_contains(encode_base, target), "region must contain target: original: " PTR_FORMAT ", target: " PTR_FORMAT ", encode_base: " PTR_FORMAT ", region_idx: " INTPTR_FORMAT, p2i(original), p2i(target), p2i(encode_base), region_idx);
   uintptr_t encoded = (((uintptr_t)(target - encode_base)) << COMPRESSED_BITS_SHIFT) |
                       (region_idx << BASE_SHIFT) | markWord::marked_value;
   assert(target == decode_forwarding(original, encoded), "must be reversible");
@@ -123,7 +130,7 @@ HeapWord* SlidingForwarding<NUM_REGION_BITS>::decode_forwarding(HeapWord* origin
   size_t region_idx = (encoded >> BASE_SHIFT) & right_n_bits(NUM_REGION_BITS);
   size_t base_table_idx = orig_idx * 2 + region_idx;
   HeapWord* decoded = _target_base_table[base_table_idx] + (encoded >> COMPRESSED_BITS_SHIFT);
-  assert(decoded >= _heap_start, "must be above heap start, encoded: " INTPTR_FORMAT ", flag: " SIZE_FORMAT ", base: " PTR_FORMAT, encoded, flag, p2i(_target_base_table[base_table_idx]));
+  assert(decoded >= _heap_start, "must be above heap start, encoded: " INTPTR_FORMAT ", region_idx: " SIZE_FORMAT ", base: " PTR_FORMAT, encoded, region_idx, p2i(_target_base_table[base_table_idx]));
   return decoded;
 }
 #endif
