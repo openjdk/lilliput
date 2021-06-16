@@ -282,11 +282,13 @@ void G1FullCollector::phase1_mark_live_objects() {
 
 void G1FullCollector::phase2_prepare_compaction() {
   GCTraceTime(Info, gc, phases) info("Phase 2: Prepare for compaction", scope()->timer());
+  _heap->forwarding()->clear();
   G1FullGCPrepareTask task(this);
   run_task(&task);
 
   // To avoid OOM when there is memory left.
   if (!task.has_freed_regions()) {
+    _heap->forwarding()->clear();
     task.prepare_serial_compaction();
   }
 }

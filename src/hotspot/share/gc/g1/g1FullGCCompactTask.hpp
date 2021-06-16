@@ -51,9 +51,11 @@ public:
 
   class G1CompactRegionClosure : public StackObj {
     G1CMBitMap* _bitmap;
-
+    const SlidingForwarding* const _forwarding;
   public:
-    G1CompactRegionClosure(G1CMBitMap* bitmap) : _bitmap(bitmap) { }
+    G1CompactRegionClosure(G1CMBitMap* bitmap) :
+      _bitmap(bitmap),
+      _forwarding(G1CollectedHeap::heap()->forwarding()) { }
     size_t apply(oop object);
   };
 };
