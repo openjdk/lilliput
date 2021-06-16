@@ -103,7 +103,7 @@ uintptr_t SlidingForwarding<NUM_REGION_BITS>::encode_forwarding(HeapWord* origin
 }
 
 template <int NUM_REGION_BITS>
-HeapWord* SlidingForwarding<NUM_REGION_BITS>::decode_forwarding(HeapWord* original, uintptr_t encoded) {
+HeapWord* SlidingForwarding<NUM_REGION_BITS>::decode_forwarding(HeapWord* original, uintptr_t encoded) const {
   assert((encoded & markWord::marked_value) == markWord::marked_value, "must be marked as forwarded");
   size_t orig_idx = region_index_containing(original);
   size_t region_idx = (encoded >> BASE_SHIFT) & right_n_bits(NUM_REGION_BITS);
@@ -127,7 +127,7 @@ void SlidingForwarding<NUM_REGION_BITS>::forward_to(oop original, oop target) {
 }
 
 template <int NUM_REGION_BITS>
-oop SlidingForwarding<NUM_REGION_BITS>::forwardee(oop original) {
+oop SlidingForwarding<NUM_REGION_BITS>::forwardee(oop original) const {
 #ifdef _LP64
   markWord header = original->mark();
   uintptr_t encoded = header.value() & ~markWord::klass_mask_in_place;

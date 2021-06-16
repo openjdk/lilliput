@@ -86,14 +86,14 @@ private:
 
   HeapWord*  const _heap_start;
   size_t     const _num_regions;
-  size_t           _region_size_words_shift;
+  size_t     const _region_size_words_shift;
   HeapWord** const _target_base_table;
 
   size_t region_index_containing(HeapWord* addr) const;
   bool region_contains(HeapWord* region_base, HeapWord* addr) const;
 
   uintptr_t encode_forwarding(HeapWord* original, HeapWord* target);
-  HeapWord* decode_forwarding(HeapWord* original, uintptr_t encoded);
+  HeapWord* decode_forwarding(HeapWord* original, uintptr_t encoded) const;
 
 #endif
 
@@ -103,7 +103,7 @@ public:
 
   void clear();
   void forward_to(oop original, oop target);
-  oop forwardee(oop original);
+  oop forwardee(oop original) const;
 };
 
 #endif // SHARE_GC_SHARED_SLIDINGFORWARDING_HPP

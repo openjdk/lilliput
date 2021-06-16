@@ -725,9 +725,9 @@ void ShenandoahFullGC::phase2_calculate_target_addresses(ShenandoahHeapRegionSet
 
 class ShenandoahAdjustPointersClosure : public MetadataVisitingOopIterateClosure {
 private:
-  ShenandoahHeap*           const _heap;
-  SlidingForwarding<1>*     const _forwarding;
-  ShenandoahMarkingContext* const _ctx;
+  ShenandoahHeap*             const _heap;
+  const SlidingForwarding<1>* const _forwarding;
+  ShenandoahMarkingContext*   const _ctx;
 
   template <class T>
   inline void do_oop_work(T* p) {
@@ -805,7 +805,7 @@ public:
     ShenandoahParallelWorkerSession worker_session(worker_id);
     ShenandoahAdjustPointersClosure cl;
     _rp->roots_do(worker_id, &cl);
-    SlidingForwarding<1>* forwarding = ShenandoahHeap::heap()->forwarding();
+    const SlidingForwarding<1>* const forwarding = ShenandoahHeap::heap()->forwarding();
     _preserved_marks->get(worker_id)->adjust_during_full_gc(forwarding);
   }
 };
@@ -836,9 +836,9 @@ void ShenandoahFullGC::phase3_update_references() {
 
 class ShenandoahCompactObjectsClosure : public ObjectClosure {
 private:
-  ShenandoahHeap*       const _heap;
-  SlidingForwarding<1>* const _forwarding;
-  uint                  const _worker_id;
+  ShenandoahHeap*             const _heap;
+  const SlidingForwarding<1>* const _forwarding;
+  uint                        const _worker_id;
 
 public:
   ShenandoahCompactObjectsClosure(uint worker_id) :
@@ -944,7 +944,7 @@ void ShenandoahFullGC::compact_humongous_objects() {
   // sliding costs. We may consider doing this in parallel in future.
 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
-  SlidingForwarding<1>* forwarding = heap->forwarding();
+  const SlidingForwarding<1>* const forwarding = heap->forwarding();
 
   for (size_t c = heap->num_regions(); c > 0; c--) {
     ShenandoahHeapRegion* r = heap->get_region(c - 1);

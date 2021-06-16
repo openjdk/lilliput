@@ -68,7 +68,7 @@ public:
   void adjust_during_full_gc();
 
   template<int NUM_REGION_BITS>
-  void adjust_during_full_gc(SlidingForwarding<NUM_REGION_BITS> * forwarding);
+  void adjust_during_full_gc(const SlidingForwarding<NUM_REGION_BITS>* const forwarding);
 
   void restore_and_increment(volatile size_t* const _total_size_addr);
   inline static void init_forwarded_mark(oop obj);

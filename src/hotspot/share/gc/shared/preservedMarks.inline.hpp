@@ -63,7 +63,7 @@ void PreservedMarks::OopAndMarkWord::set_mark() const {
 }
 
 template <int NUM_REGION_BITS>
-void PreservedMarks::adjust_during_full_gc(SlidingForwarding<NUM_REGION_BITS>* forwarding) {
+void PreservedMarks::adjust_during_full_gc(const SlidingForwarding<NUM_REGION_BITS>* const forwarding) {
   StackIterator<OopAndMarkWord, mtGC> iter(_stack);
   while (!iter.is_empty()) {
     OopAndMarkWord* elem = iter.next_addr();
