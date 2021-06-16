@@ -144,7 +144,7 @@ template <class T> inline void MarkSweep::follow_root(T* p) {
 void MarkSweep::FollowRootClosure::do_oop(oop* p)       { follow_root(p); }
 void MarkSweep::FollowRootClosure::do_oop(narrowOop* p) { follow_root(p); }
 
-void PreservedMark::adjust_pointer(SlidingForwarding* forwarding) {
+void PreservedMark::adjust_pointer(SlidingForwarding<1>* forwarding) {
   MarkSweep::adjust_pointer(forwarding, &_obj);
 }
 
@@ -177,7 +177,7 @@ void MarkSweep::adjust_marks() {
   assert( _preserved_oop_stack.size() == _preserved_mark_stack.size(),
          "inconsistent preserved oop stacks");
 
-  SlidingForwarding* forwarding = GenCollectedHeap::heap()->forwarding();
+  SlidingForwarding<1>* forwarding = GenCollectedHeap::heap()->forwarding();
 
   // adjust the oops we saved earlier
   for (size_t i = 0; i < _preserved_count; i++) {

@@ -29,7 +29,7 @@
 #include "gc/shared/collectedHeap.inline.hpp"
 #include "gc/shared/genCollectedHeap.hpp"
 #include "gc/shared/genOopClosures.inline.hpp"
-#include "gc/shared/slidingForwarding.hpp"
+#include "gc/shared/slidingForwarding.inline.hpp"
 #include "gc/shared/space.hpp"
 #include "gc/shared/space.inline.hpp"
 #include "gc/shared/spaceDecorator.inline.hpp"
@@ -348,7 +348,7 @@ void CompactibleSpace::clear(bool mangle_space) {
 }
 
 HeapWord* CompactibleSpace::forward(oop q, size_t size,
-                                    CompactPoint* cp, HeapWord* compact_top, SlidingForwarding* forwarding) {
+                                    CompactPoint* cp, HeapWord* compact_top, SlidingForwarding<1>* forwarding) {
   // q is alive
   // First check if we should switch compaction space
   assert(this == cp->space, "'this' should be current compaction space.");

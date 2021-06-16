@@ -33,7 +33,8 @@ template <int NUM_REGION_BITS>
 HeapWord* const SlidingForwarding<NUM_REGION_BITS>::UNUSED_BASE = reinterpret_cast<HeapWord*>(0x1);
 #endif
 
-SlidingForwarding::SlidingForwarding(MemRegion heap)
+template <int NUM_REGION_BITS>
+SlidingForwarding<NUM_REGION_BITS>::SlidingForwarding(MemRegion heap)
 #ifdef _LP64
 : _heap_start(heap.start()),
   _num_regions(((heap.end() - heap.start()) >> NUM_COMPRESSED_BITS) + 1),
