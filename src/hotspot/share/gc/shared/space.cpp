@@ -348,7 +348,7 @@ void CompactibleSpace::clear(bool mangle_space) {
 }
 
 HeapWord* CompactibleSpace::forward(oop q, size_t size,
-                                    CompactPoint* cp, HeapWord* compact_top, SlidingForwarding<1>* forwarding) {
+                                    CompactPoint* cp, HeapWord* compact_top, SlidingForwarding<1>* const forwarding) {
   // q is alive
   // First check if we should switch compaction space
   assert(this == cp->space, "'this' should be current compaction space.");

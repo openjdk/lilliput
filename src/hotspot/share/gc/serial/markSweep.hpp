@@ -142,7 +142,7 @@ class MarkSweep : AllStatic {
   static void adjust_marks();   // Adjust the pointers in the preserved marks table
   static void restore_marks();  // Restore the marks that we saved in preserve_mark
 
-  static int adjust_pointers(SlidingForwarding<1>* forwarding, oop obj);
+  static int adjust_pointers(const SlidingForwarding<1>* const forwarding, oop obj);
 
   static void follow_stack();   // Empty marking stack.
 
@@ -150,7 +150,7 @@ class MarkSweep : AllStatic {
 
   static void follow_cld(ClassLoaderData* cld);
 
-  template <class T> static inline void adjust_pointer(SlidingForwarding<1>* forwarding, T* p);
+  template <class T> static inline void adjust_pointer(const SlidingForwarding<1>* const forwarding, T* p);
 
   // Check mark and maybe push on marking stack
   template <class T> static void mark_and_push(T* p);
@@ -187,9 +187,9 @@ public:
 
 class AdjustPointerClosure: public BasicOopIterateClosure {
 private:
-  SlidingForwarding<1>* const _forwarding;
+  const SlidingForwarding<1>* const _forwarding;
  public:
-  AdjustPointerClosure(SlidingForwarding<1>* forwarding) : _forwarding(forwarding) {}
+  AdjustPointerClosure(const SlidingForwarding<1>* forwarding) : _forwarding(forwarding) {}
   template <typename T> void do_oop_work(T* p);
   virtual void do_oop(oop* p);
   virtual void do_oop(narrowOop* p);
@@ -207,7 +207,7 @@ public:
     _mark = mark;
   }
 
-  void adjust_pointer(SlidingForwarding<1>* forwarding);
+  void adjust_pointer(const SlidingForwarding<1>* const forwarding);
   void restore();
 };
 

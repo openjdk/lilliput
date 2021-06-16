@@ -434,7 +434,7 @@ public:
   // function of the then-current compaction space, and updates "cp->threshold
   // accordingly".
   virtual HeapWord* forward(oop q, size_t size, CompactPoint* cp,
-                    HeapWord* compact_top, SlidingForwarding<1>* forwarding);
+                    HeapWord* compact_top, SlidingForwarding<1>* const forwarding);
 
   // Return a size with adjustments as required of the space.
   virtual size_t adjust_object_size_v(size_t size) const { return size; }
