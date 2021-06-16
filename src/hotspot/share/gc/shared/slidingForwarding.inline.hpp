@@ -24,7 +24,6 @@
 #ifndef SHARE_GC_SHARED_SLIDINGFORWARDING_INLINE_HPP
 #define SHARE_GC_SHARED_SLIDINGFORWARDING_INLINE_HPP
 
-#include "precompiled.hpp"
 #include "gc/shared/slidingForwarding.hpp"
 #include "oops/markWord.hpp"
 #include "oops/oop.inline.hpp"
