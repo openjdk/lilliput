@@ -82,7 +82,7 @@ template <class T> inline void MarkSweep::adjust_pointer(T* p) {
 
     markWord header = obj->mark();
     if (header.is_marked()) {
-      oop new_obj = cast_to_oop(header.decode_pointer());
+      oop new_obj = obj->forwardee(header);
       assert(new_obj != NULL, "must be forwarded");
       assert(is_object_aligned(new_obj), "oop must be aligned");
       RawAccess<IS_NOT_NULL>::oop_store(p, new_obj);
