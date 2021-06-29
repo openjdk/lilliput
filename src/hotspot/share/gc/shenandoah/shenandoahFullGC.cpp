@@ -54,7 +54,6 @@
 #include "memory/universe.hpp"
 #include "oops/compressedOops.inline.hpp"
 #include "oops/oop.inline.hpp"
-#include "runtime/biasedLocking.hpp"
 #include "runtime/orderAccess.hpp"
 #include "runtime/thread.hpp"
 #include "runtime/vmThread.hpp"
@@ -183,7 +182,6 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
     heap->sync_pinned_region_status();
 
     // The rest of prologue:
-    BiasedLocking::preserve_marks();
     _preserved_marks->init(heap->workers()->active_workers());
     heap->forwarding()->clear();
 
@@ -232,7 +230,6 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
   {
     // Epilogue
     _preserved_marks->restore(heap->workers());
-    BiasedLocking::restore_marks();
     _preserved_marks->reclaim();
   }
 

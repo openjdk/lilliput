@@ -25,10 +25,10 @@
 #ifndef SHARE_GC_G1_G1FULLGCOOPCLOSURES_HPP
 #define SHARE_GC_G1_G1FULLGCOOPCLOSURES_HPP
 
+#include "gc/g1/g1CollectedHeap.hpp"
 #include "gc/shared/verifyOption.hpp"
 #include "memory/iterator.hpp"
 
-class G1CollectedHeap;
 class G1FullCollector;
 class G1CMBitMap;
 class G1FullGCMarker;
