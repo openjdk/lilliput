@@ -98,16 +98,16 @@ class markWord {
   // Constants
   static const int age_bits                       = 4;
   static const int lock_bits                      = 2;
-  static const int first_unused_gap_bits          = 1;
-  static const int max_hash_bits                  = BitsPerWord - age_bits - lock_bits - first_unused_gap_bits;
+  static const int self_forwarded_bits            = 1;
+  static const int max_hash_bits                  = BitsPerWord - age_bits - lock_bits - self_forwarded_bits;
   static const int hash_bits                      = max_hash_bits > 25 ? 25 : max_hash_bits;
-  static const int second_unused_gap_bits         = LP64_ONLY(1) NOT_LP64(0);
 #ifdef _LP64
   static const int klass_bits                     = 32;
 #endif
 
   static const int lock_shift                     = 0;
-  static const int age_shift                      = lock_bits + first_unused_gap_bits;
+  static const int self_forwarded_shift           = lock_shift + lock_bits;
+  static const int age_shift                      = self_forwarded_shift + self_forwarded_bits;
   static const int hash_shift                     = age_shift + age_bits;
 #ifdef _LP64
   static const int klass_shift                    = hash_shift + hash_bits;
@@ -115,6 +115,8 @@ class markWord {
 
   static const uintptr_t lock_mask                = right_n_bits(lock_bits);
   static const uintptr_t lock_mask_in_place       = lock_mask << lock_shift;
+  static const uintptr_t self_forwarded_mask      = right_n_bits(self_forwarded_bits);
+  static const uintptr_t self_forwarded_mask_in_place = self_forwarded_mask << self_forwarded_shift;
   static const uintptr_t age_mask                 = right_n_bits(age_bits);
   static const uintptr_t age_mask_in_place        = age_mask << age_shift;
   static const uintptr_t hash_mask                = right_n_bits(hash_bits);
@@ -130,6 +132,7 @@ class markWord {
   static const uintptr_t monitor_value            = 2;
   static const uintptr_t marked_value             = 3;
 
+  static const uintptr_t self_forwarded_value     = 1 << self_forwarded_shift;
   static const uintptr_t no_hash                  = 0 ;  // no hash value assigned
   static const uintptr_t no_hash_in_place         = (address_word)no_hash << hash_shift;
   static const uintptr_t no_lock_in_place         = unlocked_value;
@@ -265,6 +268,16 @@ class markWord {
 
   // Recover address of oop from encoded form used in mark
   inline void* decode_pointer() { return (void*)clear_lock_bits().value(); }
+
+  inline bool self_forwarded() const {
+    return mask_bits(value(), self_forwarded_mask_in_place) != 0;
+  }
+
+  inline markWord set_self_forwarded() const {
+    intptr_t bits = (intptr_t)value();
+    set_bits(bits, self_forwarded_value | marked_value);
+    return markWord((uintptr_t)bits);
+  }
 };
 
 // Support atomic operations.
