@@ -31,6 +31,7 @@
 #include "gc/shared/ageTable.inline.hpp"
 #include "gc/shared/cardTableRS.hpp"
 #include "gc/shared/collectorCounters.hpp"
+#include "gc/shared/forwardTable.hpp"
 #include "gc/shared/gcArguments.hpp"
 #include "gc/shared/gcHeapSummary.hpp"
 #include "gc/shared/gcLocker.hpp"
@@ -39,6 +40,7 @@
 #include "gc/shared/gcTrace.hpp"
 #include "gc/shared/gcTraceTime.inline.hpp"
 #include "gc/shared/generationSpec.hpp"
+#include "gc/shared/genCollectedHeap.hpp"
 #include "gc/shared/genOopClosures.inline.hpp"
 #include "gc/shared/preservedMarks.inline.hpp"
 #include "gc/shared/referencePolicy.hpp"
@@ -129,6 +131,7 @@ void CLDScanClosure::do_cld(ClassLoaderData* cld) {
 }
 
 ScanWeakRefClosure::ScanWeakRefClosure(DefNewGeneration* g) :
+  _fwd(GenCollectedHeap::heap()->forward_table()),
   _g(g)
 {
   _boundary = _g->reserved().end();
@@ -673,14 +676,14 @@ void DefNewGeneration::restore_preserved_marks() {
   _preserved_marks_set.restore(NULL);
 }
 
-void DefNewGeneration::handle_promotion_failure(oop old) {
+void DefNewGeneration::handle_promotion_failure(ForwardTable* const fwd, oop old) {
   log_debug(gc, promotion)("Promotion failure size = %d) ", old->size());
 
   _promotion_failed = true;
   _promotion_failed_info.register_copy_failure(old->size());
   _preserved_marks_set.get()->push_if_necessary(old, old->mark());
   // forward to self
-  old->forward_to(old);
+  fwd->forward_to(old, old);
 
   _promo_failure_scan_stack.push(old);
 
@@ -692,7 +695,7 @@ void DefNewGeneration::handle_promotion_failure(oop old) {
   }
 }
 
-oop DefNewGeneration::copy_to_survivor_space(oop old) {
+oop DefNewGeneration::copy_to_survivor_space(ForwardTable* const fwd, oop old) {
   assert(is_in_reserved(old) && !old->is_forwarded(),
          "shouldn't be scavenging this oop");
   size_t s = old->size();
@@ -707,7 +710,7 @@ oop DefNewGeneration::copy_to_survivor_space(oop old) {
   if (obj == NULL) {
     obj = _old_gen->promote(old, s);
     if (obj == NULL) {
-      handle_promotion_failure(old);
+      handle_promotion_failure(fwd, old);
       return old;
     }
   } else {
@@ -724,7 +727,7 @@ oop DefNewGeneration::copy_to_survivor_space(oop old) {
   }
 
   // Done, insert forward pointer to obj in this header
-  old->forward_to(obj);
+  fwd->forward_to(old,obj);
 
   return obj;
 }

@@ -35,6 +35,7 @@
 #include "gc/serial/genMarkSweep.hpp"
 #include "gc/serial/serialGcRefProcProxyTask.hpp"
 #include "gc/shared/collectedHeap.inline.hpp"
+#include "gc/shared/forwardTable.hpp"
 #include "gc/shared/gcHeapSummary.hpp"
 #include "gc/shared/gcTimer.hpp"
 #include "gc/shared/gcTrace.hpp"
@@ -271,6 +272,8 @@ void GenMarkSweep::mark_sweep_phase3() {
   // Need new claim bits for the pointer adjustment tracing.
   ClassLoaderDataGraph::clear_claimed_marks();
 
+  AdjustPointerClosure adjust_pointer_closure;
+  CLDToOopClosure adjust_cld_closure(&adjust_pointer_closure, ClassLoaderData::_claim_strong);
   {
     StrongRootsScope srs(0);
 
@@ -313,4 +316,6 @@ void GenMarkSweep::mark_sweep_phase4() {
 
   GenCompactClosure blk;
   gch->generation_iterate(&blk, true);
+
+  gch->forward_table()->clear();
 }

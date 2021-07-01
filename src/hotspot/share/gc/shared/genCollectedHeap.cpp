@@ -36,6 +36,7 @@
 #include "gc/shared/cardTableRS.hpp"
 #include "gc/shared/collectedHeap.inline.hpp"
 #include "gc/shared/collectorCounters.hpp"
+#include "gc/shared/forwardTable.hpp"
 #include "gc/shared/gcId.hpp"
 #include "gc/shared/gcLocker.hpp"
 #include "gc/shared/gcPolicyCounters.hpp"
@@ -97,6 +98,7 @@ GenCollectedHeap::GenCollectedHeap(Generation::Name young,
   _gc_policy_counters(new GCPolicyCounters(policy_counters_name, 2, 2)),
   _incremental_collection_failed(false),
   _full_collections_completed(0),
+  _forward_table(new ForwardTable()),
   _young_manager(NULL),
   _old_manager(NULL) {
 }
@@ -494,6 +496,8 @@ void GenCollectedHeap::collect_generation(Generation* gen, bool full, size_t siz
       rp->set_enqueuing_is_done(false);
     }
     rp->verify_no_references_recorded();
+
+    forward_table()->clear();
   }
 
   COMPILER2_OR_JVMCI_PRESENT(DerivedPointerTable::update_pointers());

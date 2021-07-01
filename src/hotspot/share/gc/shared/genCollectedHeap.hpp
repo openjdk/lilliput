@@ -34,6 +34,7 @@
 class AdaptiveSizePolicy;
 class CardTableRS;
 class GCPolicyCounters;
+class ForwardTable;
 class GenerationSpec;
 class StrongRootsScope;
 class SubTasksDone;
@@ -87,6 +88,8 @@ private:
 
   // In support of ExplicitGCInvokesConcurrent functionality
   unsigned int _full_collections_completed;
+
+  ForwardTable* const _forward_table;
 
   // Collects the given generation.
   void collect_generation(Generation* gen, bool full, size_t size, bool is_tlab,
@@ -329,6 +332,10 @@ public:
   // Convenience function to be used in situations where the heap type can be
   // asserted to be this type.
   static GenCollectedHeap* heap();
+
+  ForwardTable* const forward_table() const {
+    return _forward_table;
+  }
 
   // The ScanningOption determines which of the roots
   // the closure is applied to:
