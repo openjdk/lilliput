@@ -45,6 +45,7 @@
 // FIX ME FIX ME Add a destructor, and don't rely on the user to drain/flush/deallocate!
 //
 
+class ForwardTable;
 class MutableSpace;
 class PSOldGen;
 class ParCompactionManager;
@@ -100,7 +101,7 @@ class PSPromotionManager {
 
   template <class T> void  process_array_chunk_work(oop obj,
                                                     int start, int end);
-  void process_array_chunk(PartialArrayScanTask task);
+  void process_array_chunk(PartialArrayScanTask task, const ForwardTable* const fwd);
 
   void push_depth(ScannerTask task);
 
@@ -111,7 +112,7 @@ class PSPromotionManager {
   static PSScannerTasksQueueSet* stack_array_depth() { return _stack_array_depth; }
 
   template<bool promote_immediately>
-  oop copy_unmarked_to_survivor_space(oop o, markWord m);
+  oop copy_unmarked_to_survivor_space(ForwardTable* const fwd, oop o, markWord m);
 
  public:
   // Static
@@ -138,8 +139,8 @@ class PSPromotionManager {
   void set_old_gen_is_full(bool state) { _old_gen_is_full = state; }
 
   // Promotion methods
-  template<bool promote_immediately> oop copy_to_survivor_space(oop o);
-  oop oop_promotion_failed(oop obj, markWord obj_mark);
+  template<bool promote_immediately> oop copy_to_survivor_space(ForwardTable* const fwd, oop o);
+  oop oop_promotion_failed(ForwardTable* const fwd, oop obj, markWord obj_mark);
 
   void reset();
   void register_preserved_marks(PreservedMarks* preserved_marks);
@@ -161,13 +162,13 @@ class PSPromotionManager {
     return claimed_stack_depth()->is_empty();
   }
 
-  inline void process_popped_location_depth(ScannerTask task);
+  inline void process_popped_location_depth(ScannerTask task, ForwardTable* const fwd);
 
   static bool should_scavenge(oop* p, bool check_to_space = false);
   static bool should_scavenge(narrowOop* p, bool check_to_space = false);
 
   template <bool promote_immediately, class T>
-  void copy_and_push_safe_barrier(T* p);
+  void copy_and_push_safe_barrier(ForwardTable* const fwd, T* p);
 
   template <class T> inline void claim_or_forward_depth(T* p);
 

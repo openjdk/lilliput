@@ -87,6 +87,7 @@ void ForwardTable::clear() {
 }
 
 oop ForwardTable::forward_to(oop from, oop to) {
+  assert(to != NULL, "Must not forwarde to NULL");
   ForwardTableLookup lookup(cast_from_oop<HeapWord*>(from));
   ForwardTableValue value(cast_from_oop<HeapWord*>(from), cast_from_oop<HeapWord*>(to));
   ForwardTableFound found;
@@ -94,7 +95,9 @@ oop ForwardTable::forward_to(oop from, oop to) {
   oop result;
   if (_table->insert_get(Thread::current(), lookup, value, found, &grow)) {
     from->set_mark(from->mark().set_marked());
-    result = to;
+    assert(_table->get(Thread::current(), lookup, found), "should be inserted now");
+    assert(found.value()->forwardee() == cast_from_oop<HeapWord*>(to), "forwardee must be ours");
+    result = nullptr;
   } else {
     result = cast_to_oop(found.value()->forwardee());
   }
@@ -108,6 +111,7 @@ oop ForwardTable::forwardee(oop from) const {
   ForwardTableLookup lookup(cast_from_oop<HeapWord*>(from));
   ForwardTableFound found;
   if (_table->get(Thread::current(), lookup, found)) {
+    // tty->print_cr("forwardee: " PTR_FORMAT, p2i(found.value()->forwardee()));
     return cast_to_oop(found.value()->forwardee());
   } else {
     return nullptr;

@@ -124,11 +124,12 @@ static void steal_work(TaskTerminator& terminator, uint worker_id) {
   guarantee(pm->stacks_empty(),
             "stacks should be empty at this point");
 
+  ForwardTable* const fwd = ParallelScavengeHeap::heap()->forward_table();
   while (true) {
     ScannerTask task;
     if (PSPromotionManager::steal_depth(worker_id, task)) {
       TASKQUEUE_STATS_ONLY(pm->record_steal(task));
-      pm->process_popped_location_depth(task);
+      pm->process_popped_location_depth(task, fwd);
       pm->drain_stacks_depth(true);
     } else {
       if (terminator.offer_termination()) {
@@ -153,9 +154,12 @@ class PSKeepAliveClosure: public OopClosure {
 protected:
   MutableSpace* _to_space;
   PSPromotionManager* _promotion_manager;
+private:
+  ForwardTable* const _fwd;
 
 public:
-  PSKeepAliveClosure(PSPromotionManager* pm) : _promotion_manager(pm) {
+  PSKeepAliveClosure(PSPromotionManager* pm) : _promotion_manager(pm),
+    _fwd(ParallelScavengeHeap::heap()->forward_table()) {
     ParallelScavengeHeap* heap = ParallelScavengeHeap::heap();
     _to_space = heap->young_gen()->to_space();
 
@@ -168,7 +172,7 @@ public:
 
     // Weak refs may be visited more than once.
     if (PSScavenge::should_scavenge(p, _to_space)) {
-      _promotion_manager->copy_and_push_safe_barrier</*promote_immediately=*/false>(p);
+      _promotion_manager->copy_and_push_safe_barrier</*promote_immediately=*/false>(_fwd, p);
     }
   }
   virtual void do_oop(oop* p)       { PSKeepAliveClosure::do_oop_work(p); }

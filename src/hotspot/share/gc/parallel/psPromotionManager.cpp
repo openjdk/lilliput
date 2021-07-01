@@ -29,6 +29,7 @@
 #include "gc/parallel/psOldGen.hpp"
 #include "gc/parallel/psPromotionManager.inline.hpp"
 #include "gc/parallel/psScavenge.inline.hpp"
+#include "gc/shared/forwardTable.hpp"
 #include "gc/shared/gcTrace.hpp"
 #include "gc/shared/preservedMarks.inline.hpp"
 #include "gc/shared/taskqueue.inline.hpp"
@@ -250,6 +251,7 @@ void PSPromotionManager::drain_stacks_depth(bool totally_drain) {
   MutableSpace* old_space = heap->old_gen()->object_space();
 #endif /* ASSERT */
 
+  ForwardTable* const fwd = heap->forward_table();
   PSScannerTasksQueue* const tq = claimed_stack_depth();
   do {
     ScannerTask task;
@@ -257,16 +259,16 @@ void PSPromotionManager::drain_stacks_depth(bool totally_drain) {
     // Drain overflow stack first, so other threads can steal from
     // claimed stack while we work.
     while (tq->pop_overflow(task)) {
-      process_popped_location_depth(task);
+      process_popped_location_depth(task, fwd);
     }
 
     if (totally_drain) {
       while (tq->pop_local(task)) {
-        process_popped_location_depth(task);
+        process_popped_location_depth(task, fwd);
       }
     } else {
       while (tq->size() > _target_stack_size && tq->pop_local(task)) {
-        process_popped_location_depth(task);
+        process_popped_location_depth(task, fwd);
       }
     }
   } while ((totally_drain && !tq->taskqueue_empty()) || !tq->overflow_empty());
@@ -310,7 +312,7 @@ template <class T> void PSPromotionManager::process_array_chunk_work(
   }
 }
 
-void PSPromotionManager::process_array_chunk(PartialArrayScanTask task) {
+void PSPromotionManager::process_array_chunk(PartialArrayScanTask task, const ForwardTable* const fwd) {
   assert(PSChunkLargeArrays, "invariant");
 
   oop old = task.to_source_array();
@@ -319,7 +321,7 @@ void PSPromotionManager::process_array_chunk(PartialArrayScanTask task) {
 
   TASKQUEUE_STATS_ONLY(++_array_chunks_processed);
 
-  oop const obj = old->forwardee();
+  oop const obj = fwd->forwardee(old);
 
   int start;
   int const end = arrayOop(old)->length();
@@ -344,7 +346,7 @@ void PSPromotionManager::process_array_chunk(PartialArrayScanTask task) {
   }
 }
 
-oop PSPromotionManager::oop_promotion_failed(oop obj, markWord obj_mark) {
+oop PSPromotionManager::oop_promotion_failed(ForwardTable* const fwd, oop obj, markWord obj_mark) {
   assert(_old_gen_is_full || PromotionFailureALot, "Sanity");
 
   // Attempt to CAS in the header.
@@ -352,9 +354,10 @@ oop PSPromotionManager::oop_promotion_failed(oop obj, markWord obj_mark) {
   // this started.  If it is the same (i.e., no forwarding
   // pointer has been installed), then this thread owns
   // it.
-  if (obj->cas_forward_to(obj, obj_mark)) {
+  oop forwardee = fwd->forward_to(obj, obj);
+  if (forwardee == NULL) {
     // We won any races, we "own" this object.
-    assert(obj == obj->forwardee(), "Sanity");
+    assert(obj == fwd->forwardee(obj), "Sanity");
 
     _promotion_failed_info.register_copy_failure(obj->size());
 
@@ -366,7 +369,7 @@ oop PSPromotionManager::oop_promotion_failed(oop obj, markWord obj_mark) {
     guarantee(obj->is_forwarded(), "Object must be forwarded if the cas failed.");
 
     // No unallocation to worry about.
-    obj = obj->forwardee();
+    obj = forwardee;
   }
 
   log_develop_trace(gc, scavenge)("{promotion-failure %s " PTR_FORMAT " (%d)}", obj->klass()->internal_name(), p2i(obj), obj->size());
