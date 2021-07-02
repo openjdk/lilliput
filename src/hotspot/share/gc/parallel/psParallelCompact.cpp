@@ -993,6 +993,8 @@ void PSParallelCompact::pre_compact()
   // Fill in TLABs
   heap->ensure_parsability(true);  // retire TLABs
 
+  heap->forward_table()->clear();
+
   if (VerifyBeforeGC && heap->total_collections() >= VerifyGCStartAt) {
     Universe::verify("Before GC");
   }

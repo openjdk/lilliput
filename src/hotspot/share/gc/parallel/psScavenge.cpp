@@ -704,6 +704,8 @@ bool PSScavenge::invoke_no_policy() {
 
   _gc_tracer.report_gc_end(_gc_timer.gc_end(), _gc_timer.time_partitions());
 
+  heap->forward_table()->clear();
+
   return !promotion_failure_occurred;
 }
 
