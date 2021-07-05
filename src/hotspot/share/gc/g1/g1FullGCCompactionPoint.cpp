@@ -94,7 +94,7 @@ void G1FullGCCompactionPoint::switch_region() {
   initialize_values(true);
 }
 
-void G1FullGCCompactionPoint::forward(SlidingForwarding<5>* const forwarding, oop object, size_t size) {
+void G1FullGCCompactionPoint::forward(SlidingForwarding* const forwarding, oop object, size_t size) {
   assert(_current_region != NULL, "Must have been initialized");
 
   // Ensure the object fit in the current region.

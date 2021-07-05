@@ -52,6 +52,18 @@ void PreservedMarks::adjust_during_full_gc() {
   }
 }
 
+void PreservedMarks::adjust_during_full_gc(const SlidingForwarding* const forwarding) {
+  StackIterator<OopAndMarkWord, mtGC> iter(_stack);
+  while (!iter.is_empty()) {
+    OopAndMarkWord* elem = iter.next_addr();
+
+    oop obj = elem->get_oop();
+    if (obj->is_forwarded()) {
+      elem->set_oop(forwarding->forwardee(obj));
+    }
+  }
+}
+
 void PreservedMarks::restore_and_increment(volatile size_t* const total_size_addr) {
   const size_t stack_size = size();
   restore();

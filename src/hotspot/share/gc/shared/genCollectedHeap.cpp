@@ -121,7 +121,7 @@ jint GenCollectedHeap::initialize() {
   }
 
   initialize_reserved_region(heap_rs);
-  _forwarding = new SlidingForwarding<1>(_reserved);
+  _forwarding = new SlidingForwarding(_reserved);
 
   _rem_set = create_rem_set(heap_rs.region());
   _rem_set->initialize();

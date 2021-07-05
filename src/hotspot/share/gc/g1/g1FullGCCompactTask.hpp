@@ -33,7 +33,6 @@
 
 class G1CollectedHeap;
 class G1CMBitMap;
-template <int N>
 class SlidingForwarding;
 
 class G1FullGCCompactTask : public G1FullGCTask {
@@ -52,7 +51,7 @@ public:
 
   class G1CompactRegionClosure : public StackObj {
     G1CMBitMap* _bitmap;
-    const SlidingForwarding<5>* const _forwarding;
+    const SlidingForwarding* const _forwarding;
   public:
     G1CompactRegionClosure(G1CMBitMap* bitmap) :
       _bitmap(bitmap),

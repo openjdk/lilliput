@@ -164,7 +164,7 @@ inline void CompactibleSpace::scan_and_forward(SpaceType* space, CompactPoint* c
   HeapWord* cur_obj = space->bottom();
   HeapWord* scan_limit = space->scan_limit();
 
-  SlidingForwarding<1>* const forwarding = GenCollectedHeap::heap()->forwarding();
+  SlidingForwarding* const forwarding = GenCollectedHeap::heap()->forwarding();
   while (cur_obj < scan_limit) {
     if (space->scanned_block_is_obj(cur_obj) && cast_to_oop(cur_obj)->is_gc_marked()) {
       // prefetch beyond cur_obj
@@ -225,7 +225,7 @@ inline void CompactibleSpace::scan_and_adjust_pointers(SpaceType* space) {
   HeapWord* cur_obj = space->bottom();
   HeapWord* const end_of_live = space->_end_of_live;  // Established by "scan_and_forward".
   HeapWord* const first_dead = space->_first_dead;    // Established by "scan_and_forward".
-  const SlidingForwarding<1>* const forwarding = GenCollectedHeap::heap()->forwarding();
+  const SlidingForwarding* const forwarding = GenCollectedHeap::heap()->forwarding();
 
   assert(first_dead <= end_of_live, "Stands to reason, no?");
 
@@ -319,7 +319,7 @@ inline void CompactibleSpace::scan_and_compact(SpaceType* space) {
     cur_obj = *(HeapWord**)(space->_first_dead);
   }
 
-  const SlidingForwarding<1>* const forwarding = GenCollectedHeap::heap()->forwarding();
+  const SlidingForwarding* const forwarding = GenCollectedHeap::heap()->forwarding();
 
   debug_only(HeapWord* prev_obj = NULL);
   while (cur_obj < end_of_live) {

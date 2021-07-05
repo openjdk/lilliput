@@ -34,7 +34,6 @@
 
 class G1CMBitMap;
 class G1FullCollector;
-template <int N>
 class SlidingForwarding;
 
 class G1FullGCPrepareTask : public G1FullGCTask {
@@ -78,7 +77,7 @@ protected:
 
   class G1PrepareCompactLiveClosure : public StackObj {
     G1FullGCCompactionPoint* _cp;
-    SlidingForwarding<5>* const _forwarding;
+    SlidingForwarding* const _forwarding;
   public:
     G1PrepareCompactLiveClosure(G1FullGCCompactionPoint* cp);
     size_t apply(oop object);
@@ -87,7 +86,7 @@ protected:
   class G1RePrepareClosure : public StackObj {
     G1FullGCCompactionPoint* _cp;
     HeapRegion* _current;
-    SlidingForwarding<5>* const _forwarding;
+    SlidingForwarding* const _forwarding;
   public:
     G1RePrepareClosure(G1FullGCCompactionPoint* hrcp,
                        HeapRegion* hr) :
