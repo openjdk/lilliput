@@ -78,6 +78,7 @@ protected:
   class G1PrepareCompactLiveClosure : public StackObj {
     G1FullGCCompactionPoint* _cp;
     SlidingForwarding* const _forwarding;
+
   public:
     G1PrepareCompactLiveClosure(G1FullGCCompactionPoint* cp);
     size_t apply(oop object);
@@ -87,6 +88,7 @@ protected:
     G1FullGCCompactionPoint* _cp;
     HeapRegion* _current;
     SlidingForwarding* const _forwarding;
+
   public:
     G1RePrepareClosure(G1FullGCCompactionPoint* hrcp,
                        HeapRegion* hr) :

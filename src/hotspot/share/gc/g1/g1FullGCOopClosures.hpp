@@ -29,6 +29,7 @@
 #include "gc/shared/verifyOption.hpp"
 #include "memory/iterator.hpp"
 
+class G1CollectedHeap;
 class G1FullCollector;
 class G1CMBitMap;
 class G1FullGCMarker;
@@ -81,6 +82,7 @@ public:
 class G1AdjustClosure : public BasicOopIterateClosure {
   G1FullCollector* _collector;
   const SlidingForwarding* const _forwarding;
+
   template <class T> inline void adjust_pointer(T* p);
 public:
   G1AdjustClosure(G1FullCollector* collector) :
