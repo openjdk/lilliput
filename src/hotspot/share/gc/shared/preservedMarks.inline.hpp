@@ -26,6 +26,7 @@
 #define SHARE_GC_SHARED_PRESERVEDMARKS_INLINE_HPP
 
 #include "gc/shared/preservedMarks.hpp"
+#include "gc/shared/slidingForwarding.inline.hpp"
 
 #include "logging/log.hpp"
 #include "oops/oop.inline.hpp"
@@ -61,19 +62,6 @@ inline PreservedMarks::PreservedMarks()
 
 void PreservedMarks::OopAndMarkWord::set_mark() const {
   _o->set_mark(_m);
-}
-
-template <int NUM_REGION_BITS>
-void PreservedMarks::adjust_during_full_gc(const SlidingForwarding<NUM_REGION_BITS>* const forwarding) {
-  StackIterator<OopAndMarkWord, mtGC> iter(_stack);
-  while (!iter.is_empty()) {
-    OopAndMarkWord* elem = iter.next_addr();
-
-    oop obj = elem->get_oop();
-    if (obj->is_forwarded()) {
-      elem->set_oop(forwarding->forwardee(obj));
-    }
-  }
 }
 
 #endif // SHARE_GC_SHARED_PRESERVEDMARKS_INLINE_HPP

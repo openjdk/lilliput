@@ -29,69 +29,19 @@
 #include "oops/oop.inline.hpp"
 
 #ifdef _LP64
-template <int NUM_REGION_BITS>
-HeapWord* const SlidingForwarding<NUM_REGION_BITS>::UNUSED_BASE = reinterpret_cast<HeapWord*>(0x1);
-#endif
-
-template <int NUM_REGION_BITS>
-SlidingForwarding<NUM_REGION_BITS>::SlidingForwarding(MemRegion heap)
-#ifdef _LP64
-: _heap_start(heap.start()),
-  _num_regions(((heap.end() - heap.start()) >> NUM_COMPRESSED_BITS) + 1),
-  _region_size_words_shift(NUM_COMPRESSED_BITS),
-  _target_base_table(NEW_C_HEAP_ARRAY(HeapWord*, _num_regions * 2, mtGC)) {
-  assert(_region_size_words_shift <= NUM_COMPRESSED_BITS, "regions must not be larger than maximum addressing bits allow");
-#else
-{
-#endif
-}
-
-template <int NUM_REGION_BITS>
-SlidingForwarding<NUM_REGION_BITS>::SlidingForwarding(MemRegion heap, size_t region_size_words_shift)
-#ifdef _LP64
-: _heap_start(heap.start()),
-  _num_regions(((heap.end() - heap.start()) >> region_size_words_shift) + 1),
-  _region_size_words_shift(region_size_words_shift),
-  _target_base_table(NEW_C_HEAP_ARRAY(HeapWord*, _num_regions * (ONE << NUM_REGION_BITS), mtGC)) {
-  assert(region_size_words_shift <= NUM_COMPRESSED_BITS, "regions must not be larger than maximum addressing bits allow");
-#else
-{
-#endif
-}
-
-template <int NUM_REGION_BITS>
-SlidingForwarding<NUM_REGION_BITS>::~SlidingForwarding() {
-#ifdef _LP64
-  FREE_C_HEAP_ARRAY(HeapWord*, _target_base_table);
-#endif
-}
-
-template <int NUM_REGION_BITS>
-void SlidingForwarding<NUM_REGION_BITS>::clear() {
-#ifdef _LP64
-  size_t max = _num_regions * (ONE << NUM_REGION_BITS);
-  for (size_t i = 0; i < max; i++) {
-    _target_base_table[i] = UNUSED_BASE;
-  }
-#endif
-}
-
-#ifdef _LP64
-template <int NUM_REGION_BITS>
-size_t SlidingForwarding<NUM_REGION_BITS>::region_index_containing(HeapWord* addr) const {
+size_t SlidingForwarding::region_index_containing(HeapWord* addr) const {
   assert(addr >= _heap_start, "sanity: addr: " PTR_FORMAT " heap base: " PTR_FORMAT, p2i(addr), p2i(_heap_start));
   size_t index = ((size_t) (addr - _heap_start)) >> _region_size_words_shift;
   assert(index < _num_regions, "Region index is in bounds: " PTR_FORMAT, p2i(addr));
   return index;
 }
 
-template <int NUM_REGION_BITS>
-bool SlidingForwarding<NUM_REGION_BITS>::region_contains(HeapWord* region_base, HeapWord* addr) const {
+bool SlidingForwarding::region_contains(HeapWord* region_base, HeapWord* addr) const {
   return uintptr_t(addr - region_base) < (ONE << _region_size_words_shift);
 }
 
-template <int NUM_REGION_BITS>
-uintptr_t SlidingForwarding<NUM_REGION_BITS>::encode_forwarding(HeapWord* original, HeapWord* target) {
+
+uintptr_t SlidingForwarding::encode_forwarding(HeapWord* original, HeapWord* target) {
   size_t orig_idx = region_index_containing(original);
   size_t base_table_idx = orig_idx * 2;
   size_t target_idx = region_index_containing(target);
@@ -123,8 +73,7 @@ uintptr_t SlidingForwarding<NUM_REGION_BITS>::encode_forwarding(HeapWord* origin
   return encoded;
 }
 
-template <int NUM_REGION_BITS>
-HeapWord* SlidingForwarding<NUM_REGION_BITS>::decode_forwarding(HeapWord* original, uintptr_t encoded) const {
+HeapWord* SlidingForwarding::decode_forwarding(HeapWord* original, uintptr_t encoded) const {
   assert((encoded & markWord::marked_value) == markWord::marked_value, "must be marked as forwarded");
   size_t orig_idx = region_index_containing(original);
   size_t region_idx = (encoded >> BASE_SHIFT) & right_n_bits(NUM_REGION_BITS);
@@ -135,8 +84,7 @@ HeapWord* SlidingForwarding<NUM_REGION_BITS>::decode_forwarding(HeapWord* origin
 }
 #endif
 
-template <int NUM_REGION_BITS>
-void SlidingForwarding<NUM_REGION_BITS>::forward_to(oop original, oop target) {
+void SlidingForwarding::forward_to(oop original, oop target) {
 #ifdef _LP64
   markWord header = original->mark();
   uintptr_t encoded = encode_forwarding(cast_from_oop<HeapWord*>(original), cast_from_oop<HeapWord*>(target));
@@ -148,8 +96,7 @@ void SlidingForwarding<NUM_REGION_BITS>::forward_to(oop original, oop target) {
 #endif
 }
 
-template <int NUM_REGION_BITS>
-oop SlidingForwarding<NUM_REGION_BITS>::forwardee(oop original) const {
+oop SlidingForwarding::forwardee(oop original) const {
 #ifdef _LP64
   markWord header = original->mark();
   uintptr_t encoded = header.value() & ~markWord::klass_mask_in_place;

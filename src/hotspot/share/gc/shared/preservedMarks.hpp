@@ -33,7 +33,6 @@
 class AbstractGangTask;
 class PreservedMarksSet;
 class WorkGang;
-template <int N>
 class SlidingForwarding;
 
 class PreservedMarks {
@@ -67,8 +66,7 @@ public:
   // to their forwarding location stored in the mark.
   void adjust_during_full_gc();
 
-  template<int NUM_REGION_BITS>
-  void adjust_during_full_gc(const SlidingForwarding<NUM_REGION_BITS>* const forwarding);
+  void adjust_during_full_gc(const SlidingForwarding* const forwarding);
 
   void restore_and_increment(volatile size_t* const _total_size_addr);
   inline static void init_forwarded_mark(oop obj);

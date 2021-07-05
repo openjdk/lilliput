@@ -75,7 +75,7 @@ inline void MarkAndPushClosure::do_oop(narrowOop* p)         { do_oop_work(p); }
 inline void MarkAndPushClosure::do_klass(Klass* k)           { MarkSweep::follow_klass(k); }
 inline void MarkAndPushClosure::do_cld(ClassLoaderData* cld) { MarkSweep::follow_cld(cld); }
 
-template <class T> inline void MarkSweep::adjust_pointer(const SlidingForwarding<1>* const forwarding, T* p) {
+template <class T> inline void MarkSweep::adjust_pointer(const SlidingForwarding* const forwarding, T* p) {
   T heap_oop = RawAccess<>::oop_load(p);
   if (!CompressedOops::is_null(heap_oop)) {
     oop obj = CompressedOops::decode_not_null(heap_oop);
@@ -97,7 +97,7 @@ inline void AdjustPointerClosure::do_oop(oop* p)       { do_oop_work(p); }
 inline void AdjustPointerClosure::do_oop(narrowOop* p) { do_oop_work(p); }
 
 
-inline int MarkSweep::adjust_pointers(const SlidingForwarding<1>* const forwarding, oop obj) {
+inline int MarkSweep::adjust_pointers(const SlidingForwarding* const forwarding, oop obj) {
   AdjustPointerClosure cl(forwarding);
   return obj->oop_iterate_size(&cl);
 }

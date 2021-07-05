@@ -63,10 +63,10 @@
  * - Decode the target address by using the target base address and the compressed address bits.
  */
 
-template <int NUM_REGION_BITS>
 class SlidingForwarding : public CHeapObj<mtGC> {
 #ifdef _LP64
 private:
+  static const int NUM_REGION_BITS = 1;
 
   static const uintptr_t ONE = 1ULL;
 
@@ -89,11 +89,11 @@ private:
   size_t     const _region_size_words_shift;
   HeapWord** const _target_base_table;
 
-  size_t region_index_containing(HeapWord* addr) const;
-  bool region_contains(HeapWord* region_base, HeapWord* addr) const;
+  inline size_t region_index_containing(HeapWord* addr) const;
+  inline bool region_contains(HeapWord* region_base, HeapWord* addr) const;
 
-  uintptr_t encode_forwarding(HeapWord* original, HeapWord* target);
-  HeapWord* decode_forwarding(HeapWord* original, uintptr_t encoded) const;
+  inline uintptr_t encode_forwarding(HeapWord* original, HeapWord* target);
+  inline HeapWord* decode_forwarding(HeapWord* original, uintptr_t encoded) const;
 
 #endif
 
@@ -103,8 +103,8 @@ public:
   ~SlidingForwarding();
 
   void clear();
-  void forward_to(oop original, oop target);
-  oop forwardee(oop original) const;
+  inline void forward_to(oop original, oop target);
+  inline oop forwardee(oop original) const;
 };
 
 #endif // SHARE_GC_SHARED_SLIDINGFORWARDING_HPP

@@ -35,7 +35,6 @@ class AdaptiveSizePolicy;
 class CardTableRS;
 class GCPolicyCounters;
 class GenerationSpec;
-template <int N>
 class SlidingForwarding;
 class StrongRootsScope;
 class SubTasksDone;
@@ -90,7 +89,7 @@ private:
   // In support of ExplicitGCInvokesConcurrent functionality
   unsigned int _full_collections_completed;
 
-  SlidingForwarding<1>* _forwarding;
+  SlidingForwarding* _forwarding;
 
   // Collects the given generation.
   void collect_generation(Generation* gen, bool full, size_t size, bool is_tlab,
@@ -334,7 +333,7 @@ public:
   // asserted to be this type.
   static GenCollectedHeap* heap();
 
-  SlidingForwarding<1>* forwarding() const {
+  SlidingForwarding* forwarding() const {
     return _forwarding;
   }
 
