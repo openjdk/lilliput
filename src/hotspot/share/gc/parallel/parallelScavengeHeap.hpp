@@ -26,6 +26,7 @@
 #define SHARE_GC_PARALLEL_PARALLELSCAVENGEHEAP_HPP
 
 #include "gc/parallel/objectStartArray.hpp"
+#include "gc/parallel/parallelForwardTableAllocator.hpp"
 #include "gc/parallel/psGCAdaptivePolicyCounters.hpp"
 #include "gc/parallel/psOldGen.hpp"
 #include "gc/parallel/psYoungGen.hpp"
@@ -105,7 +106,7 @@ class ParallelScavengeHeap : public CollectedHeap {
              ParallelGCThreads,
              true /* are_GC_task_threads */,
              false /* are_ConcurrentGC_threads */),
-    _forward_table(new ForwardTable()) { }
+    _forward_table(new ForwardTable(new ParallelForwardTableAllocator())) { }
 
   // For use by VM operations
   enum CollectionType {

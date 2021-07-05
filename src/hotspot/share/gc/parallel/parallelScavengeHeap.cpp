@@ -25,6 +25,7 @@
 #include "precompiled.hpp"
 #include "code/codeCache.hpp"
 #include "gc/parallel/parallelArguments.hpp"
+#include "gc/parallel/parallelBarrierSet.hpp"
 #include "gc/parallel/objectStartArray.inline.hpp"
 #include "gc/parallel/parallelInitLogger.hpp"
 #include "gc/parallel/parallelScavengeHeap.inline.hpp"
@@ -71,7 +72,7 @@ jint ParallelScavengeHeap::initialize() {
 
   PSCardTable* card_table = new PSCardTable(heap_rs.region());
   card_table->initialize();
-  CardTableBarrierSet* const barrier_set = new CardTableBarrierSet(card_table);
+  ParallelBarrierSet* const barrier_set = new ParallelBarrierSet(card_table);
   barrier_set->initialize();
   BarrierSet::set_barrier_set(barrier_set);
 

@@ -71,16 +71,16 @@ public:
   }
 };
 
-ForwardTable::ForwardTable() :
-  _arena(new (mtGC) Arena(mtGC)),
-  _table(new ConcurrentHashTable<ForwardTableConfig, mtGC>(reinterpret_cast<void*>(_arena))) {}
+ForwardTable::ForwardTable(ForwardTableAllocator* const allocator) :
+  _table(new ConcurrentHashTable<ForwardTableConfig, mtGC>(reinterpret_cast<void*>(allocator))),
+  _allocator(allocator) {}
 
 void ForwardTable::clear() {
 //  tty->print_cr("size before clearing: ");
 //  tty->print_cr("conc-hashtable size: " SIZE_FORMAT, _table->get_mem_size(Thread::current()));
 //  tty->print_cr("arena size: " SIZE_FORMAT, _arena->size_in_bytes());
   _table->unsafe_reset();
-  _arena->destruct_contents();
+  _allocator->reset();
 //  tty->print_cr("size after clearing: ");
 //  tty->print_cr("conc-hashtable size: " SIZE_FORMAT, _table->get_mem_size(Thread::current()));
 //  tty->print_cr("arena size: " SIZE_FORMAT, _arena->size_in_bytes());
@@ -88,6 +88,7 @@ void ForwardTable::clear() {
 
 oop ForwardTable::forward_to(oop from, oop to) {
   assert(to != NULL, "Must not forwarde to NULL");
+  //tty->print_cr("forward_to: thread: " PTR_FORMAT ", from: " PTR_FORMAT ", to: " PTR_FORMAT, p2i(Thread::current()), p2i(cast_from_oop<HeapWord*>(from)), p2i(cast_from_oop<HeapWord*>(to)));
   ForwardTableLookup lookup(cast_from_oop<HeapWord*>(from));
   ForwardTableValue value(cast_from_oop<HeapWord*>(from), cast_from_oop<HeapWord*>(to));
   ForwardTableFound found;
@@ -95,7 +96,7 @@ oop ForwardTable::forward_to(oop from, oop to) {
   oop result;
   if (_table->insert_get(Thread::current(), lookup, value, found, &grow)) {
     from->set_mark(from->mark().set_marked());
-    assert(_table->get(Thread::current(), lookup, found), "should be inserted now");
+    assert(_table->get(Thread::current(), lookup, found), "should be inserted now, thread: " PTR_FORMAT ", from: " PTR_FORMAT ", found: " PTR_FORMAT ", forwardee: " PTR_FORMAT, p2i(Thread::current()), p2i(cast_from_oop<HeapWord*>(from)), p2i(found.value()->forwardee()), p2i(cast_from_oop<HeapWord*>(to)));
     assert(found.value()->forwardee() == cast_from_oop<HeapWord*>(to), "forwardee must be ours");
     result = nullptr;
   } else {

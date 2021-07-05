@@ -32,6 +32,32 @@
 template <typename CONFIG, MEMFLAGS F>
 class ConcurrentHashTable;
 
+class ForwardTableAllocator : public CHeapObj<mtGC> {
+public:
+  virtual void* allocate(size_t size) = 0;
+  virtual void free(void* memory, size_t size) = 0;
+  virtual void reset() = 0;
+};
+
+class BasicForwardTableAllocator : public ForwardTableAllocator {
+private:
+  Arena _arena;
+public:
+  BasicForwardTableAllocator() : _arena(Arena(mtGC)) {}
+
+  void* allocate(size_t size) {
+    return _arena.Amalloc_4(size);
+  }
+
+  void free(void* memory, size_t size) {
+    _arena.Afree(memory, size);
+  }
+
+  void reset() {
+    _arena.destruct_contents();
+  }
+};
+
 class ForwardTableValue {
 private:
   const HeapWord* const _object;
@@ -49,7 +75,7 @@ public:
   using Value = ForwardTableValue;
   static uintx get_hash(Value const& value, bool* is_dead);
   static void* allocate_node(void* context, size_t size, Value const& value) {
-    return reinterpret_cast<Arena*>(context)->Amalloc_4(size);
+    return reinterpret_cast<ForwardTableAllocator*>(context)->allocate(size);
   }
   static void free_node(void* context, void* memory, Value const& value) {
     // We only ever free all memory all-at-once.
@@ -58,10 +84,10 @@ public:
 
 class ForwardTable : public CHeapObj<mtGC> {
 private:
-  Arena* const _arena;
   ConcurrentHashTable<ForwardTableConfig, mtGC>* const _table;
+  ForwardTableAllocator* const _allocator;
 public:
-  ForwardTable();
+  ForwardTable(ForwardTableAllocator* const allocator);
 
   void clear();
   oop forward_to(oop from, oop to);

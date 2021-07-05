@@ -245,8 +245,8 @@ void PSPromotionManager::restore_preserved_marks() {
 void PSPromotionManager::drain_stacks_depth(bool totally_drain) {
   totally_drain = totally_drain || _totally_drain;
 
-#ifdef ASSERT
   ParallelScavengeHeap* heap = ParallelScavengeHeap::heap();
+#ifdef ASSERT
   MutableSpace* to_space = heap->young_gen()->to_space();
   MutableSpace* old_space = heap->old_gen()->object_space();
 #endif /* ASSERT */
