@@ -28,6 +28,7 @@
 #include "memory/iterator.hpp"
 #include "oops/oop.hpp"
 
+class ForwardTable;
 class Generation;
 class CardTableRS;
 class CardTableBarrierSet;
@@ -43,6 +44,7 @@ class KlassRemSet;
 template <typename Derived>
 class FastScanClosure : public BasicOopIterateClosure {
 private:
+  ForwardTable* const _fwd;
   DefNewGeneration* _young_gen;
   HeapWord*         _young_gen_end;
 
@@ -124,6 +126,8 @@ class FilteringClosure: public OopIterateClosure {
 //  -- weak references are processed all at once,
 //  with no notion of which generation they were in.
 class ScanWeakRefClosure: public OopClosure {
+private:
+  ForwardTable* const _fwd;
  protected:
   DefNewGeneration* _g;
   HeapWord*         _boundary;

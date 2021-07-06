@@ -129,7 +129,7 @@ inline void PSPromotionManager::push_contents(oop obj) {
 }
 
 template<bool promote_immediately>
-inline oop PSPromotionManager::copy_to_survivor_space(oop o) {
+inline oop PSPromotionManager::copy_to_survivor_space(ForwardTable* const fwd, oop o) {
   assert(should_scavenge(&o), "Sanity");
 
   // NOTE! We must be very careful with any methods that access the mark
@@ -137,14 +137,14 @@ inline oop PSPromotionManager::copy_to_survivor_space(oop o) {
   // at any time.
   markWord m = o->mark();
   if (!m.is_marked()) {
-    return copy_unmarked_to_survivor_space<promote_immediately>(o, m);
+    return copy_unmarked_to_survivor_space<promote_immediately>(fwd, o, m);
   } else {
     // Ensure any loads from the forwardee follow all changes that precede
     // the release-cmpxchg that performed the forwarding, possibly in some
     // other thread.
     OrderAccess::acquire();
     // Return the already installed forwardee.
-    return cast_to_oop(m.decode_pointer());
+    return fwd->forwardee(o);
   }
 }
 
@@ -154,7 +154,7 @@ inline oop PSPromotionManager::copy_to_survivor_space(oop o) {
 // performance.
 //
 template<bool promote_immediately>
-inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
+inline oop PSPromotionManager::copy_unmarked_to_survivor_space(ForwardTable* const fwd, oop o,
                                                                markWord test_mark) {
   assert(should_scavenge(&o), "Sanity");
 
@@ -198,7 +198,7 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
   if (new_obj == NULL) {
 #ifndef PRODUCT
     if (ParallelScavengeHeap::heap()->promotion_should_fail()) {
-      return oop_promotion_failed(o, test_mark);
+      return oop_promotion_failed(fwd, o, test_mark);
     }
 #endif  // #ifndef PRODUCT
 
@@ -241,7 +241,7 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
 
       if (new_obj == NULL) {
         _old_gen_is_full = true;
-        return oop_promotion_failed(o, test_mark);
+        return oop_promotion_failed(fwd, o, test_mark);
       }
     }
   }
@@ -253,10 +253,10 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
 
   // Now we have to CAS in the header.
   // Make copy visible to threads reading the forwardee.
-  oop forwardee = o->forward_to_atomic(new_obj, test_mark, memory_order_release);
+  oop forwardee = fwd->forward_to(o, new_obj);
   if (forwardee == NULL) {  // forwardee is NULL when forwarding is successful
     // We won any races, we "own" this object.
-    assert(new_obj == o->forwardee(), "Sanity");
+    assert(new_obj == fwd->forwardee(o), "Sanity: new_obj: " PTR_FORMAT ", forwardee: " PTR_FORMAT, p2i(new_obj), p2i(fwd->forwardee(o)));
 
     // Increment age if obj still in new generation. Now that
     // we're dealing with a markWord that cannot change, it is
@@ -292,8 +292,7 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
     // release-cmpxchg that performed the forwarding in another thread.
     OrderAccess::acquire();
 
-    assert(o->is_forwarded(), "Object must be forwarded if the cas failed.");
-    assert(o->forwardee() == forwardee, "invariant");
+    assert(fwd->forwardee(o) == forwardee, "invariant");
 
     // Try to deallocate the space.  If it was directly allocated we cannot
     // deallocate it, so we have to test.  If the deallocation fails,
@@ -313,11 +312,11 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
 // This version tests the oop* to make sure it is within the heap before
 // attempting marking.
 template <bool promote_immediately, class T>
-inline void PSPromotionManager::copy_and_push_safe_barrier(T* p) {
+inline void PSPromotionManager::copy_and_push_safe_barrier(ForwardTable* const fwd, T* p) {
   assert(should_scavenge(p, true), "revisiting object?");
 
   oop o = RawAccess<IS_NOT_NULL>::oop_load(p);
-  oop new_obj = copy_to_survivor_space<promote_immediately>(o);
+  oop new_obj = copy_to_survivor_space<promote_immediately>(fwd, o);
   RawAccess<IS_NOT_NULL>::oop_store(p, new_obj);
 
   // We cannot mark without test, as some code passes us pointers
@@ -331,16 +330,16 @@ inline void PSPromotionManager::copy_and_push_safe_barrier(T* p) {
   }
 }
 
-inline void PSPromotionManager::process_popped_location_depth(ScannerTask task) {
+inline void PSPromotionManager::process_popped_location_depth(ScannerTask task, ForwardTable* const fwd) {
   if (task.is_partial_array_task()) {
     assert(PSChunkLargeArrays, "invariant");
-    process_array_chunk(task.to_partial_array_task());
+    process_array_chunk(task.to_partial_array_task(), fwd);
   } else {
     if (task.is_narrow_oop_ptr()) {
       assert(UseCompressedOops, "Error");
-      copy_and_push_safe_barrier</*promote_immediately=*/false>(task.to_narrow_oop_ptr());
+      copy_and_push_safe_barrier</*promote_immediately=*/false>(fwd, task.to_narrow_oop_ptr());
     } else {
-      copy_and_push_safe_barrier</*promote_immediately=*/false>(task.to_oop_ptr());
+      copy_and_push_safe_barrier</*promote_immediately=*/false>(fwd, task.to_oop_ptr());
     }
   }
 }

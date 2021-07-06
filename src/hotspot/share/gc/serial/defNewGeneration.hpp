@@ -39,6 +39,7 @@ class ContiguousSpace;
 class CSpaceCounters;
 class DefNewYoungerGenClosure;
 class DefNewScanClosure;
+class ForwardTable;
 class ScanWeakRefClosure;
 class SerialHeap;
 class STWGCTimer;
@@ -84,7 +85,7 @@ protected:
   //     All objects in the young generation are unmarked.
   //     Eden, from-space, and to-space will all be collected by
   //       the full collection.
-  void handle_promotion_failure(oop);
+  void handle_promotion_failure(ForwardTable* const, oop);
 
   // In the absence of promotion failure, we wouldn't look at "from-space"
   // objects after a young-gen collection.  When promotion fails, however,
@@ -311,7 +312,7 @@ protected:
 
   HeapWord* expand_and_allocate(size_t size, bool is_tlab);
 
-  oop copy_to_survivor_space(oop old);
+  oop copy_to_survivor_space(ForwardTable* const fwd, oop old);
   uint tenuring_threshold() { return _tenuring_threshold; }
 
   // Performance Counter support

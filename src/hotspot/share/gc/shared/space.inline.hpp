@@ -30,6 +30,8 @@
 #include "gc/shared/blockOffsetTable.inline.hpp"
 #include "gc/shared/collectedHeap.hpp"
 #include "gc/shared/generation.hpp"
+#include "gc/shared/genCollectedHeap.hpp"
+#include "gc/shared/forwardTable.hpp"
 #include "gc/shared/spaceDecorator.hpp"
 #include "oops/oopsHierarchy.hpp"
 #include "oops/oop.inline.hpp"
@@ -163,12 +165,13 @@ inline void CompactibleSpace::scan_and_forward(SpaceType* space, CompactPoint* c
   HeapWord* cur_obj = space->bottom();
   HeapWord* scan_limit = space->scan_limit();
 
+  ForwardTable* const fwd = GenCollectedHeap::heap()->forward_table();
   while (cur_obj < scan_limit) {
     if (space->scanned_block_is_obj(cur_obj) && cast_to_oop(cur_obj)->is_gc_marked()) {
       // prefetch beyond cur_obj
       Prefetch::write(cur_obj, interval);
       size_t size = space->scanned_block_size(cur_obj);
-      compact_top = cp->space->forward(cast_to_oop(cur_obj), size, cp, compact_top);
+      compact_top = cp->space->forward(fwd, cast_to_oop(cur_obj), size, cp, compact_top);
       cur_obj += size;
       end_of_live = cur_obj;
     } else {
@@ -184,7 +187,7 @@ inline void CompactibleSpace::scan_and_forward(SpaceType* space, CompactPoint* c
       // we don't have to compact quite as often.
       if (cur_obj == compact_top && dead_spacer.insert_deadspace(cur_obj, end)) {
         oop obj = cast_to_oop(cur_obj);
-        compact_top = cp->space->forward(obj, obj->size(), cp, compact_top);
+        compact_top = cp->space->forward(fwd, obj, obj->size(), cp, compact_top);
         end_of_live = end;
       } else {
         // otherwise, it really is a free region.
@@ -317,6 +320,7 @@ inline void CompactibleSpace::scan_and_compact(SpaceType* space) {
   }
 
   debug_only(HeapWord* prev_obj = NULL);
+  const ForwardTable* const fwd = GenCollectedHeap::heap()->forward_table();
   while (cur_obj < end_of_live) {
     if (!cast_to_oop(cur_obj)->is_gc_marked()) {
       debug_only(prev_obj = cur_obj);
@@ -329,7 +333,7 @@ inline void CompactibleSpace::scan_and_compact(SpaceType* space) {
 
       // size and destination
       size_t size = space->obj_size(cur_obj);
-      HeapWord* compaction_top = cast_from_oop<HeapWord*>(cast_to_oop(cur_obj)->forwardee());
+      HeapWord* compaction_top = cast_from_oop<HeapWord*>(fwd->forwardee(cast_to_oop(cur_obj)));
 
       // prefetch beyond compaction_top
       Prefetch::write(compaction_top, copy_interval);

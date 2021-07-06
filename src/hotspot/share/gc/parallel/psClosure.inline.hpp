@@ -27,6 +27,7 @@
 
 // No psClosure.hpp
 
+#include "gc/shared/forwardTable.hpp"
 #include "gc/parallel/psPromotionManager.inline.hpp"
 #include "gc/parallel/psScavenge.inline.hpp"
 #include "memory/iterator.hpp"
@@ -35,14 +36,18 @@
 #include "utilities/globalDefinitions.hpp"
 
 class PSAdjustWeakRootsClosure final: public OopClosure {
+private:
+  const ForwardTable* const _fwd;
 public:
+  PSAdjustWeakRootsClosure() : _fwd(ParallelScavengeHeap::heap()->forward_table()) {}
+
   virtual void do_oop(narrowOop* p) { ShouldNotReachHere(); }
 
   virtual void do_oop(oop* p)       {
     if (PSScavenge::should_scavenge(p)) {
       oop o = RawAccess<IS_NOT_NULL>::oop_load(p);
-      assert(o->is_forwarded(), "Objects are already forwarded before weak processing");
-      oop new_obj = o->forwardee();
+      oop new_obj = _fwd->forwardee(o);
+      assert(new_obj != NULL, "Objects are already forwarded before weak processing");
       if (log_develop_is_enabled(Trace, gc, scavenge)) {
         ResourceMark rm; // required by internal_name()
         log_develop_trace(gc, scavenge)("{%s %s " PTR_FORMAT " -> " PTR_FORMAT " (%d)}",
@@ -58,15 +63,17 @@ template <bool promote_immediately>
 class PSRootsClosure: public OopClosure {
 private:
   PSPromotionManager* _promotion_manager;
+  ForwardTable* const _fwd;
 
   template <class T> void do_oop_work(T *p) {
     if (PSScavenge::should_scavenge(p)) {
       // We never card mark roots, maybe call a func without test?
-      _promotion_manager->copy_and_push_safe_barrier<promote_immediately>(p);
+      _promotion_manager->copy_and_push_safe_barrier<promote_immediately>(_fwd, p);
     }
   }
 public:
-  PSRootsClosure(PSPromotionManager* pm) : _promotion_manager(pm) { }
+  PSRootsClosure(PSPromotionManager* pm) : _promotion_manager(pm),
+    _fwd(ParallelScavengeHeap::heap()->forward_table()) { }
   void do_oop(oop* p)       { PSRootsClosure::do_oop_work(p); }
   void do_oop(narrowOop* p) { PSRootsClosure::do_oop_work(p); }
 };
@@ -81,8 +88,10 @@ private:
   // Used to redirty a scanned cld if it has oops
   // pointing to the young generation after being scanned.
   ClassLoaderData*    _scanned_cld;
+  ForwardTable* const _fwd;
 public:
-  PSScavengeFromCLDClosure(PSPromotionManager* pm) : _pm(pm), _scanned_cld(NULL) { }
+  PSScavengeFromCLDClosure(PSPromotionManager* pm) : _pm(pm), _scanned_cld(NULL),
+    _fwd(ParallelScavengeHeap::heap()->forward_table()) { }
   void do_oop(narrowOop* p) { ShouldNotReachHere(); }
   void do_oop(oop* p)       {
     ParallelScavengeHeap* psh = ParallelScavengeHeap::heap();
@@ -91,7 +100,7 @@ public:
       assert(PSScavenge::should_scavenge(p, true), "revisiting object?");
 
       oop o = RawAccess<IS_NOT_NULL>::oop_load(p);
-      oop new_obj = _pm->copy_to_survivor_space</*promote_immediately=*/false>(o);
+      oop new_obj = _pm->copy_to_survivor_space</*promote_immediately=*/false>(_fwd, o);
       RawAccess<IS_NOT_NULL>::oop_store(p, new_obj);
 
       if (PSScavenge::is_obj_in_young(new_obj)) {

@@ -26,11 +26,13 @@
 #define SHARE_GC_PARALLEL_PARALLELSCAVENGEHEAP_HPP
 
 #include "gc/parallel/objectStartArray.hpp"
+#include "gc/parallel/parallelForwardTableAllocator.hpp"
 #include "gc/parallel/psGCAdaptivePolicyCounters.hpp"
 #include "gc/parallel/psOldGen.hpp"
 #include "gc/parallel/psYoungGen.hpp"
 #include "gc/shared/cardTableBarrierSet.hpp"
 #include "gc/shared/collectedHeap.hpp"
+#include "gc/shared/forwardTable.hpp"
 #include "gc/shared/gcPolicyCounters.hpp"
 #include "gc/shared/gcWhen.hpp"
 #include "gc/shared/preGCValues.hpp"
@@ -73,6 +75,8 @@ class ParallelScavengeHeap : public CollectedHeap {
 
   WorkGang _workers;
 
+  ForwardTable* const _forward_table;
+
   virtual void initialize_serviceability();
 
   void trace_actual_reserved_page_size(const size_t reserved_heap_size, const ReservedSpace rs);
@@ -101,7 +105,8 @@ class ParallelScavengeHeap : public CollectedHeap {
     _workers("GC Thread",
              ParallelGCThreads,
              true /* are_GC_task_threads */,
-             false /* are_ConcurrentGC_threads */) { }
+             false /* are_ConcurrentGC_threads */),
+    _forward_table(new ForwardTable(new ParallelForwardTableAllocator())) { }
 
   // For use by VM operations
   enum CollectionType {
@@ -259,6 +264,10 @@ class ParallelScavengeHeap : public CollectedHeap {
 
   WorkGang& workers() {
     return _workers;
+  }
+
+  ForwardTable* const forward_table() const {
+    return _forward_table;
   }
 };
 

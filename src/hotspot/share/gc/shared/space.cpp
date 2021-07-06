@@ -27,6 +27,7 @@
 #include "classfile/vmSymbols.hpp"
 #include "gc/shared/blockOffsetTable.inline.hpp"
 #include "gc/shared/collectedHeap.inline.hpp"
+#include "gc/shared/forwardTable.hpp"
 #include "gc/shared/genCollectedHeap.hpp"
 #include "gc/shared/genOopClosures.inline.hpp"
 #include "gc/shared/space.hpp"
@@ -346,7 +347,7 @@ void CompactibleSpace::clear(bool mangle_space) {
   _compaction_top = bottom();
 }
 
-HeapWord* CompactibleSpace::forward(oop q, size_t size,
+HeapWord* CompactibleSpace::forward(ForwardTable* const fwd, oop q, size_t size,
                                     CompactPoint* cp, HeapWord* compact_top) {
   // q is alive
   // First check if we should switch compaction space
@@ -370,7 +371,7 @@ HeapWord* CompactibleSpace::forward(oop q, size_t size,
 
   // store the forwarding pointer into the mark word
   if (cast_from_oop<HeapWord*>(q) != compact_top) {
-    q->forward_to(cast_to_oop(compact_top));
+    fwd->forward_to(q, cast_to_oop(compact_top));
     assert(q->is_gc_marked(), "encoding the pointer should preserve the mark");
   } else {
     // if the object isn't moving we can just set the mark to the default
