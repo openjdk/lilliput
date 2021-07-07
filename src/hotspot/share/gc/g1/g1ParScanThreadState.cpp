@@ -218,7 +218,7 @@ void G1ParScanThreadState::do_partial_array(PartialArrayScanTask task) {
   oop from_obj = task.to_source_array();
 
   assert(_g1h->is_in_reserved(from_obj), "must be in heap.");
-  assert(from_obj->is_objArray(), "must be obj array");
+  //assert(from_obj->is_objArray(), "must be obj array");
   assert(from_obj->is_forwarded(), "must be forwarded");
 
   oop to_obj = from_obj->forwardee();
@@ -248,7 +248,7 @@ MAYBE_INLINE_EVACUATION
 void G1ParScanThreadState::start_partial_objarray(G1HeapRegionAttr dest_attr,
                                                   oop from_obj,
                                                   oop to_obj) {
-  assert(from_obj->is_objArray(), "precondition");
+  //assert(from_obj->is_objArray(), "precondition");
   assert(from_obj->is_forwarded(), "precondition");
   assert(from_obj->forwardee() == to_obj, "precondition");
   assert(from_obj != to_obj, "should not be scanning self-forwarded objects");
@@ -430,7 +430,16 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
 
   // Get the klass once.  We'll need it again later, and this avoids
   // re-decoding when it's compressed.
-  Klass* klass = old->klass();
+  //Klass* klass = old->klass();
+  markWord header = old->mark();
+  if (header.is_marked()) {
+    // Already forwarded by somebody else, return forwardee.
+    return old->forwardee(header);
+  }
+  if (header.has_displaced_mark_helper()) {
+    header = header.displaced_mark_helper();
+  }
+  Klass* klass = header.klass();
   const size_t word_sz = old->size_given_klass(klass);
 
   uint age = 0;
@@ -612,7 +621,10 @@ oop G1ParScanThreadState::handle_evacuation_failure_par(oop old, markWord m) {
     _g1h->preserve_mark_during_evac_failure(_worker_id, old, m);
 
     G1ScanInYoungSetter x(&_scanner, r->is_young());
-    old->oop_iterate_backwards(&_scanner);
+    if (m.has_displaced_mark_helper()) {
+      m = m.displaced_mark_helper();
+    }
+    old->oop_iterate_backwards(&_scanner, m.klass());
 
     return old;
   } else {

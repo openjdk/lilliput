@@ -229,7 +229,8 @@ void ShenandoahAsserts::assert_correct(void* interior_loc, oop obj, const char* 
                     file, line);
     }
 
-    if (obj_klass != fwd->klass()) {
+    Klass* fwd_klass = fwd->klass(false /* don't inflate_header */);
+    if (fwd_klass != NULL && obj_klass != fwd_klass) {
       print_failure(_safe_oop, obj, interior_loc, NULL, "Shenandoah assert_correct failed",
                     "Forwardee klass disagrees with object class",
                     file, line);

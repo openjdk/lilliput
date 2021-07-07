@@ -36,6 +36,11 @@ int typeArrayOopDesc::object_size() {
   return object_size(tk->layout_helper(), length());
 }
 
+int typeArrayOopDesc::object_size(const Klass* const klass) {
+  const TypeArrayKlass* tk = TypeArrayKlass::cast(klass);
+  return object_size(tk->layout_helper(), length());
+}
+
 inline jchar*    typeArrayOopDesc::char_base()   const { return (jchar*)   base(T_CHAR); }
 inline jboolean* typeArrayOopDesc::bool_base()   const { return (jboolean*)base(T_BOOLEAN); }
 inline jbyte*    typeArrayOopDesc::byte_base()   const { return (jbyte*)   base(T_BYTE); }

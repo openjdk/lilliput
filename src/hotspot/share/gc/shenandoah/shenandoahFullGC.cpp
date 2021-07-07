@@ -362,6 +362,11 @@ public:
     assert(_compact_point + obj_size <= _to_region->end(), "must fit");
     shenandoah_assert_not_forwarded(NULL, p);
     _preserved_marks->push_if_necessary(p, p->mark());
+    markWord header = p->mark();
+    if (header.has_displaced_mark_helper()) {
+      markWord dheader = header.displaced_mark_helper();
+      p->cas_set_mark(dheader, header);
+    }
     _forwarding->forward_to(p, cast_to_oop(_compact_point));
     _compact_point += obj_size;
   }

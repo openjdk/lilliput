@@ -126,6 +126,8 @@ class ObjectSynchronizer : AllStatic {
   static intptr_t identity_hash_value_for(Handle obj);
   static intptr_t FastHashCode(Thread* current, oop obj);
 
+  static markWord stable_header(const oop obj, bool inflate_header);
+
   // java.lang.Thread support
   static bool current_thread_holds_lock(JavaThread* current, Handle h_obj);
 

@@ -680,7 +680,7 @@ struct SharedGlobals {
 
 static SharedGlobals GVars;
 
-static markWord read_stable_mark(oop obj) {
+static markWord read_stable_mark(const oop obj) {
   markWord mark = obj->mark();
   if (!mark.is_being_inflated()) {
     return mark;       // normal fast-path return
@@ -736,6 +736,35 @@ static markWord read_stable_mark(oop obj) {
       }
     } else {
       SpinPause();       // SMP-polite spinning
+    }
+  }
+}
+
+markWord ObjectSynchronizer::stable_header(const oop obj, bool inflate_header) {
+  markWord mark = read_stable_mark(obj);
+  //assert(!mark.is_marked(), "no forwarded objects here");
+  if (mark.is_neutral() || mark.is_marked()) {
+    return mark;
+  } else if (mark.has_monitor()) {
+    ObjectMonitor* monitor = mark.monitor();
+    mark = monitor->header();
+    assert(mark.is_neutral(), "invariant: header=" INTPTR_FORMAT, mark.value());
+    return mark;
+  } else if (Thread::current()->is_lock_owned((address) mark.locker())) {
+    // This is a stack lock owned by the calling thread so fetch the
+    // displaced markWord from the BasicLock on the stack.
+    mark = mark.displaced_mark_helper();
+    assert(mark.is_neutral(), "invariant: header=" INTPTR_FORMAT, mark.value());
+    return mark;
+  } else {
+    if (inflate_header) {
+      ObjectMonitor* monitor = inflate(Thread::current(), obj, inflate_cause_vm_internal);
+      mark = monitor->header();
+      assert(mark.is_neutral(), "invariant: header=" INTPTR_FORMAT, mark.value());
+      assert(!mark.is_marked(), "no forwarded objects here");
+      return mark;
+    } else {
+      return markWord(0);
     }
   }
 }

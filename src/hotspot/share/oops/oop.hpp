@@ -72,10 +72,13 @@ class oopDesc {
   // objects during a GC) -- requires a valid klass pointer
   inline void init_mark();
 
-  inline Klass* klass() const;
+  inline Klass* klass(bool inflate_header = true) const;
+  inline Klass* klass_at_safepoint() const;
+
   inline Klass* klass_or_null() const;
   inline Klass* klass_or_null_acquire() const;
 
+  narrowKlass narrow_klass() const { return _metadata._compressed_klass; }
   void set_narrow_klass(narrowKlass nk) NOT_CDS_JAVA_HEAP_RETURN;
   inline void set_klass(Klass* k);
   static inline void release_set_klass(HeapWord* mem, Klass* k);
@@ -265,6 +268,9 @@ class oopDesc {
 
   template <typename OopClosureType>
   inline void oop_iterate(OopClosureType* cl);
+
+  template <typename OopClosureType>
+  inline void oop_iterate(OopClosureType* cl, Klass* klass);
 
   template <typename OopClosureType>
   inline void oop_iterate(OopClosureType* cl, MemRegion mr);

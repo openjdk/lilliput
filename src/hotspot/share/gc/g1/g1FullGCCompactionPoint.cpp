@@ -102,6 +102,13 @@ void G1FullGCCompactionPoint::forward(SlidingForwarding* const forwarding, oop o
     switch_region();
   }
 
+  markWord header = object->mark();
+  if (header.has_displaced_mark_helper()) {
+    assert(object->mark_must_be_preserved(), "need to restore the displaced header later");
+    header = header.displaced_mark_helper();
+    object->set_mark(header);
+  }
+  assert(header.narrow_klass() == object->narrow_klass(), "sanity");
   // Store a forwarding pointer if the object should be moved.
   if (cast_from_oop<HeapWord*>(object) != _compaction_top) {
     forwarding->forward_to(object, cast_to_oop(_compaction_top));

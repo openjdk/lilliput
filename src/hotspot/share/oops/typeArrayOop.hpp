@@ -132,6 +132,7 @@ private:
 
  public:
   inline int object_size();
+  inline int object_size(const Klass* const klass);
 };
 
 #endif // SHARE_OOPS_TYPEARRAYOOP_HPP

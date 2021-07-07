@@ -3091,7 +3091,10 @@ void G1CollectedHeap::do_collection_pause_at_safepoint_helper(double target_paus
 }
 
 void G1CollectedHeap::preserve_mark_during_evac_failure(uint worker_id, oop obj, markWord m) {
-  _evacuation_failed_info_array[worker_id].register_copy_failure(obj->size());
+  markWord header = obj->mark();
+  if (!header.is_marked()) {
+    _evacuation_failed_info_array[worker_id].register_copy_failure(obj->size_given_klass(header.klass()));
+  }
   _preserved_marks_set.get(worker_id)->push_if_necessary(obj, m);
 }
 

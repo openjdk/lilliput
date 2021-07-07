@@ -296,7 +296,15 @@ inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
 
   assert(ShenandoahThreadLocalData::is_evac_allowed(thread), "must be enclosed in oom-evac scope");
 
-  size_t size = p->size();
+  markWord header = p->mark();
+  if (header.is_marked()) {
+    return cast_to_oop(header.decode_pointer());
+  }
+  if (header.has_displaced_mark_helper()) {
+    header = header.displaced_mark_helper();
+  }
+  assert(header.narrow_klass() == p->narrow_klass(), "equal klass: header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, header.value(), intptr_t(p->narrow_klass()));
+  size_t size = p->size_given_klass(header.klass());
 
   assert(!heap_region_containing(p)->is_humongous(), "never evacuate humongous objects");
 
@@ -513,7 +521,15 @@ inline void ShenandoahHeap::marked_object_iterate(ShenandoahHeapRegion* region, 
     oop obj = cast_to_oop(cs);
     assert(oopDesc::is_oop(obj), "sanity");
     assert(ctx->is_marked(obj), "object expected to be marked");
-    int size = obj->size();
+    markWord header = obj->mark();
+    if (header.is_marked()) {
+      header = cast_to_oop(header.decode_pointer())->mark();
+    }
+    if (header.has_displaced_mark_helper()) {
+      header = header.displaced_mark_helper();
+    }
+    assert(header.narrow_klass() == obj->narrow_klass(), "equal klass: header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, header.value(), intptr_t(obj->narrow_klass()));
+    int size = obj->size_given_klass(header.klass());
     cl->do_object(obj);
     cs += size;
   }

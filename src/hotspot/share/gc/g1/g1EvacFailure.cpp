@@ -116,6 +116,9 @@ public:
       // The object failed to move.
 
       zap_dead_objects(_last_forwarded_object_end, obj_addr);
+
+      PreservedMarks::init_forwarded_mark(obj);
+
       // We consider all objects that we find self-forwarded to be
       // live. What we'll do is that we'll update the prev marking
       // info so that they are all under PTAMS and explicitly marked.
@@ -135,10 +138,9 @@ public:
         // we'll leave them over NTAMS.
         _cm->mark_in_next_bitmap(_worker_id, _hr, obj);
       }
-      size_t obj_size = obj->size();
 
+      size_t obj_size = obj->size();
       _marked_bytes += (obj_size * HeapWordSize);
-      PreservedMarks::init_forwarded_mark(obj);
 
       // While we were processing RSet buffers during the collection,
       // we actually didn't scan any cards on the collection set,
@@ -157,6 +159,8 @@ public:
       HeapWord* obj_end = obj_addr + obj_size;
       _last_forwarded_object_end = obj_end;
       _hr->cross_threshold(obj_addr, obj_end);
+    } else if (obj->is_forwarded()) {
+      PreservedMarks::init_forwarded_mark(obj);
     }
   }
 
