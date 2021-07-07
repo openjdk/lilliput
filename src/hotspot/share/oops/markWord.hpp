@@ -132,7 +132,6 @@ class markWord {
   static const uintptr_t monitor_value            = 2;
   static const uintptr_t marked_value             = 3;
 
-  static const uintptr_t self_forwarded_value     = 1 << self_forwarded_shift;
   static const uintptr_t no_hash                  = 0 ;  // no hash value assigned
   static const uintptr_t no_hash_in_place         = (address_word)no_hash << hash_shift;
   static const uintptr_t no_lock_in_place         = unlocked_value;
@@ -274,9 +273,7 @@ class markWord {
   }
 
   inline markWord set_self_forwarded() const {
-    intptr_t bits = (intptr_t)value();
-    set_bits(bits, self_forwarded_value | marked_value);
-    return markWord((uintptr_t)bits);
+    return markWord(value() | self_forwarded_mask_in_place | marked_value);
   }
 };
 

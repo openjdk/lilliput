@@ -302,17 +302,14 @@ oop oopDesc::forward_to_atomic(oop p, markWord compare, atomic_memory_order orde
 
 oop oopDesc::forward_to_self_atomic(markWord compare, atomic_memory_order order) {
   verify_forwardee(this);
-  while (true) {
-    markWord m = compare.set_self_forwarded();
-    assert(forwardee(m) == cast_to_oop(this), "encoding must be reversable");
-    markWord old_mark = cas_set_mark(m, compare, order);
-    if (old_mark == compare) {
-      return NULL;
-    } else if (old_mark.is_marked()) {
-      return forwardee(old_mark);
-    } else {
-      compare = old_mark;
-    }
+  markWord m = compare.set_self_forwarded();
+  assert(forwardee(m) == cast_to_oop(this), "encoding must be reversable");
+  markWord old_mark = cas_set_mark(m, compare, order);
+  if (old_mark == compare) {
+    return NULL;
+  } else {
+    assert(old_mark.is_marked(), "must be marked here");
+    return forwardee(old_mark);
   }
 }
 
