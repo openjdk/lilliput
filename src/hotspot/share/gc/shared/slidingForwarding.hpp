@@ -37,7 +37,7 @@
  *
  * The idea is to use a pointer compression scheme very similar to the one that is used for compressed oops.
  * We divide the heap into number of logical regions. Each region spans maximum of 2^NUM_BITS words.
- * We take advantage of the fact that sliding compaction can forward objects from ore region to a maximum of
+ * We take advantage of the fact that sliding compaction can forward objects from one region to a maximum of
  * two regions (including itself, but that does not really matter). We need 1 bit to indicate which region is forwarded
  * into. We also currently require the two lowest header bits to indicate that the object is forwarded.
  *
@@ -69,6 +69,8 @@ private:
   static const int NUM_REGION_BITS = 1;
 
   static const uintptr_t ONE = 1ULL;
+
+  static const size_t NUM_REGIONS = ONE << NUM_REGION_BITS;
 
   // We need the lowest two bits to indicate a forwarded object.
   static const int BASE_SHIFT = 2;

@@ -47,7 +47,7 @@ uintptr_t SlidingForwarding::encode_forwarding(HeapWord* original, HeapWord* tar
   size_t target_idx = region_index_containing(target);
   HeapWord* encode_base;
   uintptr_t region_idx;
-  for (region_idx = 0; region_idx < (ONE << NUM_REGION_BITS); region_idx++) {
+  for (region_idx = 0; region_idx < NUM_REGIONS; region_idx++) {
     encode_base = _target_base_table[base_table_idx + region_idx];
     if (encode_base == UNUSED_BASE) {
       encode_base = _heap_start + target_idx * (ONE << _region_size_words_shift);
@@ -57,13 +57,13 @@ uintptr_t SlidingForwarding::encode_forwarding(HeapWord* original, HeapWord* tar
       break;
     }
   }
-  if (region_idx >= (ONE << NUM_REGION_BITS)) {
+  if (region_idx >= NUM_REGIONS) {
     tty->print_cr("target: " PTR_FORMAT, p2i(target));
-    for (region_idx = 0; region_idx < (ONE << NUM_REGION_BITS); region_idx++) {
+    for (region_idx = 0; region_idx < NUM_REGIONS; region_idx++) {
       tty->print_cr("region_idx: " INTPTR_FORMAT ", encode_base: " PTR_FORMAT, region_idx, p2i(_target_base_table[base_table_idx + region_idx]));
     }
   }
-  assert(region_idx < (ONE << NUM_REGION_BITS), "need to have found an encoding base");
+  assert(region_idx < NUM_REGIONS, "need to have found an encoding base");
   assert(target >= encode_base, "target must be above encode base, target:" PTR_FORMAT ", encoded_base: " PTR_FORMAT ",  target_idx: " SIZE_FORMAT ", heap start: " PTR_FORMAT ", region_idx: " INTPTR_FORMAT,
          p2i(target), p2i(encode_base), target_idx, p2i(_heap_start), region_idx);
   assert(region_contains(encode_base, target), "region must contain target: original: " PTR_FORMAT ", target: " PTR_FORMAT ", encode_base: " PTR_FORMAT ", region_idx: " INTPTR_FORMAT, p2i(original), p2i(target), p2i(encode_base), region_idx);
