@@ -274,9 +274,7 @@ class markWord {
   }
 
   inline markWord set_self_forwarded() const {
-    intptr_t bits = (intptr_t)value();
-    set_bits(bits, self_forwarded_value | marked_value);
-    return markWord((uintptr_t)bits);
+    return markWord(value() | self_forwarded_mask_in_place | marked_value);
   }
 };
 

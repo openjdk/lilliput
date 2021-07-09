@@ -40,6 +40,8 @@ void PreservedMarks::restore() {
   assert_empty();
 }
 
+// TODO: This method is unused, except in the gunit test. Change the test
+// to exercise the updated method below instead, and remove this one.
 void PreservedMarks::adjust_during_full_gc() {
   StackIterator<OopAndMarkWord, mtGC> iter(_stack);
   while (!iter.is_empty()) {

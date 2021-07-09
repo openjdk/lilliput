@@ -306,10 +306,10 @@ void G1FullCollector::phase2_prepare_compaction() {
   run_task(&task);
 
   // To avoid OOM when there is memory left.
-  // NOTE: Disabled for now because it violates sliding-forwarding assumption.
-//  if (!task.has_freed_regions()) {
-//    task.prepare_serial_compaction();
-//  }
+  // TODO: Disabled for now because it violates sliding-forwarding assumption.
+  // if (!task.has_freed_regions()) {
+  //   task.prepare_serial_compaction();
+  // }
 }
 
 void G1FullCollector::phase3_adjust_pointers() {
