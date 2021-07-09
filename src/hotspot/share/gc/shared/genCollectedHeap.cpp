@@ -52,6 +52,7 @@
 #include "gc/shared/oopStorageSet.inline.hpp"
 #include "gc/shared/oopStorageParState.inline.hpp"
 #include "gc/shared/scavengableNMethods.hpp"
+#include "gc/shared/slidingForwarding.hpp"
 #include "gc/shared/space.hpp"
 #include "gc/shared/strongRootsScope.hpp"
 #include "gc/shared/weakProcessor.hpp"
@@ -120,6 +121,7 @@ jint GenCollectedHeap::initialize() {
   }
 
   initialize_reserved_region(heap_rs);
+  _forwarding = new SlidingForwarding(_reserved);
 
   _rem_set = create_rem_set(heap_rs.region());
   _rem_set->initialize();
@@ -478,21 +480,11 @@ void GenCollectedHeap::collect_generation(Generation* gen, bool full, size_t siz
     // enqueue_discovered_references if the generation returns
     // without doing any work.
     ReferenceProcessor* rp = gen->ref_processor();
-    // If the discovery of ("weak") refs in this generation is
-    // atomic wrt other collectors in this configuration, we
-    // are guaranteed to have empty discovered ref lists.
-    if (rp->discovery_is_atomic()) {
-      rp->enable_discovery();
-      rp->setup_policy(clear_soft_refs);
-    } else {
-      // collect() below will enable discovery as appropriate
-    }
+    rp->start_discovery(clear_soft_refs);
+
     gen->collect(full, clear_soft_refs, size, is_tlab);
-    if (!rp->enqueuing_is_done()) {
-      rp->disable_discovery();
-    } else {
-      rp->set_enqueuing_is_done(false);
-    }
+
+    rp->disable_discovery();
     rp->verify_no_references_recorded();
   }
 
@@ -1098,6 +1090,7 @@ GenCollectedHeap* GenCollectedHeap::heap() {
 void GenCollectedHeap::prepare_for_compaction() {
   // Start by compacting into same gen.
   CompactPoint cp(_old_gen);
+  _forwarding->clear();
   _old_gen->prepare_for_compaction(&cp);
   _young_gen->prepare_for_compaction(&cp);
 }

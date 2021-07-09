@@ -83,6 +83,7 @@
 #include "gc/shared/locationPrinter.inline.hpp"
 #include "gc/shared/oopStorageParState.hpp"
 #include "gc/shared/preservedMarks.inline.hpp"
+#include "gc/shared/slidingForwarding.inline.hpp"
 #include "gc/shared/suspendibleThreadSet.hpp"
 #include "gc/shared/referenceProcessor.inline.hpp"
 #include "gc/shared/taskTerminator.hpp"
@@ -1606,6 +1607,8 @@ jint G1CollectedHeap::initialize() {
 
   initialize_reserved_region(heap_rs);
 
+  _forwarding = new SlidingForwarding(heap_rs.region(), HeapRegion::LogOfHRGrainBytes - LogHeapWordSize);
+
   // Create the barrier set for the entire reserved region.
   G1CardTable* ct = new G1CardTable(heap_rs.region());
   ct->initialize();
@@ -2990,7 +2993,7 @@ void G1CollectedHeap::do_collection_pause_at_safepoint_helper(double target_paus
         // Please see comment in g1CollectedHeap.hpp and
         // G1CollectedHeap::ref_processing_init() to see how
         // reference processing currently works in G1.
-        _ref_processor_stw->enable_discovery();
+        _ref_processor_stw->start_discovery(false /* always_clear */);
 
         // We want to temporarily turn off discovery by the
         // CM ref processor, if necessary, and turn it back on
@@ -3269,8 +3272,6 @@ void G1CollectedHeap::process_discovered_references(G1ParScanThreadStateSet* per
   pss->set_ref_discoverer(NULL);
   assert(pss->queue_is_empty(), "pre-condition");
 
-  // Setup the soft refs policy...
-  rp->setup_policy(false);
 
   ReferenceProcessorPhaseTimes& pt = *phase_times()->ref_phase_times();
 
@@ -4204,8 +4205,12 @@ class RegisterNMethodOopClosure: public OopClosure {
   G1CollectedHeap* _g1h;
   nmethod* _nm;
 
-  template <class T> void do_oop_work(T* p) {
-    T heap_oop = RawAccess<>::oop_load(p);
+public:
+  RegisterNMethodOopClosure(G1CollectedHeap* g1h, nmethod* nm) :
+    _g1h(g1h), _nm(nm) {}
+
+  void do_oop(oop* p) {
+    oop heap_oop = RawAccess<>::oop_load(p);
     if (!CompressedOops::is_null(heap_oop)) {
       oop obj = CompressedOops::decode_not_null(heap_oop);
       HeapRegion* hr = _g1h->heap_region_containing(obj);
@@ -4219,20 +4224,19 @@ class RegisterNMethodOopClosure: public OopClosure {
     }
   }
 
-public:
-  RegisterNMethodOopClosure(G1CollectedHeap* g1h, nmethod* nm) :
-    _g1h(g1h), _nm(nm) {}
-
-  void do_oop(oop* p)       { do_oop_work(p); }
-  void do_oop(narrowOop* p) { do_oop_work(p); }
+  void do_oop(narrowOop* p) { ShouldNotReachHere(); }
 };
 
 class UnregisterNMethodOopClosure: public OopClosure {
   G1CollectedHeap* _g1h;
   nmethod* _nm;
 
-  template <class T> void do_oop_work(T* p) {
-    T heap_oop = RawAccess<>::oop_load(p);
+public:
+  UnregisterNMethodOopClosure(G1CollectedHeap* g1h, nmethod* nm) :
+    _g1h(g1h), _nm(nm) {}
+
+  void do_oop(oop* p) {
+    oop heap_oop = RawAccess<>::oop_load(p);
     if (!CompressedOops::is_null(heap_oop)) {
       oop obj = CompressedOops::decode_not_null(heap_oop);
       HeapRegion* hr = _g1h->heap_region_containing(obj);
@@ -4245,12 +4249,7 @@ class UnregisterNMethodOopClosure: public OopClosure {
     }
   }
 
-public:
-  UnregisterNMethodOopClosure(G1CollectedHeap* g1h, nmethod* nm) :
-    _g1h(g1h), _nm(nm) {}
-
-  void do_oop(oop* p)       { do_oop_work(p); }
-  void do_oop(narrowOop* p) { do_oop_work(p); }
+  void do_oop(narrowOop* p) { ShouldNotReachHere(); }
 };
 
 void G1CollectedHeap::register_nmethod(nmethod* nm) {

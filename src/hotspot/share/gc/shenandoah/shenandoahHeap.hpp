@@ -62,6 +62,7 @@ class ShenandoahPacer;
 class ShenandoahReferenceProcessor;
 class ShenandoahVerifier;
 class ShenandoahWorkGang;
+class SlidingForwarding;
 class VMStructs;
 
 // Used for buffering per-region liveness data.
@@ -227,6 +228,7 @@ private:
   size_t    _num_regions;
   ShenandoahHeapRegion** _regions;
   ShenandoahRegionIterator _update_refs_iterator;
+  SlidingForwarding* _forwarding;
 
 public:
 
@@ -242,6 +244,8 @@ public:
 
   void heap_region_iterate(ShenandoahHeapRegionClosure* blk) const;
   void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* blk) const;
+
+  SlidingForwarding* forwarding() const { return _forwarding; }
 
 // ---------- GC state machinery
 //
@@ -635,9 +639,17 @@ public:
   template <class T>
   inline void update_with_forwarded(T* p);
 
-  static inline oop cas_oop(oop n, narrowOop* addr, oop c);
-  static inline oop cas_oop(oop n, oop* addr, oop c);
-  static inline oop cas_oop(oop n, narrowOop* addr, narrowOop c);
+  static inline void atomic_update_oop(oop update,       oop* addr,       oop compare);
+  static inline void atomic_update_oop(oop update, narrowOop* addr,       oop compare);
+  static inline void atomic_update_oop(oop update, narrowOop* addr, narrowOop compare);
+
+  static inline bool atomic_update_oop_check(oop update,       oop* addr,       oop compare);
+  static inline bool atomic_update_oop_check(oop update, narrowOop* addr,       oop compare);
+  static inline bool atomic_update_oop_check(oop update, narrowOop* addr, narrowOop compare);
+
+  static inline void atomic_clear_oop(      oop* addr,       oop compare);
+  static inline void atomic_clear_oop(narrowOop* addr,       oop compare);
+  static inline void atomic_clear_oop(narrowOop* addr, narrowOop compare);
 
   void trash_humongous_region_at(ShenandoahHeapRegion *r);
 

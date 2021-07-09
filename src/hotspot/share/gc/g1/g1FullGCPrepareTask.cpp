@@ -34,6 +34,7 @@
 #include "gc/g1/heapRegion.inline.hpp"
 #include "gc/shared/gcTraceTime.inline.hpp"
 #include "gc/shared/referenceProcessor.hpp"
+#include "gc/shared/slidingForwarding.inline.hpp"
 #include "logging/log.hpp"
 #include "memory/iterator.inline.hpp"
 #include "oops/oop.inline.hpp"
@@ -157,11 +158,11 @@ void G1FullGCPrepareTask::G1CalculatePointersClosure::reset_region_metadata(Heap
 }
 
 G1FullGCPrepareTask::G1PrepareCompactLiveClosure::G1PrepareCompactLiveClosure(G1FullGCCompactionPoint* cp) :
-    _cp(cp) { }
+    _cp(cp), _forwarding(G1CollectedHeap::heap()->forwarding()) { }
 
 size_t G1FullGCPrepareTask::G1PrepareCompactLiveClosure::apply(oop object) {
   size_t size = object->size();
-  _cp->forward(object, size);
+  _cp->forward(_forwarding, object, size);
   return size;
 }
 
@@ -169,8 +170,7 @@ size_t G1FullGCPrepareTask::G1RePrepareClosure::apply(oop obj) {
   // We only re-prepare objects forwarded within the current region, so
   // skip objects that are already forwarded to another region.
   if (obj->is_forwarded()) {
-    oop forwarded_to = obj->forwardee();
-
+    oop forwarded_to = _forwarding->forwardee(obj);
     if (!_current->is_in(forwarded_to)) {
       return obj->size();
     }
@@ -178,7 +178,7 @@ size_t G1FullGCPrepareTask::G1RePrepareClosure::apply(oop obj) {
 
   // Get size and forward.
   size_t size = obj->size();
-  _cp->forward(obj, size);
+  _cp->forward(_forwarding, obj, size);
 
   return size;
 }
