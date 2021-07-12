@@ -208,9 +208,9 @@ bool CollectedHeap::is_oop(oop object) const {
     return false;
   }
 
-  if (is_in(object->klass_or_null())) {
-    return false;
-  }
+//  if (is_in(object->klass_or_null())) {
+//    return false;
+//  }
 
   return true;
 }

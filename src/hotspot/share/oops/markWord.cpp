@@ -104,6 +104,10 @@ Klass* markWord::klass() const {
   return CompressedKlassPointers::decode(narrow_klass());
 }
 
+Klass* markWord::klass_or_null() const {
+  return CompressedKlassPointers::decode(narrow_klass());
+}
+
 markWord markWord::set_narrow_klass(const narrowKlass nklass) const {
   return markWord((value() & ~klass_mask_in_place) | ((uintptr_t) nklass << klass_shift));
 }

@@ -51,7 +51,7 @@ static bool is_instance_ref_klass(Klass* k) {
 }
 
 static Klass* safe_klass(oop obj) {
-  return ShenandoahForwarding::get_forwardee(obj)->klass_at_safepoint();
+  return ShenandoahForwarding::get_forwardee(obj)->klass();
 }
 
 static size_t safe_size(oop obj) {
@@ -135,7 +135,7 @@ private:
               "oop must be aligned");
 
     ShenandoahHeapRegion *obj_reg = _heap->heap_region_containing(obj);
-    Klass* obj_klass = obj->klass_or_null();
+    Klass* obj_klass = safe_klass(obj);
 
     // Verify that obj is not in dead space:
     {
@@ -195,7 +195,7 @@ private:
              "Forwardee must be aligned");
 
       // Do this before touching fwd->size()
-      Klass* fwd_klass = fwd->klass_or_null();
+      Klass* fwd_klass = safe_klass(fwd);
       check(ShenandoahAsserts::_safe_oop, obj, fwd_klass != NULL,
              "Forwardee klass pointer should not be NULL");
       check(ShenandoahAsserts::_safe_oop, obj, Metaspace::contains(fwd_klass),

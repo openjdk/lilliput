@@ -58,7 +58,11 @@ class oopDesc {
   } _metadata;
 
  public:
-  inline markWord  mark()          const;
+  inline markWord  mark()      const;
+
+  template<DecoratorSet decorators>
+  inline markWord  mark()      const;
+
   inline markWord* mark_addr() const;
 
   inline void set_mark(markWord m);
@@ -72,8 +76,10 @@ class oopDesc {
   // objects during a GC) -- requires a valid klass pointer
   inline void init_mark();
 
-  inline Klass* klass(bool inflate_header = true) const;
-  inline Klass* klass_at_safepoint() const;
+  inline Klass* klass() const;
+
+  template <bool INFLATE_HEADER>
+  inline Klass* klass() const;
 
   inline Klass* klass_or_null() const;
   inline Klass* klass_or_null_acquire() const;
