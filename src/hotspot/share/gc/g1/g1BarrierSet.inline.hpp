@@ -91,9 +91,7 @@ template <DecoratorSet decorators, typename BarrierSetT>
 inline oop G1BarrierSet::AccessBarrier<decorators, BarrierSetT>::
 oop_load_in_heap_at(oop base, ptrdiff_t offset) {
   oop value = ModRef::oop_load_in_heap_at(base, offset);
-  if (!HasDecorator<decorators, AS_NO_KEEPALIVE>::value) {
-    enqueue_if_weak(AccessBarrierSupport::resolve_possibly_unknown_oop_ref_strength<decorators>(base, offset), value);
-  }
+  enqueue_if_weak(AccessBarrierSupport::resolve_possibly_unknown_oop_ref_strength<decorators>(base, offset), value);
   return value;
 }
 
