@@ -189,10 +189,6 @@ bool java_lang_ref_Reference::is_phantom(oop ref) {
   return InstanceKlass::cast(ref->klass())->reference_type() == REF_PHANTOM;
 }
 
-bool java_lang_ref_Reference::is_phantom(const Klass* const ref_klass) {
-  return InstanceKlass::cast(ref_klass)->reference_type() == REF_PHANTOM;
-}
-
 inline void java_lang_invoke_CallSite::set_target_volatile(oop site, oop target) {
   site->obj_field_put_volatile(_target_offset, target);
 }
