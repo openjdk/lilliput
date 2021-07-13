@@ -138,8 +138,8 @@ public:
         // we'll leave them over NTAMS.
         _cm->mark_in_next_bitmap(_worker_id, _hr, obj);
       }
-
       size_t obj_size = obj->size();
+
       _marked_bytes += (obj_size * HeapWordSize);
 
       // While we were processing RSet buffers during the collection,
