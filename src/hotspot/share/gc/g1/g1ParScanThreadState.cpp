@@ -619,6 +619,15 @@ oop G1ParScanThreadState::handle_evacuation_failure_par(oop old, markWord m) {
     }
 
     _g1h->preserve_mark_during_evac_failure(_worker_id, old, m);
+    // Preserve klass, so that we can parse the heap later.
+    if (old->mark_must_be_preserved(m)) {
+      markWord header = m;
+      if (header.has_displaced_mark_helper()) {
+        header = header.displaced_mark_helper();
+      }
+      narrowKlass nklass = header.narrow_klass();
+      old->set_mark(old->mark().set_narrow_klass(nklass));
+    }
 
     G1ScanInYoungSetter x(&_scanner, r->is_young());
     if (m.has_displaced_mark_helper()) {

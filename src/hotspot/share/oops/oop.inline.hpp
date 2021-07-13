@@ -83,12 +83,13 @@ markWord oopDesc::cas_set_mark(markWord new_mark, markWord old_mark, atomic_memo
 }
 
 void oopDesc::init_mark() {
-  markWord header = markWord::prototype();
 #ifdef _LP64
+  markWord header = ObjectSynchronizer::stable_header<MO_RELAXED, false>(cast_to_oop(this));
+  assert(_metadata._compressed_klass == header.narrow_klass(), "klass must match: " PTR_FORMAT, header.value());
   assert(UseCompressedClassPointers, "expect compressed klass pointers");
-  narrowKlass nklass = _metadata._compressed_klass;
-  assert(nklass != 0, "expect klass");
-  header = header.set_narrow_klass(nklass);
+  header = markWord((header.value() & markWord::klass_mask_in_place) | markWord::prototype().value());
+#else
+  markWord header = markWord::prototype();
 #endif
   set_mark(header);
 }

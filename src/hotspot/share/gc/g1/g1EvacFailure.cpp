@@ -160,7 +160,10 @@ public:
       _last_forwarded_object_end = obj_end;
       _hr->cross_threshold(obj_addr, obj_end);
     } else if (obj->is_forwarded()) {
-      PreservedMarks::init_forwarded_mark(obj);
+      // Restore klass so that we can safely iterate.
+      // TODO: This could probably be built more efficiently into the iterator.
+      Klass* klass = obj->forwardee()->klass<false>();
+      obj->set_mark(markWord::prototype().set_klass(klass));
     }
   }
 

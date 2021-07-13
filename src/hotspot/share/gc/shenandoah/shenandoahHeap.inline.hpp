@@ -522,13 +522,14 @@ inline void ShenandoahHeap::marked_object_iterate(ShenandoahHeapRegion* region, 
     assert(oopDesc::is_oop(obj), "sanity");
     assert(ctx->is_marked(obj), "object expected to be marked");
     markWord header = obj->mark();
+    markWord orig = header;
     if (header.is_marked()) {
       header = cast_to_oop(header.decode_pointer())->mark();
     }
     if (header.has_displaced_mark_helper()) {
       header = header.displaced_mark_helper();
     }
-    assert(header.narrow_klass() == obj->narrow_klass(), "equal klass: header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, header.value(), intptr_t(obj->narrow_klass()));
+    assert(header.narrow_klass() == obj->narrow_klass(), "equal klass: header: " INTPTR_FORMAT ", orig: " PTR_FORMAT ", nklass: " INTPTR_FORMAT, header.value(), orig.value(), intptr_t(obj->narrow_klass()));
     int size = obj->size_given_klass(header.klass());
     cl->do_object(obj);
     cs += size;
