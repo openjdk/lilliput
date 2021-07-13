@@ -431,7 +431,7 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
   // Get the klass once.  We'll need it again later, and this avoids
   // re-decoding when it's compressed.
   //Klass* klass = old->klass();
-  markWord header = old->mark();
+  markWord header = old_mark;
   if (header.is_marked()) {
     // Already forwarded by somebody else, return forwardee.
     return old->forwardee(header);
