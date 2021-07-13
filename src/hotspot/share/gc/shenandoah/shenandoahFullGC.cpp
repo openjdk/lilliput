@@ -374,7 +374,7 @@ private:
   ShenandoahHeapRegionSet** const _worker_slices;
 
 public:
-  ShenandoahPrepareForCompactionTask(PreservedMarksSet* preserved_marks, ShenandoahHeapRegionSet **worker_slices) :
+  ShenandoahPrepareForCompactionTask(PreservedMarksSet *preserved_marks, ShenandoahHeapRegionSet **worker_slices) :
     AbstractGangTask("Shenandoah Prepare For Compaction"),
     _preserved_marks(preserved_marks),
     _heap(ShenandoahHeap::heap()), _worker_slices(worker_slices) {
