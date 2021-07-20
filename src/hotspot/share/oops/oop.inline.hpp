@@ -95,6 +95,11 @@ void oopDesc::init_mark() {
 
 template<bool INFLATE_HEADER>
 Klass* oopDesc::klass() const {
+//  if (UseCompressedClassPointers) {
+//    return CompressedKlassPointers::decode_not_null(_metadata._compressed_klass);
+//  } else {
+//    return _metadata._klass;
+//  }
   assert(UseCompressedClassPointers, "only with compressed class pointers");
   markWord header = ObjectSynchronizer::stable_header<INFLATE_HEADER>(cast_to_oop(this));
   if (INFLATE_HEADER && header.value() == 0) {

@@ -50,6 +50,20 @@ inline uint32_t ZHeap::hash_oop(uintptr_t addr) const {
 
 inline bool ZHeap::is_object_live(uintptr_t addr) const {
   ZPage* page = _page_table.get(addr);
+  if (page == NULL) {
+    ZForwarding* forwarding = _forwarding_table.get(addr);
+    uintptr_t forwardee = 0;
+    if (forwarding != NULL) {
+      forwardee = _relocate.forward_object(forwarding, ZAddress::good(addr));
+    }
+    tty->print_cr("NULL page for addr: " INTPTR_FORMAT ", forwardee: " INTPTR_FORMAT, addr, forwardee);
+    markWord objmark = ZOop::from_address(addr)->mark();
+    markWord displaced = markWord(0);
+    if (objmark.has_displaced_mark_helper()) {
+      displaced = objmark.displaced_mark_helper();
+    }
+    tty->print_cr("obj mark: " INTPTR_FORMAT ", displaced: " INTPTR_FORMAT ", forwardee mark: " INTPTR_FORMAT, objmark.value(), displaced.value(), forwardee == 0 ? 0 : ZOop::from_address(forwardee)->mark().value());
+  }
   return page->is_object_live(addr);
 }
 
