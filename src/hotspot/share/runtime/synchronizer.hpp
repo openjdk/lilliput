@@ -71,7 +71,6 @@ private:
   static const int NINFLATIONLOCKS = 256;
   static os::PlatformMutex* gInflationLocks[NINFLATIONLOCKS];
 
-  template <DecoratorSet MO>
   static markWord read_stable_mark(const oop obj);
 
 public:
@@ -134,8 +133,8 @@ public:
   static intptr_t identity_hash_value_for(Handle obj);
   static intptr_t FastHashCode(Thread* current, oop obj);
 
-  template <DecoratorSet MO, bool INFLATE_HEADER>
-  static markWord stable_header(const oop obj);
+  template <bool INFLATE_HEADER>
+  static inline markWord stable_header(const oop obj);
 
   // java.lang.Thread support
   static bool current_thread_holds_lock(JavaThread* current, Handle h_obj);

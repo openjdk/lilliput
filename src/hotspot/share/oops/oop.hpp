@@ -58,12 +58,9 @@ class oopDesc {
   } _metadata;
 
  public:
-  inline markWord  mark()      const;
-
-  template<DecoratorSet decorators>
-  inline markWord  mark()      const;
-
-  inline markWord* mark_addr() const;
+  inline markWord  mark()         const;
+  inline markWord  mark_acquire() const;
+  inline markWord* mark_addr()    const;
 
   inline void set_mark(markWord m);
   static inline void set_mark(HeapWord* mem, markWord m);

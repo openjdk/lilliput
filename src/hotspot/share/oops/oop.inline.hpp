@@ -51,9 +51,8 @@ markWord oopDesc::mark() const {
   return markWord(v);
 }
 
-template <DecoratorSet decorators>
-markWord oopDesc::mark() const {
-  uintptr_t v = HeapAccess<decorators>::load_at(as_oop(), mark_offset_in_bytes());
+markWord oopDesc::mark_acquire() const {
+  uintptr_t v = HeapAccess<MO_ACQUIRE>::load_at(as_oop(), mark_offset_in_bytes());
   return markWord(v);
 }
 
@@ -84,7 +83,7 @@ markWord oopDesc::cas_set_mark(markWord new_mark, markWord old_mark, atomic_memo
 
 void oopDesc::init_mark() {
 #ifdef _LP64
-  markWord header = ObjectSynchronizer::stable_header<MO_RELAXED, false>(cast_to_oop(this));
+  markWord header = ObjectSynchronizer::stable_header<false>(cast_to_oop(this));
   assert(_metadata._compressed_klass == header.narrow_klass(), "klass must match: " PTR_FORMAT, header.value());
   assert(UseCompressedClassPointers, "expect compressed klass pointers");
   header = markWord((header.value() & markWord::klass_mask_in_place) | markWord::prototype().value());
@@ -97,7 +96,7 @@ void oopDesc::init_mark() {
 template<bool INFLATE_HEADER>
 Klass* oopDesc::klass() const {
   assert(UseCompressedClassPointers, "only with compressed class pointers");
-  markWord header = ObjectSynchronizer::stable_header<MO_RELAXED, INFLATE_HEADER>(cast_to_oop(this));
+  markWord header = ObjectSynchronizer::stable_header<INFLATE_HEADER>(cast_to_oop(this));
   if (INFLATE_HEADER && header.value() == 0) {
     return NULL;
   }
@@ -113,7 +112,7 @@ Klass* oopDesc::klass() const {
 
 Klass* oopDesc::klass_or_null() const {
   assert(UseCompressedClassPointers, "only with compressed class pointers");
-  markWord header = ObjectSynchronizer::stable_header<MO_RELAXED, true>(cast_to_oop(this));
+  markWord header = ObjectSynchronizer::stable_header<true>(cast_to_oop(this));
   assert(_metadata._compressed_klass == header.narrow_klass(), "narrow klass must be equal, header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, header.value(), intptr_t(_metadata._compressed_klass));
   Klass* klass = header.klass_or_null();
   assert(klass == CompressedKlassPointers::decode(_metadata._compressed_klass), "klass must match: header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, header.value(), intptr_t(_metadata._compressed_klass));
@@ -122,7 +121,7 @@ Klass* oopDesc::klass_or_null() const {
 
 Klass* oopDesc::klass_or_null_acquire() const {
   assert(UseCompressedClassPointers, "only with compressed class pointers");
-  markWord header = ObjectSynchronizer::stable_header<MO_ACQUIRE, true>(cast_to_oop(this));
+  markWord header = ObjectSynchronizer::stable_header<true>(cast_to_oop(this));
   assert(_metadata._compressed_klass == header.narrow_klass(), "narrow klass must be equal, header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, header.value(), intptr_t(_metadata._compressed_klass));
   Klass* klass = header.klass_or_null();
   assert(klass == CompressedKlassPointers::decode(_metadata._compressed_klass), "klass must match: header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, header.value(), intptr_t(_metadata._compressed_klass));
