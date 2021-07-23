@@ -43,7 +43,13 @@ inline size_t ZUtils::words_to_bytes(size_t size_in_words) {
 }
 
 inline size_t ZUtils::object_size(uintptr_t addr) {
-  return words_to_bytes(ZOop::from_address(addr)->size());
+  Klass* klass = ZOop::from_address(addr)->klass();
+  return words_to_bytes(ZOop::from_address(addr)->size_given_klass(klass));
+}
+
+inline size_t ZUtils::object_size2(uintptr_t addr) {
+  Klass* klass = ZOop::from_address(addr)->klass_or_null();
+  return words_to_bytes(ZOop::from_address(addr)->size_given_klass(klass));
 }
 
 inline void ZUtils::object_copy_disjoint(uintptr_t from, uintptr_t to, size_t size) {
