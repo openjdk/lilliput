@@ -61,6 +61,8 @@ class oopDesc {
   inline markWord  mark()          const;
   inline markWord* mark_addr() const;
 
+  inline markWord stable_mark() const;
+
   inline void set_mark(markWord m);
   static inline void set_mark(HeapWord* mem, markWord m);
 
@@ -91,12 +93,16 @@ class oopDesc {
   // Returns whether this is an instance of k or an instance of a subclass of k
   inline bool is_a(Klass* k) const;
 
+private:
+  inline int base_size_given_mark(Klass* klass);
+
+public:
   // Returns the actual oop size of the object
   inline int size();
 
   // Sometimes (for complicated concurrency-related reasons), it is useful
   // to be able to figure out the size of an object knowing its klass.
-  inline int size_given_klass(Klass* klass);
+  inline int size_given_mark(Klass* klass);
 
   // type test operations (inlined in oop.inline.hpp)
   inline bool is_instance()            const;
@@ -283,6 +289,11 @@ class oopDesc {
 
   inline static bool is_instanceof_or_null(oop obj, Klass* klass);
 
+private:
+  inline intptr_t hash_from_field() const;
+  size_t hash_offset_in_bytes() const;
+
+public:
   // identity hash; returns the identity hash key (computes it if necessary)
   inline intptr_t identity_hash();
   intptr_t slow_identity_hash();

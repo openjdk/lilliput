@@ -49,6 +49,14 @@ markWord oopDesc::mark() const {
   return markWord(v);
 }
 
+markWord oopDesc::stable_mark() const {
+  markWord mark = mark();
+  if (!mark.is_neutral()) {
+    mark = ObjectSynchronizer::stable_mark();
+  }
+  return mark;
+}
+
 markWord* oopDesc::mark_addr() const {
   return (markWord*) &_mark;
 }
@@ -152,7 +160,7 @@ int oopDesc::size()  {
   return size_given_klass(klass());
 }
 
-int oopDesc::size_given_klass(Klass* klass)  {
+int oopDesc::base_size_given_klass(Klass* klass)  {
   int lh = klass->layout_helper();
   int s;
 
@@ -206,6 +214,14 @@ int oopDesc::size_given_klass(Klass* klass)  {
   assert(s > 0, "Oop size must be greater than zero, not %d", s);
   assert(is_object_aligned(s), "Oop size is not properly aligned: %d", s);
   return s;
+}
+
+int oopDesc::size_given_klass(Klass* klass)  {
+  int base_size = base_size_given_klass(Klass* klass);
+  markWord header = stable_mark();
+  if (header.hash_is_copied()) {
+    return klass
+  }
 }
 
 bool oopDesc::is_instance()  const { return klass()->is_instance_klass();  }
@@ -389,14 +405,20 @@ bool oopDesc::is_instanceof_or_null(oop obj, Klass* klass) {
   return obj == NULL || obj->klass()->is_subtype_of(klass);
 }
 
+size_t oopDest::hash_offset_in_bytes() const {
+  return base_size_given_klass(klass()) << LogHeapWordSize;
+}
+
+intptr_t oopDesc::hash_from_field() const {
+  return int_field(hash_offset_in_bytes());
+}
+
 intptr_t oopDesc::identity_hash() {
   // Fast case; if the object is unlocked and the hash value is set, no locking is needed
   // Note: The mark must be read into local variable to avoid concurrent updates.
   markWord mrk = mark();
-  if (mrk.is_unlocked() && !mrk.has_no_hash()) {
-    return mrk.hash();
-  } else if (mrk.is_marked()) {
-    return mrk.hash();
+  if (mrk.is_unlocked() && mrk.hash_obj_moved_and_hashed()) {
+    return hash_from_field();
   } else {
     return slow_identity_hash();
   }

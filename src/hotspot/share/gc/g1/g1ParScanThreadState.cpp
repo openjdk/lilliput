@@ -430,8 +430,9 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
 
   // Get the klass once.  We'll need it again later, and this avoids
   // re-decoding when it's compressed.
-  Klass* klass = old->klass();
-  const size_t word_sz = old->size_given_klass(klass);
+  markWord mark = old->stable_mark();
+  Klass* klass = mark.klass();
+  const size_t word_sz = old->size_given_mark(klass);
 
   uint age = 0;
   G1HeapRegionAttr dest_attr = next_region_attr(region_attr, old_mark, age);

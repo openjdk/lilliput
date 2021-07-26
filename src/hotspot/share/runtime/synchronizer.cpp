@@ -740,6 +740,30 @@ static markWord read_stable_mark(oop obj) {
   }
 }
 
+markWord ObjectSynchronizer::stable_mark(const oop obj) {
+  markWord mark = read_stable_mark(obj);
+  if (mark.is_neutral() || mark.is_marked()) {
+    return mark;
+  } else if (mark.has_monitor()) {
+    ObjectMonitor* monitor = mark.monitor();
+    mark = monitor->header();
+    assert(mark.is_neutral(), "invariant: header=" INTPTR_FORMAT, mark.value());
+    return mark;
+  } else if (SafepointSynchronize::is_at_safepoint() || Thread::current()->is_lock_owned((address) mark.locker())) {
+    // This is a stack lock owned by the calling thread so fetch the
+    // displaced markWord from the BasicLock on the stack.
+    mark = mark.displaced_mark_helper();
+    assert(mark.is_neutral(), "invariant: header=" INTPTR_FORMAT, mark.value());
+    return mark;
+  } else {
+    ObjectMonitor* monitor = inflate(Thread::current(), obj, inflate_cause_vm_internal);
+    mark = monitor->header();
+    assert(mark.is_neutral(), "invariant: header=" INTPTR_FORMAT, mark.value());
+    assert(!mark.is_marked(), "no forwarded objects here");
+    return mark;
+  }
+}
+
 // hashCode() generation :
 //
 // Possibilities:
