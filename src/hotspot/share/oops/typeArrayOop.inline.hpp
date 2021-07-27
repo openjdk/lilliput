@@ -31,13 +31,7 @@
 #include "oops/oop.inline.hpp"
 #include "oops/arrayOop.hpp"
 
-int typeArrayOopDesc::object_size() {
-  TypeArrayKlass* tk = TypeArrayKlass::cast(klass());
-  return object_size(tk->layout_helper(), length());
-}
-
-int typeArrayOopDesc::object_size(const Klass* const klass) {
-  const TypeArrayKlass* tk = TypeArrayKlass::cast(klass);
+int typeArrayOopDesc::object_size(const TypeArrayKlass* tk) const {
   return object_size(tk->layout_helper(), length());
 }
 
