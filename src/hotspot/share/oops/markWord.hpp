@@ -251,6 +251,7 @@ class markWord {
 #ifdef _LP64
   inline Klass* klass() const;
   inline Klass* klass_or_null() const;
+  inline Klass* safe_klass() const;
   inline markWord set_klass(const Klass* klass) const;
   inline narrowKlass narrow_klass() const;
   inline markWord set_narrow_klass(const narrowKlass klass) const;

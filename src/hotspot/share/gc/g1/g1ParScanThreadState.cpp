@@ -428,18 +428,14 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
   assert(region_attr.is_in_cset(),
          "Unexpected region attr type: %s", region_attr.get_type_str());
 
+  if (old_mark.is_marked()) {
+    // Already forwarded by somebody else, return forwardee.
+    return old->forwardee(old_mark);
+  }
   // Get the klass once.  We'll need it again later, and this avoids
   // re-decoding when it's compressed.
 #ifdef _LP64
-  markWord header = old_mark;
-  if (header.is_marked()) {
-    // Already forwarded by somebody else, return forwardee.
-    return old->forwardee(header);
-  }
-  if (header.has_displaced_mark_helper()) {
-    header = header.displaced_mark_helper();
-  }
-  Klass* klass = header.klass();
+  Klass* klass = old_mark.safe_klass();
 #else
   Klass* klass = old->klass();
 #endif

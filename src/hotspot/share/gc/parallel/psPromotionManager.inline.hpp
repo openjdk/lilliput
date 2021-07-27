@@ -161,11 +161,7 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
   oop new_obj = NULL;
   bool new_obj_is_tenured = false;
 #ifdef _LP64
-  markWord mrk = test_mark;
-  if (mrk.has_displaced_mark_helper()) {
-    mrk = mrk.displaced_mark_helper();
-  }
-  Klass* klass = mrk.klass();
+  Klass* klass = test_mark.safe_klass();
 #else
   Klass* klass = o->klass();
 #endif
