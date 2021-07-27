@@ -180,7 +180,7 @@ bool oopDesc::is_a(Klass* k) const {
 }
 
 int oopDesc::size()  {
-  return size_given_klass(klass_or_null());
+  return size_given_klass(klass());
 }
 
 int oopDesc::size_given_klass(Klass* klass)  {
@@ -397,11 +397,6 @@ void oopDesc::oop_iterate(OopClosureType* cl) {
 }
 
 template <typename OopClosureType>
-void oopDesc::oop_iterate(OopClosureType* cl, Klass* klass) {
-  OopIteratorClosureDispatch::oop_oop_iterate(cl, this, klass);
-}
-
-template <typename OopClosureType>
 void oopDesc::oop_iterate(OopClosureType* cl, MemRegion mr) {
   OopIteratorClosureDispatch::oop_oop_iterate(cl, this, klass(), mr);
 }
@@ -429,7 +424,6 @@ void oopDesc::oop_iterate_backwards(OopClosureType* cl) {
 
 template <typename OopClosureType>
 void oopDesc::oop_iterate_backwards(OopClosureType* cl, Klass* k) {
-  //assert(k == klass(), "wrong klass");
   OopIteratorClosureDispatch::oop_oop_iterate_backwards(cl, this, k);
 }
 

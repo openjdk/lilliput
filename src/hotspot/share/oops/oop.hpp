@@ -74,7 +74,6 @@ class oopDesc {
   inline void init_mark();
 
   inline Klass* klass() const;
-
   inline Klass* klass_or_null() const;
   inline Klass* klass_or_null_acquire() const;
 
@@ -268,9 +267,6 @@ class oopDesc {
 
   template <typename OopClosureType>
   inline void oop_iterate(OopClosureType* cl);
-
-  template <typename OopClosureType>
-  inline void oop_iterate(OopClosureType* cl, Klass* klass);
 
   template <typename OopClosureType>
   inline void oop_iterate(OopClosureType* cl, MemRegion mr);
