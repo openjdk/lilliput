@@ -132,7 +132,7 @@ inline Klass* CompressedKlassPointers::decode_not_null(narrowKlass v) {
 inline Klass* CompressedKlassPointers::decode_not_null(narrowKlass v, address narrow_base) {
   assert(!is_null(v), "narrow klass value can never be zero");
   Klass* result = decode_raw(v, narrow_base);
-  assert(check_alignment(result), "address not aligned: " INTPTR_FORMAT " (" INTPTR_FORMAT ")", p2i((void*) result), intptr_t(v));
+  assert(check_alignment(result), "address not aligned: " INTPTR_FORMAT, p2i((void*) result));
   return result;
 }
 
