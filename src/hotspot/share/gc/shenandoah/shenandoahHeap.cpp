@@ -1298,7 +1298,6 @@ void ShenandoahHeap::object_iterate(ObjectClosure* cl) {
   while (! oop_stack.is_empty()) {
     oop obj = oop_stack.pop();
     assert(oopDesc::is_oop(obj), "must be a valid oop");
-    obj = ShenandoahForwarding::get_forwardee(obj);
     cl->do_object(obj);
     obj->oop_iterate(&oops);
   }
