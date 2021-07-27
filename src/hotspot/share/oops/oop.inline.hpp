@@ -94,6 +94,7 @@ void oopDesc::init_mark() {
 }
 
 Klass* oopDesc::klass() const {
+#ifdef _LP64
   assert(UseCompressedClassPointers, "only with compressed class pointers");
   markWord header = mark();
   if (!header.is_neutral()) {
@@ -103,9 +104,13 @@ Klass* oopDesc::klass() const {
   Klass* klass = header.klass();
   assert(klass == CompressedKlassPointers::decode_not_null(_metadata._compressed_klass), "klass must match: header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, header.value(), intptr_t(_metadata._compressed_klass));
   return klass;
+#else
+  return _metadata._klass;
+#endif
 }
 
 Klass* oopDesc::klass_or_null() const {
+#ifdef _LP64
   assert(UseCompressedClassPointers, "only with compressed class pointers");
   markWord header = mark();
   if (!header.is_neutral()) {
@@ -115,9 +120,13 @@ Klass* oopDesc::klass_or_null() const {
   Klass* klass = header.klass_or_null();
   assert(klass == CompressedKlassPointers::decode(_metadata._compressed_klass), "klass must match: header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, header.value(), intptr_t(_metadata._compressed_klass));
   return klass;
+#else
+  return _metadata._klass;
+#endif
 }
 
 Klass* oopDesc::klass_or_null_acquire() const {
+#ifdef _LP64
   assert(UseCompressedClassPointers, "only with compressed class pointers");
   markWord header = mark_acquire();
   if (!header.is_neutral()) {
@@ -127,6 +136,9 @@ Klass* oopDesc::klass_or_null_acquire() const {
   Klass* klass = header.klass_or_null();
   assert(klass == CompressedKlassPointers::decode(_metadata._compressed_klass), "klass must match: header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, header.value(), intptr_t(_metadata._compressed_klass));
   return klass;
+#else
+  return Atomic::load_acquire(&_metadata._klass);
+#endif
 }
 
 void oopDesc::set_klass(Klass* k) {

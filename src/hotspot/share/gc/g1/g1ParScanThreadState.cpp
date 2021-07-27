@@ -430,7 +430,7 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
 
   // Get the klass once.  We'll need it again later, and this avoids
   // re-decoding when it's compressed.
-  //Klass* klass = old->klass();
+#ifdef _LP64
   markWord header = old_mark;
   if (header.is_marked()) {
     // Already forwarded by somebody else, return forwardee.
@@ -440,6 +440,9 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
     header = header.displaced_mark_helper();
   }
   Klass* klass = header.klass();
+#else
+  Klass* klass = old->klass();
+#endif
   const size_t word_sz = old->size_given_klass(klass);
 
   uint age = 0;

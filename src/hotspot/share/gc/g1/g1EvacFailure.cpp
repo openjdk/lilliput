@@ -159,12 +159,15 @@ public:
       HeapWord* obj_end = obj_addr + obj_size;
       _last_forwarded_object_end = obj_end;
       _hr->cross_threshold(obj_addr, obj_end);
-    } else if (obj->is_forwarded()) {
+    }
+#ifdef _LP64
+    else if (obj->is_forwarded()) {
       // Restore klass so that we can safely iterate.
       // TODO: This could probably be built more efficiently into the iterator.
       Klass* klass = obj->forwardee()->klass();
       obj->set_mark(markWord::prototype().set_klass(klass));
     }
+#endif
   }
 
   // Fill the memory area from start to end with filler objects, and update the BOT

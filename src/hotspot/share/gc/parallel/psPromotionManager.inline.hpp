@@ -160,12 +160,16 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
 
   oop new_obj = NULL;
   bool new_obj_is_tenured = false;
-  size_t new_obj_size;
-  if (test_mark.has_displaced_mark_helper()) {
-    new_obj_size = o->size_given_klass(test_mark.displaced_mark_helper().klass());
-  } else {
-    new_obj_size = o->size_given_klass(test_mark.klass());
+#ifdef _LP64
+  markWord mrk = test_mark;
+  if (mrk.has_displaced_mark_helper()) {
+    mrk = mrk.displaced_mark_helper();
   }
+  Klass* klass = mrk.klass();
+#else
+  Klass* klass = o->klass();
+#endif
+  size_t new_obj_size = o->size_given_klass(klass);
 
   // Find the objects age, MT safe.
   uint age = (test_mark.has_displaced_mark_helper() /* o->has_displaced_mark() */) ?
