@@ -29,7 +29,6 @@
 #include "oops/markWord.hpp"
 #include "runtime/basicLock.hpp"
 #include "runtime/handles.hpp"
-#include "runtime/os.hpp"
 #include "utilities/growableArray.hpp"
 
 class LogStream;
@@ -67,13 +66,7 @@ public:
 class ObjectSynchronizer : AllStatic {
   friend class VMStructs;
 
-private:
-  static const int NINFLATIONLOCKS = 256;
-  static os::PlatformMutex* gInflationLocks[NINFLATIONLOCKS];
-
-  static markWord read_stable_mark(const oop obj);
-
-public:
+ public:
   typedef enum {
     inflate_cause_vm_internal = 0,
     inflate_cause_monitor_enter = 1,
@@ -133,8 +126,7 @@ public:
   static intptr_t identity_hash_value_for(Handle obj);
   static intptr_t FastHashCode(Thread* current, oop obj);
 
-  template <bool INFLATE_HEADER>
-  static inline markWord stable_header(const oop obj);
+  static markWord stable_mark(const oop obj, bool inflate_header);
 
   // java.lang.Thread support
   static bool current_thread_holds_lock(JavaThread* current, Handle h_obj);
