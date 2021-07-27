@@ -32,7 +32,7 @@
 #include "oops/arrayKlass.hpp"
 #include "oops/arrayOop.hpp"
 #include "oops/compressedOops.inline.hpp"
-#include "oops/markWord.hpp"
+#include "oops/markWord.inline.hpp"
 #include "oops/oopsHierarchy.hpp"
 #include "runtime/atomic.hpp"
 #include "runtime/globals.hpp"
@@ -83,7 +83,7 @@ markWord oopDesc::cas_set_mark(markWord new_mark, markWord old_mark, atomic_memo
 
 void oopDesc::init_mark() {
 #ifdef _LP64
-  markWord header = ObjectSynchronizer::stable_mark(cast_to_oop(this), false);
+  markWord header = ObjectSynchronizer::stable_mark(cast_to_oop(this));
   assert(_metadata._compressed_klass == header.narrow_klass(), "klass must match: " PTR_FORMAT, header.value());
   assert(UseCompressedClassPointers, "expect compressed klass pointers");
   header = markWord((header.value() & markWord::klass_mask_in_place) | markWord::prototype().value());
@@ -93,17 +93,11 @@ void oopDesc::init_mark() {
   set_mark(header);
 }
 
-template <bool INFLATE_HEADER>
 Klass* oopDesc::klass() const {
-//  if (UseCompressedClassPointers) {
-//    return CompressedKlassPointers::decode_not_null(_metadata._compressed_klass);
-//  } else {
-//    return _metadata._klass;
-//  }
   assert(UseCompressedClassPointers, "only with compressed class pointers");
-  markWord header = ObjectSynchronizer::stable_mark(cast_to_oop(this), INFLATE_HEADER);
-  if (INFLATE_HEADER && header.value() == 0) {
-    return NULL;
+  markWord header = mark();
+  if (!header.is_neutral()) {
+    header = ObjectSynchronizer::stable_mark(cast_to_oop(this));
   }
   assert(_metadata._compressed_klass == header.narrow_klass(), "narrow klass must be equal, header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, header.value(), intptr_t(_metadata._compressed_klass));
   Klass* klass = header.klass();
@@ -111,27 +105,24 @@ Klass* oopDesc::klass() const {
   return klass;
 }
 
-Klass* oopDesc::klass() const {
-  return klass<true>();
-}
-
 Klass* oopDesc::klass_or_null() const {
-  if (UseCompressedClassPointers) {
-    return CompressedKlassPointers::decode(_metadata._compressed_klass);
-  } else {
-    return _metadata._klass;
+  assert(UseCompressedClassPointers, "only with compressed class pointers");
+  markWord header = mark();
+  if (!header.is_neutral()) {
+    header =ObjectSynchronizer::stable_mark(cast_to_oop(this));
   }
-//  assert(UseCompressedClassPointers, "only with compressed class pointers");
-//  markWord header = ObjectSynchronizer::stable_mark(cast_to_oop(this), true);
-//  assert(_metadata._compressed_klass == header.narrow_klass(), "narrow klass must be equal, header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, header.value(), intptr_t(_metadata._compressed_klass));
-//  Klass* klass = header.klass_or_null();
-//  assert(klass == CompressedKlassPointers::decode(_metadata._compressed_klass), "klass must match: header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, header.value(), intptr_t(_metadata._compressed_klass));
-//  return klass;
+  assert(_metadata._compressed_klass == header.narrow_klass(), "narrow klass must be equal, header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, header.value(), intptr_t(_metadata._compressed_klass));
+  Klass* klass = header.klass_or_null();
+  assert(klass == CompressedKlassPointers::decode(_metadata._compressed_klass), "klass must match: header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, header.value(), intptr_t(_metadata._compressed_klass));
+  return klass;
 }
 
 Klass* oopDesc::klass_or_null_acquire() const {
   assert(UseCompressedClassPointers, "only with compressed class pointers");
-  markWord header = ObjectSynchronizer::stable_mark(cast_to_oop(this), true);
+  markWord header = mark_acquire();
+  if (!header.is_neutral()) {
+    header = ObjectSynchronizer::stable_mark(cast_to_oop(this));
+  }
   assert(_metadata._compressed_klass == header.narrow_klass(), "narrow klass must be equal, header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, header.value(), intptr_t(_metadata._compressed_klass));
   Klass* klass = header.klass_or_null();
   assert(klass == CompressedKlassPointers::decode(_metadata._compressed_klass), "klass must match: header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, header.value(), intptr_t(_metadata._compressed_klass));

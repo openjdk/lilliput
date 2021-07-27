@@ -162,7 +162,7 @@ public:
     } else if (obj->is_forwarded()) {
       // Restore klass so that we can safely iterate.
       // TODO: This could probably be built more efficiently into the iterator.
-      Klass* klass = obj->forwardee()->klass<false>();
+      Klass* klass = obj->forwardee()->klass();
       obj->set_mark(markWord::prototype().set_klass(klass));
     }
   }

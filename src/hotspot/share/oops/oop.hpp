@@ -75,9 +75,6 @@ class oopDesc {
 
   inline Klass* klass() const;
 
-  template <bool INFLATE_HEADER>
-  inline Klass* klass() const;
-
   inline Klass* klass_or_null() const;
   inline Klass* klass_or_null_acquire() const;
 

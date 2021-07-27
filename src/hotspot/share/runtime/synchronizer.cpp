@@ -740,7 +740,7 @@ static markWord read_stable_mark(oop obj) {
   }
 }
 
-markWord ObjectSynchronizer::stable_mark(const oop obj, bool inflate_header) {
+markWord ObjectSynchronizer::stable_mark(const oop obj) {
   markWord mark = read_stable_mark(obj);
   if (mark.is_neutral() || mark.is_marked()) {
     return mark;
@@ -756,15 +756,11 @@ markWord ObjectSynchronizer::stable_mark(const oop obj, bool inflate_header) {
     assert(mark.is_neutral(), "invariant: header=" INTPTR_FORMAT, mark.value());
     return mark;
   } else {
-    if (inflate_header) {
-      ObjectMonitor* monitor = inflate(Thread::current(), obj, inflate_cause_vm_internal);
-      mark = monitor->header();
-      assert(mark.is_neutral(), "invariant: header=" INTPTR_FORMAT, mark.value());
-      assert(!mark.is_marked(), "no forwarded objects here");
-      return mark;
-    } else {
-      return markWord(0);
-    }
+    ObjectMonitor* monitor = inflate(Thread::current(), obj, inflate_cause_vm_internal);
+    mark = monitor->header();
+    assert(mark.is_neutral(), "invariant: header=" INTPTR_FORMAT, mark.value());
+    assert(!mark.is_marked(), "no forwarded objects here");
+    return mark;
   }
 }
 
