@@ -110,8 +110,6 @@ void G1FullGCCompactionPoint::forward(SlidingForwarding* const forwarding, oop o
   // Store a forwarding pointer if the object should be moved.
   if (forward_object) {
     assert(_compaction_top < cast_from_oop<HeapWord*>(object), "must only slide downwards");
-    tty->print_cr("forwarding " PTR_FORMAT " to " PTR_FORMAT ", realloc: %s, mark: " INTPTR_FORMAT ", obj size: %d, copy size: %d, base size: %d", p2i(object), p2i(_compaction_top),
-                  BOOL_TO_STR(realloc_for_hash), object->mark().value(), object->size(), size, object->klass()->oop_size(object));
     forwarding->forward_to(object, cast_to_oop(_compaction_top));
     assert(object->is_forwarded(), "must be forwarded now");
   } else {

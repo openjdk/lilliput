@@ -285,10 +285,11 @@ oop HeapShared::archive_object(oop obj) {
     // into during run time, increasing the potential of memory sharing.
     narrowKlass nklass = mark.narrow_klass();
     markWord new_mark = markWord::prototype() LP64_ONLY(.set_narrow_klass(nklass));
-    tty->print_cr("archiving oop: " PTR_FORMAT, p2i(obj));
     if (mark.hash_is_hashed()) {
       // Initialize hashcode.
       archived_oop->initialize_hash(obj, mark);
+      new_mark = new_mark.hash_set_copied();
+    } else if (mark.hash_is_copied()) {
       new_mark = new_mark.hash_set_copied();
     }
     assert(!new_mark.is_marked(), "must not be forwarded");

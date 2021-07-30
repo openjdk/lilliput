@@ -76,7 +76,6 @@ size_t G1FullGCCompactTask::G1CompactRegionClosure::apply(oop obj) {
   HeapWord* obj_addr = cast_from_oop<HeapWord*>(obj);
   assert(obj_addr != destination, "everything in this pass should be moving");
   assert(destination < obj_addr, "compact downward only");
-  tty->print_cr("Copying " SIZE_FORMAT " words from: " PTR_FORMAT ", to " PTR_FORMAT, size, p2i(obj_addr), p2i(destination));
   Copy::aligned_conjoint_words(obj_addr, destination, size);
   if (mark.hash_is_hashed()) {
     cast_to_oop(destination)->initialize_hash(obj, mark);

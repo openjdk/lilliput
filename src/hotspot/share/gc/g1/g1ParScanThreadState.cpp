@@ -441,7 +441,6 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
   const size_t old_size = old->size(mark);
   size_t new_size = old_size;
   if (old->hash_requires_reallocation(mark)) {
-    tty->print_cr("expanding object for hash code");
     new_size++;
   }
 
