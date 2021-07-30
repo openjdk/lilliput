@@ -430,26 +430,32 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
     // Already forwarded by somebody else, return forwardee.
     return old->forwardee(old_mark);
   }
-  // Get the klass once.  We'll need it again later, and this avoids
-  // re-decoding when it's compressed.
-#ifdef _LP64
-  Klass* klass = old_mark.safe_klass();
-#else
-  Klass* klass = old->klass();
-#endif
-  const size_t word_sz = old->size_given_klass(klass);
+  // Get the mark, size, etc once.  We'll need it again later, and this avoids
+  // re-decoding.
+  markWord mark = old_mark;
+  if (mark.has_displaced_mark_helper()) {
+    mark = mark.displaced_mark_helper();
+  }
+  markWord orig_mark = mark;
+
+  const size_t old_size = old->size(mark);
+  size_t new_size = old_size;
+  if (old->hash_requires_reallocation(mark)) {
+    tty->print_cr("expanding object for hash code");
+    new_size++;
+  }
 
   uint age = 0;
   G1HeapRegionAttr dest_attr = next_region_attr(region_attr, old_mark, age);
   HeapRegion* const from_region = _g1h->heap_region_containing(old);
   uint node_index = from_region->node_index();
 
-  HeapWord* obj_ptr = _plab_allocator->plab_allocate(dest_attr, word_sz, node_index);
+  HeapWord* obj_ptr = _plab_allocator->plab_allocate(dest_attr, new_size, node_index);
 
   // PLAB allocations should succeed most of the time, so we'll
   // normally check against NULL once and that's it.
   if (obj_ptr == NULL) {
-    obj_ptr = allocate_copy_slow(&dest_attr, old, word_sz, age, node_index);
+    obj_ptr = allocate_copy_slow(&dest_attr, old, new_size, age, node_index);
     if (obj_ptr == NULL) {
       // This will either forward-to-self, or detect that someone else has
       // installed a forwarding pointer.
@@ -465,7 +471,7 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
   if (_g1h->evacuation_should_fail()) {
     // Doing this after all the allocation attempts also tests the
     // undo_allocation() method too.
-    undo_allocation(dest_attr, obj_ptr, word_sz, node_index);
+    undo_allocation(dest_attr, obj_ptr, new_size, node_index);
     return handle_evacuation_failure_par(old, old_mark);
   }
 #endif // !PRODUCT
@@ -476,35 +482,48 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
   const oop obj = cast_to_oop(obj_ptr);
   const oop forward_ptr = old->forward_to_atomic(obj, old_mark, memory_order_relaxed);
   if (forward_ptr == NULL) {
-    Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(old), obj_ptr, word_sz);
+    Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(old), obj_ptr, old_size);
 
     {
       const uint young_index = from_region->young_index_in_cset();
       assert((from_region->is_young() && young_index >  0) ||
              (!from_region->is_young() && young_index == 0), "invariant" );
-      _surviving_young_words[young_index] += word_sz;
+      _surviving_young_words[young_index] += new_size;
+    }
+
+    // Initialize i-hash if necessary
+    if (mark.hash_is_hashed()) {
+      obj->initialize_hash(old, mark);
+      mark = mark.hash_set_copied();
     }
 
     if (dest_attr.is_young()) {
       if (age < markWord::max_age) {
         age++;
       }
+      mark = mark.set_age(age);
+      _age_table.add(age, new_size);
+    }
+
+    // Update mark if necessary (changed age or hashctrl bits)
+    if (mark != orig_mark) {
       if (old_mark.has_displaced_mark_helper()) {
-        // In this case, we have to install the old mark word containing the
-        // displacement tag, and update the age in the displaced mark word.
-        markWord new_mark = old_mark.displaced_mark_helper().set_age(age);
-        old_mark.set_displaced_mark_helper(new_mark);
+        old_mark.set_displaced_mark_helper(mark);
         obj->set_mark(old_mark);
       } else {
-        obj->set_mark(old_mark.set_age(age));
+        obj->set_mark(mark);
       }
-      _age_table.add(age, word_sz);
     } else {
       obj->set_mark(old_mark);
     }
 
     // Most objects are not arrays, so do one array check rather than
     // checking for each array category for each object.
+#ifdef _LP64
+    Klass* klass = mark.klass();
+#else
+    Klass* klass = old->klass();
+#endif
     if (klass->is_array_klass()) {
       if (klass->is_objArray_klass()) {
         start_partial_objarray(dest_attr, old, obj);
@@ -532,7 +551,7 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
     return obj;
 
   } else {
-    _plab_allocator->undo_allocation(dest_attr, obj_ptr, word_sz, node_index);
+    _plab_allocator->undo_allocation(dest_attr, obj_ptr, new_size, node_index);
     return forward_ptr;
   }
 }

@@ -271,7 +271,7 @@ class Generation: public CHeapObj<mtGC> {
   //
   // The "obj_size" argument is just obj->size(), passed along so the caller can
   // avoid repeating the virtual call to retrieve it.
-  virtual oop promote(oop obj, size_t obj_size);
+  virtual oop promote(oop obj, size_t old_size, size_t new_size);
 
   // Thread "thread_num" (0 <= i < ParalleGCThreads) wants to promote
   // object "obj", whose original mark word was "m", and whose size is

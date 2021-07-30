@@ -56,12 +56,13 @@ markWord oopDesc::mark_acquire() const {
   return markWord(v);
 }
 
-markWord oopDesc::stable_mark() const {
-  markWord mark = mark();
-  if (!mark.is_neutral()) {
-    mark = ObjectSynchronizer::stable_mark();
+markWord oopDesc::safe_mark() const {
+  assert(SafepointSynchronize::is_at_safepoint(), "can only resolve displaced mark at safepoint");
+  markWord m = mark();
+  if (m.has_displaced_mark_helper()) {
+    m = m.displaced_mark_helper();
   }
-  return mark;
+  return m;
 }
 
 markWord* oopDesc::mark_addr() const {
@@ -187,10 +188,6 @@ bool oopDesc::is_a(Klass* k) const {
   return klass()->is_subtype_of(k);
 }
 
-int oopDesc::size()  {
-  return size_given_klass(klass());
-}
-
 int oopDesc::base_size_given_klass(Klass* klass)  {
   int lh = klass->layout_helper();
   int s;
@@ -247,12 +244,26 @@ int oopDesc::base_size_given_klass(Klass* klass)  {
   return s;
 }
 
-int oopDesc::size_given_klass(Klass* klass)  {
-  int base_size = base_size_given_klass(Klass* klass);
-  markWord header = stable_mark();
-  if (header.hash_is_copied()) {
-    return klass
+int oopDesc::size(markWord mrk) {
+  Klass* klass = mrk.klass();
+  int size = base_size_given_klass(klass);
+  if (mrk.hash_is_copied() && klass->hash_requires_reallocation(cast_to_oop(this))) {
+    size++;
   }
+  return size;
+}
+
+int oopDesc::size() {
+  markWord mrk = mark();
+  if (!mrk.is_neutral()) {
+    mrk = ObjectSynchronizer::stable_mark(cast_to_oop(this));
+  }
+  return size(mrk);
+}
+
+bool oopDesc::hash_requires_reallocation(markWord mrk)  {
+  assert(SafepointSynchronize::is_at_safepoint(), "need safepoint to safely resolve displaced mark");
+  return mrk.hash_is_hashed() && mrk.klass()->hash_requires_reallocation(cast_to_oop(this));
 }
 
 bool oopDesc::is_instance()  const { return klass()->is_instance_klass();  }
@@ -420,17 +431,19 @@ void oopDesc::oop_iterate(OopClosureType* cl, MemRegion mr) {
 template <typename OopClosureType>
 int oopDesc::oop_iterate_size(OopClosureType* cl) {
   Klass* k = klass();
-  int size = size_given_klass(k);
+  // TODO: Optimize to fetch header once, and figure out size and Klass* from there.
+  int sz = size();
   OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k);
-  return size;
+  return sz;
 }
 
 template <typename OopClosureType>
 int oopDesc::oop_iterate_size(OopClosureType* cl, MemRegion mr) {
   Klass* k = klass();
-  int size = size_given_klass(k);
+  // TODO: Optimize to fetch header once, and figure out size and Klass* from there.
+  int sz = size();
   OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k, mr);
-  return size;
+  return sz;
 }
 
 template <typename OopClosureType>
@@ -447,20 +460,13 @@ bool oopDesc::is_instanceof_or_null(oop obj, Klass* klass) {
   return obj == NULL || obj->klass()->is_subtype_of(klass);
 }
 
-size_t oopDest::hash_offset_in_bytes() const {
-  return base_size_given_klass(klass()) << LogHeapWordSize;
-}
-
-intptr_t oopDesc::hash_from_field() const {
-  return int_field(hash_offset_in_bytes());
-}
-
 intptr_t oopDesc::identity_hash() {
   // Fast case; if the object is unlocked and the hash value is set, no locking is needed
   // Note: The mark must be read into local variable to avoid concurrent updates.
   markWord mrk = mark();
-  if (mrk.is_unlocked() && mrk.hash_obj_moved_and_hashed()) {
-    return hash_from_field();
+  if (mrk.is_neutral() && mrk.hash_is_copied()) {
+    Klass* klass = mrk.klass();
+    return int_field(klass->hash_offset_in_bytes(cast_to_oop(this)));
   } else {
     return slow_identity_hash();
   }

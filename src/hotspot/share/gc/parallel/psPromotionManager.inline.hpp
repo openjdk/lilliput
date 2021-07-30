@@ -160,27 +160,31 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
 
   oop new_obj = NULL;
   bool new_obj_is_tenured = false;
-#ifdef _LP64
-  Klass* klass = test_mark.safe_klass();
-#else
-  Klass* klass = o->klass();
-#endif
-  size_t new_obj_size = o->size_given_klass(klass);
+  markWord mark = test_mark;
+  if (mark.has_displaced_mark_helper()) {
+    mark = mark.displaced_mark_helper();
+  }
+  markWord orig_mark = mark;
+
+  size_t old_size = o->size(mark);
+  size_t new_size = old_size;
+  if (o->hash_requires_reallocation(mark)) {
+    new_size++;
+  }
 
   // Find the objects age, MT safe.
-  uint age = (test_mark.has_displaced_mark_helper() /* o->has_displaced_mark() */) ?
-      test_mark.displaced_mark_helper().age() : test_mark.age();
+  uint age = mark.age();
 
   if (!promote_immediately) {
     // Try allocating obj in to-space (unless too old)
     if (age < PSScavenge::tenuring_threshold()) {
-      new_obj = cast_to_oop(_young_lab.allocate(new_obj_size));
+      new_obj = cast_to_oop(_young_lab.allocate(new_size));
       if (new_obj == NULL && !_young_gen_is_full) {
         // Do we allocate directly, or flush and refill?
-        if (new_obj_size > (YoungPLABSize / 2)) {
+        if (new_size > (YoungPLABSize / 2)) {
           // Allocate this object directly
-          new_obj = cast_to_oop(young_space()->cas_allocate(new_obj_size));
-          promotion_trace_event(new_obj, o, new_obj_size, age, false, NULL);
+          new_obj = cast_to_oop(young_space()->cas_allocate(new_size));
+          promotion_trace_event(new_obj, o, new_size, age, false, NULL);
         } else {
           // Flush and fill
           _young_lab.flush();
@@ -189,8 +193,8 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
           if (lab_base != NULL) {
             _young_lab.initialize(MemRegion(lab_base, YoungPLABSize));
             // Try the young lab allocation again.
-            new_obj = cast_to_oop(_young_lab.allocate(new_obj_size));
-            promotion_trace_event(new_obj, o, new_obj_size, age, false, &_young_lab);
+            new_obj = cast_to_oop(_young_lab.allocate(new_size));
+            promotion_trace_event(new_obj, o, new_size, age, false, &_young_lab);
           } else {
             _young_gen_is_full = true;
           }
@@ -207,16 +211,16 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
     }
 #endif  // #ifndef PRODUCT
 
-    new_obj = cast_to_oop(_old_lab.allocate(new_obj_size));
+    new_obj = cast_to_oop(_old_lab.allocate(new_size));
     new_obj_is_tenured = true;
 
     if (new_obj == NULL) {
       if (!_old_gen_is_full) {
         // Do we allocate directly, or flush and refill?
-        if (new_obj_size > (OldPLABSize / 2)) {
+        if (new_size > (OldPLABSize / 2)) {
           // Allocate this object directly
-          new_obj = cast_to_oop(old_gen()->allocate(new_obj_size));
-          promotion_trace_event(new_obj, o, new_obj_size, age, true, NULL);
+          new_obj = cast_to_oop(old_gen()->allocate(new_size));
+          promotion_trace_event(new_obj, o, new_size, age, true, NULL);
         } else {
           // Flush and fill
           _old_lab.flush();
@@ -232,8 +236,8 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
 #endif
             _old_lab.initialize(MemRegion(lab_base, OldPLABSize));
             // Try the old lab allocation again.
-            new_obj = cast_to_oop(_old_lab.allocate(new_obj_size));
-            promotion_trace_event(new_obj, o, new_obj_size, age, true, &_old_lab);
+            new_obj = cast_to_oop(_old_lab.allocate(new_size));
+            promotion_trace_event(new_obj, o, new_size, age, true, &_old_lab);
           }
         }
       }
@@ -254,7 +258,7 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
   assert(new_obj != NULL, "allocation should have succeeded");
 
   // Copy obj
-  Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(o), cast_from_oop<HeapWord*>(new_obj), new_obj_size);
+  Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(o), cast_from_oop<HeapWord*>(new_obj), old_size);
 
   // Now we have to CAS in the header.
   // Make copy visible to threads reading the forwardee.
@@ -267,8 +271,28 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
     // we're dealing with a markWord that cannot change, it is
     // okay to use the non mt safe oop methods.
     if (!new_obj_is_tenured) {
-      new_obj->incr_age();
+      mark = mark.incr_age();
       assert(young_space()->contains(new_obj), "Attempt to push non-promoted obj");
+    }
+
+    if (mark.hash_is_hashed()) {
+      new_obj->initialize_hash(o, mark);
+      mark = mark.hash_set_copied();
+    }
+
+    // Update mark if necessary (changed age or hashctrl bits)
+    if (mark != orig_mark) {
+      if (test_mark.has_displaced_mark_helper()) {
+        test_mark.set_displaced_mark_helper(mark);
+        assert(!test_mark.is_marked(), "must not be forwarded");
+        new_obj->set_mark(test_mark);
+      } else {
+        assert(!mark.is_marked(), "must not be forwarded");
+        new_obj->set_mark(mark);
+      }
+    } else {
+      assert(!test_mark.is_marked(), "must not be forwarded");
+      new_obj->set_mark(test_mark);
     }
 
     log_develop_trace(gc, scavenge)("{%s %s " PTR_FORMAT " -> " PTR_FORMAT " (%d)}",
@@ -280,7 +304,7 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
     // already have. Hopefully, only a few objects are larger than
     // _min_array_size_for_chunking, and most of them will be arrays.
     // So, the is->objArray() test would be very infrequent.
-    if (new_obj_size > _min_array_size_for_chunking &&
+    if (new_size > _min_array_size_for_chunking &&
         new_obj->is_objArray() &&
         PSChunkLargeArrays) {
       // we'll chunk it
@@ -304,11 +328,11 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
     // deallocate it, so we have to test.  If the deallocation fails,
     // overwrite with a filler object.
     if (new_obj_is_tenured) {
-      if (!_old_lab.unallocate_object(cast_from_oop<HeapWord*>(new_obj), new_obj_size)) {
-        CollectedHeap::fill_with_object(cast_from_oop<HeapWord*>(new_obj), new_obj_size);
+      if (!_old_lab.unallocate_object(cast_from_oop<HeapWord*>(new_obj), new_size)) {
+        CollectedHeap::fill_with_object(cast_from_oop<HeapWord*>(new_obj), new_size);
       }
-    } else if (!_young_lab.unallocate_object(cast_from_oop<HeapWord*>(new_obj), new_obj_size)) {
-      CollectedHeap::fill_with_object(cast_from_oop<HeapWord*>(new_obj), new_obj_size);
+    } else if (!_young_lab.unallocate_object(cast_from_oop<HeapWord*>(new_obj), new_size)) {
+      CollectedHeap::fill_with_object(cast_from_oop<HeapWord*>(new_obj), new_size);
     }
     return forwardee;
   }

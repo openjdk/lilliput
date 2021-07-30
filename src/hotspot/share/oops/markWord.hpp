@@ -113,15 +113,15 @@ class markWord {
   static const int self_forwarded_bits            = 1;
   static const int hashctrl_bits                  = 2;
 #ifdef _LP64
-  static const int klass_bits                     = 32;
+  static const int klass_bits                     = 30;
 #endif
 
   static const int lock_shift                     = 0;
   static const int self_forwarded_shift           = lock_shift + lock_bits;
   static const int age_shift                      = self_forwarded_shift + self_forwarded_bits;
-  static const int hashctrl_shift                 = age_shift + age_bits;
+  static const int hashctrl_shift                 = 32;
 #ifdef _LP64
-  static const int klass_shift                    = 32;
+  static const int klass_shift                    = 34;
 #endif
 
   static const uintptr_t lock_mask                = right_n_bits(lock_bits);
@@ -132,6 +132,8 @@ class markWord {
   static const uintptr_t age_mask_in_place        = age_mask << age_shift;
   static const uintptr_t hashctrl_mask            = right_n_bits(hashctrl_bits);
   static const uintptr_t hashctrl_mask_in_place   = hashctrl_mask << hashctrl_shift;
+  static const uintptr_t hashctrl_hashed_mask_in_place = ((uintptr_t)1) << hashctrl_shift;
+  static const uintptr_t hashctrl_copied_mask_in_place = ((uintptr_t)2) << hashctrl_shift;
 
 #ifdef _LP64
   static const uintptr_t klass_mask               = right_n_bits(klass_bits);
@@ -246,7 +248,40 @@ class markWord {
     return (value() & hashctrl_mask_in_place) == 0;
   }
 
-#ifdef _LP64
+  markWord copy_set_hashctrl(markWord m) const {
+    return markWord(value() | (m.value() & hashctrl_mask_in_place));
+  }
+
+  inline bool hash_is_hashed() const {
+    return (value() & hashctrl_hashed_mask_in_place) != 0;
+  }
+
+  inline markWord hash_set_hashed() const {
+    assert(has_no_hash(), "only transition from no-hash -> hashed");
+    return markWord((value() | hashctrl_hashed_mask_in_place));
+  }
+
+  inline bool hash_is_copied() const {
+    return (value() & hashctrl_copied_mask_in_place) != 0;
+  }
+
+  inline markWord hash_set_copied() const {
+    return markWord(((value() & ~hashctrl_mask_in_place) | hashctrl_copied_mask_in_place));
+  }
+
+  inline bool hash_is_hashed_or_copied() const {
+    return (value() & hashctrl_mask_in_place) != 0;
+  }
+
+  int hashctrl() const {
+    return (int)((value() & hashctrl_mask_in_place) >> hashctrl_shift);
+  }
+
+  inline markWord hash_copy_hashctrl_from(markWord m) const {
+    return markWord((value() & ~hashctrl_mask_in_place) | (m.value() & hashctrl_hashed_mask_in_place));
+  }
+
+  #ifdef _LP64
   inline Klass* klass() const;
   inline Klass* klass_or_null() const;
   inline Klass* safe_klass() const;

@@ -2594,27 +2594,24 @@
                                                                           \
   declare_constant(markWord::age_bits)                                    \
   declare_constant(markWord::lock_bits)                                   \
-  declare_constant(markWord::max_hash_bits)                               \
-  declare_constant(markWord::hash_bits)                                   \
+  declare_constant(markWord::hashctrl_bits)                               \
                                                                           \
   declare_constant(markWord::lock_shift)                                  \
   declare_constant(markWord::age_shift)                                   \
-  declare_constant(markWord::hash_shift)                                  \
+  declare_constant(markWord::hashctrl_shift)                              \
                                                                           \
   declare_constant(markWord::lock_mask)                                   \
   declare_constant(markWord::lock_mask_in_place)                          \
   declare_constant(markWord::age_mask)                                    \
   declare_constant(markWord::age_mask_in_place)                           \
-  declare_constant(markWord::hash_mask)                                   \
-  declare_constant(markWord::hash_mask_in_place)                          \
+  declare_constant(markWord::hashctrl_mask)                               \
+  declare_constant(markWord::hashctrl_mask_in_place)                      \
                                                                           \
   declare_constant(markWord::locked_value)                                \
   declare_constant(markWord::unlocked_value)                              \
   declare_constant(markWord::monitor_value)                               \
   declare_constant(markWord::marked_value)                                \
                                                                           \
-  declare_constant(markWord::no_hash)                                     \
-  declare_constant(markWord::no_hash_in_place)                            \
   declare_constant(markWord::no_lock_in_place)                            \
   declare_constant(markWord::max_age)                                     \
                                                                           \

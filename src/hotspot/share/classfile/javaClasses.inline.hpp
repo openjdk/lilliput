@@ -264,6 +264,9 @@ inline bool java_lang_Class::is_primitive(oop java_class) {
 inline int java_lang_Class::oop_size_raw(oop java_class) {
   assert(_oop_size_offset != 0, "must be set");
   int size = java_class->int_field_raw(_oop_size_offset);
+  // tty->print_cr("mirror size oop: " PTR_FORMAT, p2i(java_class));
+  assert((size << LogBytesPerWord) >= _signers_offset + HeapWordSize, "java mirror size must be greater than signers-offset: size: %d, signers-offset: %d, oop: " PTR_FORMAT, size << LogBytesPerWord, _signers_offset,
+         p2i(java_class));
   assert(size > 0, "Oop size must be greater than zero, not %d", size);
   return size;
 }

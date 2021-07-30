@@ -67,6 +67,11 @@ class InstanceMirrorKlass: public InstanceKlass {
   // Returns the size of the instance including the extra static fields.
   virtual int oop_size(oop obj) const;
 
+  int hash_offset_in_bytes(oop obj) const override {
+//    tty->print_cr("hash offset if instanceMirrorKlass: %d", oop_size(obj) << LogBytesPerWord);
+    return oop_size(obj) << LogBytesPerWord;
+  }
+
   // Static field offset is an offset into the Heap, should be converted by
   // based on UseCompressedOop for traversal
   static HeapWord* start_of_static_fields(oop obj) {

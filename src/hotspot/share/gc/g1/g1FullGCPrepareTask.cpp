@@ -161,12 +161,14 @@ G1FullGCPrepareTask::G1PrepareCompactLiveClosure::G1PrepareCompactLiveClosure(G1
     _cp(cp), _forwarding(G1CollectedHeap::heap()->forwarding()) { }
 
 size_t G1FullGCPrepareTask::G1PrepareCompactLiveClosure::apply(oop object) {
-  size_t size = object->size();
-  _cp->forward(_forwarding, object, size);
+  markWord mark = object->safe_mark();
+  size_t size = object->size(mark);
+  _cp->forward(_forwarding, object, size, object->hash_requires_reallocation(mark));
   return size;
 }
 
 size_t G1FullGCPrepareTask::G1RePrepareClosure::apply(oop obj) {
+  ShouldNotReachHere();
   // We only re-prepare objects forwarded within the current region, so
   // skip objects that are already forwarded to another region.
   if (obj->is_forwarded()) {
@@ -177,8 +179,9 @@ size_t G1FullGCPrepareTask::G1RePrepareClosure::apply(oop obj) {
   }
 
   // Get size and forward.
-  size_t size = obj->size();
-  _cp->forward(_forwarding, obj, size);
+  markWord mark = obj->safe_mark();
+  size_t size = obj->size(mark);
+  _cp->forward(_forwarding, obj, size, obj->hash_requires_reallocation(mark));
 
   return size;
 }
@@ -202,6 +205,7 @@ void G1FullGCPrepareTask::G1CalculatePointersClosure::prepare_for_compaction(Hea
 
 void G1FullGCPrepareTask::prepare_serial_compaction() {
   GCTraceTime(Debug, gc, phases) debug("Phase 2: Prepare Serial Compaction", collector()->scope()->timer());
+  ShouldNotReachHere();
   // At this point we know that no regions were completely freed by
   // the parallel compaction. That means that the last region of
   // all compaction queues still have data in them. We try to compact

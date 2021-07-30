@@ -59,10 +59,9 @@ class oopDesc {
 
  public:
   inline markWord  mark()          const;
+  inline markWord  safe_mark()     const;
   inline markWord  mark_acquire()  const;
   inline markWord* mark_addr() const;
-
-  inline markWord stable_mark() const;
 
   inline void set_mark(markWord m);
   static inline void set_mark(HeapWord* mem, markWord m);
@@ -96,15 +95,14 @@ class oopDesc {
   inline bool is_a(Klass* k) const;
 
 private:
-  inline int base_size_given_mark(Klass* klass);
+  inline int base_size_given_klass(Klass* klass);
 
 public:
   // Returns the actual oop size of the object
   inline int size();
+  inline int size(markWord mrk);
 
-  // Sometimes (for complicated concurrency-related reasons), it is useful
-  // to be able to figure out the size of an object knowing its klass.
-  inline int size_given_mark(Klass* klass);
+  inline bool hash_requires_reallocation(markWord mrk);
 
   // type test operations (inlined in oop.inline.hpp)
   inline bool is_instance()            const;
@@ -291,14 +289,13 @@ public:
 
   inline static bool is_instanceof_or_null(oop obj, Klass* klass);
 
-private:
-  inline intptr_t hash_from_field() const;
-  size_t hash_offset_in_bytes() const;
-
 public:
   // identity hash; returns the identity hash key (computes it if necessary)
   inline intptr_t identity_hash();
   intptr_t slow_identity_hash();
+
+  // Initialize identity hash code in hash word of object copy from original object.
+  void initialize_hash(oop obj, markWord m);
 
   // marks are forwarded to stack when object is locked
   inline bool     has_displaced_mark() const;

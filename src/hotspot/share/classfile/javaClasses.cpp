@@ -1438,6 +1438,10 @@ void java_lang_Class::set_init_lock(oop java_class, oop init_lock) {
 
 objArrayOop java_lang_Class::signers(oop java_class) {
   assert(_signers_offset != 0, "must be set");
+  tty->print_cr("signers offset: %d", _signers_offset);
+  tty->print_cr("Class size: %d", java_class->size() * HeapWordSize);
+  //tty->print_cr("Class base size: %d", java_class->klass()->oop_size(java_class) * HeapWordSize);
+  tty->print_cr("signers object: " INTPTR_FORMAT, p2i(java_class));
   return (objArrayOop)java_class->obj_field(_signers_offset);
 }
 void java_lang_Class::set_signers(oop java_class, objArrayOop signers) {

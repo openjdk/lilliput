@@ -46,7 +46,9 @@ private:
     OopAndMarkWord(oop obj, markWord m) : _o(obj), _m(m) { }
 
     oop get_oop() { return _o; }
+    markWord get_mark() { return _m; }
     inline void set_mark() const;
+    inline void set_mark(markWord m) { _m = m; }
     void set_oop(oop obj) { _o = obj; }
   };
   typedef Stack<OopAndMarkWord, mtGC> OopAndMarkWordStack;

@@ -719,7 +719,7 @@ const intx ObjectAlignmentInBytes = 8;
           "before adjusting the in_use_list_ceiling up (0 is off).")        \
           range(0, max_uintx)                                               \
                                                                             \
-  product(intx, hashCode, 5, EXPERIMENTAL,                                  \
+  product(intx, hashCode, 6, EXPERIMENTAL,                                  \
                "(Unstable) select hashCode generation algorithm")           \
                                                                             \
   product(bool, FilterSpuriousWakeups, true,                                \
@@ -1807,7 +1807,7 @@ const intx ObjectAlignmentInBytes = 8;
                                                                             \
   /* Shared spaces */                                                       \
                                                                             \
-  product(bool, UseSharedSpaces, true,                                      \
+  product(bool, UseSharedSpaces, false,                                     \
           "Use shared spaces for metadata")                                 \
                                                                             \
   product(bool, VerifySharedSpaces, false,                                  \

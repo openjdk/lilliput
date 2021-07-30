@@ -263,12 +263,15 @@ class InstanceKlass: public Klass {
   u2              _misc_flags;           // There is more space in access_flags for more flags.
 
   Thread*         _init_thread;          // Pointer to current thread doing initialization (to handle recursive initialization)
+  int             _hash_offset;          // Offset of hidden field for i-hash
   OopMapCache*    volatile _oop_map_cache;   // OopMapCache for all methods in the klass (allocated lazily)
   JNIid*          _jni_ids;              // First JNI identifier for static fields in this class
   jmethodID*      volatile _methods_jmethod_ids;  // jmethodIDs corresponding to method_idnum, or NULL if none
   nmethodBucket*  volatile _dep_context;          // packed DependencyContext structure
   uint64_t        volatile _dep_context_last_cleaned;
   nmethod*        _osr_nmethods_head;    // Head of list of on-stack replacement nmethods for this class
+
+
 #if INCLUDE_JVMTI
   BreakpointInfo* _breakpoints;          // bpt lists, managed by Method*
   // Linked instanceKlasses of previous versions
@@ -1061,6 +1064,10 @@ public:
   int size_helper() const {
     return layout_helper_to_size_helper(layout_helper());
   }
+
+//  virtual int hash_offset_in_bytes(oop obj) const override {
+//    return _hash_offset;
+//  }
 
   // This bit is initialized in classFileParser.cpp.
   // It is false under any of the following conditions:

@@ -3756,7 +3756,7 @@ bool LibraryCallKit::inline_native_hashcode(bool is_virtual, bool is_static) {
   assert(is_static == callee()->is_static(), "correct intrinsic selection");
   assert(!(is_virtual && is_static), "either virtual, special, or static");
 
-  enum { _slow_path = 1, _fast_path, _null_path, PATH_LIMIT };
+  enum { _slow_path = 1, _null_path, PATH_LIMIT };
 
   RegionNode* result_reg = new RegionNode(PATH_LIMIT);
   PhiNode*    result_val = new PhiNode(result_reg, TypeInt::INT);
@@ -3820,35 +3820,15 @@ bool LibraryCallKit::inline_native_hashcode(bool is_virtual, bool is_static) {
 
   generate_slow_guard(test_unlocked, slow_region);
 
-  // Get the hash value and check to see that it has been properly assigned.
-  // We depend on hash_mask being at most 32 bits and avoid the use of
-  // hash_mask_in_place because it could be larger than 32 bits in a 64-bit
-  // vm: see markWord.hpp.
-  Node *hash_mask      = _gvn.intcon(markWord::hash_mask);
-  Node *hash_shift     = _gvn.intcon(markWord::hash_shift);
-  Node *hshifted_header= _gvn.transform(new URShiftXNode(header, hash_shift));
-  // This hack lets the hash bits live anywhere in the mark object now, as long
-  // as the shift drops the relevant bits into the low 32 bits.  Note that
-  // Java spec says that HashCode is an int so there's no point in capturing
-  // an 'X'-sized hashcode (32 in 32-bit build or 64 in 64-bit build).
-  hshifted_header      = ConvX2I(hshifted_header);
-  Node *hash_val       = _gvn.transform(new AndINode(hshifted_header, hash_mask));
-
-  Node *no_hash_val    = _gvn.intcon(markWord::no_hash);
-  Node *chk_assigned   = _gvn.transform(new CmpINode( hash_val, no_hash_val));
-  Node *test_assigned  = _gvn.transform(new BoolNode( chk_assigned, BoolTest::eq));
-
-  generate_slow_guard(test_assigned, slow_region);
+  // TODO: We could generate a fast case here under the following conditions:
+  // - The hashctrl is set to hash_is_copied (see markWord::hash_is_copied())
+  // - The type of the object is known
+  // Then we can load the identity hashcode from the int field at Klass::hash_offset_in_bytes() of the object.
 
   Node* init_mem = reset_memory();
   // fill in the rest of the null path:
   result_io ->init_req(_null_path, i_o());
   result_mem->init_req(_null_path, init_mem);
-
-  result_val->init_req(_fast_path, hash_val);
-  result_reg->init_req(_fast_path, control());
-  result_io ->init_req(_fast_path, i_o());
-  result_mem->init_req(_fast_path, init_mem);
 
   // Generate code for the slow case.  We make a call to hashCode().
   set_control(_gvn.transform(slow_region));

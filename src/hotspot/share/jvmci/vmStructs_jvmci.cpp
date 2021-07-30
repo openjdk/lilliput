@@ -605,8 +605,6 @@
   declare_constant(Klass::_lh_array_tag_type_value)                       \
   declare_constant(Klass::_lh_array_tag_obj_value)                        \
                                                                           \
-  declare_constant(markWord::no_hash)                                     \
-                                                                          \
   declare_constant(Method::_caller_sensitive)                             \
   declare_constant(Method::_force_inline)                                 \
   declare_constant(Method::_dont_inline)                                  \
@@ -637,16 +635,15 @@
   declare_constant(InvocationCounter::count_increment)                    \
   declare_constant(InvocationCounter::count_shift)                        \
                                                                           \
-  declare_constant(markWord::hash_shift)                                  \
+  declare_constant(markWord::hashctrl_shift)                              \
   declare_constant(markWord::monitor_value)                               \
                                                                           \
   declare_constant(markWord::age_mask_in_place)                           \
-  declare_constant(markWord::hash_mask)                                   \
-  declare_constant(markWord::hash_mask_in_place)                          \
+  declare_constant(markWord::hashctrl_mask)                               \
+  declare_constant(markWord::hashctrl_mask_in_place)                      \
                                                                           \
   declare_constant(markWord::unlocked_value)                              \
                                                                           \
-  declare_constant(markWord::no_hash_in_place)                            \
   declare_constant(markWord::no_lock_in_place)                            \
 
 #define VM_ADDRESSES(declare_address, declare_preprocessor_address, declare_function) \

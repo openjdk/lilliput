@@ -764,6 +764,43 @@ markWord ObjectSynchronizer::stable_mark(const oop obj) {
   }
 }
 
+static inline uint32_t rotl32(uint32_t x, int8_t r) {
+  return (x << r) | (x >> (32 - r));
+}
+
+static uint32_t mix32(uint32_t k, uint32_t h) {
+  const uint32_t c1 = 0xcc9e2d51;
+  const uint32_t c2 = 0x1b873593;
+  k *= c1;
+  k = rotl32(k, 15);
+  k *= c2;
+  h ^= k;
+  return rotl32(h, 13) * 5 + 0xe6546b64;
+}
+
+static uint32_t fmix32(uint32_t h) {
+  h ^= (h >> 16);
+  h *= 0x85ebca6b;
+  h ^= (h >> 13);
+  h *= 0xc2b2ae35;
+  h ^= (h >> 16);
+  return h;
+}
+
+#define DEFAULT_SEED 104729
+
+static inline uint32_t murmur3_32(uintptr_t r0) {
+  uint32_t h1 = DEFAULT_SEED;
+  h1 = mix32((uint32_t) r0, h1);
+#ifdef _LP64
+  h1 = mix32((uint32_t)(r0 >> 32), h1);
+#endif
+
+  h1 ^= sizeof(r0);
+  h1 = fmix32(h1);
+  return h1;
+}
+
 // hashCode() generation :
 //
 // Possibilities:
@@ -781,44 +818,38 @@ markWord ObjectSynchronizer::stable_mark(const oop obj) {
 //   There are simple ways to "diffuse" the middle address bits over the
 //   generated hashCode values:
 
-static inline intptr_t get_next_hash(Thread* current, oop obj) {
+uint32_t ObjectSynchronizer::generate_hash(oop obj) {
   intptr_t value = 0;
   if (hashCode == 0) {
-    // This form uses global Park-Miller RNG.
-    // On MP system we'll have lots of RW access to a global, so the
-    // mechanism induces lots of coherency traffic.
-    value = os::random();
+    ShouldNotReachHere();
   } else if (hashCode == 1) {
-    // This variation has the property of being stable (idempotent)
-    // between STW operations.  This can be useful in some of the 1-0
-    // synchronization schemes.
-    intptr_t addr_bits = cast_from_oop<intptr_t>(obj) >> 3;
-    value = addr_bits ^ (addr_bits >> 5) ^ GVars.stw_random;
+    ShouldNotReachHere();
   } else if (hashCode == 2) {
     value = 1;            // for sensitivity testing
   } else if (hashCode == 3) {
-    value = ++GVars.hc_sequence;
+    ShouldNotReachHere();
   } else if (hashCode == 4) {
     value = cast_from_oop<intptr_t>(obj);
+    value &= right_n_bits(32);
+  } else if (hashCode == 5) {
+    ShouldNotReachHere();
   } else {
-    // Marsaglia's xor-shift scheme with thread-specific state
-    // This is probably the best overall implementation -- we'll
-    // likely make this the default in future releases.
-    unsigned t = current->_hashStateX;
-    t ^= (t << 11);
-    current->_hashStateX = current->_hashStateY;
-    current->_hashStateY = current->_hashStateZ;
-    current->_hashStateZ = current->_hashStateW;
-    unsigned v = current->_hashStateW;
-    v = (v ^ (v >> 19)) ^ (t ^ (t >> 8));
-    current->_hashStateW = v;
-    value = v;
+    value = murmur3_32(cast_from_oop<uintptr_t>(obj));
   }
-
-  value &= markWord::hash_mask;
-  if (value == 0) value = 0xBAD;
-  assert(value != markWord::no_hash, "invariant");
   return value;
+}
+
+static uint32_t get_hash(markWord mark, oop obj) {
+  assert(mark.is_neutral(), "only from neutral mark");
+  assert(mark.hash_is_hashed_or_copied(), "only from hashed or copied object");
+  if (mark.hash_is_copied()) {
+    Klass* klass = mark.klass();
+    return obj->int_field(klass->hash_offset_in_bytes(obj));
+  } else {
+    assert(mark.hash_is_hashed(), "must be hashed");
+    // Already marked as hashed, but not yet copied. Recompute hash and return it.
+    return ObjectSynchronizer::generate_hash(obj); // recompute hash
+  }
 }
 
 intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {
@@ -829,46 +860,26 @@ intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {
     intptr_t hash;
     markWord mark = read_stable_mark(obj);
 
-    if (mark.is_neutral()) {               // if this is a normal header
-      hash = mark.hash();
-      if (hash != 0) {                     // if it has a hash, just return it
-        return hash;
+    if (mark.is_neutral()) {                     // if this is a normal header
+      if (mark.hash_is_hashed_or_copied()) {
+        return get_hash(mark, obj);
       }
-      hash = get_next_hash(current, obj);  // get a new hash
-      temp = mark.copy_set_hash(hash);     // merge the hash into header
-                                           // try to install the hash
+      hash = generate_hash(obj);
+      temp = mark.hash_set_hashed();
       test = obj->cas_set_mark(temp, mark);
-      if (test == mark) {                  // if the hash was installed, return it
+      if (test == mark) {
         return hash;
       }
-      // Failed to install the hash. It could be that another thread
-      // installed the hash just before our attempt or inflation has
+      // Failed to install the new mark. It could be that another thread
+      // installed the mark just before our attempt or inflation has
       // occurred or... so we fall thru to inflate the monitor for
-      // stability and then install the hash.
+      // stability and then install the mark.
     } else if (mark.has_monitor()) {
       monitor = mark.monitor();
       temp = monitor->header();
       assert(temp.is_neutral(), "invariant: header=" INTPTR_FORMAT, temp.value());
-      hash = temp.hash();
-      if (hash != 0) {
-        // It has a hash.
-
-        // Separate load of dmw/header above from the loads in
-        // is_being_async_deflated().
-
-        // dmw/header and _contentions may get written by different threads.
-        // Make sure to observe them in the same order when having several observers.
-        OrderAccess::loadload_for_IRIW();
-
-        if (monitor->is_being_async_deflated()) {
-          // But we can't safely use the hash if we detect that async
-          // deflation has occurred. So we attempt to restore the
-          // header/dmw to the object's header so that we only retry
-          // once if the deflater thread happens to be slow.
-          monitor->install_displaced_markword_in_object(obj);
-          continue;
-        }
-        return hash;
+      if (temp.hash_is_hashed_or_copied()) {
+        return get_hash(temp, obj);
       }
       // Fall thru so we only have one place that installs the hash in
       // the ObjectMonitor.
@@ -877,9 +888,8 @@ intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {
       // displaced markWord from the BasicLock on the stack.
       temp = mark.displaced_mark_helper();
       assert(temp.is_neutral(), "invariant: header=" INTPTR_FORMAT, temp.value());
-      hash = temp.hash();
-      if (hash != 0) {                  // if it has a hash, just return it
-        return hash;
+      if (temp.hash_is_hashed_or_copied()) {
+        return get_hash(temp, obj);
       }
       // WARNING:
       // The displaced header in the BasicLock on a thread's stack
@@ -891,39 +901,40 @@ intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {
       // may not propagate to other threads correctly.
     }
 
-    // Inflate the monitor to set the hash.
+    // Inflate the monitor to update the mark.
 
     // An async deflation can race after the inflate() call and before we
     // can update the ObjectMonitor's header with the hash value below.
     monitor = inflate(current, obj, inflate_cause_hash_code);
-    // Load ObjectMonitor's header/dmw field and see if it has a hash.
+    // Load ObjectMonitor's header/dmw field and see if we have a hash.
     mark = monitor->header();
     assert(mark.is_neutral(), "invariant: header=" INTPTR_FORMAT, mark.value());
-    hash = mark.hash();
-    if (hash == 0) {                       // if it does not have a hash
-      hash = get_next_hash(current, obj);  // get a new hash
-      temp = mark.copy_set_hash(hash)   ;  // merge the hash into header
-      assert(temp.is_neutral(), "invariant: header=" INTPTR_FORMAT, temp.value());
-      uintptr_t v = Atomic::cmpxchg((volatile uintptr_t*)monitor->header_addr(), mark.value(), temp.value());
-      test = markWord(v);
-      if (test != mark) {
-        // The attempt to update the ObjectMonitor's header/dmw field
-        // did not work. This can happen if another thread managed to
-        // merge in the hash just before our cmpxchg().
-        // If we add any new usages of the header/dmw field, this code
-        // will need to be updated.
-        hash = test.hash();
-        assert(test.is_neutral(), "invariant: header=" INTPTR_FORMAT, test.value());
-        assert(hash != 0, "should only have lost the race to a thread that set a non-zero hash");
-      }
-      if (monitor->is_being_async_deflated()) {
-        // If we detect that async deflation has occurred, then we
-        // attempt to restore the header/dmw to the object's header
-        // so that we only retry once if the deflater thread happens
-        // to be slow.
-        monitor->install_displaced_markword_in_object(obj);
-        continue;
-      }
+    if (mark.hash_is_hashed_or_copied()) {
+      return get_hash(mark, obj);
+    }
+    hash = generate_hash(obj); // get a new hash
+    // TODO: We should install the hashcode in the object right away if it does not
+    // require re-allocation.
+    temp = mark.hash_set_hashed(); // merge hashed state into header
+    assert(temp.is_neutral(), "invariant: header=" INTPTR_FORMAT, temp.value());
+    uintptr_t v = Atomic::cmpxchg((volatile uintptr_t*)monitor->header_addr(), mark.value(), temp.value());
+    test = markWord(v);
+    if (test != mark) {
+      // The attempt to update the ObjectMonitor's header/dmw field
+      // did not work. This can happen if another thread managed to
+      // merge in the hashed state just before our cmpxchg().
+      // If we add any new usages of the header/dmw field, this code
+      // will need to be updated.
+      assert(test.is_neutral(), "invariant: header=" INTPTR_FORMAT, test.value());
+      assert(test.hash_is_hashed(), "should only have lost the race to a thread that set hashed state");
+    }
+    if (monitor->is_being_async_deflated()) {
+      // If we detect that async deflation has occurred, then we
+      // attempt to restore the header/dmw to the object's header
+      // so that we only retry once if the deflater thread happens
+      // to be slow.
+      monitor->install_displaced_markword_in_object(obj);
+      continue;
     }
     // We finally get the hash.
     return hash;
@@ -1709,7 +1720,7 @@ void ObjectSynchronizer::log_in_use_monitor_details(outputStream* out) {
       const markWord mark = mid->header();
       ResourceMark rm;
       out->print(INTPTR_FORMAT "  %d%d%d  " INTPTR_FORMAT "  %s", p2i(mid),
-                 mid->is_busy(), mark.hash() != 0, mid->owner() != NULL,
+                 mid->is_busy(), mark.hashctrl() != 0, mid->owner() != NULL,
                  p2i(obj), obj == NULL ? "" : obj->klass()->external_name());
       if (mid->is_busy()) {
         out->print(" (%s)", mid->is_busy_to_string(&ss));

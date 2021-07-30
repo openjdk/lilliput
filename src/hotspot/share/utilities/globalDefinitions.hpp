@@ -536,7 +536,7 @@ extern uint64_t OopEncodingHeapMax;
 // Maximal size of compressed class space. Above this limit compression is not possible.
 // Also upper bound for placement of zero based class space. (Class space is further limited
 // to be < 3G, see arguments.cpp.)
-const  uint64_t KlassEncodingMetaspaceMax = (uint64_t(max_juint) + 1) << LogKlassAlignmentInBytes;
+const  uint64_t KlassEncodingMetaspaceMax = (uint64_t(max_juint >> 2) + 1) << LogKlassAlignmentInBytes;
 
 // Machine dependent stuff
 
