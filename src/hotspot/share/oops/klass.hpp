@@ -698,10 +698,7 @@ protected:
   // for error reporting
   static bool is_valid(Klass* k);
 
-  //virtual int hash_offset_in_bytes(oop obj) const = 0;
-  virtual int hash_offset_in_bytes(oop obj) const {
-    return oop_size(obj) << LogBytesPerWord;
-  }
+  virtual int hash_offset_in_bytes(oop obj) const = 0;
 
   bool hash_requires_reallocation(oop obj) const {
     return (size_t)(oop_size(obj) * HeapWordSize - hash_offset_in_bytes(obj)) < sizeof(uint32_t);

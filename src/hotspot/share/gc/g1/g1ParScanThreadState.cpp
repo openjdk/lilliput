@@ -198,8 +198,10 @@ void G1ParScanThreadState::do_oop_evac(T* p) {
   markWord m = obj->mark();
   if (m.is_marked()) {
     obj = obj->forwardee(m);
+    assert(is_object_aligned(obj), "object must be aligned: " PTR_FORMAT, p2i(obj));
   } else {
     obj = do_copy_to_survivor_space(region_attr, obj, m);
+    assert(is_object_aligned(obj), "object must be aligned: " PTR_FORMAT, p2i(obj));
   }
   RawAccess<IS_NOT_NULL>::oop_store(p, obj);
 
@@ -439,10 +441,7 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
   markWord orig_mark = mark;
 
   const size_t old_size = old->size(mark);
-  size_t new_size = old_size;
-  if (old->hash_requires_reallocation(mark)) {
-    new_size++;
-  }
+  size_t new_size = old->copy_size(old_size, mark);
 
   uint age = 0;
   G1HeapRegionAttr dest_attr = next_region_attr(region_attr, old_mark, age);

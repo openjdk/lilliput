@@ -102,8 +102,6 @@ intptr_t oopDesc::slow_identity_hash() {
 void oopDesc::initialize_hash(oop obj, markWord m) {
   uint32_t hash = ObjectSynchronizer::generate_hash(obj);
   Klass* k = m.klass();
-  // tty->print_cr("writing expanded hash " PTR_FORMAT ", at offset: %d", hash, k->hash_offset_in_bytes(cast_to_oop(this)));
-  assert(hash != 0x41c38, "check");
   int_field_put(k->hash_offset_in_bytes(cast_to_oop(this)), (jint)hash);
 }
 

@@ -248,8 +248,18 @@ int oopDesc::size(markWord mrk) {
   Klass* klass = mrk.klass();
   int size = base_size_given_klass(klass);
   if (mrk.hash_is_copied() && klass->hash_requires_reallocation(cast_to_oop(this))) {
-    size++;
+    size = align_up(size + 1, MinObjAlignment);
   }
+  assert(is_object_aligned(size), "Oop size is not properly aligned: %d", size);
+  return size;
+}
+
+int oopDesc::copy_size(int size, markWord mrk) const {
+  Klass* klass = mrk.klass();
+  if (mrk.hash_is_hashed() && klass->hash_requires_reallocation(cast_to_oop(this))) {
+    size = align_up(size + 1, MinObjAlignment);
+  }
+  assert(is_object_aligned(size), "Oop size is not properly aligned: %d", size);
   return size;
 }
 

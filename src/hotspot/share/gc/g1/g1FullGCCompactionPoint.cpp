@@ -97,19 +97,21 @@ void G1FullGCCompactionPoint::switch_region() {
 void G1FullGCCompactionPoint::forward(SlidingForwarding* const forwarding, oop object, size_t size, bool realloc_for_hash) {
   assert(_current_region != NULL, "Must have been initialized");
 
-  bool forward_object = (cast_from_oop<HeapWord*>(object) != _compaction_top);
-  if (forward_object && realloc_for_hash) {
-    size++;
+  size_t req_size = size;
+  if (cast_from_oop<HeapWord*>(object) != _compaction_top && realloc_for_hash) {
+    req_size = align_up(req_size + 1, MinObjAlignment);
   }
 
   // Ensure the object fit in the current region.
-  while (!object_will_fit(size)) {
+  while (!object_will_fit(req_size)) {
     switch_region();
   }
 
   // Store a forwarding pointer if the object should be moved.
-  if (forward_object) {
-    assert(_compaction_top < cast_from_oop<HeapWord*>(object), "must only slide downwards");
+  if (cast_from_oop<HeapWord*>(object) != _compaction_top) {
+    if (realloc_for_hash) {
+      size = align_up(size + 1, MinObjAlignment);
+    }
     forwarding->forward_to(object, cast_to_oop(_compaction_top));
     assert(object->is_forwarded(), "must be forwarded now");
   } else {

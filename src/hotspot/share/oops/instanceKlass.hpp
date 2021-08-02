@@ -1065,9 +1065,9 @@ public:
     return layout_helper_to_size_helper(layout_helper());
   }
 
-//  virtual int hash_offset_in_bytes(oop obj) const override {
-//    return _hash_offset;
-//  }
+  virtual int hash_offset_in_bytes(oop obj) const override {
+    return _hash_offset;
+  }
 
   // This bit is initialized in classFileParser.cpp.
   // It is false under any of the following conditions:

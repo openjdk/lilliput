@@ -64,8 +64,15 @@ void PreservedMarks::adjust_during_full_gc(const SlidingForwarding* const forwar
       elem->set_oop(forwarding->forwardee(obj));
       // If forwarded object has been hashed before, we need to update its hash state to copied.
       markWord m = elem->get_mark();
-      if (m.hash_is_hashed()) {
-        elem->set_mark(m.hash_set_copied());
+      if (m.has_displaced_mark_helper()) {
+        markWord disp_mark = m.displaced_mark_helper();
+        if (disp_mark.hash_is_hashed()) {
+          m.set_displaced_mark_helper(disp_mark.hash_set_copied());
+        }
+      } else {
+        if (m.hash_is_hashed()) {
+          elem->set_mark(m.hash_set_copied());
+        }
       }
     }
   }

@@ -68,7 +68,6 @@ class InstanceMirrorKlass: public InstanceKlass {
   virtual int oop_size(oop obj) const;
 
   int hash_offset_in_bytes(oop obj) const override {
-//    tty->print_cr("hash offset if instanceMirrorKlass: %d", oop_size(obj) << LogBytesPerWord);
     return oop_size(obj) << LogBytesPerWord;
   }
 

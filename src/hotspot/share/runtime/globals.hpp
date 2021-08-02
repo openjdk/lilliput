@@ -1807,7 +1807,7 @@ const intx ObjectAlignmentInBytes = 8;
                                                                             \
   /* Shared spaces */                                                       \
                                                                             \
-  product(bool, UseSharedSpaces, false,                                     \
+  product(bool, UseSharedSpaces, true,                                      \
           "Use shared spaces for metadata")                                 \
                                                                             \
   product(bool, VerifySharedSpaces, false,                                  \

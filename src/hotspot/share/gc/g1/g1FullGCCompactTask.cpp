@@ -62,11 +62,7 @@ public:
 size_t G1FullGCCompactTask::G1CompactRegionClosure::apply(oop obj) {
   markWord mark = obj->safe_mark();
   size_t size = obj->size(mark);
-  if (cast_from_oop<HeapWord*>(obj) == (HeapWord*)0xff908a80) {
-    assert(size == 3, "correct size: " SIZE_FORMAT ", mark: " INTPTR_FORMAT, size, mark.value());
-  }
   if (!obj->is_forwarded()) {
-    assert(cast_from_oop<HeapWord*>(obj) != (HeapWord*)0xff908a98, "obj should be forwarded");
     // Object not moving
     return size;
   }
@@ -75,7 +71,6 @@ size_t G1FullGCCompactTask::G1CompactRegionClosure::apply(oop obj) {
   // copy object and reinit its mark
   HeapWord* obj_addr = cast_from_oop<HeapWord*>(obj);
   assert(obj_addr != destination, "everything in this pass should be moving");
-  assert(destination < obj_addr, "compact downward only");
   Copy::aligned_conjoint_words(obj_addr, destination, size);
   if (mark.hash_is_hashed()) {
     cast_to_oop(destination)->initialize_hash(obj, mark);

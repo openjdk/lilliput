@@ -102,6 +102,8 @@ public:
   inline int size();
   inline int size(markWord mrk);
 
+  inline int copy_size(int size, markWord mrk) const;
+
   inline bool hash_requires_reallocation(markWord mrk);
 
   // type test operations (inlined in oop.inline.hpp)

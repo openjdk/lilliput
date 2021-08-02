@@ -264,10 +264,7 @@ oop HeapShared::archive_object(oop obj) {
 
   markWord mark = obj->safe_mark();
   int old_size = obj->size(mark);
-  int new_size = old_size;
-  if (obj->hash_requires_reallocation(mark)) {
-    new_size++;
-  }
+  int new_size = obj->copy_size(old_size, mark);
   if (G1CollectedHeap::heap()->is_archive_alloc_too_large(new_size)) {
     log_debug(cds, heap)("Cannot archive, object (" PTR_FORMAT ") is too large: " SIZE_FORMAT,
                          p2i(obj), (size_t)obj->size());

@@ -278,7 +278,7 @@ class markWord {
   }
 
   inline markWord hash_copy_hashctrl_from(markWord m) const {
-    return markWord((value() & ~hashctrl_mask_in_place) | (m.value() & hashctrl_hashed_mask_in_place));
+    return markWord((value() & ~hashctrl_mask_in_place) | (m.value() & hashctrl_mask_in_place));
   }
 
   #ifdef _LP64
