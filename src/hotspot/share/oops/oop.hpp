@@ -94,10 +94,8 @@ class oopDesc {
   // Returns whether this is an instance of k or an instance of a subclass of k
   inline bool is_a(Klass* k) const;
 
-private:
-  inline int base_size_given_klass(Klass* klass);
+  inline int base_size_given_klass(const Klass* klass);
 
-public:
   // Returns the actual oop size of the object
   inline int size();
   inline int size(markWord mrk);

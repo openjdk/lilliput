@@ -95,7 +95,7 @@ void oopDesc::init_mark() {
   markWord header = ObjectSynchronizer::stable_mark(cast_to_oop(this));
   assert(_metadata._compressed_klass == header.narrow_klass(), "klass must match: " PTR_FORMAT, header.value());
   assert(UseCompressedClassPointers, "expect compressed klass pointers");
-  header = markWord((header.value() & markWord::klass_mask_in_place) | markWord::prototype().value());
+  header = markWord((header.value() & (markWord::klass_mask_in_place | markWord::hashctrl_mask_in_place)) | markWord::prototype().value());
 #else
   markWord header = markWord::prototype();
 #endif
@@ -188,7 +188,7 @@ bool oopDesc::is_a(Klass* k) const {
   return klass()->is_subtype_of(k);
 }
 
-int oopDesc::base_size_given_klass(Klass* klass)  {
+int oopDesc::base_size_given_klass(const Klass* klass)  {
   int lh = klass->layout_helper();
   int s;
 

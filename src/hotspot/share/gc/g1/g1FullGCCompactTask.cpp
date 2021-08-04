@@ -72,10 +72,11 @@ size_t G1FullGCCompactTask::G1CompactRegionClosure::apply(oop obj) {
   HeapWord* obj_addr = cast_from_oop<HeapWord*>(obj);
   assert(obj_addr != destination, "everything in this pass should be moving");
   Copy::aligned_conjoint_words(obj_addr, destination, size);
+  oop new_obj = cast_to_oop(destination);
   if (mark.hash_is_hashed()) {
-    cast_to_oop(destination)->initialize_hash(obj, mark);
+    new_obj->initialize_hash(obj, mark);
   }
-  cast_to_oop(destination)->init_mark();
+  new_obj->init_mark();
   assert(cast_to_oop(destination)->klass() != NULL, "should have a class");
 
   return size;

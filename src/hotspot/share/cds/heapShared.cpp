@@ -277,9 +277,7 @@ oop HeapShared::archive_object(oop obj) {
     // Reinitialize markword to remove age/marking/locking/etc.
     //
     // We need to retain the identity_hash, because it may have been used by some hashtables
-    // in the shared heap. This also has the side effect of pre-initializing the
-    // identity_hash for all shared objects, so they are less likely to be written
-    // into during run time, increasing the potential of memory sharing.
+    // in the shared heap.
     narrowKlass nklass = mark.narrow_klass();
     markWord new_mark = markWord::prototype() LP64_ONLY(.set_narrow_klass(nklass));
     if (mark.hash_is_hashed()) {
@@ -293,7 +291,7 @@ oop HeapShared::archive_object(oop obj) {
     archived_oop->set_mark(new_mark);
 
 #ifdef ASSERT
-    if (mark.hash_is_hashed()) {
+    if (mark.hash_is_hashed_or_copied()) {
       int hash_original = obj->identity_hash();
       int hash_archived = archived_oop->identity_hash();
       assert(hash_original == hash_archived, "Different hash codes: original %x, archived %x", hash_original,
