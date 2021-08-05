@@ -52,7 +52,7 @@ public:
   bool is_initialized();
   void initialize(HeapRegion* hr, bool init_threshold);
   void update();
-  void forward(SlidingForwarding* const forwarding, oop object, size_t size, bool realloc_for_hash);
+  void forward(SlidingForwarding* const forwarding, oop object, size_t old_size, size_t new_size);
   void add(HeapRegion* hr);
 
   HeapRegion* remove_last();

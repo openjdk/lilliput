@@ -94,12 +94,12 @@ void G1FullGCCompactionPoint::switch_region() {
   initialize_values(true);
 }
 
-void G1FullGCCompactionPoint::forward(SlidingForwarding* const forwarding, oop object, size_t size, bool realloc_for_hash) {
+void G1FullGCCompactionPoint::forward(SlidingForwarding* const forwarding, oop object, size_t old_size, size_t new_size) {
   assert(_current_region != NULL, "Must have been initialized");
 
-  size_t req_size = size;
-  if (cast_from_oop<HeapWord*>(object) != _compaction_top && realloc_for_hash) {
-    req_size = align_up(req_size + 1, MinObjAlignment);
+  size_t req_size = old_size;
+  if (cast_from_oop<HeapWord*>(object) != _compaction_top) {
+    req_size = new_size;
   }
 
   // Ensure the object fit in the current region.
@@ -108,12 +108,11 @@ void G1FullGCCompactionPoint::forward(SlidingForwarding* const forwarding, oop o
   }
 
   // Store a forwarding pointer if the object should be moved.
+  size_t size;
   if (cast_from_oop<HeapWord*>(object) != _compaction_top) {
-    if (realloc_for_hash) {
-      size = align_up(size + 1, MinObjAlignment);
-    }
     forwarding->forward_to(object, cast_to_oop(_compaction_top));
     assert(object->is_forwarded(), "must be forwarded now");
+    size = new_size;
   } else {
     // TODO: This seems to be checking if mark-word looks like a forwarding pointer, and fix it if
     // it doesn't. That is because compaction code (G1FullGCCompactTask::G1CompactRegionClosure::apply(oop obj))
@@ -134,6 +133,7 @@ void G1FullGCCompactionPoint::forward(SlidingForwarding* const forwarding, oop o
              p2i(object), object->mark().value(), markWord::prototype().value());
     }
     assert((reinterpret_cast<uintptr_t>(object->mark().decode_pointer()) & 0x00000000ffffffff) == 0, "should be forwarded to NULL");
+    size = old_size;
   }
 
   // Update compaction values.

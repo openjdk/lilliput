@@ -162,9 +162,10 @@ G1FullGCPrepareTask::G1PrepareCompactLiveClosure::G1PrepareCompactLiveClosure(G1
 
 size_t G1FullGCPrepareTask::G1PrepareCompactLiveClosure::apply(oop object) {
   markWord mark = object->safe_mark();
-  size_t size = object->size(mark);
-  _cp->forward(_forwarding, object, size, object->hash_requires_reallocation(mark));
-  return size;
+  size_t old_size = object->size(mark);
+  size_t new_size = object->copy_size(old_size, mark);
+  _cp->forward(_forwarding, object, old_size, new_size);
+  return old_size;
 }
 
 size_t G1FullGCPrepareTask::G1RePrepareClosure::apply(oop obj) {
@@ -180,10 +181,11 @@ size_t G1FullGCPrepareTask::G1RePrepareClosure::apply(oop obj) {
 
   // Get size and forward.
   markWord mark = obj->safe_mark();
-  size_t size = obj->size(mark);
-  _cp->forward(_forwarding, obj, size, obj->hash_requires_reallocation(mark));
+  size_t old_size = obj->size(mark);
+  size_t new_size = obj->copy_size(old_size, mark);
+  _cp->forward(_forwarding, obj, old_size, new_size);
 
-  return size;
+  return old_size;
 }
 
 void G1FullGCPrepareTask::G1CalculatePointersClosure::prepare_for_compaction_work(G1FullGCCompactionPoint* cp,
