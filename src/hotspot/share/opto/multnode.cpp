@@ -74,6 +74,9 @@ ProjNode* MultiNode::proj_out_or_null(uint which_proj, bool is_io_use) const {
 
 // Get a named projection
 ProjNode* MultiNode::proj_out(uint which_proj) const {
+  if (!((Opcode() != Op_If && Opcode() != Op_RangeCheck) || outcnt() == 2)) {
+    dump();
+  }
   assert((Opcode() != Op_If && Opcode() != Op_RangeCheck) || outcnt() == 2, "bad if #1");
   ProjNode* p = proj_out_or_null(which_proj);
   assert(p != NULL, "named projection %u not found", which_proj);

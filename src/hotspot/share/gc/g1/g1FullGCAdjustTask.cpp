@@ -94,9 +94,9 @@ void G1FullGCAdjustTask::work(uint worker_id) {
   ResourceMark rm;
 
   // Adjust preserved marks first since they are not balanced.
-  G1FullGCMarker* marker = collector()->marker(worker_id);
+  G1FullGCCompactionPoint* compaction_point = collector()->compaction_point(worker_id);
   const SlidingForwarding* const forwarding = G1CollectedHeap::heap()->forwarding();
-  marker->preserved_stack()->adjust_during_full_gc(forwarding);
+  compaction_point->preserved_stack()->adjust_during_full_gc(forwarding);
 
   // Adjust the weak roots.
   if (!Atomic::cmpxchg(&_references_done, false, true)) {

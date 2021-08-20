@@ -85,7 +85,7 @@ void markWord::print_on(outputStream* st, bool print_monitor_info) const {
       st->print("is_neutral");
       if (has_no_hash()) {
         st->print(" no_hash");
-      } if (hash_is_hashed()) {
+      } else if (hash_is_hashed()) {
         st->print(" hashed");
       } else {
         assert(hash_is_copied(), "must be copied hash");

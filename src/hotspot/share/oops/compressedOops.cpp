@@ -237,7 +237,7 @@ void CompressedKlassPointers::initialize(address addr, size_t len) {
 
   } else {
 
-    // Otherwise we attempt to use a zero base if the range fits in lower 32G.
+    // Otherwise we attempt to use a zero base if the range fits in lower 8G.
     if (end <= (address)KlassEncodingMetaspaceMax) {
       base = 0;
     } else {
@@ -247,8 +247,8 @@ void CompressedKlassPointers::initialize(address addr, size_t len) {
     // Highest offset a Klass* can ever have in relation to base.
     range = end - base;
 
-    // We may not even need a shift if the range fits into 32bit:
-    const uint64_t UnscaledClassSpaceMax = (uint64_t(max_juint) + 1);
+    // We may not even need a shift if the range fits into 30bit:
+    const uint64_t UnscaledClassSpaceMax = (uint64_t(max_juint >> 2) + 1);
     if (range < UnscaledClassSpaceMax) {
       shift = 0;
     } else {

@@ -706,11 +706,8 @@ oop DefNewGeneration::copy_to_survivor_space(oop old) {
   markWord orig_mark = mark;
 
   size_t old_size = old->size(mark);
-  size_t new_size = old_size;
+  size_t new_size = old->copy_size(old_size, mark);
 
-  if (old->hash_requires_reallocation(mark)) {
-    new_size++;
-  }
   oop obj = NULL;
 
   // Try allocating obj in to-space (unless too old)
@@ -739,10 +736,7 @@ oop DefNewGeneration::copy_to_survivor_space(oop old) {
   }
 
   // Initialize i-hash, if necessary.
-  if (mark.hash_is_hashed()) {
-    obj->initialize_hash(old, mark);
-    mark = mark.hash_set_copied();
-  }
+  mark = obj->initialize_hash_if_necessary(old, mark);
 
   // Update mark with new age and possibly updated hashctrl bits.
   if (mark != orig_mark) {
@@ -752,8 +746,6 @@ oop DefNewGeneration::copy_to_survivor_space(oop old) {
     } else {
       obj->set_mark(mark);
     }
-  } else {
-    obj->set_mark(real_mark);
   }
 
   // Done, insert forward pointer to obj in this header

@@ -23,13 +23,16 @@
  */
 
 #include "precompiled.hpp"
+#include "gc/g1/g1CollectedHeap.hpp"
 #include "gc/g1/g1FullGCCompactionPoint.hpp"
 #include "gc/g1/heapRegion.hpp"
+#include "gc/shared/preservedMarks.inline.hpp"
 #include "gc/shared/slidingForwarding.inline.hpp"
 #include "oops/oop.inline.hpp"
 #include "utilities/debug.hpp"
 
-G1FullGCCompactionPoint::G1FullGCCompactionPoint() :
+G1FullGCCompactionPoint::G1FullGCCompactionPoint(PreservedMarks* preserved_marks) :
+    _preserved_marks(preserved_marks),
     _current_region(NULL),
     _threshold(NULL),
     _compaction_top(NULL) {
@@ -110,6 +113,11 @@ void G1FullGCCompactionPoint::forward(SlidingForwarding* const forwarding, oop o
   // Store a forwarding pointer if the object should be moved.
   size_t size;
   if (cast_from_oop<HeapWord*>(object) != _compaction_top) {
+    G1CollectedHeap* g1h = (G1CollectedHeap*)Universe::heap();
+    if (!g1h->is_humongous(old_size) && g1h->is_humongous(new_size)) {
+      assert(false, "expand non-humongous object to humongous");
+    }
+    _preserved_marks->push_if_necessary(object, object->mark());
     forwarding->forward_to(object, cast_to_oop(_compaction_top));
     assert(object->is_forwarded(), "must be forwarded now");
     size = new_size;
@@ -119,20 +127,21 @@ void G1FullGCCompactionPoint::forward(SlidingForwarding* const forwarding, oop o
     // used to do the same check. However, it is more reliable to first check the lower bits (is_forwarded())
     // instead before accepting the forwardee. The code in G1FullCompactTask has been changed accordingly,
     // which should make this block superfluous.
-    if ((reinterpret_cast<uintptr_t>(object->mark().decode_pointer()) & 0x00000000ffffffff) != 0) {
-      // Object should not move but mark-word is used so it looks like the
-      // object is forwarded. Need to clear the mark and it's no problem
-      // since it will be restored by preserved marks.
-      object->init_mark();
-    } else {
-      // Make sure object has the correct mark-word set or that it will be
-      // fixed when restoring the preserved marks.
-      assert(object->mark() LP64_ONLY(.set_narrow_klass(0)) == markWord::prototype() || // Correct mark
-             object->mark_must_be_preserved(), // Will be restored by PreservedMarksSet
-             "should have correct prototype obj: " PTR_FORMAT " mark: " PTR_FORMAT " prototype: " PTR_FORMAT,
-             p2i(object), object->mark().value(), markWord::prototype().value());
-    }
-    assert((reinterpret_cast<uintptr_t>(object->mark().decode_pointer()) & 0x00000000ffffffff) == 0, "should be forwarded to NULL");
+    assert(!object->is_forwarded(), "no forwarded objs here?");
+//    if ((reinterpret_cast<uintptr_t>(object->mark().decode_pointer()) & 0x00000000ffffffff) != 0) {
+//      // Object should not move but mark-word is used so it looks like the
+//      // object is forwarded. Need to clear the mark and it's no problem
+//      // since it will be restored by preserved marks.
+//      //object->init_mark();
+//    } else {
+//      // Make sure object has the correct mark-word set or that it will be
+//      // fixed when restoring the preserved marks.
+////      assert(object->mark() LP64_ONLY(.set_narrow_klass(0)) == markWord::prototype() || // Correct mark
+////             object->mark_must_be_preserved(), // Will be restored by PreservedMarksSet
+////             "should have correct prototype obj: " PTR_FORMAT " mark: " PTR_FORMAT " prototype: " PTR_FORMAT,
+////             p2i(object), object->mark().value(), markWord::prototype().value());
+//    }
+//    assert((reinterpret_cast<uintptr_t>(object->mark().decode_pointer()) & 0x00000000ffffffff) == 0, "should be forwarded to NULL");
     size = old_size;
   }
 

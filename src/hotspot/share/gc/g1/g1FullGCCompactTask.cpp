@@ -73,10 +73,8 @@ size_t G1FullGCCompactTask::G1CompactRegionClosure::apply(oop obj) {
   assert(obj_addr != destination, "everything in this pass should be moving");
   Copy::aligned_conjoint_words(obj_addr, destination, size);
   oop new_obj = cast_to_oop(destination);
-  if (mark.hash_is_hashed()) {
-    new_obj->initialize_hash(obj, mark);
-  }
-  new_obj->init_mark();
+  mark = new_obj->initialize_hash_if_necessary(obj, mark);
+  new_obj->init_mark(mark);
   assert(cast_to_oop(destination)->klass() != NULL, "should have a class");
 
   return size;

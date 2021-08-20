@@ -406,7 +406,7 @@ public:
   // generation; return the new location of obj if successful.  Otherwise, return NULL.
   oop handle_failed_promotion(Generation* old_gen,
                               oop obj,
-                              size_t obj_size);
+                              size_t old_size, size_t new_size);
 
 
 private:

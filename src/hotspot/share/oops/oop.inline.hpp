@@ -102,6 +102,11 @@ void oopDesc::init_mark() {
   set_mark(header);
 }
 
+void oopDesc::init_mark(markWord m) {
+  m = markWord(m.value() & (markWord::klass_mask_in_place | markWord::hashctrl_mask_in_place)).set_unlocked();
+  set_mark(m);
+}
+
 Klass* oopDesc::klass() const {
 #ifdef _LP64
   assert(UseCompressedClassPointers, "only with compressed class pointers");
@@ -109,7 +114,7 @@ Klass* oopDesc::klass() const {
   if (!header.is_neutral()) {
     header = ObjectSynchronizer::stable_mark(cast_to_oop(this));
   }
-  assert(_metadata._compressed_klass == header.narrow_klass(), "narrow klass must be equal, header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, header.value(), intptr_t(_metadata._compressed_klass));
+  assert(_metadata._compressed_klass == header.narrow_klass(), "narrow klass must be equal, obj: " PTR_FORMAT ", header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, p2i(cast_to_oop(this)), header.value(), intptr_t(_metadata._compressed_klass));
   Klass* klass = header.klass();
   assert(klass == CompressedKlassPointers::decode_not_null(_metadata._compressed_klass), "klass must match: header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, header.value(), intptr_t(_metadata._compressed_klass));
   return klass;
@@ -256,7 +261,7 @@ int oopDesc::size(markWord mrk) {
 
 int oopDesc::copy_size(int size, markWord mrk) const {
   Klass* klass = mrk.klass();
-  if (mrk.hash_is_hashed() && klass->hash_requires_reallocation(cast_to_oop(this))) {
+  if (mrk.hash_is_hashed() && (!mrk.hash_is_copied()) && klass->hash_requires_reallocation(cast_to_oop(this))) {
     size = align_up(size + 1, MinObjAlignment);
   }
   assert(is_object_aligned(size), "Oop size is not properly aligned: %d", size);
@@ -269,11 +274,6 @@ int oopDesc::size() {
     mrk = ObjectSynchronizer::stable_mark(cast_to_oop(this));
   }
   return size(mrk);
-}
-
-bool oopDesc::hash_requires_reallocation(markWord mrk)  {
-  assert(SafepointSynchronize::is_at_safepoint(), "need safepoint to safely resolve displaced mark");
-  return mrk.hash_is_hashed() && mrk.klass()->hash_requires_reallocation(cast_to_oop(this));
 }
 
 bool oopDesc::is_instance()  const { return klass()->is_instance_klass();  }

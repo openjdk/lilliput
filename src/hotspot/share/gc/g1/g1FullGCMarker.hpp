@@ -58,7 +58,7 @@ class G1FullGCMarker : public CHeapObj<mtGC> {
   // Mark stack
   OopQueue           _oop_stack;
   ObjArrayTaskQueue  _objarray_stack;
-  PreservedMarks*    _preserved_stack;
+  //PreservedMarks*    _preserved_stack;
 
   // Marking closures
   G1MarkAndPushClosure  _mark_closure;
@@ -83,14 +83,13 @@ class G1FullGCMarker : public CHeapObj<mtGC> {
 public:
   G1FullGCMarker(G1FullCollector* collector,
                  uint worker_id,
-                 PreservedMarks* preserved_stack,
                  G1RegionMarkStats* mark_stats);
   ~G1FullGCMarker();
 
   // Stack getters
   OopQueue*          oop_stack()       { return &_oop_stack; }
   ObjArrayTaskQueue* objarray_stack()  { return &_objarray_stack; }
-  PreservedMarks*    preserved_stack() { return _preserved_stack; }
+  //PreservedMarks*    preserved_stack() { return _preserved_stack; }
 
   // Marking entry points
   template <class T> inline void mark_and_push(T* p);

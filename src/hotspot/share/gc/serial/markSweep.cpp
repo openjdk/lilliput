@@ -149,6 +149,9 @@ void PreservedMark::adjust_pointer(const SlidingForwarding* const forwarding) {
 }
 
 void PreservedMark::restore() {
+  assert(_mark.has_displaced_mark_helper(), "only displaced headers here");
+  markWord m = _mark.displaced_mark_helper();
+  _mark.set_displaced_mark_helper(m.hash_copy_hashctrl_from(_obj->mark()));
   _obj->set_mark(_mark);
 }
 
@@ -206,6 +209,9 @@ void MarkSweep::restore_marks() {
   while (!_preserved_oop_stack.is_empty()) {
     oop obj       = _preserved_oop_stack.pop();
     markWord mark = _preserved_mark_stack.pop();
+    assert(mark.has_displaced_mark_helper(), "only displaced headers here");
+    markWord m = mark.displaced_mark_helper();
+    mark.set_displaced_mark_helper(m.hash_copy_hashctrl_from(obj->mark()));
     obj->set_mark(mark);
   }
 }

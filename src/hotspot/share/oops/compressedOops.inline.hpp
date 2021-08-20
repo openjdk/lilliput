@@ -150,7 +150,8 @@ inline narrowKlass CompressedKlassPointers::encode_not_null(Klass* v, address na
   uint64_t pd = (uint64_t)(pointer_delta((void*)v, narrow_base, 1));
   assert(KlassEncodingMetaspaceMax > pd, "change encoding max if new encoding");
   uint64_t result = pd >> shift();
-  assert((result & CONST64(0xffffffff00000000)) == 0, "narrow klass pointer overflow");
+  assert((result & CONST64(0xffffffffC0000000)) == 0, "narrow klass pointer overflow: klass: " PTR_FORMAT ", narrow_base: " PTR_FORMAT ", shift: %d",
+         p2i(v), p2i(narrow_base), shift());
   assert(decode_not_null(result, narrow_base) == v, "reversibility");
   return (narrowKlass)result;
 }

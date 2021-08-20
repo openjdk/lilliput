@@ -31,9 +31,9 @@ package gc;
  * @requires vm.gc != "Shenandoah"
  * @library /test/lib
  * @modules java.base/jdk.internal.misc
- * @run main/othervm -Xmx128m gc.TestSoftReferencesBehaviorOnOOME 512 2k
- * @run main/othervm -Xmx128m gc.TestSoftReferencesBehaviorOnOOME 128k 256k
- * @run main/othervm -Xmx128m gc.TestSoftReferencesBehaviorOnOOME 2k 32k
+ * @run main/othervm -Xmx128m -Xlog:gc* gc.TestSoftReferencesBehaviorOnOOME 512 2k
+ * @run main/othervm -Xmx128m -Xlog:gc* gc.TestSoftReferencesBehaviorOnOOME 128k 256k
+ * @run main/othervm -Xmx128m -Xlog:gc* gc.TestSoftReferencesBehaviorOnOOME 2k 32k
  */
 import jdk.test.lib.Utils;
 import jdk.test.lib.Asserts;

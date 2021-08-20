@@ -279,14 +279,8 @@ oop HeapShared::archive_object(oop obj) {
     // We need to retain the identity_hash, because it may have been used by some hashtables
     // in the shared heap.
     narrowKlass nklass = mark.narrow_klass();
-    markWord new_mark = markWord::prototype() LP64_ONLY(.set_narrow_klass(nklass));
-    if (mark.hash_is_hashed()) {
-      // Initialize hashcode.
-      archived_oop->initialize_hash(obj, mark);
-      new_mark = new_mark.hash_set_copied();
-    } else if (mark.hash_is_copied()) {
-      new_mark = new_mark.hash_set_copied();
-    }
+    markWord new_mark = markWord::prototype() LP64_ONLY(.set_narrow_klass(nklass)).hash_copy_hashctrl_from(mark);
+    new_mark = archived_oop->initialize_hash_if_necessary(obj, new_mark);
     assert(!new_mark.is_marked(), "must not be forwarded");
     archived_oop->set_mark(new_mark);
 

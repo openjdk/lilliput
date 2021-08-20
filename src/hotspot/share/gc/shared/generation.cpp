@@ -170,7 +170,7 @@ oop Generation::promote(oop obj, size_t old_size, size_t new_size) {
     return cast_to_oop(result);
   } else {
     GenCollectedHeap* gch = GenCollectedHeap::heap();
-    return gch->handle_failed_promotion(this, obj, old_size);
+    return gch->handle_failed_promotion(this, obj, old_size, new_size);
   }
 }
 

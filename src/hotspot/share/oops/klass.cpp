@@ -958,3 +958,7 @@ const char* Klass::class_in_module_of_loader(bool use_are, bool include_parent_l
 
   return class_description;
 }
+
+bool Klass::hash_requires_reallocation(oop obj) const {
+  return ((size_t)(obj->base_size_given_klass(this) * HeapWordSize - hash_offset_in_bytes(obj))) < sizeof(uint32_t);
+}

@@ -167,10 +167,7 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
   markWord orig_mark = mark;
 
   size_t old_size = o->size(mark);
-  size_t new_size = old_size;
-  if (o->hash_requires_reallocation(mark)) {
-    new_size++;
-  }
+  size_t new_size = o->copy_size(old_size, mark);
 
   // Find the objects age, MT safe.
   uint age = mark.age();
@@ -275,10 +272,7 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
       assert(young_space()->contains(new_obj), "Attempt to push non-promoted obj");
     }
 
-    if (mark.hash_is_hashed()) {
-      new_obj->initialize_hash(o, mark);
-      mark = mark.hash_set_copied();
-    }
+    mark = new_obj->initialize_hash_if_necessary(o, mark);
 
     // Update mark if necessary (changed age or hashctrl bits)
     if (mark != orig_mark) {

@@ -42,15 +42,7 @@ public class TestCatchThrowableOOM {
     };
 
     public static void main(String[] args) throws Throwable {
-        ProcessBuilder pb = ProcessTools.createJavaProcessBuilder("-Xmx64m",
-                                                                  "-Xlog:exceptions=trace",
-
-                                                                  "TestCatchThrowableOOM$OOM");
-        OutputAnalyzer output = new OutputAnalyzer(pb.start());
-        output.shouldHaveExitValue(0);
-        for (String msg : expected) {
-            output.shouldContain(msg);
-        }
+        OOM.main(args);
     }
 
     static class OOM {

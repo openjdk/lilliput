@@ -480,6 +480,9 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
   const oop obj = cast_to_oop(obj_ptr);
   const oop forward_ptr = old->forward_to_atomic(obj, old_mark, memory_order_relaxed);
   if (forward_ptr == NULL) {
+    if (!_g1h->is_humongous(old_size) && _g1h->is_humongous(new_size)) {
+      assert(false, "expand non-humongous object to humongous");
+    }
     Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(old), obj_ptr, old_size);
 
     {
@@ -490,10 +493,7 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
     }
 
     // Initialize i-hash if necessary
-    if (mark.hash_is_hashed()) {
-      obj->initialize_hash(old, mark);
-      mark = mark.hash_set_copied();
-    }
+    mark = obj->initialize_hash_if_necessary(old, mark);
 
     if (dest_attr.is_young()) {
       if (age < markWord::max_age) {

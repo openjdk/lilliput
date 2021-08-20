@@ -1739,11 +1739,13 @@ class G1RebuildRemSetTask: public AbstractGangTask {
       // can be scanned without passing the mr.
       if (!obj->is_objArray() || mr.contains(MemRegion(cast_from_oop<HeapWord*>(obj), obj_size))) {
         obj->oop_iterate(&_update_cl);
+        //log_info(gc)("scanned size (1): obj: "  PTR_FORMAT ", size: " SIZE_FORMAT, p2i(obj), obj_size);
         return obj_size;
       }
       // This path is for objArrays crossing the given MemRegion. Only scan the
       // area within the MemRegion.
       obj->oop_iterate(&_update_cl, mr);
+      //log_info(gc)("scanned size (2): " SIZE_FORMAT ", obj: " PTR_FORMAT ", (" PTR_FORMAT " -> " PTR_FORMAT ")", obj_size, p2i(obj), p2i(mr.start()), p2i(mr.end()));
       return mr.intersection(MemRegion(cast_from_oop<HeapWord*>(obj), obj_size)).word_size();
     }
 

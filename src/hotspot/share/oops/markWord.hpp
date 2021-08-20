@@ -180,13 +180,13 @@ class markWord {
 
   // Should this header be preserved during GC?
   bool must_be_preserved(const oopDesc* obj) const {
-    return (!is_unlocked() || !has_no_hash());
+    return !is_unlocked();
   }
 
   // Should this header (including its age bits) be preserved in the
   // case of a promotion failure during scavenge?
   bool must_be_preserved_for_promotion_failure(const oopDesc* obj) const {
-    return (!is_unlocked() || !has_no_hash());
+    return !is_unlocked();
   }
 
   // WARNING: The following routines are used EXCLUSIVELY by
@@ -257,8 +257,11 @@ class markWord {
   }
 
   inline markWord hash_set_hashed() const {
-    assert(has_no_hash(), "only transition from no-hash -> hashed");
-    return markWord((value() | hashctrl_hashed_mask_in_place));
+    return markWord(value() | hashctrl_hashed_mask_in_place);
+  }
+
+  inline markWord hash_clear_hashed() const {
+    return markWord(value() & ~hashctrl_hashed_mask_in_place);
   }
 
   inline bool hash_is_copied() const {
@@ -266,7 +269,11 @@ class markWord {
   }
 
   inline markWord hash_set_copied() const {
-    return markWord(((value() & ~hashctrl_mask_in_place) | hashctrl_copied_mask_in_place));
+    return markWord(value() | hashctrl_copied_mask_in_place);
+  }
+
+  inline markWord hash_clear_copied() const {
+    return markWord(value() & ~hashctrl_copied_mask_in_place);
   }
 
   inline bool hash_is_hashed_or_copied() const {

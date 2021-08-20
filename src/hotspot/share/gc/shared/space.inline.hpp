@@ -169,8 +169,11 @@ inline void CompactibleSpace::scan_and_forward(SpaceType* space, CompactPoint* c
     if (space->scanned_block_is_obj(cur_obj) && cast_to_oop(cur_obj)->is_gc_marked()) {
       // prefetch beyond cur_obj
       Prefetch::write(cur_obj, interval);
-      size_t size = space->scanned_block_size(cur_obj);
-      compact_top = cp->space->forward(cast_to_oop(cur_obj), size, cp, compact_top, forwarding);
+      oop obj = cast_to_oop(cur_obj);
+      markWord m = obj->safe_mark();
+      size_t size = obj->size(m);
+      size_t new_size = obj->copy_size(size, m);
+      compact_top = cp->space->forward(obj, size, new_size, cp, compact_top, forwarding);
       cur_obj += size;
       end_of_live = cur_obj;
     } else {
@@ -186,7 +189,9 @@ inline void CompactibleSpace::scan_and_forward(SpaceType* space, CompactPoint* c
       // we don't have to compact quite as often.
       if (cur_obj == compact_top && dead_spacer.insert_deadspace(cur_obj, end)) {
         oop obj = cast_to_oop(cur_obj);
-        compact_top = cp->space->forward(obj, obj->size(), cp, compact_top, forwarding);
+        markWord m = obj->safe_mark();
+        size_t size = obj->size(m);
+        compact_top = cp->space->forward(obj, size, size, cp, compact_top, forwarding);
         end_of_live = end;
       } else {
         // otherwise, it really is a free region.
@@ -333,7 +338,9 @@ inline void CompactibleSpace::scan_and_compact(SpaceType* space) {
       Prefetch::read(cur_obj, scan_interval);
 
       // size and destination
-      size_t size = space->obj_size(cur_obj);
+      oop obj = cast_to_oop(cur_obj);
+      markWord m = obj->safe_mark();
+      size_t size = obj->size(m);
       HeapWord* compaction_top = cast_from_oop<HeapWord*>(forwarding->forwardee(cast_to_oop(cur_obj)));
 
       // prefetch beyond compaction_top
@@ -342,7 +349,9 @@ inline void CompactibleSpace::scan_and_compact(SpaceType* space) {
       // copy object and reinit its mark
       assert(cur_obj != compaction_top, "everything in this pass should be moving");
       Copy::aligned_conjoint_words(cur_obj, compaction_top, size);
-      cast_to_oop(compaction_top)->init_mark();
+      oop dst = cast_to_oop(compaction_top);
+      m = dst->initialize_hash_if_necessary(obj, m);
+      dst->init_mark(m);
       assert(cast_to_oop(compaction_top)->klass() != NULL, "should have a class");
 
       debug_only(prev_obj = cur_obj);

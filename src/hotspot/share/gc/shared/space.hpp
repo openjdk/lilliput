@@ -432,7 +432,7 @@ public:
   // If the forwarding crosses "cp->threshold", invokes the "cross_threshold"
   // function of the then-current compaction space, and updates "cp->threshold
   // accordingly".
-  virtual HeapWord* forward(oop q, size_t size, CompactPoint* cp,
+  virtual HeapWord* forward(oop q, size_t size, size_t new_size, CompactPoint* cp,
                     HeapWord* compact_top, SlidingForwarding* const forwarding);
 
   // Return a size with adjustments as required of the space.

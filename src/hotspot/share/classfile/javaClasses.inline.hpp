@@ -264,7 +264,7 @@ inline bool java_lang_Class::is_primitive(oop java_class) {
 inline int java_lang_Class::oop_size_raw(oop java_class) {
   assert(_oop_size_offset != 0, "must be set");
   int size = java_class->int_field_raw(_oop_size_offset);
-  assert(size > 0, "Oop size must be greater than zero, not %d", size);
+  assert(size > 0, "Oop size must be greater than zero, not %d, mark: " INTPTR_FORMAT ", obj: " PTR_FORMAT, size, ObjectSynchronizer::stable_mark(java_class).value(), p2i(java_class));
   return size;
 }
 

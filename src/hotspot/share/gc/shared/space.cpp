@@ -347,13 +347,17 @@ void CompactibleSpace::clear(bool mangle_space) {
   _compaction_top = bottom();
 }
 
-HeapWord* CompactibleSpace::forward(oop q, size_t size,
+HeapWord* CompactibleSpace::forward(oop q, size_t old_size, size_t new_size,
                                     CompactPoint* cp, HeapWord* compact_top, SlidingForwarding* const forwarding) {
   // q is alive
   // First check if we should switch compaction space
   assert(this == cp->space, "'this' should be current compaction space.");
   size_t compaction_max_size = pointer_delta(end(), compact_top);
-  while (size > compaction_max_size) {
+  size_t req_size = old_size;
+  if (cast_from_oop<HeapWord*>(q) != compact_top) {
+    req_size = new_size;
+  }
+  while (req_size > compaction_max_size) {
     // switch to next compaction space
     cp->space->set_compaction_top(compact_top);
     cp->space = cp->space->next_compaction_space();
@@ -370,14 +374,17 @@ HeapWord* CompactibleSpace::forward(oop q, size_t size,
   }
 
   // store the forwarding pointer into the mark word
+  size_t size;
   if (cast_from_oop<HeapWord*>(q) != compact_top) {
     forwarding->forward_to(q, cast_to_oop(compact_top));
     assert(q->is_gc_marked(), "encoding the pointer should preserve the mark");
+    size = new_size;
   } else {
     // if the object isn't moving we can just set the mark to the default
     // mark and handle it specially later on.
     q->init_mark();
     assert(!q->is_forwarded(), "should not be forwarded");
+    size = old_size;
   }
 
   compact_top += size;

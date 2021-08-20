@@ -73,6 +73,7 @@ class oopDesc {
   // Used only to re-initialize the mark word (e.g., of promoted
   // objects during a GC) -- requires a valid klass pointer
   inline void init_mark();
+  inline void init_mark(markWord m);
 
   inline Klass* klass() const;
   inline Klass* klass_or_null() const;
@@ -101,8 +102,6 @@ class oopDesc {
   inline int size(markWord mrk);
 
   inline int copy_size(int size, markWord mrk) const;
-
-  inline bool hash_requires_reallocation(markWord mrk);
 
   // type test operations (inlined in oop.inline.hpp)
   inline bool is_instance()            const;
@@ -295,7 +294,7 @@ public:
   intptr_t slow_identity_hash();
 
   // Initialize identity hash code in hash word of object copy from original object.
-  void initialize_hash(oop obj, markWord m);
+  markWord initialize_hash_if_necessary(oop obj, markWord m);
 
   // marks are forwarded to stack when object is locked
   inline bool     has_displaced_mark() const;

@@ -48,25 +48,8 @@ public class ObjectSynchronizer {
   }
 
   public long identityHashValueFor(Oop obj) {
-    Mark mark = obj.getMark();
-    if (mark.isUnlocked()) {
-      // FIXME: can not generate marks in debugging system
-      return mark.hash();
-    } else if (mark.hasMonitor()) {
-      ObjectMonitor monitor = mark.monitor();
-      Mark temp = monitor.header();
-      return temp.hash();
-    } else {
-      if (Assert.ASSERTS_ENABLED) {
-        Assert.that(VM.getVM().isDebugging(), "Can not access displaced header otherwise");
-      }
-      if (mark.hasDisplacedMarkHelper()) {
-        Mark temp = mark.displacedMarkHelper();
-        return temp.hash();
-      }
-      // FIXME: can not do anything else here in debugging system
-      return 0;
-    }
+    // FIXME: can not do anything else here in debugging system
+    return 0;
   }
 
   public static Iterator objectMonitorIterator() {

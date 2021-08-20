@@ -49,23 +49,20 @@ public class Mark extends VMObject {
 
     ageBits             = db.lookupLongConstant("markWord::age_bits").longValue();
     lockBits            = db.lookupLongConstant("markWord::lock_bits").longValue();
-    maxHashBits         = db.lookupLongConstant("markWord::max_hash_bits").longValue();
-    hashBits            = db.lookupLongConstant("markWord::hash_bits").longValue();
+    hashctrlBits        = db.lookupLongConstant("markWord::hashctrl_bits").longValue();
     lockShift           = db.lookupLongConstant("markWord::lock_shift").longValue();
     ageShift            = db.lookupLongConstant("markWord::age_shift").longValue();
-    hashShift           = db.lookupLongConstant("markWord::hash_shift").longValue();
+    hashctrlShift       = db.lookupLongConstant("markWord::hashctrl_shift").longValue();
     lockMask            = db.lookupLongConstant("markWord::lock_mask").longValue();
     lockMaskInPlace     = db.lookupLongConstant("markWord::lock_mask_in_place").longValue();
     ageMask             = db.lookupLongConstant("markWord::age_mask").longValue();
     ageMaskInPlace      = db.lookupLongConstant("markWord::age_mask_in_place").longValue();
-    hashMask            = db.lookupLongConstant("markWord::hash_mask").longValue();
-    hashMaskInPlace     = db.lookupLongConstant("markWord::hash_mask_in_place").longValue();
+    hashctrlMask        = db.lookupLongConstant("markWord::hashctrl_mask").longValue();
+    hashctrlMaskInPlace = db.lookupLongConstant("markWord::hashctrl_mask_in_place").longValue();
     lockedValue         = db.lookupLongConstant("markWord::locked_value").longValue();
     unlockedValue       = db.lookupLongConstant("markWord::unlocked_value").longValue();
     monitorValue        = db.lookupLongConstant("markWord::monitor_value").longValue();
     markedValue         = db.lookupLongConstant("markWord::marked_value").longValue();
-    noHash              = db.lookupLongConstant("markWord::no_hash").longValue();
-    noHashInPlace       = db.lookupLongConstant("markWord::no_hash_in_place").longValue();
     noLockInPlace       = db.lookupLongConstant("markWord::no_lock_in_place").longValue();
     maxAge              = db.lookupLongConstant("markWord::max_age").longValue();
   }
@@ -76,28 +73,24 @@ public class Mark extends VMObject {
   // Constants -- read from VM
   private static long ageBits;
   private static long lockBits;
-  private static long maxHashBits;
-  private static long hashBits;
+  private static long hashctrlBits;
 
   private static long lockShift;
   private static long ageShift;
-  private static long hashShift;
+  private static long hashctrlShift;
 
   private static long lockMask;
   private static long lockMaskInPlace;
   private static long ageMask;
   private static long ageMaskInPlace;
-  private static long hashMask;
-  private static long hashMaskInPlace;
+  private static long hashctrlMask;
+  private static long hashctrlMaskInPlace;
 
   private static long lockedValue;
   private static long unlockedValue;
   private static long monitorValue;
   private static long markedValue;
 
-  private static long noHash;
-
-  private static long noHashInPlace;
   private static long noLockInPlace;
 
   private static long maxAge;
@@ -138,7 +131,7 @@ public class Mark extends VMObject {
 
   // Should this header be preserved during GC?
   public boolean mustBePreserved() {
-     return (!isUnlocked() || !hasNoHash());
+     return !isUnlocked();
   }
 
   // WARNING: The following routines are used EXCLUSIVELY by
@@ -178,12 +171,12 @@ public class Mark extends VMObject {
   public int age() { return (int) Bits.maskBitsLong(value() >> ageShift, ageMask); }
 
   // hash operations
-  public long hash() {
-    return Bits.maskBitsLong(value() >> hashShift, hashMask);
+  public long hashctrl() {
+    return Bits.maskBitsLong(value() >> hashctrlShift, hashctrlMask);
   }
 
   public boolean hasNoHash() {
-    return hash() == noHash;
+    return hashctrl() == 0;
   }
 
   // Debugging
@@ -197,7 +190,7 @@ public class Mark extends VMObject {
         Assert.that(isUnlocked(), "just checking");
       }
       tty.print("mark(");
-      tty.print("hash " + Long.toHexString(hash()) + ",");
+      tty.print("hashctrl " + Long.toHexString(hashctrl()) + ",");
       tty.print("age " + age() + ")");
     }
   }

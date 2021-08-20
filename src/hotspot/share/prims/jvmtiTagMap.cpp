@@ -1438,7 +1438,10 @@ inline void ObjectMarker::mark(oop o) {
   }
 
   // mark the object
-  o->set_mark(o->klass()->prototype_header().set_marked());
+  if (mark.has_displaced_mark_helper()) {
+    mark = mark.displaced_mark_helper();
+  }
+  o->set_mark(markWord(mark.value() & (markWord::klass_mask_in_place | markWord::hashctrl_mask_in_place)).set_marked());
 }
 
 // return true if object is marked

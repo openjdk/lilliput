@@ -55,9 +55,14 @@ inline void PreservedMarks::init_forwarded_mark(oop obj) {
   if (header.has_displaced_mark_helper()) {
     header = header.displaced_mark_helper();
   }
-  narrowKlass nklass = header.narrow_klass();
-  assert(nklass == obj->narrow_klass(), "narrow klass must match: header: " PTR_FORMAT ", nklass: " PTR_FORMAT, forwardee->mark().value(), uintptr_t(nklass));
-  obj->set_mark(markWord::prototype().set_narrow_klass(nklass).hash_copy_hashctrl_from(header));
+  // If object has been copied, and the hashcode has just been installed in the
+  // copy, me must clear the copied flag in the original object, otherwise sizing
+  // would be off by 1.
+  if (forwardee != obj && header.hash_is_hashed() && header.hash_is_copied()) {
+    header = header.hash_clear_copied();
+  }
+  markWord mark = markWord(header.value() & (markWord::klass_mask_in_place | markWord::hashctrl_mask_in_place)).set_unlocked();
+  obj->set_mark(mark);
 #else
   obj->set_mark(markWord::prototype());
 #endif
@@ -72,6 +77,9 @@ inline PreservedMarks::PreservedMarks()
              0 /* max_cache_size */) { }
 
 void PreservedMarks::OopAndMarkWord::set_mark() const {
+  assert(_m.has_displaced_mark_helper(), "only displaced marks");
+  markWord mark = _m.displaced_mark_helper();
+  _m.set_displaced_mark_helper(mark.hash_copy_hashctrl_from(_o->mark()));
   _o->set_mark(_m);
 }
 
