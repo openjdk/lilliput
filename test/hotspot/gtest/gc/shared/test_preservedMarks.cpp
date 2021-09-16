@@ -30,7 +30,7 @@
 // return true for calls to must_be_preserved().
 class FakeOop {
   oopDesc _oop;
-
+  BasicLock _lock;
 public:
   FakeOop() : _oop() { _oop.set_mark(originalMark()); }
 
@@ -43,7 +43,7 @@ public:
   }
 
   static markWord originalMark() { return markWord(markWord::lock_mask_in_place); }
-  static markWord changedMark()  { return markWord(0x4711); }
+  markWord changedMark()  { return markWord((intptr_t)(void*)(&_lock)); }
 };
 
 #define ASSERT_MARK_WORD_EQ(a, b) ASSERT_EQ((a).value(), (b).value())
@@ -62,10 +62,10 @@ TEST_VM(PreservedMarks, iterate_and_restore) {
   ASSERT_MARK_WORD_EQ(o4.mark(), FakeOop::originalMark());
 
   // Change the marks and verify change.
-  o1.set_mark(FakeOop::changedMark());
-  o2.set_mark(FakeOop::changedMark());
-  ASSERT_MARK_WORD_EQ(o1.mark(), FakeOop::changedMark());
-  ASSERT_MARK_WORD_EQ(o2.mark(), FakeOop::changedMark());
+  o1.set_mark(o1.changedMark());
+  o2.set_mark(o2.changedMark());
+  ASSERT_MARK_WORD_EQ(o1.mark(), o1.changedMark());
+  ASSERT_MARK_WORD_EQ(o2.mark(), o2.changedMark());
 
   // Push o1 and o2 to have their marks preserved.
   pm.push(o1.get_oop(), o1.mark());
@@ -86,6 +86,6 @@ TEST_VM(PreservedMarks, iterate_and_restore) {
   // Restore all preserved and verify that the changed
   // mark is now present at o3 and o4.
   pm.restore();
-  ASSERT_MARK_WORD_EQ(o3.mark(), FakeOop::changedMark());
-  ASSERT_MARK_WORD_EQ(o4.mark(), FakeOop::changedMark());
+  ASSERT_MARK_WORD_EQ(o3.mark(), o1.changedMark());
+  ASSERT_MARK_WORD_EQ(o4.mark(), o2.changedMark());
 }
