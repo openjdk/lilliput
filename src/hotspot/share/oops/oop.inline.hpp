@@ -114,7 +114,7 @@ Klass* oopDesc::klass_or_null() const {
   assert(UseCompressedClassPointers, "only with compressed class pointers");
   markWord header = mark();
   if (!header.is_neutral()) {
-    header =ObjectSynchronizer::stable_mark(cast_to_oop(this));
+    header = ObjectSynchronizer::stable_mark(cast_to_oop(this));
   }
   assert(_metadata._compressed_klass == header.narrow_klass(), "narrow klass must be equal, header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, header.value(), intptr_t(_metadata._compressed_klass));
   Klass* klass = header.klass_or_null();
