@@ -102,6 +102,7 @@ public class InstanceKlass extends Klass {
       breakpoints        = type.getAddressField("_breakpoints");
     }
     miscFlags            = new CIntField(type.getCIntegerField("_misc_flags"), 0);
+    hashOffset           = new CIntField(type.getCIntegerField("_hash_offset"), 0);
     headerSize           = type.getSize();
 
     // read field offset constants
@@ -179,6 +180,7 @@ public class InstanceKlass extends Klass {
   private static CIntField itableLen;
   private static AddressField breakpoints;
   private static CIntField miscFlags;
+  private static CIntField hashOffset;
 
   // type safe enum for ClassState from instanceKlass.hpp
   public static class ClassState {
@@ -268,7 +270,12 @@ public class InstanceKlass extends Klass {
   private static long headerSize;
 
   public long getObjectSize(Oop object) {
-    return getSizeHelper() * VM.getVM().getAddressSize();
+    long size = getSizeHelper() * VM.getVM().getAddressSize();
+    Mark mark = object.getMark();
+    if (mark.isHashInstalled() && object.hashRequiresExtraWord(size, getHashOffset())) {
+      size = Oop.alignObjectSize(size + Oop.HASH_SIZE_IN_BYTES);
+    }
+    return size;
   }
 
   public long getSize() { // in number of bytes
@@ -409,6 +416,7 @@ public class InstanceKlass extends Klass {
   public long      majorVersion()           { return                getConstants().majorVersion(); }
   public long      minorVersion()           { return                getConstants().minorVersion(); }
   public Symbol    getGenericSignature()    { return                getConstants().getGenericSignature(); }
+  public long      getHashOffset()          { return                hashOffset.getValue(this); }
 
   // "size helper" == instance size in words
   public long getSizeHelper() {

@@ -239,6 +239,7 @@
   nonstatic_field(InstanceKlass,               _misc_flags,                                   u2)                                    \
   nonstatic_field(InstanceKlass,               _init_state,                                   u1)                                    \
   nonstatic_field(InstanceKlass,               _init_thread,                                  Thread*)                               \
+  nonstatic_field(InstanceKlass,               _hash_offset,                                  int)                                   \
   nonstatic_field(InstanceKlass,               _itable_len,                                   int)                                   \
   nonstatic_field(InstanceKlass,               _reference_type,                               u1)                                    \
   volatile_nonstatic_field(InstanceKlass,      _oop_map_cache,                                OopMapCache*)                          \
@@ -2606,6 +2607,7 @@
   declare_constant(markWord::age_mask_in_place)                           \
   declare_constant(markWord::hashctrl_mask)                               \
   declare_constant(markWord::hashctrl_mask_in_place)                      \
+  declare_constant(markWord::hashctrl_copied_mask_in_place)               \
                                                                           \
   declare_constant(markWord::locked_value)                                \
   declare_constant(markWord::unlocked_value)                              \

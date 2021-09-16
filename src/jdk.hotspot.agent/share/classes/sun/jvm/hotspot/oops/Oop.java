@@ -53,6 +53,8 @@ public class Oop {
     headerSize = type.getSize();
   }
 
+  public static long HASH_SIZE_IN_BYTES = 4;
+
   private OopHandle  handle;
   private ObjectHeap heap;
 
@@ -94,6 +96,10 @@ public class Oop {
     Klass k = getKlass();
     // All other types should be overriding getObjectSize directly
     return ((InstanceKlass)k).getObjectSize(this);
+  }
+
+  public boolean hashRequiresExtraWord(long baseSize, long hashOffset) {
+     return (baseSize - hashOffset) < HASH_SIZE_IN_BYTES;
   }
 
   // Type test operations

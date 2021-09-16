@@ -59,6 +59,7 @@ public class Mark extends VMObject {
     ageMaskInPlace      = db.lookupLongConstant("markWord::age_mask_in_place").longValue();
     hashctrlMask        = db.lookupLongConstant("markWord::hashctrl_mask").longValue();
     hashctrlMaskInPlace = db.lookupLongConstant("markWord::hashctrl_mask_in_place").longValue();
+    hashctrlCopiedMaskInPlace = db.lookupLongConstant("markWord::hashctrl_copied_mask_in_place").longValue();
     lockedValue         = db.lookupLongConstant("markWord::locked_value").longValue();
     unlockedValue       = db.lookupLongConstant("markWord::unlocked_value").longValue();
     monitorValue        = db.lookupLongConstant("markWord::monitor_value").longValue();
@@ -85,6 +86,7 @@ public class Mark extends VMObject {
   private static long ageMaskInPlace;
   private static long hashctrlMask;
   private static long hashctrlMaskInPlace;
+  private static long hashctrlCopiedMaskInPlace;
 
   private static long lockedValue;
   private static long unlockedValue;
@@ -177,6 +179,10 @@ public class Mark extends VMObject {
 
   public boolean hasNoHash() {
     return hashctrl() == 0;
+  }
+
+  public boolean isHashInstalled() {
+    return (value() & hashctrlCopiedMaskInPlace) != 0;
   }
 
   // Debugging

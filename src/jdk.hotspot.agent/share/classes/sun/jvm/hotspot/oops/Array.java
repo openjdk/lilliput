@@ -103,6 +103,9 @@ public class Array extends Oop {
     // object size.
     long s = getLength() << klass.getLog2ElementSize();
     s += klass.getArrayHeaderInBytes();
+    if (getMark().isHashInstalled() && hashRequiresExtraWord(Oop.alignObjectSize(s), s)) {
+      s = s + Oop.HASH_SIZE_IN_BYTES;
+    }
     s = Oop.alignObjectSize(s);
     return s;
   }

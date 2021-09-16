@@ -55,7 +55,11 @@ public class InstanceMirrorKlass extends InstanceKlass {
   }
 
   public long getObjectSize(Oop o) {
-    return java_lang_Class.getOopSize(o) * VM.getVM().getAddressSize();
+    long size = java_lang_Class.getOopSize(o) * VM.getVM().getAddressSize();
+    if (o.getMark().isHashInstalled() && o.hashRequiresExtraWord(size, size)) {
+      size = Oop.alignObjectSize(size + Oop.HASH_SIZE_IN_BYTES);
+    }
+    return size;
   }
 
   public void iterateNonStaticFields(OopVisitor visitor, Oop obj) {
