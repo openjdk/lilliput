@@ -38,6 +38,7 @@
 #include "memory/allStatic.hpp"
 #include "memory/memRegion.hpp"
 #include "memory/resourceArea.hpp"
+#include "oops/compressedKlass.inline.hpp"
 #include "oops/instanceKlass.hpp"
 #include "oops/klass.inline.hpp"
 #include "oops/objArrayKlass.hpp"
@@ -218,7 +219,7 @@ bool ArchiveBuilder::gather_klass_and_symbol(MetaspaceClosure::Ref* ref, bool re
       _klasses->append(klass);
     }
     // See RunTimeClassInfo::get_for()
-    _estimated_metaspaceobj_bytes += align_up(BytesPerWord, SharedSpaceObjectAlignment);
+    _estimated_metaspaceobj_bytes += align_up(BytesPerWord, KlassAlignmentInBytes);
   } else if (ref->msotype() == MetaspaceObj::SymbolType) {
     // Make sure the symbol won't be GC'ed while we are dumping the archive.
     Symbol* sym = (Symbol*)ref->obj();
@@ -623,8 +624,10 @@ void ArchiveBuilder::make_shallow_copy(DumpRegion *dump_region, SourceObjInfo* s
       SystemDictionaryShared::validate_before_archiving(InstanceKlass::cast(klass));
       dump_region->allocate(sizeof(address));
     }
+    dest = dump_region->allocate(bytes, KlassAlignmentInBytes);
+  } else {
+    dest = dump_region->allocate(bytes);
   }
-  dest = dump_region->allocate(bytes);
   newtop = dump_region->top();
 
   memcpy(dest, src, bytes);
@@ -635,10 +638,13 @@ void ArchiveBuilder::make_shallow_copy(DumpRegion *dump_region, SourceObjInfo* s
     ArchivePtrMarker::mark_pointer((address*)dest);
   }
 
-  log_trace(cds)("Copy: " PTR_FORMAT " ==> " PTR_FORMAT " %d", p2i(src), p2i(dest), bytes);
+  log_trace(cds)("Copy: " PTR_FORMAT " ==> " PTR_FORMAT " %d (%s)", p2i(src), p2i(dest), bytes,
+                 MetaspaceObj::type_name(ref->msotype()));
   src_info->set_dumped_addr((address)dest);
 
   _alloc_stats.record(ref->msotype(), int(newtop - oldtop), src_info->read_only());
+
+  DEBUG_ONLY(_alloc_stats.verify((int)dump_region->used(), src_info->read_only()));
 }
 
 address ArchiveBuilder::get_dumped_addr(address src_obj) const {

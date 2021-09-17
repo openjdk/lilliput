@@ -26,6 +26,7 @@
 #ifndef SHARE_MEMORY_METASPACE_CHUNKLEVEL_HPP
 #define SHARE_MEMORY_METASPACE_CHUNKLEVEL_HPP
 
+#include "utilities/debug.hpp"
 #include "utilities/globalDefinitions.hpp"
 
 // Constants for the chunk levels and some utility functions.
