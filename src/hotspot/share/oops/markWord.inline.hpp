@@ -48,11 +48,11 @@ markWord markWord::set_narrow_klass(const narrowKlass nklass) const {
 
 Klass* markWord::safe_klass() const {
   assert(SafepointSynchronize::is_at_safepoint(), "only call at safepoint");
-  markWord mrk = *this;
-  if (mrk.has_displaced_mark_helper()) {
-    mrk = mrk.displaced_mark_helper();
+  markWord m = *this;
+  if (m.has_displaced_mark_helper()) {
+    m = m.displaced_mark_helper();
   }
-  return CompressedKlassPointers::decode_not_null(mrk.narrow_klass());
+  return CompressedKlassPointers::decode_not_null(m.narrow_klass());
 }
 
 markWord markWord::set_klass(const Klass* klass) const {

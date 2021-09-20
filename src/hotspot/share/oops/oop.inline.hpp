@@ -47,13 +47,11 @@
 // We need a separate file to avoid circular references
 
 markWord oopDesc::mark() const {
-  uintptr_t v = HeapAccess<MO_RELAXED>::load_at(as_oop(), mark_offset_in_bytes());
-  return markWord(v);
+  return Atomic::load(&_mark);
 }
 
 markWord oopDesc::mark_acquire() const {
-  uintptr_t v = HeapAccess<MO_ACQUIRE>::load_at(as_oop(), mark_offset_in_bytes());
-  return markWord(v);
+  return Atomic::load_acquire(&_mark);
 }
 
 markWord oopDesc::safe_mark() const {
@@ -70,7 +68,7 @@ markWord* oopDesc::mark_addr() const {
 }
 
 void oopDesc::set_mark(markWord m) {
-  HeapAccess<MO_RELAXED>::store_at(as_oop(), mark_offset_in_bytes(), m.value());
+  Atomic::store(&_mark, m);
 }
 
 void oopDesc::set_mark(HeapWord* mem, markWord m) {
@@ -78,12 +76,11 @@ void oopDesc::set_mark(HeapWord* mem, markWord m) {
 }
 
 void oopDesc::release_set_mark(markWord m) {
-  HeapAccess<MO_RELEASE>::store_at(as_oop(), mark_offset_in_bytes(), m.value());
+  Atomic::release_store(&_mark, m);
 }
 
 markWord oopDesc::cas_set_mark(markWord new_mark, markWord old_mark) {
-  uintptr_t v = HeapAccess<>::atomic_cmpxchg_at(as_oop(), mark_offset_in_bytes(), old_mark.value(), new_mark.value());
-  return markWord(v);
+  return Atomic::cmpxchg(&_mark, old_mark, new_mark);
 }
 
 markWord oopDesc::cas_set_mark(markWord new_mark, markWord old_mark, atomic_memory_order order) {
@@ -128,7 +125,7 @@ Klass* oopDesc::klass_or_null() const {
   assert(UseCompressedClassPointers, "only with compressed class pointers");
   markWord header = mark();
   if (!header.is_neutral()) {
-    header =ObjectSynchronizer::stable_mark(cast_to_oop(this));
+    header = ObjectSynchronizer::stable_mark(cast_to_oop(this));
   }
   assert(_metadata._compressed_klass == header.narrow_klass(), "narrow klass must be equal, header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, header.value(), intptr_t(_metadata._compressed_klass));
   Klass* klass = header.klass_or_null();
@@ -309,7 +306,6 @@ inline jshort oopDesc::short_field(int offset) const                { return Hea
 inline void   oopDesc::short_field_put(int offset, jshort value)    { HeapAccess<>::store_at(as_oop(), offset, value); }
 
 inline jint oopDesc::int_field(int offset) const                    { return HeapAccess<>::load_at(as_oop(), offset);  }
-inline jint oopDesc::int_field_raw(int offset) const                { return RawAccess<>::load_at(as_oop(), offset);   }
 inline void oopDesc::int_field_put(int offset, jint value)          { HeapAccess<>::store_at(as_oop(), offset, value); }
 
 inline jlong oopDesc::long_field(int offset) const                  { return HeapAccess<>::load_at(as_oop(), offset);  }
@@ -500,10 +496,6 @@ bool oopDesc::mark_must_be_preserved() const {
 
 bool oopDesc::mark_must_be_preserved(markWord m) const {
   return m.must_be_preserved(this);
-}
-
-bool oopDesc::mark_must_be_preserved_for_promotion_failure(markWord m) const {
-  return m.must_be_preserved_for_promotion_failure(this);
 }
 
 #endif // SHARE_OOPS_OOP_INLINE_HPP

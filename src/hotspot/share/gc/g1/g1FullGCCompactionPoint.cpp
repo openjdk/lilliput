@@ -34,7 +34,6 @@
 G1FullGCCompactionPoint::G1FullGCCompactionPoint(PreservedMarks* preserved_marks) :
     _preserved_marks(preserved_marks),
     _current_region(NULL),
-    _threshold(NULL),
     _compaction_top(NULL) {
   _compaction_regions = new (ResourceObj::C_HEAP, mtGC) GrowableArray<HeapRegion*>(32, mtGC);
   _compaction_region_iterator = _compaction_regions->begin();
@@ -53,7 +52,7 @@ void G1FullGCCompactionPoint::update() {
 void G1FullGCCompactionPoint::initialize_values(bool init_threshold) {
   _compaction_top = _current_region->compaction_top();
   if (init_threshold) {
-    _threshold = _current_region->initialize_threshold();
+    _current_region->initialize_bot_threshold();
   }
 }
 
@@ -147,9 +146,7 @@ void G1FullGCCompactionPoint::forward(SlidingForwarding* const forwarding, oop o
 
   // Update compaction values.
   _compaction_top += size;
-  if (_compaction_top > _threshold) {
-    _threshold = _current_region->cross_threshold(_compaction_top - size, _compaction_top);
-  }
+  _current_region->alloc_block_in_bot(_compaction_top - size, _compaction_top);
 }
 
 void G1FullGCCompactionPoint::add(HeapRegion* hr) {

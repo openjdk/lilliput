@@ -742,26 +742,25 @@ static markWord read_stable_mark(oop obj) {
 
 markWord ObjectSynchronizer::stable_mark(const oop obj) {
   markWord mark = read_stable_mark(obj);
-  if (mark.is_neutral() || mark.is_marked()) {
-    return mark;
-  } else if (mark.has_monitor()) {
-    ObjectMonitor* monitor = mark.monitor();
-    mark = monitor->header();
-    assert(mark.is_neutral(), "invariant: header=" INTPTR_FORMAT, mark.value());
-    return mark;
-  } else if (SafepointSynchronize::is_at_safepoint() || Thread::current()->is_lock_owned((address) mark.locker())) {
-    // This is a stack lock owned by the calling thread so fetch the
-    // displaced markWord from the BasicLock on the stack.
-    mark = mark.displaced_mark_helper();
-    assert(mark.is_neutral(), "invariant: header=" INTPTR_FORMAT, mark.value());
-    return mark;
-  } else {
-    ObjectMonitor* monitor = inflate(Thread::current(), obj, inflate_cause_vm_internal);
-    mark = monitor->header();
-    assert(mark.is_neutral(), "invariant: header=" INTPTR_FORMAT, mark.value());
-    assert(!mark.is_marked(), "no forwarded objects here");
-    return mark;
+  if (!mark.is_neutral() && !mark.is_marked()) {
+    if (mark.has_monitor()) {
+      ObjectMonitor* monitor = mark.monitor();
+      mark = monitor->header();
+      assert(mark.is_neutral(), "invariant: header=" INTPTR_FORMAT, mark.value());
+    } else if (SafepointSynchronize::is_at_safepoint() || Thread::current()->is_lock_owned((address) mark.locker())) {
+      // This is a stack lock owned by the calling thread so fetch the
+      // displaced markWord from the BasicLock on the stack.
+      assert(mark.has_displaced_mark_helper(), "must be displaced header here");
+      mark = mark.displaced_mark_helper();
+      assert(mark.is_neutral(), "invariant: header=" INTPTR_FORMAT, mark.value());
+    } else {
+      ObjectMonitor* monitor = inflate(Thread::current(), obj, inflate_cause_vm_internal);
+      mark = monitor->header();
+      assert(mark.is_neutral(), "invariant: header=" INTPTR_FORMAT, mark.value());
+      assert(!mark.is_marked(), "no forwarded objects here");
+    }
   }
+  return mark;
 }
 
 static inline uint32_t rotl32(uint32_t x, int8_t r) {
@@ -1007,10 +1006,13 @@ JavaThread* ObjectSynchronizer::get_lock_owner(ThreadsList * t_list, Handle h_ob
 
 // Visitors ...
 
-void ObjectSynchronizer::monitors_iterate(MonitorClosure* closure) {
+void ObjectSynchronizer::monitors_iterate(MonitorClosure* closure, JavaThread* thread) {
   MonitorList::Iterator iter = _in_use_list.iterator();
   while (iter.has_next()) {
     ObjectMonitor* mid = iter.next();
+    if (mid->owner() != thread) {
+      continue;
+    }
     if (!mid->is_being_async_deflated() && mid->object_peek() != NULL) {
       // Only process with closure if the object is set.
 
@@ -1496,9 +1498,7 @@ class ReleaseJavaMonitorsClosure: public MonitorClosure {
  public:
   ReleaseJavaMonitorsClosure(JavaThread* thread) : _thread(thread) {}
   void do_monitor(ObjectMonitor* mid) {
-    if (mid->owner() == _thread) {
-      (void)mid->complete_exit(_thread);
-    }
+    (void)mid->complete_exit(_thread);
   }
 };
 
@@ -1521,7 +1521,7 @@ void ObjectSynchronizer::release_monitors_owned_by_thread(JavaThread* current) {
   assert(current == JavaThread::current(), "must be current Java thread");
   NoSafepointVerifier nsv;
   ReleaseJavaMonitorsClosure rjmc(current);
-  ObjectSynchronizer::monitors_iterate(&rjmc);
+  ObjectSynchronizer::monitors_iterate(&rjmc, current);
   assert(!current->has_pending_exception(), "Should not be possible");
   current->clear_pending_exception();
 }
