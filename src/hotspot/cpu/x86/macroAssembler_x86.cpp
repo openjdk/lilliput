@@ -4533,7 +4533,9 @@ void MacroAssembler::load_klass(Register dst, Register src, Register tmp) {
 
   Label slow, done;
   movq(tmp, Address(src, oopDesc::mark_offset_in_bytes()));
-  // TODO: would be nice to use xorb instead, but it doesn't exist in our assembler. xorl zeroes the upper bits.
+  // NOTE: While it would seem nice to use xorb instead (for which we don't have an encoding in our assembler),
+  // the encoding for xorq uses the signed version (0x81/6) of xor, which encodes as compact as xorb would,
+  // and does't make a difference performance-wise.
   xorq(tmp, markWord::unlocked_value);
   testb(tmp, 3/*markWord::lock_mask_in_place*/);
   jccb(Assembler::notZero, slow);
