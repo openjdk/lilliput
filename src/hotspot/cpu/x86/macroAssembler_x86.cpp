@@ -4529,12 +4529,52 @@ void MacroAssembler::load_klass(Register dst, Register src, Register tmp) {
   assert_different_registers(src, tmp);
   assert_different_registers(dst, tmp);
 #ifdef _LP64
-  if (UseCompressedClassPointers) {
-    movl(dst, Address(src, oopDesc::klass_offset_in_bytes()));
-    decode_klass_not_null(dst, tmp);
-  } else
+  assert(UseCompressedClassPointers, "expect compressed class pointers");
+
+  Label slow, done;
+  movq(tmp, Address(src, oopDesc::mark_offset_in_bytes()));
+  // TODO: would be nice to use xorb instead, but it doesn't exist in our assembler. xorl zeroes the upper bits.
+  xorq(tmp, markWord::unlocked_value);
+  testb(tmp, 3/*markWord::lock_mask_in_place*/);
+  jccb(Assembler::notZero, slow);
+
+  movq(dst, tmp);
+  shrq(dst, markWord::klass_shift);
+  decode_klass_not_null(dst, tmp);
+  jmpb(done);
+  bind(slow);
+
+  if (dst != rax) {
+    push(rax);
+  }
+  push(rdi);
+  push(rsi);
+  push(rdx);
+  push(rcx);
+  push(r8);
+  push(r9);
+  push(r10);
+  push(r11);
+
+  MacroAssembler::call_VM_leaf(CAST_FROM_FN_PTR(address, oopDesc::load_klass_runtime), src);
+
+  pop(r11);
+  pop(r10);
+  pop(r9);
+  pop(r8);
+  pop(rcx);
+  pop(rdx);
+  pop(rsi);
+  pop(rdi);
+  if (dst != rax) {
+    mov(dst, rax);
+    pop(rax);
+  }
+
+  bind(done);
+#else
+  movptr(dst, Address(src, oopDesc::klass_offset_in_bytes()));
 #endif
-    movptr(dst, Address(src, oopDesc::klass_offset_in_bytes()));
 }
 
 void MacroAssembler::store_klass(Register dst, Register src, Register tmp) {
