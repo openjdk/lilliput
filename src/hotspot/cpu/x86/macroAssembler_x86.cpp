@@ -4547,8 +4547,8 @@ void MacroAssembler::load_klass(Register dst, Register src, Register tmp, bool n
   shrq(dst, markWord::klass_shift);
   decode_klass_not_null(dst, tmp);
   jmpb(done);
-  bind(slow);
 
+  bind(slow);
   if (dst != rax) {
     push(rax);
   }

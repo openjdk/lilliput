@@ -300,6 +300,13 @@ void MonitorExitStub::emit_code(LIR_Assembler* ce) {
   __ jmp(_continuation);
 }
 
+void LoadKlassStub::emit_code(LIR_Assembler* ce) {
+  __ bind(_entry);
+  ce->store_parameter(_obj->as_register(), 0);
+  __ call(RuntimeAddress(Runtime1::entry_for(Runtime1::load_klass_id)));
+  __ movptr(_result->as_register(), rax);
+  __ jmp(_continuation);
+}
 
 // Implementation of patching:
 // - Copy the code at given offset to an inlined buffer (first the bytes, then the number of bytes)

@@ -1237,7 +1237,10 @@ void LIRGenerator::do_getClass(Intrinsic* x) {
 
   LIRItem rcvr(x->argument_at(0), this);
   rcvr.load_item();
-  LIR_Opr temp = new_register(T_METADATA);
+  BasicType type = LP64_ONLY(T_LONG) NOT_LP64(T_INT);
+  LIR_Opr mark = new_register(type);
+  LIR_Opr klass = new_register(T_METADATA);
+  LIR_Opr temp = new_register(T_ADDRESS);
   LIR_Opr result = rlock_result(x);
 
   // need to perform the null check on the rcvr
@@ -1246,10 +1249,12 @@ void LIRGenerator::do_getClass(Intrinsic* x) {
     info = state_for(x);
   }
 
-  // FIXME T_ADDRESS should actually be T_METADATA but it can't because the
-  // meaning of these two is mixed up (see JDK-8026837).
-  __ move(new LIR_Address(rcvr.result(), oopDesc::klass_offset_in_bytes(), T_ADDRESS), temp, info);
-  __ move_wide(new LIR_Address(temp, in_bytes(Klass::java_mirror_offset()), T_ADDRESS), temp);
+  LIR_Opr obj = rcvr.result();
+  __ move(new LIR_Address(obj, oopDesc::mark_offset_in_bytes(), type), mark, info);
+  CodeStub* slow_path = new LoadKlassStub(obj, klass);
+  __ load_klass(mark, klass, slow_path);
+  __ branch_destination(slow_path->continuation());
+  __ move_wide(new LIR_Address(klass, in_bytes(Klass::java_mirror_offset()), T_ADDRESS), temp);
   // mirror = ((OopHandle)mirror)->resolve();
   access_load(IN_NATIVE, T_OBJECT,
               LIR_OprFact::address(new LIR_Address(temp, T_OBJECT)), result);

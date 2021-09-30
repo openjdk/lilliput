@@ -1227,7 +1227,7 @@ ObjectMonitor* ObjectSynchronizer::inflate(Thread* current, oop object,
       markWord dmw = mark.displaced_mark_helper();
       // Catch if the object's header is not neutral (not locked and
       // not marked is what we care about here).
-      assert(dmw.is_neutral(), "invariant: header=" INTPTR_FORMAT, dmw.value());
+      assert(dmw.is_neutral(), "invariant: oop: " PTR_FORMAT ", mark: " INTPTR_FORMAT ", header=" INTPTR_FORMAT, p2i(object), mark.value(), dmw.value());
 
       // Setup monitor fields to proper values -- prepare the monitor
       m->set_header(dmw);
