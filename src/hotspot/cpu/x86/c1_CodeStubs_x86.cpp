@@ -304,7 +304,7 @@ void LoadKlassStub::emit_code(LIR_Assembler* ce) {
   __ bind(_entry);
   ce->store_parameter(_obj->as_register(), 0);
   __ call(RuntimeAddress(Runtime1::entry_for(Runtime1::load_klass_id)));
-  __ movptr(_result->as_register(), rax);
+  assert(_result->as_register() == rax, "need result in rax");
   __ jmp(_continuation);
 }
 

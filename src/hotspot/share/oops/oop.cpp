@@ -179,10 +179,6 @@ JRT_LEAF(Klass*, oopDesc::load_klass_runtime(oopDesc* o))
   oop obj = oop(o);
   assert(oopDesc::is_oop(obj), "need a valid oop here: " PTR_FORMAT, p2i(o));
   Klass* klass = obj->klass();
-#ifdef ASSERT
-  klass->verify();
-#endif
-  //tty->print_cr("oopDesc::load_klass_runtime: " PTR_FORMAT " -> " PTR_FORMAT, p2i(obj), p2i(klass));
   return klass;
 JRT_END
 
@@ -191,7 +187,6 @@ JRT_LEAF(Klass*, oopDesc::load_klass_c1(oopDesc* o))
   oop obj = oop(o);
   assert(oopDesc::is_oop(obj), "need a valid oop here: " PTR_FORMAT, p2i(o));
   Klass* klass = obj->klass();
-  tty->print_cr("oopDesc::load_klass_c1: " PTR_FORMAT " -> " PTR_FORMAT, p2i(obj), p2i(klass));
   return klass;
 JRT_END
 

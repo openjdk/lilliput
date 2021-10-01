@@ -1239,7 +1239,7 @@ void LIRGenerator::do_getClass(Intrinsic* x) {
   rcvr.load_item();
   BasicType type = LP64_ONLY(T_LONG) NOT_LP64(T_INT);
   LIR_Opr mark = new_register(type);
-  LIR_Opr klass = new_register(T_METADATA);
+  LIR_Opr klass = result_register_for(as_ValueType(T_OBJECT)); // T_ADDRESS really, but we don't get a register.
   LIR_Opr temp = new_register(T_ADDRESS);
   LIR_Opr result = rlock_result(x);
 
