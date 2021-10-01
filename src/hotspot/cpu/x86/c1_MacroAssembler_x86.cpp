@@ -54,7 +54,7 @@ int C1_MacroAssembler::lock_object(Register hdr, Register obj, Register disp_hdr
   null_check_offset = offset();
 
   if (DiagnoseSyncOnValueBasedClasses != 0) {
-    load_klass(hdr, obj, rklass_decode_tmp);
+    load_klass(hdr, obj, rklass_decode_tmp, false);
     movl(hdr, Address(hdr, Klass::access_flags_offset()));
     testl(hdr, JVM_ACC_IS_VALUE_BASED_CLASS);
     jcc(Assembler::notZero, slow_case);
@@ -285,7 +285,7 @@ void C1_MacroAssembler::inline_cache_check(Register receiver, Register iCache) {
   Register tmp_load_klass = LP64_ONLY(rscratch2) NOT_LP64(noreg);
 
   if (UseCompressedClassPointers) {
-    load_klass(rscratch1, receiver, tmp_load_klass);
+    load_klass(rscratch1, receiver, tmp_load_klass, false);
     cmpptr(rscratch1, iCache);
   } else {
     cmpptr(iCache, Address(receiver, oopDesc::klass_offset_in_bytes()));

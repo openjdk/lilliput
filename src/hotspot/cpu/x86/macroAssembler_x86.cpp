@@ -4525,13 +4525,16 @@ void MacroAssembler::load_method_holder(Register holder, Register method) {
   movptr(holder, Address(holder, ConstantPool::pool_holder_offset_in_bytes())); // InstanceKlass*
 }
 
-void MacroAssembler::load_klass(Register dst, Register src, Register tmp) {
+void MacroAssembler::load_klass(Register dst, Register src, Register tmp, bool null_check_src) {
   assert_different_registers(src, tmp);
   assert_different_registers(dst, tmp);
 #ifdef _LP64
   assert(UseCompressedClassPointers, "expect compressed class pointers");
 
   Label slow, done;
+  if (null_check_src) {
+    null_check(src, oopDesc::mark_offset_in_bytes());
+  }
   movq(tmp, Address(src, oopDesc::mark_offset_in_bytes()));
   // NOTE: While it would seem nice to use xorb instead (for which we don't have an encoding in our assembler),
   // the encoding for xorq uses the signed version (0x81/6) of xor, which encodes as compact as xorb would,
@@ -4575,6 +4578,9 @@ void MacroAssembler::load_klass(Register dst, Register src, Register tmp) {
 
   bind(done);
 #else
+  if (null_check_src) {
+    null_check(src, oopDesc::klass_offset_in_bytes());
+  }
   movptr(dst, Address(src, oopDesc::klass_offset_in_bytes()));
 #endif
 }

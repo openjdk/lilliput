@@ -1762,7 +1762,7 @@ void LIR_Assembler::emit_typecheck_helper(LIR_OpTypeCheck *op, Label* success, L
     // not a safepoint as obj null check happens earlier
 #ifdef _LP64
     if (UseCompressedClassPointers) {
-      __ load_klass(Rtmp1, obj, tmp_load_klass);
+      __ load_klass(Rtmp1, obj, tmp_load_klass, false);
       __ cmpptr(k_RInfo, Rtmp1);
     } else {
       __ cmpptr(k_RInfo, Address(obj, oopDesc::klass_offset_in_bytes()));
@@ -1779,7 +1779,7 @@ void LIR_Assembler::emit_typecheck_helper(LIR_OpTypeCheck *op, Label* success, L
   } else {
     // get object class
     // not a safepoint as obj null check happens earlier
-    __ load_klass(klass_RInfo, obj, tmp_load_klass);
+    __ load_klass(klass_RInfo, obj, tmp_load_klass, false);
     if (k->is_loaded()) {
       // See if we get an immediate positive hit
 #ifdef _LP64
@@ -1834,7 +1834,7 @@ void LIR_Assembler::emit_typecheck_helper(LIR_OpTypeCheck *op, Label* success, L
     Register mdo  = klass_RInfo, recv = k_RInfo;
     __ bind(profile_cast_success);
     __ mov_metadata(mdo, md->constant_encoding());
-    __ load_klass(recv, obj, tmp_load_klass);
+    __ load_klass(recv, obj, tmp_load_klass, false);
     type_profile_helper(mdo, md, data, recv, success);
     __ jmp(*success);
 
@@ -1895,8 +1895,8 @@ void LIR_Assembler::emit_opTypeCheck(LIR_OpTypeCheck* op) {
     }
 
     add_debug_info_for_null_check_here(op->info_for_exception());
-    __ load_klass(k_RInfo, array, tmp_load_klass);
-    __ load_klass(klass_RInfo, value, tmp_load_klass);
+    __ load_klass(k_RInfo, array, tmp_load_klass, false);
+    __ load_klass(klass_RInfo, value, tmp_load_klass, false);
 
     // get instance klass (it's already uncompressed)
     __ movptr(k_RInfo, Address(k_RInfo, ObjArrayKlass::element_klass_offset()));
@@ -1917,7 +1917,7 @@ void LIR_Assembler::emit_opTypeCheck(LIR_OpTypeCheck* op) {
       Register mdo  = klass_RInfo, recv = k_RInfo;
       __ bind(profile_cast_success);
       __ mov_metadata(mdo, md->constant_encoding());
-      __ load_klass(recv, value, tmp_load_klass);
+      __ load_klass(recv, value, tmp_load_klass, false);
       type_profile_helper(mdo, md, data, recv, &done);
       __ jmpb(done);
 
@@ -3223,13 +3223,13 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
   // an instance type.
   if (flags & LIR_OpArrayCopy::type_check) {
     if (!(flags & LIR_OpArrayCopy::dst_objarray)) {
-      __ load_klass(tmp, dst, tmp_load_klass);
+      __ load_klass(tmp, dst, tmp_load_klass, false);
       __ cmpl(Address(tmp, in_bytes(Klass::layout_helper_offset())), Klass::_lh_neutral_value);
       __ jcc(Assembler::greaterEqual, *stub->entry());
     }
 
     if (!(flags & LIR_OpArrayCopy::src_objarray)) {
-      __ load_klass(tmp, src, tmp_load_klass);
+      __ load_klass(tmp, src, tmp_load_klass, false);
       __ cmpl(Address(tmp, in_bytes(Klass::layout_helper_offset())), Klass::_lh_neutral_value);
       __ jcc(Assembler::greaterEqual, *stub->entry());
     }
@@ -3286,8 +3286,8 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
       __ push(src);
       __ push(dst);
 
-      __ load_klass(src, src, tmp_load_klass);
-      __ load_klass(dst, dst, tmp_load_klass);
+      __ load_klass(src, src, tmp_load_klass, false);
+      __ load_klass(dst, dst, tmp_load_klass, false);
 
       __ check_klass_subtype_fast_path(src, dst, tmp, &cont, &slow, NULL);
 
@@ -3315,9 +3315,9 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
           assert(flags & mask, "one of the two should be known to be an object array");
 
           if (!(flags & LIR_OpArrayCopy::src_objarray)) {
-            __ load_klass(tmp, src, tmp_load_klass);
+            __ load_klass(tmp, src, tmp_load_klass, false);
           } else if (!(flags & LIR_OpArrayCopy::dst_objarray)) {
-            __ load_klass(tmp, dst, tmp_load_klass);
+            __ load_klass(tmp, dst, tmp_load_klass, false);
           }
           int lh_offset = in_bytes(Klass::layout_helper_offset());
           Address klass_lh_addr(tmp, lh_offset);
@@ -3368,7 +3368,7 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
         __ call(RuntimeAddress(copyfunc_addr));
         __ addptr(rsp, 6*wordSize);
 #else
-        __ load_klass(c_rarg4, dst, tmp_load_klass);
+        __ load_klass(c_rarg4, dst, tmp_load_klass, false);
         __ movptr(c_rarg4, Address(c_rarg4, ObjArrayKlass::element_klass_offset()));
         __ movl(c_rarg3, Address(c_rarg4, Klass::super_check_offset_offset()));
         __ call(RuntimeAddress(copyfunc_addr));
@@ -3586,7 +3586,7 @@ void LIR_Assembler::emit_profile_call(LIR_OpProfileCall* op) {
         }
       }
     } else {
-      __ load_klass(recv, recv, tmp_load_klass);
+      __ load_klass(recv, recv, tmp_load_klass, false);
       Label update_done;
       type_profile_helper(mdo, md, data, recv, &update_done);
       // Receiver did not match any saved receiver and there is no empty row for it.
@@ -3651,7 +3651,7 @@ void LIR_Assembler::emit_profile_type(LIR_OpProfileType* op) {
 #ifdef ASSERT
     if (exact_klass != NULL) {
       Label ok;
-      __ load_klass(tmp, tmp, tmp_load_klass);
+      __ load_klass(tmp, tmp, tmp_load_klass, false);
       __ push(tmp);
       __ mov_metadata(tmp, exact_klass->constant_encoding());
       __ cmpptr(tmp, Address(rsp, 0));
@@ -3666,7 +3666,7 @@ void LIR_Assembler::emit_profile_type(LIR_OpProfileType* op) {
         if (exact_klass != NULL) {
           __ mov_metadata(tmp, exact_klass->constant_encoding());
         } else {
-          __ load_klass(tmp, tmp, tmp_load_klass);
+          __ load_klass(tmp, tmp, tmp_load_klass, false);
         }
 
         __ xorptr(tmp, mdo_addr);
