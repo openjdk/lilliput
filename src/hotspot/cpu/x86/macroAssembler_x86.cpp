@@ -4537,7 +4537,7 @@ void MacroAssembler::load_klass(Register dst, Register src, Register tmp) {
   // the encoding for xorq uses the signed version (0x81/6) of xor, which encodes as compact as xorb would,
   // and does't make a difference performance-wise.
   xorq(tmp, markWord::unlocked_value);
-  testb(tmp, 3/*markWord::lock_mask_in_place*/);
+  testb(tmp, markWord::lock_mask_in_place);
   jccb(Assembler::notZero, slow);
 
   movq(dst, tmp);
