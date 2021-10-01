@@ -3520,9 +3520,11 @@ void LIR_Assembler::emit_lock(LIR_OpLock* op) {
 
 void LIR_Assembler::emit_load_klass(LIR_OpLoadKlass* op) {
   Register mark = op->mark()->as_pointer_register();
+  Register obj = op->obj()->as_pointer_register();
   Register result = op->result_opr()->as_pointer_register();
   assert_different_registers(mark, result);
 
+#ifdef _LP64
   // Check if we can take the (common) fast path, if obj is unlocked.
   __ xorq(mark, markWord::unlocked_value);
   __ testb(mark, markWord::lock_mask_in_place);
@@ -3532,6 +3534,9 @@ void LIR_Assembler::emit_load_klass(LIR_OpLoadKlass* op) {
   __ movq(result, mark);
   __ shrq(result, markWord::klass_shift);
   __ decode_klass_not_null(result, mark);
+#else
+  __ load_klass(result, obj, noreg /*not needed*/, false);
+#endif
 }
 
 void LIR_Assembler::emit_profile_call(LIR_OpProfileCall* op) {

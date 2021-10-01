@@ -1808,14 +1808,17 @@ class LIR_OpLoadKlass: public LIR_Op {
   friend class LIR_OpVisitState;
 
  private:
+  LIR_Opr _obj;
   LIR_Opr _mark;
   CodeStub* _stub;
  public:
-  LIR_OpLoadKlass(LIR_Opr mark, LIR_Opr result, CodeStub* stub)
+  LIR_OpLoadKlass(LIR_Opr obj, LIR_Opr mark, LIR_Opr result, CodeStub* stub)
     : LIR_Op(lir_load_klass, result, NULL)
+    , _obj(obj)
     , _mark(mark)
     , _stub(stub) {}
 
+  LIR_Opr obj()    const { return _obj;  }
   LIR_Opr mark()   const { return _mark; }
   CodeStub* stub() const { return _stub; }
 
@@ -2266,7 +2269,7 @@ class LIR_List: public CompilationResourceObj {
   void xadd(LIR_Opr src, LIR_Opr add, LIR_Opr res, LIR_Opr tmp) { append(new LIR_Op2(lir_xadd, src, add, res, tmp)); }
   void xchg(LIR_Opr src, LIR_Opr set, LIR_Opr res, LIR_Opr tmp) { append(new LIR_Op2(lir_xchg, src, set, res, tmp)); }
 
-  void load_klass(LIR_Opr mark, LIR_Opr result, CodeStub* stub) { append(new LIR_OpLoadKlass(mark, result, stub)); }
+  void load_klass(LIR_Opr obj, LIR_Opr mark, LIR_Opr result, CodeStub* stub) { append(new LIR_OpLoadKlass(obj, mark, result, stub)); }
 
 #ifdef ASSERT
   void lir_assert(LIR_Condition condition, LIR_Opr opr1, LIR_Opr opr2, const char* msg, bool halt) { append(new LIR_OpAssert(condition, opr1, opr2, msg, halt)); }

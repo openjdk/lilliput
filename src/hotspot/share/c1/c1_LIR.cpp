@@ -885,6 +885,7 @@ void LIR_OpVisitState::visit(LIR_Op* op) {
       LIR_OpLoadKlass* opLoadKlass = op->as_OpLoadKlass();
       assert(opLoadKlass != NULL, "must be");
 
+      do_input(opLoadKlass->_obj);
       do_input(opLoadKlass->_mark);
       do_temp(opLoadKlass->_mark);
       do_output(opLoadKlass->_result);
