@@ -182,14 +182,6 @@ JRT_LEAF(Klass*, oopDesc::load_klass_runtime(oopDesc* o))
   return klass;
 JRT_END
 
-JRT_LEAF(Klass*, oopDesc::load_klass_c1(oopDesc* o))
-  assert(o != NULL, "null-check");
-  oop obj = oop(o);
-  assert(oopDesc::is_oop(obj), "need a valid oop here: " PTR_FORMAT, p2i(o));
-  Klass* klass = obj->klass();
-  return klass;
-JRT_END
-
 oop oopDesc::obj_field_acquire(int offset) const                      { return HeapAccess<MO_ACQUIRE>::oop_load_at(as_oop(), offset); }
 
 void oopDesc::obj_field_put_raw(int offset, oop value)                { RawAccess<>::oop_store_at(as_oop(), offset, value); }
