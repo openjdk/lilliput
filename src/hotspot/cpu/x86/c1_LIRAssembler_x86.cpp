@@ -3519,21 +3519,27 @@ void LIR_Assembler::emit_lock(LIR_OpLock* op) {
 }
 
 void LIR_Assembler::emit_load_klass(LIR_OpLoadKlass* op) {
-  Register mark = op->mark()->as_pointer_register();
   Register obj = op->obj()->as_pointer_register();
   Register result = op->result_opr()->as_pointer_register();
-  assert_different_registers(mark, result);
 
 #ifdef _LP64
+  Register tmp = rscratch1;
+  assert_different_registers(tmp, obj);
+  assert_different_registers(tmp, result);
+
+  if (op->info() != NULL) {
+    add_debug_info_for_null_check_here(op->info());
+  }
   // Check if we can take the (common) fast path, if obj is unlocked.
-  __ xorq(mark, markWord::unlocked_value);
-  __ testb(mark, markWord::lock_mask_in_place);
+  __ movq(tmp, Address(obj, oopDesc::mark_offset_in_bytes()));
+  __ xorq(tmp, markWord::unlocked_value);
+  __ testb(tmp, markWord::lock_mask_in_place);
   __ jcc(Assembler::notZero, *op->stub()->entry());
 
   // Fast-path: shift and decode Klass*.
-  __ movq(result, mark);
+  __ movq(result, tmp);
   __ shrq(result, markWord::klass_shift);
-  __ decode_klass_not_null(result, mark);
+  __ decode_klass_not_null(result, tmp);
 #else
   __ load_klass(result, obj, noreg /*not needed*/, false);
 #endif

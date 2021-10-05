@@ -1231,16 +1231,10 @@ void LIRGenerator::do_isInstance(Intrinsic* x) {
   __ move(call_result, result);
 }
 
-LIR_Opr LIRGenerator::load_klass(LIR_Opr obj, CodeEmitInfo* null_check_info) {
-  BasicType type = LP64_ONLY(T_LONG) NOT_LP64(T_INT);
-  LIR_Opr mark = new_register(type);
-  LIR_Opr klass = new_register(T_METADATA);
-
-  __ move(new LIR_Address(obj, oopDesc::mark_offset_in_bytes(), type), mark, null_check_info);
+void LIRGenerator::load_klass(LIR_Opr obj, LIR_Opr klass, CodeEmitInfo* null_check_info) {
   CodeStub* slow_path = new LoadKlassStub(obj, klass);
-  __ load_klass(obj, mark, klass, slow_path);
+  __ load_klass(obj, klass, slow_path, null_check_info);
   __ branch_destination(slow_path->continuation());
-  return klass;
 }
 
 // Example: object.getClass ()
@@ -1258,8 +1252,8 @@ void LIRGenerator::do_getClass(Intrinsic* x) {
     info = state_for(x);
   }
 
-  LIR_Opr obj = rcvr.result();
-  LIR_Opr klass = load_klass(obj, info);
+  LIR_Opr klass = new_register(T_METADATA);
+  load_klass(rcvr.result(), klass, info);
   __ move_wide(new LIR_Address(klass, in_bytes(Klass::java_mirror_offset()), T_ADDRESS), temp);
   // mirror = ((OopHandle)mirror)->resolve();
   access_load(IN_NATIVE, T_OBJECT,
@@ -1332,7 +1326,8 @@ void LIRGenerator::do_getObjectSize(Intrinsic* x) {
   LIRItem value(x->argument_at(2), this);
   value.load_item();
 
-  LIR_Opr klass = load_klass(value.result(), NULL);
+  LIR_Opr klass = new_register(T_METADATA);
+  load_klass(value.result(), klass, NULL);
   LIR_Opr layout = new_register(T_INT);
   __ move(new LIR_Address(klass, in_bytes(Klass::layout_helper_offset()), T_INT), layout);
 
@@ -3577,7 +3572,8 @@ LIR_Opr LIRGenerator::mask_boolean(LIR_Opr array, LIR_Opr value, CodeEmitInfo*& 
   } else {
     __ logical_and(value, LIR_OprFact::intConst(1), value_fixed);
   }
-  LIR_Opr klass = load_klass(array, null_check_info);
+  LIR_Opr klass = new_register(T_METADATA);
+  load_klass(array, klass, null_check_info);
   null_check_info = NULL;
   LIR_Opr layout = new_register(T_INT);
   __ move(new LIR_Address(klass, in_bytes(Klass::layout_helper_offset()), T_INT), layout);

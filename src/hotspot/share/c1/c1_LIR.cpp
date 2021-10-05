@@ -886,10 +886,9 @@ void LIR_OpVisitState::visit(LIR_Op* op) {
       assert(opLoadKlass != NULL, "must be");
 
       do_input(opLoadKlass->_obj);
-      do_input(opLoadKlass->_mark);
-      do_temp(opLoadKlass->_mark);
       do_output(opLoadKlass->_result);
       do_stub(opLoadKlass->_stub);
+      if (opLoadKlass->_info) do_info(opLoadKlass->_info);
       break;
     }
 
@@ -1990,7 +1989,7 @@ void LIR_OpLock::print_instr(outputStream* out) const {
 }
 
 void LIR_OpLoadKlass::print_instr(outputStream* out) const {
-  mark()->print(out);       out->print(" ");
+  obj()->print(out);        out->print(" ");
   result_opr()->print(out); out->print(" ");
   out->print("[lbl:" INTPTR_FORMAT "]", p2i(stub()->entry()));
 }
