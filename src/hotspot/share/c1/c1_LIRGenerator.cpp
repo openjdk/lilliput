@@ -1234,7 +1234,7 @@ void LIRGenerator::do_isInstance(Intrinsic* x) {
 LIR_Opr LIRGenerator::load_klass(LIR_Opr obj, CodeEmitInfo* null_check_info) {
   BasicType type = LP64_ONLY(T_LONG) NOT_LP64(T_INT);
   LIR_Opr mark = new_register(type);
-  LIR_Opr klass = result_register_for(as_ValueType(T_OBJECT)); // T_ADDRESS really, but we don't get a register.
+  LIR_Opr klass = new_register(T_METADATA);
 
   __ move(new LIR_Address(obj, oopDesc::mark_offset_in_bytes(), type), mark, null_check_info);
   CodeStub* slow_path = new LoadKlassStub(obj, klass);
