@@ -561,7 +561,6 @@ public:
   virtual void emit_code(LIR_Assembler* e);
   virtual void visit(LIR_OpVisitState* visitor) {
     visitor->do_input(_obj);
-    visitor->do_temp(_obj);
     visitor->do_output(_result);
   }
 #ifndef PRODUCT

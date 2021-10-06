@@ -304,13 +304,15 @@ void LoadKlassStub::emit_code(LIR_Assembler* ce) {
   __ bind(_entry);
   Register res = _result->as_register();
   if (res != rax) {
-    __ push(rax);
+    // This preserves rax and allows it to be used as return-register,
+    // without messing with the stack.
+    __ xchgptr(rax, res);
   }
   ce->store_parameter(_obj->as_register(), 0);
   __ call(RuntimeAddress(Runtime1::entry_for(Runtime1::load_klass_id)));
   if (res != rax) {
-    __ mov(res, rax);
-    __ pop(rax);
+    // Swap back rax, and move result to correct register.
+    __ xchgptr(rax, res);
   }
   __ jmp(_continuation);
 }
