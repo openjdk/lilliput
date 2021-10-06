@@ -303,12 +303,12 @@ void MonitorExitStub::emit_code(LIR_Assembler* ce) {
 void LoadKlassStub::emit_code(LIR_Assembler* ce) {
   __ bind(_entry);
   Register res = _result->as_register();
+  ce->store_parameter(_obj->as_register(), 0);
   if (res != rax) {
     // This preserves rax and allows it to be used as return-register,
     // without messing with the stack.
     __ xchgptr(rax, res);
   }
-  ce->store_parameter(_obj->as_register(), 0);
   __ call(RuntimeAddress(Runtime1::entry_for(Runtime1::load_klass_id)));
   if (res != rax) {
     // Swap back rax, and move result to correct register.
