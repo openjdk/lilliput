@@ -141,9 +141,7 @@ void EventEmitter::write_event(const ObjectSample* sample, EdgeStore* edge_store
   traceid gc_root_id = 0;
   const Edge* edge = NULL;
   if (SafepointSynchronize::is_at_safepoint()) {
-    if (!sample->object()->mark().is_marked()) {
-      edge = (const Edge*)(sample->object())->mark().to_pointer();
-    }
+    edge = edge_store->get_edge_for_object(sample->object());
   }
   if (edge == NULL) {
     edge = edge_store->get(UnifiedOopRef::encode_in_native(sample->object_addr()));

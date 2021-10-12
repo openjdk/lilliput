@@ -38,11 +38,14 @@ traceid EdgeStore::_edge_id_counter = 0;
 
 EdgeStore::EdgeStore() : _edges(NULL) {
   _edges = new EdgeHashTable(this);
+  _objEdgeHashTable = new ObjEdgeHashTable();
 }
 
 EdgeStore::~EdgeStore() {
   assert(_edges != NULL, "invariant");
   delete _edges;
+  assert(_objEdgeHashTable != NULL, "invariant");
+  delete _objEdgeHashTable;
 }
 
 bool EdgeStore::is_empty() const {
@@ -232,7 +235,7 @@ StoredEdge* EdgeStore::associate_leak_context_with_candidate(const Edge* edge) {
   oop sample_object = edge->pointee();
   assert(sample_object != NULL, "invariant");
   assert(sample_object->mark().is_marked(), "invariant");
-  sample_object->set_mark(markWord::from_pointer(leak_context_edge));
+  map_obj_to_edge(sample_object, leak_context_edge);
   return leak_context_edge;
 }
 
@@ -315,4 +318,20 @@ void EdgeStore::store_gc_root_id_in_leak_context_edge(StoredEdge* leak_context_e
   assert(root_id != 0, "invariant");
   leak_context_edge->set_gc_root_id(root_id);
   assert(leak_context_edge->gc_root_id() == stored_root->gc_root_id(), "invariant");
+}
+
+void EdgeStore::map_obj_to_edge(oop obj, Edge* edge) {
+  ObjEdgeEntry entry(obj, edge);
+  ObjEdgeHashEntry& result = _objEdgeHashTable->put(uintptr_t(cast_from_oop<void*>(obj)), entry);
+  assert(result.value().obj() == obj, "invariant");
+}
+
+Edge* EdgeStore::get_edge_for_object(oop obj) {
+  ObjEdgeHashEntry* result = _objEdgeHashTable->lookup_only(uintptr_t(cast_from_oop<void*>(obj)));
+  if (result != NULL) {
+    assert(result->value().obj() == obj, "invariant");
+    return result->value().edge();
+  } else {
+    return nullptr;
+  }
 }

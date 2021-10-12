@@ -57,9 +57,36 @@ class StoredEdge : public Edge {
   }
 };
 
+class ObjEdgeEntry {
+private:
+  oop _obj;
+  Edge* _edge;
+public:
+  ObjEdgeEntry(oop obj, Edge* edge) : _obj(obj), _edge(edge) {}
+  oop obj() const { return _obj; }
+  Edge* edge() const { return _edge; }
+};
+
+class ObjEdgeTableCallback : public JfrCHeapObj  {
+public:
+  void on_link(HashTableHost<ObjEdgeEntry, uintptr_t, JfrHashtableEntry, ObjEdgeTableCallback>::HashEntry* entry) {
+    entry->set_id(cast_from_oop<uintptr_t>(entry->value().obj()));
+  }
+  void on_unlink(HashTableHost<ObjEdgeEntry, uintptr_t, JfrHashtableEntry, ObjEdgeTableCallback>::HashEntry* entry) {
+    // Nothing to do.
+  }
+  bool on_equals(uintptr_t hash, HashTableHost<ObjEdgeEntry, uintptr_t, JfrHashtableEntry, ObjEdgeTableCallback>::HashEntry* entry) {
+    // Curiously, JfrHashtable uses the hash for comparison. Therefore we use the object address as hash.
+    // This is not ideal, but works.
+    return true;
+  }
+};
+
 class EdgeStore : public CHeapObj<mtTracing> {
   typedef HashTableHost<StoredEdge, traceid, JfrHashtableEntry, EdgeStore> EdgeHashTable;
   typedef EdgeHashTable::HashEntry EdgeEntry;
+  typedef HashTableHost<ObjEdgeEntry, uintptr_t, JfrHashtableEntry, ObjEdgeTableCallback> ObjEdgeHashTable;
+  typedef ObjEdgeHashTable::HashEntry ObjEdgeHashEntry;
   template <typename,
             typename,
             template<typename, typename> class,
@@ -72,6 +99,7 @@ class EdgeStore : public CHeapObj<mtTracing> {
  private:
   static traceid _edge_id_counter;
   EdgeHashTable* _edges;
+  ObjEdgeHashTable* _objEdgeHashTable;
 
   // Hash table callbacks
   void on_link(EdgeEntry* entry);
@@ -103,6 +131,9 @@ class EdgeStore : public CHeapObj<mtTracing> {
   bool is_empty() const;
   traceid get_id(const Edge* edge) const;
   void put_chain(const Edge* chain, size_t length);
+
+  void map_obj_to_edge(oop obj, Edge* edge);
+  Edge* get_edge_for_object(oop obj);
 };
 
 #endif // SHARE_JFR_LEAKPROFILER_CHAINS_EDGESTORE_HPP
