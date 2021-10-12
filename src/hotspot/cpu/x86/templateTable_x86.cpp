@@ -4181,7 +4181,7 @@ void TemplateTable::instanceof() {
   __ pop_ptr(rdx); // restore receiver
   __ verify_oop(rdx);
   Register tmp_load_klass = LP64_ONLY(rscratch1) NOT_LP64(noreg);
-  __ load_klass(rdx, rdx, tmp_load_klass, false);
+  __ load_klass(rdx, rdx, tmp_load_klass);
   __ jmp(resolved);
 
   // Get superklass in rax and subklass in rdx
