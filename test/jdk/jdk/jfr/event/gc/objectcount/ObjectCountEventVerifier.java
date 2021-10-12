@@ -70,7 +70,8 @@ public class ObjectCountEventVerifier {
     private static long expectedFooArraySize(long count) {
         boolean runsOn32Bit = System.getProperty("sun.arch.data.model").equals("32");
         int bytesPerWord = runsOn32Bit ? 4 : 8;
-        int objectHeaderSize = bytesPerWord * 2; // length will be in klass-gap
+        // length will be in klass-gap on 64 bits, extra field on 32 bits.
+        int objectHeaderSize = bytesPerWord * (runsOn32Bit ? 3 : 2);
         int alignmentInOopArray = runsOn32Bit ? 4 : 0;
         int ptrSize = bytesPerWord;
         return objectHeaderSize + alignmentInOopArray + count * ptrSize;
