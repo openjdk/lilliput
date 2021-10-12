@@ -158,7 +158,8 @@ private:
   void start_partial_objarray(G1HeapRegionAttr dest_dir, oop from, oop to);
 
   HeapWord* allocate_copy_slow(G1HeapRegionAttr* dest_attr,
-                               oop old, Klass* klass,
+                               oop old, 
+                               Klass* klass,
                                size_t word_sz,
                                uint age,
                                uint node_index);
