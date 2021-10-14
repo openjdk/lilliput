@@ -1273,7 +1273,7 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
         Label register_finalizer;
         Register tmp_load_klass = LP64_ONLY(rscratch1) NOT_LP64(noreg);
         Register t = rsi;
-        __ load_klass(t, rax, tmp_load_klass, false);
+        __ load_klass(t, rax, tmp_load_klass);
         __ movl(t, Address(t, Klass::access_flags_offset()));
         __ testl(t, JVM_ACC_HAS_FINALIZER);
         __ jcc(Assembler::notZero, register_finalizer);

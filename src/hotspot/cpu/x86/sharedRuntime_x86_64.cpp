@@ -990,7 +990,7 @@ AdapterHandlerEntry* SharedRuntime::generate_i2c2i_adapters(MacroAssembler *masm
   Register temp = rbx;
 
   {
-    __ load_klass(temp, receiver, rscratch1, false);
+    __ load_klass(temp, receiver, rscratch1);
     __ cmpptr(temp, Address(holder, CompiledICHolder::holder_klass_offset()));
     __ movptr(rbx, Address(holder, CompiledICHolder::holder_metadata_offset()));
     __ jcc(Assembler::equal, ok);
@@ -1765,7 +1765,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
 
   assert_different_registers(ic_reg, receiver, rscratch1);
   __ verify_oop(receiver);
-  __ load_klass(rscratch1, receiver, rscratch2, false);
+  __ load_klass(rscratch1, receiver, rscratch2);
   __ cmpq(ic_reg, rscratch1);
   __ jcc(Assembler::equal, hit);
 
