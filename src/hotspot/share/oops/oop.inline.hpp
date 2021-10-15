@@ -336,6 +336,7 @@ oop oopDesc::forward_to_atomic(oop p, markWord compare, atomic_memory_order orde
 }
 
 oop oopDesc::forward_to_self_atomic(markWord compare, atomic_memory_order order) {
+#ifdef _LP64
   verify_forwardee(this);
   markWord m = compare;
   // If mark is displaced, we need to preserve the Klass* from real header.
@@ -352,6 +353,9 @@ oop oopDesc::forward_to_self_atomic(markWord compare, atomic_memory_order order)
     assert(old_mark.is_marked(), "must be marked here");
     return forwardee(old_mark);
   }
+#else
+  return forward_to_atomic(oop(this), compare, order);
+#endif
 }
 
 // Note that the forwardee is not the same thing as the displaced_mark.
