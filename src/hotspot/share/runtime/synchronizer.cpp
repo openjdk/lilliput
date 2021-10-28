@@ -1379,7 +1379,7 @@ class HandshakeForDeflation : public HandshakeClosure {
 class VM_RendezvousGCThreads : public VM_Operation {
 public:
   bool evaluate_at_safepoint() const override { return false; }
-  VMOp_Type type() const { return VMOp_RendezvousGCThreads; }
+  VMOp_Type type() const override { return VMOp_RendezvousGCThreads; }
   void doit() override {
     SuspendibleThreadSet::synchronize();
     SuspendibleThreadSet::desynchronize();
