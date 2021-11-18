@@ -134,7 +134,7 @@ public:
 
   // Apply the post barrier to the given reference field. Enqueues the card of p
   // if the barrier does not filter out the reference for some reason (e.g.
-  // p and q are in the same region, p is in survivor)
+  // p and q are in the same region, p is in survivor, p is in collection set)
   // To be called during GC if nothing particular about p and obj are known.
   template <class T> void write_ref_field_post(T* p, oop obj);
 
@@ -159,6 +159,7 @@ private:
 
   HeapWord* allocate_copy_slow(G1HeapRegionAttr* dest_attr,
                                oop old,
+                               Klass* klass,
                                size_t word_sz,
                                uint age,
                                uint node_index);
@@ -191,7 +192,7 @@ private:
   inline G1HeapRegionAttr next_region_attr(G1HeapRegionAttr const region_attr, markWord const m, uint& age);
 
   void report_promotion_event(G1HeapRegionAttr const dest_attr,
-                              oop const old, size_t word_sz, uint age,
+                              oop const old, Klass* klass, size_t word_sz, uint age,
                               HeapWord * const obj_ptr, uint node_index) const;
 
   void trim_queue_to_threshold(uint threshold);
