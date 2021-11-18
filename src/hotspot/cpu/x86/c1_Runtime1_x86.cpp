@@ -1111,8 +1111,8 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
       }
 
       break;
-    case load_klass_id:
 #ifdef _LP64
+    case load_klass_id:
       {
         StubFrame f(sasm, "load_klass", dont_gc_arguments);
         sasm->save_live_registers_no_oop_map(true);
@@ -1120,10 +1120,8 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
         __ call_VM_leaf(CAST_FROM_FN_PTR(address, oopDesc::load_klass_runtime), c_rarg0);
         sasm->restore_live_registers_except_rax(true);
       }
-#else
-      __ should_not_reach_here();
-#endif
       break;
+#endif
     case counter_overflow_id:
       {
         Register bci = rax, method = rbx;
@@ -1273,7 +1271,7 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
         Label register_finalizer;
         Register tmp_load_klass = LP64_ONLY(rscratch1) NOT_LP64(noreg);
         Register t = rsi;
-        __ load_klass(t, rax, tmp_load_klass, false);
+        __ load_klass(t, rax, tmp_load_klass);
         __ movl(t, Address(t, Klass::access_flags_offset()));
         __ testl(t, JVM_ACC_HAS_FINALIZER);
         __ jcc(Assembler::notZero, register_finalizer);

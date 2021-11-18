@@ -1671,7 +1671,7 @@ void MachUEPNode::emit(CodeBuffer& cbuf, PhaseRegAlloc* ra_) const
   MacroAssembler masm(&cbuf);
   uint insts_size = cbuf.insts_size();
   if (UseCompressedClassPointers) {
-    masm.load_klass(rscratch1, j_rarg0, rscratch2, false);
+    masm.load_klass(rscratch1, j_rarg0, rscratch2);
     masm.cmpptr(rax, rscratch1);
   } else {
     masm.cmpptr(rax, Address(j_rarg0, oopDesc::klass_offset_in_bytes()));

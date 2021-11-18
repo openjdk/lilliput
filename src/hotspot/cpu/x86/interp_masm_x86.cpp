@@ -60,7 +60,7 @@ void InterpreterMacroAssembler::profile_obj_type(Register obj, const Address& md
 
   bind(update);
   Register tmp_load_klass = LP64_ONLY(rscratch1) NOT_LP64(noreg);
-  load_klass(obj, obj, tmp_load_klass, false);
+  load_klass(obj, obj, tmp_load_klass);
 
   xorptr(obj, mdo_addr);
   testptr(obj, TypeEntries::type_klass_mask);
@@ -1219,7 +1219,7 @@ void InterpreterMacroAssembler::lock_object(Register lock_reg) {
     movptr(obj_reg, Address(lock_reg, obj_offset));
 
     if (DiagnoseSyncOnValueBasedClasses != 0) {
-      load_klass(tmp_reg, obj_reg, rklass_decode_tmp, false);
+      load_klass(tmp_reg, obj_reg, rklass_decode_tmp);
       movl(tmp_reg, Address(tmp_reg, Klass::access_flags_offset()));
       testl(tmp_reg, JVM_ACC_IS_VALUE_BASED_CLASS);
       jcc(Assembler::notZero, slow_case);
