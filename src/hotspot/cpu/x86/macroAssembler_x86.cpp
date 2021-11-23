@@ -4598,6 +4598,60 @@ void MacroAssembler::load_klass(Register dst, Register src, Register tmp, bool n
 #endif
 }
 
+void MacroAssembler::load_nklass(Register dst, Register src) {
+  assert_different_registers(src, dst);
+#ifdef _LP64
+  assert(UseCompressedClassPointers, "expect compressed class pointers");
+
+  Label slow, done;
+  movq(dst, Address(src, oopDesc::mark_offset_in_bytes()));
+  // NOTE: While it would seem nice to use xorb instead (for which we don't have an encoding in our assembler),
+  // the encoding for xorq uses the signed version (0x81/6) of xor, which encodes as compact as xorb would,
+  // and does't make a difference performance-wise.
+  xorq(dst, markWord::unlocked_value);
+  testb(dst, markWord::lock_mask_in_place);
+  jccb(Assembler::notZero, slow);
+
+  shrq(dst, markWord::klass_shift);
+  jmp(done);
+  bind(slow);
+
+  if (dst != rax) {
+    push(rax);
+  }
+  push(rdi);
+  push(rsi);
+  push(rdx);
+  push(rcx);
+  push(r8);
+  push(r9);
+  push(r10);
+  push(r11);
+
+  MacroAssembler::call_VM_leaf(CAST_FROM_FN_PTR(address, oopDesc::load_nklass_runtime), src);
+
+  pop(r11);
+  pop(r10);
+  pop(r9);
+  pop(r8);
+  pop(rcx);
+  pop(rdx);
+  pop(rsi);
+  pop(rdi);
+  if (dst != rax) {
+    mov(dst, rax);
+    pop(rax);
+  }
+
+  bind(done);
+#else
+  if (null_check_src) {
+    null_check(src, oopDesc::klass_offset_in_bytes());
+  }
+  movptr(dst, Address(src, oopDesc::klass_offset_in_bytes()));
+#endif
+}
+
 void MacroAssembler::store_klass(Register dst, Register src, Register tmp) {
   assert_different_registers(src, tmp);
   assert_different_registers(dst, tmp);

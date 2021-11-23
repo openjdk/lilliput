@@ -7418,6 +7418,21 @@ address generate_avx_ghash_processBlocks() {
 
   }
 
+  // Slow-path of loading compressed Klass* from obj.
+  // Receives src oop in rax.
+  // Returns compressed Klass* in rax.
+  // All other registers are preserved.
+  address generate_load_klass_stub() {
+    StubCodeMark mark(this, "StubRoutines", "libmCos");
+    address start = __ pc();
+
+    __ enter(); // required for proper stackwalking of RuntimeStub frame
+    __ leave(); // required for proper stackwalking of RuntimeStub frame
+    __ ret(0);
+
+    return start;
+  }
+
 #undef __
 #define __ masm->
 
@@ -7896,6 +7911,8 @@ address generate_avx_ghash_processBlocks() {
         StubRoutines::_vector_d_math[VectorSupport::VEC_SIZE_256][op] = (address)os::dll_lookup(libjsvml, ebuf);
       }
     }
+
+    //StubRoutines::_load_klass_stub = generate_load_klass_stub();
 #endif // COMPILER2
 
     if (UseVectorizedMismatchIntrinsic) {
