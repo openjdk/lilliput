@@ -288,4 +288,7 @@ public:
 
   void masked_op(int ideal_opc, int mask_len, KRegister dst,
                  KRegister src1, KRegister src2);
+
+  void load_nklass(Register dst, Register src);
+
 #endif // CPU_X86_C2_MACROASSEMBLER_X86_HPP
