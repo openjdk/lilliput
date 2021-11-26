@@ -89,8 +89,7 @@ template <class T> inline void MarkSweep::adjust_pointer(const SlidingForwarding
     oop obj = CompressedOops::decode_not_null(heap_oop);
     assert(Universe::heap()->is_in(obj), "should be in heap");
 
-    markWord header = obj->mark();
-    if (header.is_marked()) {
+    if (obj->is_forwarded()) {
       oop new_obj = forwarding->forwardee(obj);
       assert(new_obj != NULL, "must be forwarded");
       assert(is_object_aligned(new_obj), "oop must be aligned");
@@ -105,7 +104,7 @@ inline void AdjustPointerClosure::do_oop(oop* p)       { do_oop_work(p); }
 inline void AdjustPointerClosure::do_oop(narrowOop* p) { do_oop_work(p); }
 
 
-inline int MarkSweep::adjust_pointers(const SlidingForwarding* const forwarding, oop obj) {
+inline size_t MarkSweep::adjust_pointers(const SlidingForwarding* const forwarding, oop obj) {
   AdjustPointerClosure cl(forwarding);
   return obj->oop_iterate_size(&cl);
 }

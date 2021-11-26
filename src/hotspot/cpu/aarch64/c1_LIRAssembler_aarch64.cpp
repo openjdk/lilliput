@@ -1553,7 +1553,7 @@ void LIR_Assembler::emit_compare_and_swap(LIR_OpCompareAndSwap* op) {
     assert(op->addr()->is_address(), "what else?");
     LIR_Address* addr_ptr = op->addr()->as_address_ptr();
     assert(addr_ptr->disp() == 0, "need 0 disp");
-    assert(addr_ptr->index() == LIR_OprDesc::illegalOpr(), "need 0 index");
+    assert(addr_ptr->index() == LIR_Opr::illegalOpr(), "need 0 index");
     addr = as_reg(addr_ptr->base());
   }
   Register newval = as_reg(op->new_value());
@@ -2585,12 +2585,17 @@ void LIR_Assembler::emit_lock(LIR_OpLock* op) {
 void LIR_Assembler::emit_load_klass(LIR_OpLoadKlass* op) {
   Register obj = op->obj()->as_pointer_register();
   Register result = op->result_opr()->as_pointer_register();
-  Address from_addr(obj, oopDesc::klass_offset_in_bytes());
+
+  CodeEmitInfo* info = op->info();
+  if (info != NULL) {
+    add_debug_info_for_null_check_here(info);
+  }
+
   if (UseCompressedClassPointers) {
-    __ ldrw(result, from_addr);
+    __ ldrw(result, Address (obj, oopDesc::klass_offset_in_bytes()));
     __ decode_klass_not_null(result);
   } else {
-    __ ldr(result, from_addr);
+    __ ldr(result, Address (obj, oopDesc::klass_offset_in_bytes()));
   }
 }
 
@@ -2984,7 +2989,7 @@ void LIR_Assembler::membar_loadstore() { __ membar(MacroAssembler::LoadStore); }
 void LIR_Assembler::membar_storeload() { __ membar(MacroAssembler::StoreLoad); }
 
 void LIR_Assembler::on_spin_wait() {
-  Unimplemented();
+  __ spin_wait();
 }
 
 void LIR_Assembler::get_thread(LIR_Opr result_reg) {

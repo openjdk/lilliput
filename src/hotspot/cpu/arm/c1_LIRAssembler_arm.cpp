@@ -1377,7 +1377,7 @@ void LIR_Assembler::emit_compare_and_swap(LIR_OpCompareAndSwap* op) {
     op->addr()->as_pointer_register() :
     op->addr()->as_address_ptr()->base()->as_pointer_register();
   assert(op->addr()->is_register() || op->addr()->as_address_ptr()->disp() == 0, "unexpected disp");
-  assert(op->addr()->is_register() || op->addr()->as_address_ptr()->index() == LIR_OprDesc::illegalOpr(), "unexpected index");
+  assert(op->addr()->is_register() || op->addr()->as_address_ptr()->index() == LIR_Opr::illegalOpr(), "unexpected index");
   if (op->code() == lir_cas_int || op->code() == lir_cas_obj) {
     Register cmpval = op->cmp_value()->as_register();
     Register newval = op->new_value()->as_register();
@@ -2444,6 +2444,12 @@ void LIR_Assembler::emit_lock(LIR_OpLock* op) {
 void LIR_Assembler::emit_load_klass(LIR_OpLoadKlass* op) {
   Register obj = op->obj()->as_pointer_register();
   Register result = op->result_opr()->as_pointer_register();
+
+  CodeEmitInfo* info = op->info();
+  if (info != NULL) {
+    add_debug_info_for_null_check_here(info);
+  }
+
   if (UseCompressedClassPointers) { // On 32 bit arm??
     __ ldr_u32(result, Address(obj, oopDesc::klass_offset_in_bytes()));
   } else {

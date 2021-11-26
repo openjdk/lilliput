@@ -1184,7 +1184,6 @@ void LIR_Assembler::mem2reg(LIR_Opr src, LIR_Opr dest, BasicType type, LIR_Patch
 
   LIR_Address* addr = src->as_address_ptr();
   Address from_addr = as_Address(addr);
-  Register tmp_load_klass = LP64_ONLY(rscratch1) NOT_LP64(noreg);
 
   if (addr->base()->type() == T_OBJECT) {
     __ verify_oop(addr->base()->as_pointer_register());
