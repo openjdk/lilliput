@@ -613,6 +613,8 @@ bool ObjectMonitor::deflate_monitor() {
   return true;  // Success, ObjectMonitor has been deflated.
 }
 
+// We might access the dead object headers for parsable heap walk, make sure
+// headers are in correct shape, e.g. monitors deflated.
 void ObjectMonitor::maybe_deflate_dead(oop* p) {
   oop obj = *p;
   assert(obj != NULL, "must not yet been cleared");
