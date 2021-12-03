@@ -89,7 +89,8 @@ template <class T> inline void MarkSweep::adjust_pointer(const SlidingForwarding
     oop obj = CompressedOops::decode_not_null(heap_oop);
     assert(Universe::heap()->is_in(obj), "should be in heap");
 
-    if (obj->is_forwarded()) {
+    markWord header = obj->mark();
+    if (header.is_marked()) {
       oop new_obj = forwarding->forwardee(obj);
       assert(new_obj != NULL, "must be forwarded");
       assert(is_object_aligned(new_obj), "oop must be aligned");
