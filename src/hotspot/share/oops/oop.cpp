@@ -176,7 +176,10 @@ void* oopDesc::load_oop_raw(oop obj, int offset) {
 
 JRT_LEAF(Klass*, oopDesc::load_klass_runtime(oopDesc* o))
   assert(o != NULL, "null-check");
-  return oop(o)->klass();
+  oop obj = oop(o);
+  assert(oopDesc::is_oop(obj), "need a valid oop here: " PTR_FORMAT, p2i(o));
+  Klass* klass = obj->klass();
+  return klass;
 JRT_END
 
 JRT_LEAF(narrowKlass, oopDesc::load_nklass_runtime(oopDesc* o))

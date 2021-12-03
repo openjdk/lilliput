@@ -1184,7 +1184,6 @@ void LIR_Assembler::mem2reg(LIR_Opr src, LIR_Opr dest, BasicType type, LIR_Patch
 
   LIR_Address* addr = src->as_address_ptr();
   Address from_addr = as_Address(addr);
-  Register tmp_load_klass = LP64_ONLY(rscratch1) NOT_LP64(noreg);
 
   if (addr->base()->type() == T_OBJECT) {
     __ verify_oop(addr->base()->as_pointer_register());
@@ -1257,11 +1256,7 @@ void LIR_Assembler::mem2reg(LIR_Opr src, LIR_Opr dest, BasicType type, LIR_Patch
       break;
 
     case T_ADDRESS:
-      if (UseCompressedClassPointers && addr->disp() == oopDesc::klass_offset_in_bytes()) {
-        __ movl(dest->as_register(), from_addr);
-      } else {
-        __ movptr(dest->as_register(), from_addr);
-      }
+      __ movptr(dest->as_register(), from_addr);
       break;
     case T_INT:
       __ movl(dest->as_register(), from_addr);
@@ -1367,12 +1362,6 @@ void LIR_Assembler::mem2reg(LIR_Opr src, LIR_Opr dest, BasicType type, LIR_Patch
     if (!UseZGC) {
       __ verify_oop(dest->as_register());
     }
-  } else if (type == T_ADDRESS && addr->disp() == oopDesc::klass_offset_in_bytes()) {
-#ifdef _LP64
-    if (UseCompressedClassPointers) {
-      __ decode_klass_not_null(dest->as_register(), tmp_load_klass);
-    }
-#endif
   }
 }
 
@@ -3528,6 +3517,32 @@ void LIR_Assembler::emit_lock(LIR_OpLock* op) {
   __ bind(*op->stub()->continuation());
 }
 
+void LIR_Assembler::emit_load_klass(LIR_OpLoadKlass* op) {
+  Register obj = op->obj()->as_pointer_register();
+  Register result = op->result_opr()->as_pointer_register();
+
+#ifdef _LP64
+  Register tmp = rscratch1;
+  assert_different_registers(tmp, obj);
+  assert_different_registers(tmp, result);
+
+  if (op->info() != NULL) {
+    add_debug_info_for_null_check_here(op->info());
+  }
+  // Check if we can take the (common) fast path, if obj is unlocked.
+  __ movq(tmp, Address(obj, oopDesc::mark_offset_in_bytes()));
+  __ xorq(tmp, markWord::unlocked_value);
+  __ testb(tmp, markWord::lock_mask_in_place);
+  __ jcc(Assembler::notZero, *op->stub()->entry());
+
+  // Fast-path: shift and decode Klass*.
+  __ movq(result, tmp);
+  __ shrq(result, markWord::klass_shift);
+  __ decode_klass_not_null(result, tmp);
+#else
+  __ load_klass(result, obj, noreg /*not needed*/);
+#endif
+}
 
 void LIR_Assembler::emit_profile_call(LIR_OpProfileCall* op) {
   ciMethod* method = op->profiled_method();

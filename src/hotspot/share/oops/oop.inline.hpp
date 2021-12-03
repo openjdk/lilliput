@@ -373,13 +373,14 @@ oop oopDesc::forwardee(markWord header) const {
   } else
 #endif
   {
+    assert(header.is_marked(), "only decode when actually forwarded");
     return cast_to_oop(header.decode_pointer());
   }
 }
 
 // The following method needs to be MT safe.
 uint oopDesc::age() const {
-  assert(!is_forwarded(), "Attempt to read age from forwarded mark");
+  assert(!mark().is_marked(), "Attempt to read age from forwarded mark");
   if (has_displaced_mark()) {
     return displaced_mark().age();
   } else {
@@ -388,7 +389,7 @@ uint oopDesc::age() const {
 }
 
 void oopDesc::incr_age() {
-  assert(!is_forwarded(), "Attempt to increment age of forwarded mark");
+  assert(!mark().is_marked(), "Attempt to increment age of forwarded mark");
   if (has_displaced_mark()) {
     set_displaced_mark(displaced_mark().incr_age());
   } else {
