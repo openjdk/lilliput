@@ -5300,7 +5300,7 @@ instruct loadNKlass(rRegN dst, memory mem, rRegP tmp)
     // emit bogus load to make implicit null-checking happy. Sorry. ;-)
     // In the future, we want to emit straightforward load from offset into the header.
     __ movl($dst$$Register, $mem$$Address);
-    __ lea($tmp$$Register, $mem$$Address.plus_disp(oopDesc::mark_offset_in_bytes() - oopDesc::klass_offset_in_bytes()));
+    __ lea($tmp$$Register, $mem$$Address.plus_disp(oopDesc::mark_offset_in_bytes() - oopDesc::nklass_offset_in_bytes()));
     __ load_nklass($dst$$Register, $tmp$$Register);
   %}
   ins_pipe(pipe_slow); // XXX
