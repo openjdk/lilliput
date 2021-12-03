@@ -12263,16 +12263,19 @@ instruct compN_rReg_imm_klass(rFlagsRegU cr, rRegN op1, immNKlass op2) %{
   ins_pipe(ialu_cr_reg_imm);
 %}
 
-instruct compN_mem_imm_klass(rFlagsRegU cr, memory mem, immNKlass src)
-%{
-  match(Set cr (CmpN src (LoadNKlass mem)));
-
-  format %{ "cmpl    $mem, $src\t# compressed klass ptr" %}
-  ins_encode %{
-    __ cmp_narrow_klass($mem$$Address, (Klass*)$src$$constant);
-  %}
-  ins_pipe(ialu_cr_reg_mem);
-%}
+// Disabled because the compressed Klass* in header cannot be safely
+// accessed. TODO: Re-enable it as soon as synchronization does not
+// overload the upper header bits anymore.
+//instruct compN_mem_imm_klass(rFlagsRegU cr, memory mem, immNKlass src)
+//%{
+//  match(Set cr (CmpN src (LoadNKlass mem)));
+//
+//  format %{ "cmpl    $mem, $src\t# compressed klass ptr" %}
+//  ins_encode %{
+//    __ cmp_narrow_klass($mem$$Address, (Klass*)$src$$constant);
+//  %}
+//  ins_pipe(ialu_cr_reg_mem);
+//%}
 
 instruct testN_reg(rFlagsReg cr, rRegN src, immN0 zero) %{
   match(Set cr (CmpN src zero));
