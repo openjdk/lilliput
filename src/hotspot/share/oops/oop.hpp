@@ -82,6 +82,7 @@ class oopDesc {
   // objects during a GC) -- requires a valid klass pointer
   inline void init_mark();
 
+  inline narrowKlass nklass() const;
   inline Klass* klass() const;
   inline Klass* klass_or_null() const;
   inline Klass* klass_or_null_acquire() const;
@@ -307,6 +308,7 @@ class oopDesc {
   // for code generation
   static int mark_offset_in_bytes()      { return offset_of(oopDesc, _mark); }
   static int klass_offset_in_bytes()     { return offset_of(oopDesc, _metadata._klass); }
+  static int nklass_offset_in_bytes()    { return 4; }
   static int klass_gap_offset_in_bytes() {
     assert(has_klass_gap(), "only applicable to compressed klass pointers");
     return klass_offset_in_bytes() + sizeof(narrowKlass);
@@ -318,6 +320,7 @@ class oopDesc {
 
   // Runtime entry
   static Klass* load_klass_runtime(oopDesc* o);
+  static narrowKlass load_nklass_runtime(oopDesc* o);
 
   // Avoid include gc_globals.hpp in oop.inline.hpp
   DEBUG_ONLY(bool get_UseParallelGC();)
