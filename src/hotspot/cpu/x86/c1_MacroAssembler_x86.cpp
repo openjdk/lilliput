@@ -144,26 +144,13 @@ void C1_MacroAssembler::initialize_header(Register obj, Register klass, Register
   assert_different_registers(obj, klass, len, t1, t2);
   movptr(t1, Address(klass, Klass::prototype_header_offset()));
   movptr(Address(obj, oopDesc::mark_offset_in_bytes()), t1);
-#ifdef _LP64
-  if (UseCompressedClassPointers) { // Take care not to kill klass
-    movptr(t1, klass);
-    encode_klass_not_null(t1, tmp_encode_klass);
-    movl(Address(obj, oopDesc::klass_offset_in_bytes()), t1);
-  } else
+#ifndef _LP64
+  movptr(Address(obj, oopDesc::klass_offset_in_bytes()), klass);
 #endif
-  {
-    movptr(Address(obj, oopDesc::klass_offset_in_bytes()), klass);
-  }
 
   if (len->is_valid()) {
     movl(Address(obj, arrayOopDesc::length_offset_in_bytes()), len);
   }
-#ifdef _LP64
-  else if (UseCompressedClassPointers) {
-    xorptr(t1, t1);
-    store_klass_gap(obj, t1);
-  }
-#endif
 }
 
 
@@ -280,16 +267,17 @@ void C1_MacroAssembler::inline_cache_check(Register receiver, Register iCache) {
   verify_oop(receiver);
   // explicit NULL check not needed since load from [klass_offset] causes a trap
   // check against inline cache
-  assert(!MacroAssembler::needs_explicit_null_check(oopDesc::klass_offset_in_bytes()), "must add explicit null check");
+  assert(!MacroAssembler::needs_explicit_null_check(oopDesc::nklass_offset_in_bytes()), "must add explicit null check");
   int start_offset = offset();
   Register tmp_load_klass = LP64_ONLY(rscratch2) NOT_LP64(noreg);
 
-  if (UseCompressedClassPointers) {
-    load_klass(rscratch1, receiver, tmp_load_klass);
-    cmpptr(rscratch1, iCache);
-  } else {
-    cmpptr(iCache, Address(receiver, oopDesc::klass_offset_in_bytes()));
-  }
+#ifdef _LP64
+  assert(UseCompressedClassPointers, "Lilliput");
+  load_klass(rscratch1, receiver, tmp_load_klass);
+  cmpptr(rscratch1, iCache);
+#else
+  cmpptr(iCache, Address(receiver, oopDesc::klass_offset_in_bytes()));
+#endif
   // if icache check fails, then jump to runtime routine
   // Note: RECEIVER must still contain the receiver!
   jump_cc(Assembler::notEqual,

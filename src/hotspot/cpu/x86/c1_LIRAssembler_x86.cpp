@@ -1750,12 +1750,9 @@ void LIR_Assembler::emit_typecheck_helper(LIR_OpTypeCheck *op, Label* success, L
     // get object class
     // not a safepoint as obj null check happens earlier
 #ifdef _LP64
-    if (UseCompressedClassPointers) {
-      __ load_klass(Rtmp1, obj, tmp_load_klass);
-      __ cmpptr(k_RInfo, Rtmp1);
-    } else {
-      __ cmpptr(k_RInfo, Address(obj, oopDesc::klass_offset_in_bytes()));
-    }
+    assert(UseCompressedClassPointers, "Lilliput");
+    __ load_klass(Rtmp1, obj, tmp_load_klass);
+    __ cmpptr(k_RInfo, Rtmp1);
 #else
     if (k->is_loaded()) {
       __ cmpklass(Address(obj, oopDesc::klass_offset_in_bytes()), k->constant_encoding());

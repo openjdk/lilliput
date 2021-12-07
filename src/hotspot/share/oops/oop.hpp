@@ -54,10 +54,6 @@ class oopDesc {
   friend class JVMCIVMStructs;
  private:
   volatile markWord _mark;
-  union _metadata {
-    Klass*      _klass;
-    narrowKlass _compressed_klass;
-  } _metadata;
 
   // There may be ordering constraints on the initialization of fields that
   // make use of the C++ copy/assign incorrect.
@@ -73,6 +69,7 @@ class oopDesc {
 
   inline void set_mark(markWord m);
   static inline void set_mark(HeapWord* mem, markWord m);
+  static inline void release_set_mark(HeapWord* mem, markWord m);
 
   inline void release_set_mark(markWord m);
   inline markWord cas_set_mark(markWord new_mark, markWord old_mark);
@@ -86,16 +83,6 @@ class oopDesc {
   inline Klass* klass() const;
   inline Klass* klass_or_null() const;
   inline Klass* klass_or_null_acquire() const;
-
-  narrowKlass narrow_klass_legacy() const { return _metadata._compressed_klass; }
-  void set_narrow_klass(narrowKlass nk) NOT_CDS_JAVA_HEAP_RETURN;
-  inline void set_klass(Klass* k);
-  static inline void release_set_klass(HeapWord* mem, Klass* k);
-
-  // For klass field compression
-  inline int klass_gap() const;
-  inline void set_klass_gap(int z);
-  static inline void set_klass_gap(HeapWord* mem, int z);
 
   // size of object header, aligned to platform wordSize
   static int header_size() { return sizeof(oopDesc)/HeapWordSize; }
@@ -303,19 +290,11 @@ class oopDesc {
   inline bool mark_must_be_preserved() const;
   inline bool mark_must_be_preserved(markWord m) const;
 
-  static bool has_klass_gap();
-
   // for code generation
   static int mark_offset_in_bytes()      { return offset_of(oopDesc, _mark); }
-  static int klass_offset_in_bytes()     { return offset_of(oopDesc, _metadata._klass); }
   static int nklass_offset_in_bytes()    { return 4; }
-  static int klass_gap_offset_in_bytes() {
-    assert(has_klass_gap(), "only applicable to compressed klass pointers");
-    return klass_offset_in_bytes() + sizeof(narrowKlass);
-  }
 
   // for error reporting
-  static void* load_klass_raw(oop obj);
   static void* load_oop_raw(oop obj, int offset);
 
   // Runtime entry

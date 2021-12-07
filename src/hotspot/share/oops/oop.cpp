@@ -140,29 +140,6 @@ bool oopDesc::is_array_noinline()             const { return is_array();        
 bool oopDesc::is_objArray_noinline()          const { return is_objArray();            }
 bool oopDesc::is_typeArray_noinline()         const { return is_typeArray();           }
 
-bool oopDesc::has_klass_gap() {
-  // Only has a klass gap when compressed class pointers are used.
-  return UseCompressedClassPointers;
-}
-
-#if INCLUDE_CDS_JAVA_HEAP
-void oopDesc::set_narrow_klass(narrowKlass nk) {
-  assert(DumpSharedSpaces, "Used by CDS only. Do not abuse!");
-  assert(UseCompressedClassPointers, "must be");
-  _metadata._compressed_klass = nk;
-}
-#endif
-
-void* oopDesc::load_klass_raw(oop obj) {
-  if (UseCompressedClassPointers) {
-    narrowKlass narrow_klass = obj->_metadata._compressed_klass;
-    if (narrow_klass == 0) return NULL;
-    return (void*)CompressedKlassPointers::decode_raw(narrow_klass);
-  } else {
-    return obj->_metadata._klass;
-  }
-}
-
 void* oopDesc::load_oop_raw(oop obj, int offset) {
   uintptr_t addr = (uintptr_t)(void*)obj + (uint)offset;
   if (UseCompressedOops) {
@@ -180,17 +157,6 @@ JRT_LEAF(Klass*, oopDesc::load_klass_runtime(oopDesc* o))
   assert(oopDesc::is_oop(obj), "need a valid oop here: " PTR_FORMAT, p2i(o));
   Klass* klass = obj->klass();
   return klass;
-JRT_END
-
-JRT_LEAF(narrowKlass, oopDesc::load_nklass_runtime(oopDesc* o))
-  assert(o != NULL, "null-check");
-  assert(UseCompressedClassPointers, "only with compressed class pointers");
-  oop obj = oop(o);
-  markWord header = obj->mark();
-  if (!header.is_neutral()) {
-    header = ObjectSynchronizer::stable_mark(obj);
-  }
-  return header.narrow_klass();
 JRT_END
 
 JRT_LEAF(narrowKlass, oopDesc::load_nklass_runtime(oopDesc* o))

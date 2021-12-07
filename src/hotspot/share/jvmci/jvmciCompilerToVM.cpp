@@ -386,7 +386,8 @@ C2V_VMENTRY_NULL(jobject, getResolvedJavaType0, (JNIEnv* env, jobject, jobject b
   JVMCIKlassHandle klass(THREAD);
   JVMCIObject base_object = JVMCIENV->wrap(base);
   jlong base_address = 0;
-  if (base_object.is_non_null() && offset == oopDesc::klass_offset_in_bytes()) {
+  // TODO: Deal with changed Klass* offset in JVMCI?
+  if (base_object.is_non_null() && offset == oopDesc::nklass_offset_in_bytes()) {
     // klass = JVMCIENV->unhandle(base_object)->klass();
     if (JVMCIENV->isa_HotSpotObjectConstantImpl(base_object)) {
       Handle base_oop = JVMCIENV->asConstant(base_object, JVMCI_CHECK_NULL);

@@ -1946,7 +1946,6 @@ run:
 
               // Initialize header
               obj->set_mark(markWord::prototype());
-              obj->set_klass_gap(0);
               obj->set_klass(ik);
 
               // Must prevent reordering of stores for object initialization

@@ -57,7 +57,6 @@ inline void PreservedMarks::init_forwarded_mark(oop obj) {
   }
   assert(UseCompressedClassPointers, "assume +UseCompressedClassPointers");
   narrowKlass nklass = header.narrow_klass();
-  assert(nklass == obj->narrow_klass_legacy(), "narrow klass must match: header: " PTR_FORMAT ", nklass: " PTR_FORMAT, forwardee->mark().value(), uintptr_t(nklass));
   obj->set_mark(markWord::prototype().set_narrow_klass(nklass));
 #else
   obj->set_mark(markWord::prototype());

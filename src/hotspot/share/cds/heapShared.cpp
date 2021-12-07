@@ -444,8 +444,7 @@ void HeapShared::copy_roots() {
   memset(mem, 0, size * BytesPerWord);
   {
     // This is copied from MemAllocator::finish
-    oopDesc::set_mark(mem, k->prototype_header());
-    oopDesc::release_set_klass(mem, k);
+    oopDesc::release_set_mark(mem, k->prototype_header());
   }
   {
     // This is copied from ObjArrayAllocator::initialize

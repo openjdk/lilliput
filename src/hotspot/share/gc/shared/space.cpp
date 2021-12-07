@@ -755,15 +755,12 @@ void ContiguousSpace::allocate_temporary_filler(int factor) {
     typeArrayOop t = (typeArrayOop) cast_to_oop(allocate(size));
     assert(t != NULL, "allocation should succeed");
     t->set_mark(Universe::intArrayKlassObj()->prototype_header());
-    t->set_klass(Universe::intArrayKlassObj());
     t->set_length((int)length);
   } else {
     assert(size == CollectedHeap::min_fill_size(),
            "size for smallest fake object doesn't match");
     instanceOop obj = (instanceOop) cast_to_oop(allocate(size));
     obj->set_mark(vmClasses::Object_klass()->prototype_header());
-    obj->set_klass_gap(0);
-    obj->set_klass(vmClasses::Object_klass());
   }
 }
 
