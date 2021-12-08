@@ -716,6 +716,11 @@ const intx ObjectAlignmentInBytes = 8;
           "before adjusting the in_use_list_ceiling up (0 is off).")        \
           range(0, max_uintx)                                               \
                                                                             \
+  product(uint, MaxNumMonitors, 2048, EXPERIMENTAL,                         \
+          "Maximum number of monitors that can be allocated at the same "   \
+          "time.")                                                          \
+          range(0, UINT32_MAX)                                              \
+                                                                            \
   product(intx, hashCode, 5, EXPERIMENTAL,                                  \
                "(Unstable) select hashCode generation algorithm")           \
                                                                             \
