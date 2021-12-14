@@ -748,9 +748,10 @@ void ContiguousSpace::allocate_temporary_filler(int factor) {
   }
   size = align_object_size(size);
 
-  const size_t array_header_size = typeArrayOopDesc::header_size(T_INT);
-  if (size >= align_object_size(array_header_size)) {
-    size_t length = (size - array_header_size) * (HeapWordSize / sizeof(jint));
+  const size_t array_header_size_bytes = typeArrayOopDesc::header_size_in_bytes(T_INT);
+  const size_t array_header_size_words = align_up(array_header_size_bytes, HeapWordSize) / HeapWordSize;
+  if (size >= align_object_size(array_header_size_words)) {
+    size_t length = (size * HeapWordSize - array_header_size_bytes) / sizeof(jint);
     // allocate uninitialized int array
     typeArrayOop t = (typeArrayOop) cast_to_oop(allocate(size));
     assert(t != NULL, "allocation should succeed");

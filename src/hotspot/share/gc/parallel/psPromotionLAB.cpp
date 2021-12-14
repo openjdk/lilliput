@@ -47,7 +47,7 @@ void PSPromotionLAB::initialize(MemRegion lab) {
 
   // Initialize after VM starts up because header_size depends on compressed
   // oops.
-  filler_header_size = align_object_size(typeArrayOopDesc::header_size(T_INT));
+  filler_header_size = align_object_size(align_up(typeArrayOopDesc::header_size_in_bytes(T_INT), HeapWordSize) / HeapWordSize);
 
   // We can be initialized to a zero size!
   if (free() > 0) {
@@ -84,15 +84,19 @@ void PSPromotionLAB::flush() {
   HeapWord* tlab_end = end() + filler_header_size;
   typeArrayOop filler_oop = (typeArrayOop) cast_to_oop(top());
   filler_oop->set_mark(Universe::intArrayKlassObj()->prototype_header());
-  const size_t array_length =
-    pointer_delta(tlab_end, top()) - typeArrayOopDesc::header_size(T_INT);
-  assert( (array_length * (HeapWordSize/sizeof(jint))) < (size_t)max_jint, "array too big in PSPromotionLAB");
-  filler_oop->set_length((int)(array_length * (HeapWordSize/sizeof(jint))));
+  const size_t array_length_bytes = pointer_delta(tlab_end, top()) * HeapWordSize
+                                    - typeArrayOopDesc::header_size_in_bytes(T_INT);
+  assert(array_length_bytes % sizeof(jint) == 0, "expect header to align to int size");
+  const size_t array_length_ints = array_length_bytes / sizeof(jint);
+  assert(array_length_ints < (size_t)max_jint, "array too big in PSPromotionLAB");
+  filler_oop->set_length((int)array_length_ints);
 
 #ifdef ASSERT
   // Note that we actually DO NOT want to use the aligned header size!
-  HeapWord* elt_words = cast_from_oop<HeapWord*>(filler_oop) + typeArrayOopDesc::header_size(T_INT);
-  Copy::fill_to_words(elt_words, array_length, 0xDEAABABE);
+  int array_offset_words = align_up(typeArrayOopDesc::header_size_in_bytes(T_INT), HeapWordSize) / HeapWordSize;
+  HeapWord* elt_words = cast_from_oop<HeapWord*>(filler_oop) + array_offset_words;
+  int array_length_words = tlab_end - elt_words;
+  Copy::fill_to_words(elt_words, array_length_words, 0xDEAABABE);
 #endif
 
   set_bottom(NULL);

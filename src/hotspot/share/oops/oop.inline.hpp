@@ -199,9 +199,12 @@ size_t oopDesc::size_given_klass(Klass* klass)  {
       // the grey portion of an already copied array. This will cause the first
       // disjunct below to fail if the two comparands are computed across such
       // a concurrent change.
+      bool typeArray = klass->is_typeArray_klass();
+      bool objArray = klass->is_objArray_klass();
       assert((s == klass->oop_size(this)) ||
              (Universe::is_gc_active() && is_objArray() && is_forwarded() && (get_UseParallelGC() || get_UseG1GC())),
-             "wrong array object size");
+             "wrong array object size: s: " SIZE_FORMAT ", klass->oop_size(this): " SIZE_FORMAT ", is typeArray: %s, is objArray: %s, array_length: " SIZE_FORMAT ", header_size: %d, element size: %d", s, klass->oop_size(this),
+             BOOL_TO_STR(typeArray), BOOL_TO_STR(objArray), array_length, Klass::layout_helper_header_size(lh), Klass::layout_helper_log2_element_size(lh));
     } else {
       // Must be zero, so bite the bullet and take the virtual call.
       s = klass->oop_size(this);
