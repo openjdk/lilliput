@@ -3553,7 +3553,7 @@ void TemplateTable::_new() {
 
     // initialize object header only.
     __ bind(initialize_header);
-    __ mov(rscratch1, (intptr_t)markWord::prototype().value());
+    __ ldr(rscratch1, Address(r4, Klass::prototype_header_offset()));
     __ str(rscratch1, Address(r0, oopDesc::mark_offset_in_bytes()));
     __ store_klass_gap(r0, zr);  // zero klass gap for compressed oops
     __ store_klass(r0, r4);      // store klass last
@@ -3563,7 +3563,7 @@ void TemplateTable::_new() {
       // Trigger dtrace event for fastpath
       __ push(atos); // save the return value
       __ call_VM_leaf(
-           CAST_FROM_FN_PTR(address, SharedRuntime::dtrace_object_alloc), r0);
+           CAST_FROM_FN_PTR(address, static_cast<int (*)(oopDesc*)>(SharedRuntime::dtrace_object_alloc)), r0);
       __ pop(atos); // restore the return value
 
     }
