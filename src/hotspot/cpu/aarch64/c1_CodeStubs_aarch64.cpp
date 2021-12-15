@@ -254,7 +254,18 @@ void MonitorExitStub::emit_code(LIR_Assembler* ce) {
 }
 
 void LoadKlassStub::emit_code(LIR_Assembler* ce) {
-  // Currently not needed.
+  __ bind(_entry);
+  Register res = _result->as_register();
+  ce->store_parameter(_obj->as_register(), 0);
+  if (res != r0) {
+    __ push(RegSet::of(r0), sp);
+  }
+  __ far_jump(RuntimeAddress(Runtime1::entry_for(Runtime1::load_klass_id)));
+  if (res != r0) {
+    __ mov(res, r0);
+    __ pop(RegSet::of(r0), sp);
+  }
+  __ b(_continuation);
 }
 
 // Implementation of patching:
