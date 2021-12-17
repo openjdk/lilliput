@@ -29,6 +29,7 @@
 #include "memory/memRegion.hpp"
 #include "oops/access.hpp"
 #include "oops/accessBackend.hpp"
+#include "oops/markWord.hpp"
 #include "oops/oopsHierarchy.hpp"
 #include "utilities/fakeRttiSupport.hpp"
 #include "utilities/macros.hpp"
@@ -143,6 +144,13 @@ public:
   virtual void on_thread_detach(Thread* thread) {}
 
   virtual void make_parsable(JavaThread* thread) {}
+
+  // When safely accessing the object header, deal with concurrently-forwarded
+  // objects. This may change the obj argument to the forwarded object.
+  // Returns true, if caller should retry (e.g. with forwarded object), false otherwise.
+  virtual bool handle_marked_object_header(oop& obj, markWord header) const { return false; }
+
+  virtual void set_heap_walk_in_progress(bool in_progress) const {}
 
 public:
   // Print a description of the memory for the barrier set

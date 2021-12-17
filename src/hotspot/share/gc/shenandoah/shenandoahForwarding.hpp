@@ -29,7 +29,18 @@
 #include "utilities/globalDefinitions.hpp"
 
 class ShenandoahForwarding {
+private:
+  static bool _heap_walk_in_progress;
+
 public:
+  static void set_heap_walk_in_progress(bool in_progress) {
+    _heap_walk_in_progress = in_progress;
+  }
+
+  static bool is_heap_walk_in_progress() {
+    return _heap_walk_in_progress;
+  }
+
   /* Gets forwardee from the given object.
    */
   static inline oop get_forwardee(oop obj);

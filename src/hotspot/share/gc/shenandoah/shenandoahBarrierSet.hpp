@@ -26,6 +26,7 @@
 #define SHARE_GC_SHENANDOAH_SHENANDOAHBARRIERSET_HPP
 
 #include "gc/shared/barrierSet.hpp"
+#include "gc/shenandoah/shenandoahForwarding.hpp"
 #include "gc/shenandoah/shenandoahSATBMarkQueueSet.hpp"
 
 class ShenandoahHeap;
@@ -80,6 +81,12 @@ public:
   virtual void on_thread_destroy(Thread* thread);
   virtual void on_thread_attach(Thread* thread);
   virtual void on_thread_detach(Thread* thread);
+
+  bool handle_marked_object_header(oop& obj, markWord header) const override;
+
+  void set_heap_walk_in_progress(bool in_progress) const override {
+    ShenandoahForwarding::set_heap_walk_in_progress(in_progress);
+  }
 
   static inline oop resolve_forwarded_not_null(oop p);
   static inline oop resolve_forwarded_not_null_mutator(oop p);

@@ -136,3 +136,12 @@ void ShenandoahBarrierSet::clone_barrier_runtime(oop src) {
     clone_barrier(src);
   }
 }
+
+bool ShenandoahBarrierSet::handle_marked_object_header(oop& obj, markWord header) const {
+  assert(header.is_marked(), "only forwarded objects here");
+  if (!_heap->is_full_gc_move_in_progress() && !ShenandoahForwarding::is_heap_walk_in_progress()) {
+    obj = cast_to_oop(header.decode_pointer());
+    return true;
+  }
+  return false;
+ }

@@ -42,11 +42,8 @@ inline oop ShenandoahForwarding::get_forwardee_raw_unchecked(oop obj) {
   // fwdptr. That object is still not forwarded, and we need to return
   // the object itself.
   markWord mark = obj->mark();
-  if (mark.is_marked()) {
-    HeapWord* fwdptr = (HeapWord*) mark.clear_lock_bits().to_pointer();
-    if (fwdptr != NULL) {
-      return cast_to_oop(fwdptr);
-    }
+  if (mark.is_marked() && !is_heap_walk_in_progress()) {
+    return cast_to_oop(mark.decode_pointer());
   }
   return obj;
 }
@@ -81,12 +78,17 @@ inline oop ShenandoahForwarding::try_update_forwardee(oop obj, oop update) {
     return cast_to_oop(old_mark.clear_lock_bits().to_pointer());
   }
 
-  markWord new_mark = markWord::encode_pointer_as_mark(update);
-  markWord prev_mark = obj->cas_set_mark(new_mark, old_mark, memory_order_conservative);
-  if (prev_mark == old_mark) {
-    return update;
-  } else {
-    return cast_to_oop(prev_mark.clear_lock_bits().to_pointer());
+  while (true) {
+    markWord new_mark = markWord::encode_pointer_as_mark(update);
+    markWord prev_mark = obj->cas_set_mark(new_mark, old_mark, memory_order_conservative);
+    if (prev_mark == old_mark) {
+      return update;
+    } else if (prev_mark == markWord::INFLATING()) {
+      // This happens when we encounter a stack-locked object in from-space. Busy for completion.
+      continue;
+    } else {
+      return cast_to_oop(prev_mark.clear_lock_bits().to_pointer());
+    }
   }
 }
 
