@@ -150,8 +150,6 @@ public:
   // Returns true, if caller should retry (e.g. with forwarded object), false otherwise.
   virtual bool handle_marked_object_header(oop& obj, markWord header) const { return false; }
 
-  virtual void set_heap_walk_in_progress(bool in_progress) const {}
-
 public:
   // Print a description of the memory for the barrier set
   virtual void print_on(outputStream* st) const = 0;

@@ -84,10 +84,6 @@ public:
 
   bool handle_marked_object_header(oop& obj, markWord header) const override;
 
-  void set_heap_walk_in_progress(bool in_progress) const override {
-    ShenandoahForwarding::set_heap_walk_in_progress(in_progress);
-  }
-
   static inline oop resolve_forwarded_not_null(oop p);
   static inline oop resolve_forwarded_not_null_mutator(oop p);
   static inline oop resolve_forwarded(oop p);

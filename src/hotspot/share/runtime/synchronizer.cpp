@@ -698,7 +698,7 @@ struct SharedGlobals {
 
 static SharedGlobals GVars;
 
-static markWord read_stable_mark(oop obj) {
+markWord ObjectSynchronizer::read_stable_mark(const oop obj) {
   markWord mark = obj->mark_acquire();
   if (!mark.is_being_inflated()) {
     return mark;       // normal fast-path return

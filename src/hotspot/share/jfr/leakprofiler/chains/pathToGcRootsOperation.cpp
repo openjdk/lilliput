@@ -106,8 +106,6 @@ void PathToGcRootsOperation::doit() {
     return;
   }
 
-  BarrierSet::barrier_set()->set_heap_walk_in_progress(true);
-
   // Necessary condition for attempting a root set iteration
   Universe::heap()->ensure_parsability(false);
 
@@ -130,6 +128,4 @@ void PathToGcRootsOperation::doit() {
   // Emit old objects including their reference chains as events
   EventEmitter emitter(GranularTimer::start_time(), GranularTimer::end_time());
   emitter.write_events(_sampler, _edge_store, _emit_all);
-
-  BarrierSet::barrier_set()->set_heap_walk_in_progress(false);
 }

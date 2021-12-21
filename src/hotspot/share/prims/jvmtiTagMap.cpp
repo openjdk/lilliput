@@ -1392,7 +1392,6 @@ void ObjectMarker::init() {
   assert(SafepointSynchronize::is_at_safepoint(), "must be at a safepoint");
 
   // prepare heap for iteration
-  BarrierSet::barrier_set()->set_heap_walk_in_progress(true);
   Universe::heap()->ensure_parsability(false);  // no need to retire TLABs
 
   // create stacks for interesting headers
@@ -1419,8 +1418,6 @@ void ObjectMarker::done() {
     markWord mark = _saved_mark_stack->at(i);
     o->set_mark(mark);
   }
-
-  BarrierSet::barrier_set()->set_heap_walk_in_progress(false);
 
   // free the stacks
   delete _saved_oop_stack;
