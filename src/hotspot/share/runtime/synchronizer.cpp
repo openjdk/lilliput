@@ -25,6 +25,7 @@
 #include "precompiled.hpp"
 #include "classfile/vmSymbols.hpp"
 #include "jfr/jfrEvents.hpp"
+#include "gc/shared/collectedHeap.hpp"
 #include "gc/shared/suspendibleThreadSet.hpp"
 #include "logging/log.hpp"
 #include "logging/logStream.hpp"
