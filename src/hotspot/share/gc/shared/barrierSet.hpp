@@ -148,7 +148,7 @@ public:
   // When safely accessing the object header, deal with concurrently-forwarded
   // objects. This may change the obj argument to the forwarded object.
   // Returns true, if caller should retry (e.g. with forwarded object), false otherwise.
-  virtual bool handle_marked_object_header(oop& obj, markWord header) const { return false; }
+  virtual bool load_header_handle_forwarding(oop& obj, markWord header) const { return false; }
 
 public:
   // Print a description of the memory for the barrier set

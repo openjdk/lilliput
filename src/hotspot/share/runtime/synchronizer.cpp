@@ -778,8 +778,8 @@ markWord ObjectSynchronizer::stable_mark(oop object) {
 
     // CASE: Forwarded
     if (mark.is_marked()) {
-      oop orig = object;
-      if (BarrierSet::barrier_set()->handle_marked_object_header(object, mark)) {
+      DEBUG_ONLY(oop orig = object;)
+      if (BarrierSet::barrier_set()->load_header_handle_forwarding(object, mark)) {
         assert(orig != object, "need to see forwarded object");
         assert(object != nullptr, "null object");
         assert(Universe::heap()->is_in(object), "object not in heap: " PTR_FORMAT ", orig: " PTR_FORMAT ", header: " INTPTR_FORMAT, p2i(object), p2i(orig), mark.value());

@@ -82,7 +82,7 @@ public:
   virtual void on_thread_attach(Thread* thread);
   virtual void on_thread_detach(Thread* thread);
 
-  bool handle_marked_object_header(oop& obj, markWord header) const override;
+  bool load_header_handle_forwarding(oop& obj, markWord header) const override;
 
   static inline oop resolve_forwarded_not_null(oop p);
   static inline oop resolve_forwarded_not_null_mutator(oop p);
