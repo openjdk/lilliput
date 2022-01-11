@@ -65,8 +65,10 @@
  f(size_t, TLABSizeConstraintFunc)                             \
  f(uintx,  TLABWasteIncrementConstraintFunc)                   \
  f(uintx,  SurvivorRatioConstraintFunc)                        \
+ f(size_t, CompressedClassSpaceSizeConstraintFunc)             \
  f(size_t, MetaspaceSizeConstraintFunc)                        \
- f(size_t, MaxMetaspaceSizeConstraintFunc)
+ f(size_t, MaxMetaspaceSizeConstraintFunc)                     \
+ f(uint, GCCardSizeInBytesConstraintFunc)
 
 SHARED_GC_CONSTRAINTS(DECLARE_CONSTRAINT)
 

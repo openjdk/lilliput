@@ -252,7 +252,15 @@ public enum SourceVersion {
      *
      * @since 18
      */
-    RELEASE_18;
+    RELEASE_18,
+
+    /**
+     * The version recognized by the Java Platform, Standard Edition
+     * 19.
+     *
+     * @since 19
+     */
+    RELEASE_19;
 
     // Note that when adding constants for newer releases, the
     // behavior of latest() and latestSupported() must be updated too.
@@ -261,7 +269,7 @@ public enum SourceVersion {
      * {@return the latest source version that can be modeled}
      */
     public static SourceVersion latest() {
-        return RELEASE_18;
+        return RELEASE_19;
     }
 
     private static final SourceVersion latestSupported = getLatestSupported();
@@ -276,7 +284,7 @@ public enum SourceVersion {
     private static SourceVersion getLatestSupported() {
         int intVersion = Runtime.version().feature();
         return (intVersion >= 11) ?
-            valueOf("RELEASE_" + Math.min(18, intVersion)):
+            valueOf("RELEASE_" + Math.min(19, intVersion)):
             RELEASE_10;
     }
 
@@ -312,8 +320,8 @@ public enum SourceVersion {
      * Character#isJavaIdentifierStart(int)} returns {@code true},
      * followed only by characters for which {@link
      * Character#isJavaIdentifierPart(int)} returns {@code true}.
-     * This pattern matches regular identifiers, keywords, restricted
-     * keywords, restricted identifiers and the literals {@code "true"},
+     * This pattern matches regular identifiers, keywords, contextual
+     * keywords, and the literals {@code "true"},
      * {@code "false"}, {@code "null"}.
      *
      * The method returns {@code false} for all other strings.
@@ -359,8 +367,8 @@ public enum SourceVersion {
      * {@code false} for keywords, boolean literals, and the null
      * literal in any segment.
      *
-     * This method returns {@code true} for <i>restricted
-     * keywords</i> and <i>restricted identifiers</i>.
+     * This method returns {@code true} for <i>contextual
+     * keywords</i>.
      *
      * @param name the string to check
      * @return {@code true} if this string is a
@@ -385,8 +393,8 @@ public enum SourceVersion {
      * {@code false} for keywords, boolean literals, and the null
      * literal in any segment.
      *
-     * This method returns {@code true} for <i>restricted
-     * keywords</i> and <i>restricted identifiers</i>.
+     * This method returns {@code true} for <i>contextual
+     * keywords</i>.
      *
      * @param name the string to check
      * @param version the version to use
@@ -409,8 +417,8 @@ public enum SourceVersion {
     /**
      * Returns whether or not {@code s} is a keyword, boolean literal,
      * or null literal in the latest source version.
-     * This method returns {@code false} for <i>restricted
-     * keywords</i> and <i>restricted identifiers</i>.
+     * This method returns {@code false} for <i>contextual
+     * keywords</i>.
      *
      * @param s the string to check
      * @return {@code true} if {@code s} is a keyword, or boolean
@@ -426,8 +434,8 @@ public enum SourceVersion {
     /**
      * Returns whether or not {@code s} is a keyword, boolean literal,
      * or null literal in the given source version.
-     * This method returns {@code false} for <i>restricted
-     * keywords</i> and <i>restricted identifiers</i>.
+     * This method returns {@code false} for <i>contextual
+     * keywords</i>.
      *
      * @param s the string to check
      * @param version the version to use
