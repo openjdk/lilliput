@@ -272,6 +272,7 @@ void MonitorExitStub::emit_code(LIR_Assembler* ce) {
 
 void LoadKlassStub::emit_code(LIR_Assembler* ce) {
   // Currently not needed.
+  Unimplemented();
 }
 
 // Implementation of patching:

@@ -245,6 +245,7 @@ void MonitorExitStub::emit_code(LIR_Assembler* ce) {
 
 void LoadKlassStub::emit_code(LIR_Assembler* ce) {
   // Currently not needed.
+  Unimplemented();
 }
 
 // Call return is directly after patch word
