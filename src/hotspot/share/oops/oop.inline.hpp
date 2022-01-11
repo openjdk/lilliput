@@ -91,8 +91,8 @@ void oopDesc::init_mark() {
   set_mark(header);
 }
 
-narrowKlass oopDesc::nklass() const {
 #ifdef _LP64
+narrowKlass oopDesc::nklass() const {
   assert(UseCompressedClassPointers, "only with compressed class pointers");
   markWord header = mark();
   if (!header.is_neutral()) {
@@ -101,10 +101,8 @@ narrowKlass oopDesc::nklass() const {
   narrowKlass nklass = header.narrow_klass();
   assert(_metadata._compressed_klass == nklass, "narrow klass must be equal, header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, header.value(), intptr_t(_metadata._compressed_klass));
   return nklass;
-#else
-  return _metadata._klass;
-#endif
 }
+#endif
 
 Klass* oopDesc::klass() const {
 #ifdef _LP64

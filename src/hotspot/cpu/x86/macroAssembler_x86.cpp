@@ -4550,10 +4550,10 @@ void MacroAssembler::load_method_holder(Register holder, Register method) {
   movptr(holder, Address(holder, ConstantPool::pool_holder_offset_in_bytes())); // InstanceKlass*
 }
 
+#ifdef _LP64
 void MacroAssembler::load_nklass(Register dst, Register src, Register tmp) {
   assert_different_registers(src, tmp);
   assert_different_registers(dst, tmp);
-#ifdef _LP64
   assert(UseCompressedClassPointers, "expect compressed class pointers");
 
   Label slow, done;
@@ -4598,13 +4598,8 @@ void MacroAssembler::load_nklass(Register dst, Register src, Register tmp) {
   }
 
   bind(done);
-#else
-  if (null_check_src) {
-    null_check(src, oopDesc::klass_offset_in_bytes());
-  }
-  movptr(dst, Address(src, oopDesc::klass_offset_in_bytes()));
-#endif
 }
+#endif
 
 void MacroAssembler::load_klass(Register dst, Register src, Register tmp, bool null_check_src) {
   assert_different_registers(src, tmp);
