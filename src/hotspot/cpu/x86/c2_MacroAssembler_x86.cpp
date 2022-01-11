@@ -4360,9 +4360,6 @@ void C2_MacroAssembler::load_nklass(Register dst, Register src) {
 
   bind(done);
 #else
-  if (null_check_src) {
-    null_check(src, oopDesc::klass_offset_in_bytes());
-  }
   movptr(dst, Address(src, oopDesc::klass_offset_in_bytes()));
 #endif
 }

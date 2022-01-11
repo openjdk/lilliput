@@ -180,6 +180,7 @@ JRT_LEAF(Klass*, oopDesc::load_klass_runtime(oopDesc* o))
   return oop(o)->klass();
 JRT_END
 
+#ifdef _LP64
 JRT_LEAF(narrowKlass, oopDesc::load_nklass_runtime(oopDesc* o))
   assert(o != NULL, "null-check");
   assert(UseCompressedClassPointers, "only with compressed class pointers");
@@ -190,6 +191,7 @@ JRT_LEAF(narrowKlass, oopDesc::load_nklass_runtime(oopDesc* o))
   }
   return header.narrow_klass();
 JRT_END
+#endif
 
 oop oopDesc::obj_field_acquire(int offset) const                      { return HeapAccess<MO_ACQUIRE>::oop_load_at(as_oop(), offset); }
 
