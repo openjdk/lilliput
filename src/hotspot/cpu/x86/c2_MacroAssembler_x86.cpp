@@ -4331,6 +4331,8 @@ void C2_MacroAssembler::load_nklass(Register dst, Register src) {
   jmp(done);
   bind(slow);
 
+  push_FPU_state();
+
   if (dst != rax) {
     push(rax);
   }
@@ -4342,9 +4344,7 @@ void C2_MacroAssembler::load_nklass(Register dst, Register src) {
   push(r9);
   push(r10);
   push(r11);
-
   MacroAssembler::call_VM_leaf(CAST_FROM_FN_PTR(address, oopDesc::load_nklass_runtime), src);
-
   pop(r11);
   pop(r10);
   pop(r9);
@@ -4357,6 +4357,8 @@ void C2_MacroAssembler::load_nklass(Register dst, Register src) {
     mov(dst, rax);
     pop(rax);
   }
+
+  pop_FPU_state();
 
   bind(done);
 #else
