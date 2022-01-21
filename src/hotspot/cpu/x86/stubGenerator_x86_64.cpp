@@ -7445,6 +7445,7 @@ address generate_avx_ghash_processBlocks() {
     address start = __ pc();
     __ enter(); // save rbp
 
+    __ andptr(rsp, -(StackAlignmentInBytes));    // Align stack
     __ push_FPU_state();
 
     __ push(rdi);
