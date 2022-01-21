@@ -4331,34 +4331,25 @@ void C2_MacroAssembler::load_nklass(Register dst, Register src) {
   jmp(done);
   bind(slow);
 
-  push_FPU_state();
-
+  // We use rax to pass argument and result to/from load_nklass stub.
+  // Preserve it, if necessary.
   if (dst != rax) {
     push(rax);
   }
-  push(rdi);
-  push(rsi);
-  push(rdx);
-  push(rcx);
-  push(r8);
-  push(r9);
-  push(r10);
-  push(r11);
-  MacroAssembler::call_VM_leaf(CAST_FROM_FN_PTR(address, oopDesc::load_nklass_runtime), src);
-  pop(r11);
-  pop(r10);
-  pop(r9);
-  pop(r8);
-  pop(rcx);
-  pop(rdx);
-  pop(rsi);
-  pop(rdi);
+  // rscratch1 may be used by the call. Preserve it.
+  push(rscratch1);
+
+  if (src != rax) {
+    mov(rax, src);
+  }
+
+  call(RuntimeAddress(StubRoutines::load_nklass()));
+
+  pop(rscratch1);
   if (dst != rax) {
     mov(dst, rax);
     pop(rax);
   }
-
-  pop_FPU_state();
 
   bind(done);
 #else

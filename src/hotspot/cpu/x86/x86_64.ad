@@ -5296,11 +5296,13 @@ instruct loadNKlass(rRegN dst, memory mem, rRegP tmp, rFlagsReg cr)
   ins_cost(125); // XXX
   format %{ "movl    $dst, $mem\t# compressed klass ptr" %}
   ins_encode %{
-    //assert($mem$$Address.disp() == oopDesc::klass_offset_in_bytes(), "expect correct offset");
+    assert($mem$$disp == oopDesc::nklass_offset_in_bytes(), "expect correct offset 4, but got: %d", $mem$$disp);
     // emit bogus load to make implicit null-checking happy. Sorry. ;-)
     // In the future, we want to emit straightforward load from offset into the header.
     __ movl($dst$$Register, $mem$$Address);
-    __ lea($tmp$$Register, $mem$$Address.plus_disp(oopDesc::mark_offset_in_bytes() - oopDesc::nklass_offset_in_bytes()));
+    // We are getting indirect and indexed addresses as input, the offset is always nklass_offset.
+    // Figure out the base oop by subtracting nklass_offset().
+    __ lea($tmp$$Register, $mem$$Address.plus_disp(-oopDesc::nklass_offset_in_bytes()));
     __ load_nklass($dst$$Register, $tmp$$Register);
   %}
   ins_pipe(pipe_slow); // XXX

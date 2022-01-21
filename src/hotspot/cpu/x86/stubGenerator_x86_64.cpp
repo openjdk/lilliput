@@ -7435,6 +7435,43 @@ address generate_avx_ghash_processBlocks() {
 
   }
 
+  // Call stub to call runtime oopDesc::load_nklass_runtime().
+  // rax: call argument (object)
+  // rax: return object's narrowKlass
+  // Preserves all caller-saved registers, except rax
+  address generate_load_nklass() {
+    __ align(CodeEntryAlignment);
+    StubCodeMark(this, "StubRoutines", "load_nklass");
+    address start = __ pc();
+    __ enter(); // save rbp
+
+    __ push_FPU_state();
+
+    __ push(rdi);
+    __ push(rsi);
+    __ push(rdx);
+    __ push(rcx);
+    __ push(r8);
+    __ push(r9);
+    __ push(r10);
+    __ push(r11);
+    __ call_VM_leaf(CAST_FROM_FN_PTR(address, oopDesc::load_nklass_runtime), rax);
+    __ pop(r11);
+    __ pop(r10);
+    __ pop(r9);
+    __ pop(r8);
+    __ pop(rcx);
+    __ pop(rdx);
+    __ pop(rsi);
+    __ pop(rdi);
+
+    __ pop_FPU_state();
+
+    __ leave();
+    __ ret(0);
+    return start;
+  }
+
 #undef __
 #define __ masm->
 
@@ -7918,6 +7955,8 @@ address generate_avx_ghash_processBlocks() {
     if (UseVectorizedMismatchIntrinsic) {
       StubRoutines::_vectorizedMismatch = generate_vectorizedMismatch();
     }
+
+    StubRoutines::_load_nklass = generate_load_nklass();
   }
 
  public:
