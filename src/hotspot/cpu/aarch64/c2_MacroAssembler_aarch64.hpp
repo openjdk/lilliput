@@ -108,4 +108,6 @@
     sve_lastb(dst, size, pg, src);
   }
 
+  void load_nklass(Register dst, Register src);
+
 #endif // CPU_AARCH64_C2_MACROASSEMBLER_AARCH64_HPP

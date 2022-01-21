@@ -6593,6 +6593,28 @@ class StubGenerator: public StubCodeGenerator {
 
     ICache::invalidate_range(first_entry, __ pc() - first_entry);
   }
+
+  // Pass object argument in r0 (which has to be preserved outside this stub)
+  // Pass back result in r0
+  // Clobbers rscratch1
+  address generate_load_nklass() {
+    __ align(CodeEntryAlignment);
+    StubCodeMark mark(this, "StubRoutines", "load_nklass");
+
+    address start = __ pc();
+
+    __ set_last_Java_frame(sp, rfp, lr, rscratch1);
+    __ enter();
+    __ push_call_clobbered_registers_except(RegSet::of(r0));
+    __ call_VM_leaf(CAST_FROM_FN_PTR(address, oopDesc::load_nklass_runtime), 1);
+    __ pop_call_clobbered_registers_except(RegSet::of(r0));
+    __ leave();
+    __ reset_last_Java_frame(true);
+    __ ret(lr);
+
+    return start;
+  }
+
 #endif // LINUX
 
   // Continuation point for throwing of implicit exceptions that are
@@ -7663,6 +7685,8 @@ class StubGenerator: public StubCodeGenerator {
       // because it's faster for the sizes of modulus we care about.
       StubRoutines::_montgomerySquare = g.generate_multiply();
     }
+
+    StubRoutines::_load_nklass = generate_load_nklass();
 #endif // COMPILER2
 
     if (UseBASE64Intrinsics) {
