@@ -6594,6 +6594,8 @@ class StubGenerator: public StubCodeGenerator {
     ICache::invalidate_range(first_entry, __ pc() - first_entry);
   }
 
+#endif // LINUX
+
   // Pass object argument in r0 (which has to be preserved outside this stub)
   // Pass back result in r0
   // Clobbers rscratch1
@@ -6614,8 +6616,6 @@ class StubGenerator: public StubCodeGenerator {
 
     return start;
   }
-
-#endif // LINUX
 
   // Continuation point for throwing of implicit exceptions that are
   // not handled in the current activation. Fabricates an exception
