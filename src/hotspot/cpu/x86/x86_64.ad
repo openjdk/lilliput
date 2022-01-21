@@ -5289,10 +5289,10 @@ instruct loadKlass(rRegP dst, memory mem)
 %}
 
 // Load narrow Klass Pointer
-instruct loadNKlass(rRegN dst, memory mem, rRegP tmp)
+instruct loadNKlass(rRegN dst, memory mem, rRegP tmp, rFlagsReg cr)
 %{
   match(Set dst (LoadNKlass mem));
-  effect(TEMP_DEF dst, TEMP tmp);
+  effect(TEMP_DEF dst, TEMP tmp, KILL cr);
   ins_cost(125); // XXX
   format %{ "movl    $dst, $mem\t# compressed klass ptr" %}
   ins_encode %{
