@@ -3693,11 +3693,61 @@ void MacroAssembler::load_method_holder(Register holder, Register method) {
 }
 
 void MacroAssembler::load_klass(Register dst, Register src) {
-  if (UseCompressedClassPointers) {
-    ldrw(dst, Address(src, oopDesc::klass_offset_in_bytes()));
-    decode_klass_not_null(dst);
-  } else {
-    ldr(dst, Address(src, oopDesc::klass_offset_in_bytes()));
+  assert(UseCompressedClassPointers, "expects UseCompressedClassPointers");
+
+  // We can receive src and dst in the same register here, and they can also
+  // come in rscratch1 and rscratch2. Let's allocate an additional register
+  // here to preserve src across the fast-path.
+  Register tmp = dst;
+  if (src == dst) {
+    if (src == r0) {
+      tmp = r1;
+    } else {
+      tmp = r0;
+    }
+    push(RegSet::of(tmp), sp);
+  }
+  assert_different_registers(src, tmp);
+
+  Label slow, done;
+
+  // Check if we can take the (common) fast path, if obj is unlocked.
+  ldr(tmp, Address(src, oopDesc::mark_offset_in_bytes()));
+  eor(tmp, tmp, markWord::unlocked_value);
+  tst(tmp, markWord::lock_mask_in_place);
+  br(Assembler::NE, slow);
+
+  // Fast-path: shift and decode Klass*.
+  mov(dst, tmp);
+  lsr(dst, dst, markWord::klass_shift);
+  decode_klass_not_null(dst);
+  b(done);
+
+  bind(slow);
+  set_last_Java_frame(sp, rfp, lr, rscratch1);
+  enter();
+  // We need r0 as argument and return register for the call. Preserve it, if necessary.
+  if (dst != r0) {
+    push(RegSet::of(r0), sp);
+  }
+  // We don't need to preserve r0 here, but we need to preserve rscratch1 and rescratch2,
+  // because some users of load_klass() use them around the call.
+  push(RegSet::of(rscratch1, rscratch2), sp);
+  push_call_clobbered_registers_except(RegSet::of(r0));
+  mov(r0, src);
+  mov(rscratch1, CAST_FROM_FN_PTR(address, oopDesc::load_klass_runtime));
+  blr(rscratch1);
+  pop_call_clobbered_registers_except(RegSet::of(r0));
+  pop(RegSet::of(rscratch1, rscratch2), sp);
+  if (dst != r0) {
+    mov(dst, r0);
+    pop(RegSet::of(r0), sp);
+  }
+  leave();
+  reset_last_Java_frame(true);
+  bind(done);
+  if (src == dst) {
+    pop(RegSet::of(tmp), sp);
   }
 }
 
