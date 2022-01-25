@@ -175,11 +175,17 @@ void* oopDesc::load_oop_raw(oop obj, int offset) {
   }
 }
 
-JRT_LEAF(Klass*, oopDesc::load_klass_runtime(oopDesc* o))
+JRT_LEAF(narrowKlass, oopDesc::load_nklass_runtime(oopDesc* o))
   assert(o != NULL, "null-check");
   oop obj = oop(o);
   assert(oopDesc::is_oop(obj), "need a valid oop here: " PTR_FORMAT, p2i(o));
-  return obj->klass();
+  markWord header = obj->mark();
+  if (!header.is_neutral()) {
+    header = ObjectSynchronizer::stable_mark(obj);
+  }
+  assert(header.is_neutral(), "expect neutral header here");
+  narrowKlass nklass = header.narrow_klass();
+  return nklass;
 JRT_END
 
 oop oopDesc::obj_field_acquire(int offset) const                      { return HeapAccess<MO_ACQUIRE>::oop_load_at(as_oop(), offset); }
