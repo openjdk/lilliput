@@ -3547,6 +3547,8 @@ void LIR_Assembler::emit_load_klass(LIR_OpLoadKlass* op) {
   __ decode_klass_not_null(result, tmp);
 #else
   __ movptr(result, Address(obj, oopDesc::klass_offset_in_bytes()));
+  // Not really needed, but bind the label anyway to make compiler happy.
+  __ bind(*op->stub()->continuation());
 #endif
 }
 

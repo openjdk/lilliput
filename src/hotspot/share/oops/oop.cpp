@@ -175,6 +175,7 @@ void* oopDesc::load_oop_raw(oop obj, int offset) {
   }
 }
 
+#ifdef _LP64
 JRT_LEAF(narrowKlass, oopDesc::load_nklass_runtime(oopDesc* o))
   assert(o != NULL, "null-check");
   oop obj = oop(o);
@@ -187,6 +188,7 @@ JRT_LEAF(narrowKlass, oopDesc::load_nklass_runtime(oopDesc* o))
   narrowKlass nklass = header.narrow_klass();
   return nklass;
 JRT_END
+#endif
 
 oop oopDesc::obj_field_acquire(int offset) const                      { return HeapAccess<MO_ACQUIRE>::oop_load_at(as_oop(), offset); }
 
