@@ -3720,7 +3720,6 @@ void MacroAssembler::load_klass(Register dst, Register src) {
   // Fast-path: shift and decode Klass*.
   mov(dst, tmp);
   lsr(dst, dst, markWord::klass_shift);
-  decode_klass_not_null(dst);
   b(done);
 
   bind(slow);
@@ -3735,7 +3734,7 @@ void MacroAssembler::load_klass(Register dst, Register src) {
   push(RegSet::of(rscratch1, rscratch2), sp);
   push_call_clobbered_registers_except(RegSet::of(r0));
   mov(r0, src);
-  mov(rscratch1, CAST_FROM_FN_PTR(address, oopDesc::load_klass_runtime));
+  mov(rscratch1, CAST_FROM_FN_PTR(address, oopDesc::load_nklass_runtime));
   blr(rscratch1);
   pop_call_clobbered_registers_except(RegSet::of(r0));
   pop(RegSet::of(rscratch1, rscratch2), sp);
@@ -3745,7 +3744,9 @@ void MacroAssembler::load_klass(Register dst, Register src) {
   }
   leave();
   reset_last_Java_frame(true);
+
   bind(done);
+  decode_klass_not_null(dst);
   if (src == dst) {
     pop(RegSet::of(tmp), sp);
   }
