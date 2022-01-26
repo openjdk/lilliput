@@ -3723,7 +3723,6 @@ void MacroAssembler::load_klass(Register dst, Register src) {
   b(done);
 
   bind(slow);
-  set_last_Java_frame(sp, rfp, lr, rscratch1);
   enter();
   // We need r0 as argument and return register for the call. Preserve it, if necessary.
   if (dst != r0) {
@@ -3732,18 +3731,16 @@ void MacroAssembler::load_klass(Register dst, Register src) {
   // We don't need to preserve r0 here, but we need to preserve rscratch1 and rescratch2,
   // because some users of load_klass() use them around the call.
   push(RegSet::of(rscratch1, rscratch2), sp);
-  push_call_clobbered_registers_except(RegSet::of(r0));
   mov(r0, src);
-  mov(rscratch1, CAST_FROM_FN_PTR(address, oopDesc::load_nklass_runtime));
+  assert(StubRoutines::load_nklass() != NULL, "Must have stub");
+  mov(rscratch1, StubRoutines::load_nklass());
   blr(rscratch1);
-  pop_call_clobbered_registers_except(RegSet::of(r0));
   pop(RegSet::of(rscratch1, rscratch2), sp);
   if (dst != r0) {
     mov(dst, r0);
     pop(RegSet::of(r0), sp);
   }
   leave();
-  reset_last_Java_frame(true);
 
   bind(done);
   decode_klass_not_null(dst);

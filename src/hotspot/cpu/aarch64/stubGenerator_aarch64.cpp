@@ -584,8 +584,8 @@ class StubGenerator: public StubCodeGenerator {
     __ cbnz(c_rarg2, error);
 
     // make sure klass is 'reasonable', which is not zero.
-    __ load_klass(r0, r0);  // get klass
-    __ cbz(r0, error);      // if klass is NULL it is broken
+    __ ldrw(r0, Address(r0, oopDesc::nklass_offset_in_bytes()));  // get klass
+    __ cbzw(r0, error);      // if klass is NULL it is broken
 
     // return if everything seems ok
     __ bind(exit);
@@ -6595,6 +6595,27 @@ class StubGenerator: public StubCodeGenerator {
   }
 #endif // LINUX
 
+  // Pass object argument in r0 (which has to be preserved outside this stub)
+  // Pass back result in r0
+  // Clobbers rscratch1
+  address generate_load_nklass() {
+    __ align(CodeEntryAlignment);
+    StubCodeMark mark(this, "StubRoutines", "load_nklass");
+
+    address start = __ pc();
+
+    __ set_last_Java_frame(sp, rfp, lr, rscratch1);
+    __ enter();
+    __ push_call_clobbered_registers_except(RegSet::of(r0));
+    __ call_VM_leaf(CAST_FROM_FN_PTR(address, oopDesc::load_nklass_runtime), 1);
+    __ pop_call_clobbered_registers_except(RegSet::of(r0));
+    __ leave();
+    __ reset_last_Java_frame(true);
+    __ ret(lr);
+
+    return start;
+  }
+
   // Continuation point for throwing of implicit exceptions that are
   // not handled in the current activation. Fabricates an exception
   // oop and initiates normal exception dispatching in this
@@ -7585,6 +7606,8 @@ class StubGenerator: public StubCodeGenerator {
     generate_safefetch("SafeFetchN", sizeof(intptr_t), &StubRoutines::_safefetchN_entry,
                                                        &StubRoutines::_safefetchN_fault_pc,
                                                        &StubRoutines::_safefetchN_continuation_pc);
+
+    StubRoutines::_load_nklass = generate_load_nklass();
   }
 
   void generate_all() {
