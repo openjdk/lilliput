@@ -175,23 +175,19 @@ void* oopDesc::load_oop_raw(oop obj, int offset) {
   }
 }
 
-JRT_LEAF(Klass*, oopDesc::load_klass_runtime(oopDesc* o))
-  assert(o != NULL, "null-check");
-  oop obj = oop(o);
-  assert(oopDesc::is_oop(obj), "need a valid oop here: " PTR_FORMAT, p2i(o));
-  return obj->klass();
-JRT_END
-
 #ifdef _LP64
 JRT_LEAF(narrowKlass, oopDesc::load_nklass_runtime(oopDesc* o))
   assert(o != NULL, "null-check");
   assert(UseCompressedClassPointers, "only with compressed class pointers");
   oop obj = oop(o);
+  assert(oopDesc::is_oop(obj), "need a valid oop here: " PTR_FORMAT, p2i(o));
   markWord header = obj->mark();
   if (!header.is_neutral()) {
     header = ObjectSynchronizer::stable_mark(obj);
   }
-  return header.narrow_klass();
+  assert(header.is_neutral(), "expect neutral header here");
+  narrowKlass nklass = header.narrow_klass();
+  return nklass;
 JRT_END
 #endif
 
