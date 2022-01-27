@@ -309,7 +309,7 @@ class oopDesc {
   static int mark_offset_in_bytes()      { return offset_of(oopDesc, _mark); }
 #ifdef _LP64
   static int nklass_offset_in_bytes()    {
-    assert(markWord::klass_shift % 8 == 0, "klass_shift must be multiple of 8");
+    STATIC_ASSERT(markWord::klass_shift % 8 == 0);
     return mark_offset_in_bytes() + markWord::klass_shift / 8;
   }
 #endif

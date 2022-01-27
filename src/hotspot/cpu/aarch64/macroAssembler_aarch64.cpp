@@ -3708,6 +3708,8 @@ void MacroAssembler::load_klass(Register dst, Register src) {
     push(RegSet::of(tmp), sp);
   }
   assert_different_registers(src, tmp);
+  assert_different_registers(src, rscratch1);
+  assert_different_registers(src, rscratch2);
 
   Label slow, done;
 
@@ -3718,8 +3720,7 @@ void MacroAssembler::load_klass(Register dst, Register src) {
   br(Assembler::NE, slow);
 
   // Fast-path: shift and decode Klass*.
-  mov(dst, tmp);
-  lsr(dst, dst, markWord::klass_shift);
+  lsr(dst, tmp, markWord::klass_shift);
   b(done);
 
   bind(slow);
@@ -3730,12 +3731,9 @@ void MacroAssembler::load_klass(Register dst, Register src) {
   }
   // We don't need to preserve r0 here, but we need to preserve rscratch1 and rescratch2,
   // because some users of load_klass() use them around the call.
-  push(RegSet::of(rscratch1, rscratch2), sp);
   mov(r0, src);
   assert(StubRoutines::load_nklass() != NULL, "Must have stub");
-  mov(rscratch1, StubRoutines::load_nklass());
-  blr(rscratch1);
-  pop(RegSet::of(rscratch1, rscratch2), sp);
+  far_call(RuntimeAddress(StubRoutines::load_nklass()));
   if (dst != r0) {
     mov(dst, r0);
     pop(RegSet::of(r0), sp);
