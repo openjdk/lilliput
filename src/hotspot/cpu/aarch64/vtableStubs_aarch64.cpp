@@ -212,7 +212,7 @@ VtableStub* VtableStubs::create_itable_stub(int itable_index) {
   const ptrdiff_t lookupSize = __ pc() - start_pc;
 
   // Reduce "estimate" such that "padding" does not drop below 8.
-  const ptrdiff_t estimate = 332;
+  const ptrdiff_t estimate = 180;
   const ptrdiff_t codesize = typecheckSize + lookupSize;
   slop_delta  = (int)(estimate - codesize);
   slop_bytes += slop_delta;
