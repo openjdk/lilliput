@@ -377,8 +377,8 @@
   /* CompressedKlassPointers */                                                                                                      \
   /***************************/                                                                                                      \
                                                                                                                                      \
-     static_field(CompressedKlassPointers,     _narrow_klass._base,                           address)                               \
-     static_field(CompressedKlassPointers,     _narrow_klass._shift,                          int)                                   \
+     static_field(CompressedKlassPointers,     _base,                           address)                                             \
+     static_field(CompressedKlassPointers,     _shift_copy,                          int)                                            \
                                                                                                                                      \
   /******/                                                                                                                           \
   /* os */                                                                                                                           \

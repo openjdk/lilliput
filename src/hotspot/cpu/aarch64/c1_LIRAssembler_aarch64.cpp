@@ -438,7 +438,11 @@ int LIR_Assembler::emit_unwind_handler() {
   if (method()->is_synchronized()) {
     monitor_address(0, FrameMap::r0_opr);
     stub = new MonitorExitStub(FrameMap::r0_opr, true, 0);
-    __ unlock_object(r5, r4, r0, *stub->entry());
+    if (UseHeavyMonitors) {
+      __ b(*stub->entry());
+    } else {
+      __ unlock_object(r5, r4, r0, *stub->entry());
+    }
     __ bind(*stub->continuation());
   }
 
@@ -2562,7 +2566,7 @@ void LIR_Assembler::emit_lock(LIR_OpLock* op) {
   Register obj = op->obj_opr()->as_register();  // may not be an oop
   Register hdr = op->hdr_opr()->as_register();
   Register lock = op->lock_opr()->as_register();
-  if (!UseFastLocking) {
+  if (UseHeavyMonitors) {
     __ b(*op->stub()->entry());
   } else if (op->code() == lir_lock) {
     assert(BasicLock::displaced_header_offset_in_bytes() == 0, "lock_reg must point to the displaced header");
@@ -2584,18 +2588,27 @@ void LIR_Assembler::emit_lock(LIR_OpLock* op) {
 void LIR_Assembler::emit_load_klass(LIR_OpLoadKlass* op) {
   Register obj = op->obj()->as_pointer_register();
   Register result = op->result_opr()->as_pointer_register();
+  Register tmp = rscratch1;
 
   CodeEmitInfo* info = op->info();
   if (info != NULL) {
     add_debug_info_for_null_check_here(info);
   }
 
-  if (UseCompressedClassPointers) {
-    __ ldrw(result, Address (obj, oopDesc::klass_offset_in_bytes()));
-    __ decode_klass_not_null(result);
-  } else {
-    __ ldr(result, Address (obj, oopDesc::klass_offset_in_bytes()));
-  }
+  assert(UseCompressedClassPointers, "expects UseCompressedClassPointers");
+
+  // Check if we can take the (common) fast path, if obj is unlocked.
+  __ ldr(tmp, Address(obj, oopDesc::mark_offset_in_bytes()));
+  __ eor(tmp, tmp, markWord::unlocked_value);
+  __ tst(tmp, markWord::lock_mask_in_place);
+  __ br(Assembler::NE, *op->stub()->entry());
+
+  // Fast-path: shift and decode Klass*.
+  __ mov(result, tmp);
+  __ lsr(result, result, markWord::klass_shift);
+  __ decode_klass_not_null(result);
+
+  __ bind(*op->stub()->continuation());
 }
 
 void LIR_Assembler::emit_profile_call(LIR_OpProfileCall* op) {

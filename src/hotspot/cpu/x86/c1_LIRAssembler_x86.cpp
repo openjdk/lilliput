@@ -461,7 +461,11 @@ int LIR_Assembler::emit_unwind_handler() {
   if (method()->is_synchronized()) {
     monitor_address(0, FrameMap::rax_opr);
     stub = new MonitorExitStub(FrameMap::rax_opr, true, 0);
-    __ unlock_object(rdi, rsi, rax, *stub->entry());
+    if (UseHeavyMonitors) {
+      __ jmp(*stub->entry());
+    } else {
+      __ unlock_object(rdi, rsi, rax, *stub->entry());
+    }
     __ bind(*stub->continuation());
   }
 
@@ -3494,7 +3498,7 @@ void LIR_Assembler::emit_lock(LIR_OpLock* op) {
   Register obj = op->obj_opr()->as_register();  // may not be an oop
   Register hdr = op->hdr_opr()->as_register();
   Register lock = op->lock_opr()->as_register();
-  if (!UseFastLocking) {
+  if (UseHeavyMonitors) {
     __ jmp(*op->stub()->entry());
   } else if (op->code() == lir_lock) {
     assert(BasicLock::displaced_header_offset_in_bytes() == 0, "lock_reg must point to the displaced header");
@@ -3517,14 +3521,14 @@ void LIR_Assembler::emit_load_klass(LIR_OpLoadKlass* op) {
   Register obj = op->obj()->as_pointer_register();
   Register result = op->result_opr()->as_pointer_register();
 
+  if (op->info() != NULL) {
+    add_debug_info_for_null_check_here(op->info());
+  }
 #ifdef _LP64
   Register tmp = rscratch1;
   assert_different_registers(tmp, obj);
   assert_different_registers(tmp, result);
 
-  if (op->info() != NULL) {
-    add_debug_info_for_null_check_here(op->info());
-  }
   // Check if we can take the (common) fast path, if obj is unlocked.
   __ movq(tmp, Address(obj, oopDesc::mark_offset_in_bytes()));
   __ xorq(tmp, markWord::unlocked_value);
@@ -3536,7 +3540,7 @@ void LIR_Assembler::emit_load_klass(LIR_OpLoadKlass* op) {
   __ shrq(result, markWord::klass_shift);
   __ decode_klass_not_null(result, tmp);
 #else
-  __ load_klass(result, obj, noreg /*not needed*/);
+  __ movptr(result, Address(obj, oopDesc::klass_offset_in_bytes()));
 #endif
 }
 
