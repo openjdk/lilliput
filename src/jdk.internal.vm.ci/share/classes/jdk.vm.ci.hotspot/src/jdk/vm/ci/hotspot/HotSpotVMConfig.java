@@ -73,7 +73,11 @@ class HotSpotVMConfig extends HotSpotVMConfigAccess {
 
     final int objectAlignment = getFlag("ObjectAlignmentInBytes", Integer.class);
 
-    final int hubOffset = getFieldOffset("oopDesc::_metadata._klass", Integer.class, "Klass*");
+    // TODO: In Lilliput, we can not safely access the Klass*/narrowKlass offset, because
+    // it may be displaced by the lock word. However, CompilerToVM.getResolvedJavaType0()
+    // seems to ignore the offset, and call oopDesc::klass(), which is
+    // what we want anyway.
+    final int hubOffset = 4; // getFieldOffset("oopDesc::_metadata._klass", Integer.class, "Klass*");
 
     final int subklassOffset = getFieldOffset("Klass::_subklass", Integer.class, "Klass*");
     final int superOffset = getFieldOffset("Klass::_super", Integer.class, "Klass*");
