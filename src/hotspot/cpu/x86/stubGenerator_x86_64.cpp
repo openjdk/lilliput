@@ -7435,18 +7435,41 @@ address generate_avx_ghash_processBlocks() {
 
   }
 
-  // Slow-path of loading compressed Klass* from obj.
-  // Receives src oop in rax.
-  // Returns compressed Klass* in rax.
-  // All other registers are preserved.
-  address generate_load_klass_stub() {
-    StubCodeMark mark(this, "StubRoutines", "libmCos");
+  // Call stub to call runtime oopDesc::load_nklass_runtime().
+  // rax: call argument (object)
+  // rax: return object's narrowKlass
+  // Preserves all caller-saved registers, except rax
+  address generate_load_nklass() {
+    __ align(CodeEntryAlignment);
+    StubCodeMark(this, "StubRoutines", "load_nklass");
     address start = __ pc();
+    __ enter(); // save rbp
 
-    __ enter(); // required for proper stackwalking of RuntimeStub frame
-    __ leave(); // required for proper stackwalking of RuntimeStub frame
+    __ andptr(rsp, -(StackAlignmentInBytes));    // Align stack
+    __ push_FPU_state();
+
+    __ push(rdi);
+    __ push(rsi);
+    __ push(rdx);
+    __ push(rcx);
+    __ push(r8);
+    __ push(r9);
+    __ push(r10);
+    __ push(r11);
+    __ call_VM_leaf(CAST_FROM_FN_PTR(address, oopDesc::load_nklass_runtime), rax);
+    __ pop(r11);
+    __ pop(r10);
+    __ pop(r9);
+    __ pop(r8);
+    __ pop(rcx);
+    __ pop(rdx);
+    __ pop(rsi);
+    __ pop(rdi);
+
+    __ pop_FPU_state();
+
+    __ leave();
     __ ret(0);
-
     return start;
   }
 
@@ -7928,13 +7951,13 @@ address generate_avx_ghash_processBlocks() {
         StubRoutines::_vector_d_math[VectorSupport::VEC_SIZE_256][op] = (address)os::dll_lookup(libjsvml, ebuf);
       }
     }
-
-    //StubRoutines::_load_klass_stub = generate_load_klass_stub();
 #endif // COMPILER2
 
     if (UseVectorizedMismatchIntrinsic) {
       StubRoutines::_vectorizedMismatch = generate_vectorizedMismatch();
     }
+
+    StubRoutines::_load_nklass = generate_load_nklass();
   }
 
  public:

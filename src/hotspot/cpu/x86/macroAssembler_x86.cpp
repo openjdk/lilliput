@@ -4609,6 +4609,7 @@ void MacroAssembler::load_nklass(Register dst, Register src, Register tmp) {
   }
 
   bind(done);
+  decode_klass_not_null(dst, tmp);
 #else
   if (null_check_src) {
     null_check(src, oopDesc::klass_offset_in_bytes());

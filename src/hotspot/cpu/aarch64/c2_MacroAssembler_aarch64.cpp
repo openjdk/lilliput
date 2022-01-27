@@ -1232,3 +1232,37 @@ void C2_MacroAssembler::sve_reduce_integral(int opc, Register dst, BasicType bt,
     }
   }
 }
+
+void C2_MacroAssembler::load_nklass(Register dst, Register src) {
+  assert_different_registers(src, dst, rscratch1, rscratch2);
+  assert(UseCompressedClassPointers, "expect compressed class pointers");
+
+  Label slow, done;
+  //verify_oop(src, "need valid oop");
+  ldr(dst, Address(src, oopDesc::mark_offset_in_bytes()));
+  eor(dst, dst, markWord::unlocked_value);
+  tst(dst, markWord::lock_mask_in_place);
+  br(Assembler::NE, slow);
+
+  lsr(dst, dst, markWord::klass_shift);
+  b(done);
+
+  bind(slow);
+
+  // We need to free r0 because it's used as argument and result for the call.
+  if (dst != r0) {
+    mov(rscratch2, r0);
+  }
+
+  mov(r0, src);
+  // trampoline_call(RuntimeAddress(StubRoutines::load_nklass()));
+  mov(rscratch1, CAST_FROM_FN_PTR(address, StubRoutines::load_nklass()));
+  blr(rscratch1);
+
+  if (dst != r0) {
+    mov(dst, r0);
+    mov(r0, rscratch2);
+  }
+
+  bind(done);
+}
