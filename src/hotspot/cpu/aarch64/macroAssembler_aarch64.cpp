@@ -3695,31 +3695,22 @@ void MacroAssembler::load_method_holder(Register holder, Register method) {
 void MacroAssembler::load_klass(Register dst, Register src) {
   assert(UseCompressedClassPointers, "expects UseCompressedClassPointers");
 
-  // We can receive src and dst in the same register here. Let's allocate an
-  // additional register here to preserve src across the fast-path.
-  Register tmp = dst;
-  if (src == dst) {
-    if (src == r0) {
-      tmp = r1;
-    } else {
-      tmp = r0;
-    }
-    push(RegSet::of(tmp), sp);
-  }
-  assert_different_registers(src, tmp);
+  assert_different_registers(src, dst);
   assert_different_registers(src, rscratch1);
   assert_different_registers(src, rscratch2);
 
   Label slow, done;
 
   // Check if we can take the (common) fast path, if obj is unlocked.
-  ldr(tmp, Address(src, oopDesc::mark_offset_in_bytes()));
-  eor(tmp, tmp, markWord::unlocked_value);
-  tst(tmp, markWord::lock_mask_in_place);
+  ldr(dst, Address(src, oopDesc::mark_offset_in_bytes()));
+  eor(dst, dst, markWord::unlocked_value);
+  tst(dst, markWord::lock_mask_in_place);
   br(Assembler::NE, slow);
+  //andr(rscratch2, dst, markWord::lock_mask_in_place);
+  //cbnz(rscratch2, slow);
 
   // Fast-path: shift and decode Klass*.
-  lsr(dst, tmp, markWord::klass_shift);
+  lsr(dst, dst, markWord::klass_shift);
   b(done);
 
   bind(slow);
@@ -3739,9 +3730,6 @@ void MacroAssembler::load_klass(Register dst, Register src) {
 
   bind(done);
   decode_klass_not_null(dst);
-  if (src == dst) {
-    pop(RegSet::of(tmp), sp);
-  }
 }
 
 // ((OopHandle)result).resolve();
