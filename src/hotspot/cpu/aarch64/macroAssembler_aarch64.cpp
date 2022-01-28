@@ -3695,9 +3695,8 @@ void MacroAssembler::load_method_holder(Register holder, Register method) {
 void MacroAssembler::load_klass(Register dst, Register src) {
   assert(UseCompressedClassPointers, "expects UseCompressedClassPointers");
 
-  // We can receive src and dst in the same register here, and they can also
-  // come in rscratch1 and rscratch2. Let's allocate an additional register
-  // here to preserve src across the fast-path.
+  // We can receive src and dst in the same register here. Let's allocate an
+  // additional register here to preserve src across the fast-path.
   Register tmp = dst;
   if (src == dst) {
     if (src == r0) {
@@ -3729,8 +3728,6 @@ void MacroAssembler::load_klass(Register dst, Register src) {
   if (dst != r0) {
     push(RegSet::of(r0), sp);
   }
-  // We don't need to preserve r0 here, but we need to preserve rscratch1 and rescratch2,
-  // because some users of load_klass() use them around the call.
   mov(r0, src);
   assert(StubRoutines::load_nklass() != NULL, "Must have stub");
   far_call(RuntimeAddress(StubRoutines::load_nklass()));
