@@ -3692,12 +3692,13 @@ void MacroAssembler::load_method_holder(Register holder, Register method) {
   ldr(holder, Address(holder, ConstantPool::pool_holder_offset_in_bytes())); // InstanceKlass*
 }
 
+// Loads the obj's Klass* into dst.
+// src and dst must be distinct registers
+// Preserves all registers (incl src, rscratch1 and rscratch2), but clobbers condition flags
 void MacroAssembler::load_klass(Register dst, Register src) {
   assert(UseCompressedClassPointers, "expects UseCompressedClassPointers");
 
   assert_different_registers(src, dst);
-  assert_different_registers(src, rscratch1);
-  assert_different_registers(src, rscratch2);
 
   Label slow, done;
 
@@ -3706,8 +3707,6 @@ void MacroAssembler::load_klass(Register dst, Register src) {
   eor(dst, dst, markWord::unlocked_value);
   tst(dst, markWord::lock_mask_in_place);
   br(Assembler::NE, slow);
-  //andr(rscratch2, dst, markWord::lock_mask_in_place);
-  //cbnz(rscratch2, slow);
 
   // Fast-path: shift and decode Klass*.
   lsr(dst, dst, markWord::klass_shift);

@@ -6616,9 +6616,11 @@ class StubGenerator: public StubCodeGenerator {
 
     __ set_last_Java_frame(sp, rfp, lr, rscratch1);
     __ enter();
+    __ push(RegSet::of(rscratch1, rscratch2), sp);
     __ push_call_clobbered_registers_except(r0);
     __ call_VM_leaf(CAST_FROM_FN_PTR(address, oopDesc::load_nklass_runtime), 1);
     __ pop_call_clobbered_registers_except(r0);
+    __ pop(RegSet::of(rscratch1, rscratch2), sp);
     __ leave();
     __ reset_last_Java_frame(true);
     __ ret(lr);
