@@ -3426,28 +3426,23 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
 #ifdef _LP64
     assert(UseCompressedClassPointers, "Lilliput");
     __ encode_klass_not_null(tmp, rscratch1);
-#endif
-
     if (basic_type != T_OBJECT) {
-#ifdef _LP64
       __ load_nklass(tmp2, dst, tmp_load_klass);
       __ cmpl(tmp, tmp2);
-#else
-      __ cmpptr(tmp, dst_klass_addr);
-#endif
       __ jcc(Assembler::notEqual, halt);
-#ifdef _LP64
       __ load_nklass(tmp2, src, tmp_load_klass);
       __ cmpl(tmp, tmp2);
-#else
-      __ cmpptr(tmp, src_klass_addr);
-#endif
       __ jcc(Assembler::equal, known_ok);
     } else {
-#ifdef _LP64
       __ load_nklass(tmp2, dst, tmp_load_klass);
       __ cmpl(tmp, tmp2);
 #else
+    if (basic_type != T_OBJECT) {
+      __ cmpptr(tmp, dst_klass_addr);
+      __ jcc(Assembler::notEqual, halt);
+      __ cmpptr(tmp, src_klass_addr);
+      __ jcc(Assembler::equal, known_ok);
+    } else {
       __ cmpptr(tmp, dst_klass_addr);
 #endif
       __ jcc(Assembler::equal, known_ok);
