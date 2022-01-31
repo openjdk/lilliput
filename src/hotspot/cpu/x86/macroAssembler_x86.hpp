@@ -364,7 +364,7 @@ class MacroAssembler: public Assembler {
   // oop manipulations
   void load_klass(Register dst, Register src, Register tmp, bool null_check_src = false);
 #ifdef _LP64
-  void load_nklass(Register dst, Register src, Register tmp);
+  void load_nklass(Register dst, Register src, Register tmp, bool null_check_src = false);
 #endif
   void store_klass(Register dst, Register src, Register tmp);
 
