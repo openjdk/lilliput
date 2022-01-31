@@ -3267,7 +3267,7 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
       // Simple test for basic type arrays
       // (rare) locked objects may give false negatives, which lead to slow-path.
       // False positives are impossible.
-      __ movptr(tmp, src_klass_addr);
+      __ movl(tmp, src_klass_addr);
       __ cmpl(tmp, dst_klass_addr);
       __ jcc(Assembler::notEqual, *stub->entry());
     } else {
