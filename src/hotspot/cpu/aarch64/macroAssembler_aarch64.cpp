@@ -3695,7 +3695,7 @@ void MacroAssembler::load_method_holder(Register holder, Register method) {
 // Loads the obj's Klass* into dst.
 // src and dst must be distinct registers
 // Preserves all registers (incl src, rscratch1 and rscratch2), but clobbers condition flags
-void MacroAssembler::load_klass(Register dst, Register src) {
+void MacroAssembler::load_nklass(Register dst, Register src) {
   assert(UseCompressedClassPointers, "expects UseCompressedClassPointers");
 
   assert_different_registers(src, dst);
@@ -3728,6 +3728,10 @@ void MacroAssembler::load_klass(Register dst, Register src) {
   leave();
 
   bind(done);
+}
+
+void MacroAssembler::load_klass(Register dst, Register src) {
+  load_nklass(dst, src);
   decode_klass_not_null(dst);
 }
 
@@ -3763,21 +3767,18 @@ void MacroAssembler::load_mirror(Register dst, Register method, Register tmp) {
 }
 
 void MacroAssembler::cmp_klass(Register oop, Register trial_klass, Register tmp) {
-  if (UseCompressedClassPointers) {
-    ldrw(tmp, Address(oop, oopDesc::klass_offset_in_bytes()));
-    if (CompressedKlassPointers::base() == NULL) {
-      cmp(trial_klass, tmp, LSL, CompressedKlassPointers::shift());
-      return;
-    } else if (((uint64_t)CompressedKlassPointers::base() & 0xffffffff) == 0
-               && CompressedKlassPointers::shift() == 0) {
-      // Only the bottom 32 bits matter
-      cmpw(trial_klass, tmp);
-      return;
-    }
-    decode_klass_not_null(tmp);
-  } else {
-    ldr(tmp, Address(oop, oopDesc::klass_offset_in_bytes()));
+  assert(UseCompressedClassPointers, "Lilliput");
+  load_nklass(tmp, oop);
+  if (CompressedKlassPointers::base() == NULL) {
+    cmp(trial_klass, tmp, LSL, CompressedKlassPointers::shift());
+    return;
+  } else if (((uint64_t)CompressedKlassPointers::base() & 0xffffffff) == 0
+             && CompressedKlassPointers::shift() == 0) {
+    // Only the bottom 32 bits matter
+    cmpw(trial_klass, tmp);
+    return;
   }
+  decode_klass_not_null(tmp);
   cmp(trial_klass, tmp);
 }
 
