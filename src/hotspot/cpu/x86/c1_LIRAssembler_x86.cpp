@@ -3197,10 +3197,10 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
 
   Address src_length_addr = Address(src, arrayOopDesc::length_offset_in_bytes());
   Address dst_length_addr = Address(dst, arrayOopDesc::length_offset_in_bytes());
-  int klass_offset = LP64_ONLY(oopDesc::nklass_offset_in_bytes()) NOT_LP64(oopDesc::klass_offset_in_bytes());
-  Address src_klass_addr = Address(src, klass_offset);
-  Address dst_klass_addr = Address(dst, klass_offset);
-
+#ifndef _LP64
+  Address src_klass_addr = Address(src, oopDesc::klass_offset_in_bytes());
+  Address dst_klass_addr = Address(dst, oopDesc::klass_offset_in_bytes());
+#endif
   // length and pos's are all sign extended at this point on 64bit
 
   // test for NULL
@@ -3265,10 +3265,14 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
     // We don't know the array types are compatible
     if (basic_type != T_OBJECT) {
       // Simple test for basic type arrays
-      // (rare) locked objects may give false negatives, which lead to slow-path.
-      // False positives are impossible.
-      __ movl(tmp, src_klass_addr);
-      __ cmpl(tmp, dst_klass_addr);
+#ifdef _LP64
+      __ load_nklass(tmp, src);
+      __ load_nklass(tmp2, dst);
+      __ cmpl(tmp, tmp2);
+#else
+      __ movptr(tmp, src_klass_addr);
+      __ cmpptr(tmp, dst_klass_addr);
+#endif
       __ jcc(Assembler::notEqual, *stub->entry());
     } else {
       // For object arrays, if src is a sub class of dst then we can
@@ -3427,14 +3431,14 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
     assert(UseCompressedClassPointers, "Lilliput");
     __ encode_klass_not_null(tmp, rscratch1);
     if (basic_type != T_OBJECT) {
-      __ load_nklass(tmp2, dst, tmp_load_klass);
+      __ load_nklass(tmp2, dst);
       __ cmpl(tmp, tmp2);
       __ jcc(Assembler::notEqual, halt);
-      __ load_nklass(tmp2, src, tmp_load_klass);
+      __ load_nklass(tmp2, src);
       __ cmpl(tmp, tmp2);
       __ jcc(Assembler::equal, known_ok);
     } else {
-      __ load_nklass(tmp2, dst, tmp_load_klass);
+      __ load_nklass(tmp2, dst);
       __ cmpl(tmp, tmp2);
 #else
     if (basic_type != T_OBJECT) {
