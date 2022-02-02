@@ -264,7 +264,7 @@ class StubRoutines: AllStatic {
 
   static address _load_nklass;
 
- public:
+public:
   // Initialization/Testing
   static void    initialize1();                            // must happen before universe::genesis
   static void    initialize2();                            // must happen after  universe::genesis

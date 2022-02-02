@@ -83,9 +83,6 @@ class oopDesc {
   // objects during a GC) -- requires a valid klass pointer
   inline void init_mark();
 
-#ifdef _LP64
-  inline narrowKlass nklass() const;
-#endif
   inline Klass* klass() const;
   inline Klass* klass_or_null() const;
   inline Klass* klass_or_null_acquire() const;
