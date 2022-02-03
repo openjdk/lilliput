@@ -584,8 +584,18 @@ class StubGenerator: public StubCodeGenerator {
     __ cbnz(c_rarg2, error);
 
     // make sure klass is 'reasonable', which is not zero.
-    __ load_klass(r0, r0);  // get klass
-    __ cbz(r0, error);      // if klass is NULL it is broken
+    // NOTE: We used to load the Klass* here, and compare that to zero.
+    // However, with current Lilliput implementation, that would require
+    // checking the locking bits and calling into the runtime, which
+    // clobbers the condition flags, which may be live around this call.
+    // OTOH, this is a simple NULL-check, and we can simply load the upper
+    // 32bit of the header as narrowKlass, and compare that to 0. The
+    // worst that can happen (rarely) is that the object is locked and
+    // we have lock pointer bits in the upper 32bits. We can't get a false
+    // negative.
+    assert(oopDesc::nklass_offset_in_bytes() % 4 == 0, "must be 4 byte aligned");
+    __ ldrw(r0, Address(r0, oopDesc::nklass_offset_in_bytes()));  // get klass
+    __ cbzw(r0, error);      // if klass is NULL it is broken
 
     // return if everything seems ok
     __ bind(exit);
@@ -6593,7 +6603,6 @@ class StubGenerator: public StubCodeGenerator {
 
     ICache::invalidate_range(first_entry, __ pc() - first_entry);
   }
-
 #endif // LINUX
 
   // Pass object argument in r0 (which has to be preserved outside this stub)
@@ -6607,9 +6616,11 @@ class StubGenerator: public StubCodeGenerator {
 
     __ set_last_Java_frame(sp, rfp, lr, rscratch1);
     __ enter();
-    __ push_call_clobbered_registers_except(RegSet::of(r0));
+    __ push(RegSet::of(rscratch1, rscratch2), sp);
+    __ push_call_clobbered_registers_except(r0);
     __ call_VM_leaf(CAST_FROM_FN_PTR(address, oopDesc::load_nklass_runtime), 1);
-    __ pop_call_clobbered_registers_except(RegSet::of(r0));
+    __ pop_call_clobbered_registers_except(r0);
+    __ pop(RegSet::of(rscratch1, rscratch2), sp);
     __ leave();
     __ reset_last_Java_frame(true);
     __ ret(lr);
@@ -7607,6 +7618,8 @@ class StubGenerator: public StubCodeGenerator {
     generate_safefetch("SafeFetchN", sizeof(intptr_t), &StubRoutines::_safefetchN_entry,
                                                        &StubRoutines::_safefetchN_fault_pc,
                                                        &StubRoutines::_safefetchN_continuation_pc);
+
+    StubRoutines::_load_nklass = generate_load_nklass();
   }
 
   void generate_all() {
