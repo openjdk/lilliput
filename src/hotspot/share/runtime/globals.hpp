@@ -2034,6 +2034,12 @@ const intx ObjectAlignmentInBytes = 8;
                                                                             \
   develop(bool, TraceOptimizedUpcallStubs, false,                           \
                 "Trace optimized upcall stub generation")                   \
+                                                                            \
+  product(uintx, MaxObjectMonitors, NOT_LP64(100000) LP64_ONLY(20 * M),     \
+                "Max. number of object monitors")                           \
+                                                                            \
+  product(uintx, PreallocatedObjectMonitors, NOT_LP64(8) LP64_ONLY(64),     \
+                "Max. thread local preallocated OMs")                       \
 
 // end of RUNTIME_FLAGS
 
