@@ -3699,7 +3699,6 @@ Node* GraphKit::set_output_for_allocation(AllocateNode* alloc,
     // to one of those has correct memory state
     set_memory(minit_out, C->get_alias_index(oop_type->add_offset(oopDesc::mark_offset_in_bytes())));
     set_memory(minit_out, C->get_alias_index(oop_type->add_offset(oopDesc::nklass_offset_in_bytes())));
-    set_memory(minit_out, C->get_alias_index(oop_type->add_offset(oopDesc::klass_offset_in_bytes())));
     if (oop_type->isa_aryptr()) {
       const TypePtr* telemref = oop_type->add_offset(Type::OffsetBot);
       int            elemidx  = C->get_alias_index(telemref);
