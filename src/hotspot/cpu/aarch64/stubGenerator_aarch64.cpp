@@ -7698,8 +7698,6 @@ class StubGenerator: public StubCodeGenerator {
       // because it's faster for the sizes of modulus we care about.
       StubRoutines::_montgomerySquare = g.generate_multiply();
     }
-
-    StubRoutines::_load_nklass = generate_load_nklass();
 #endif // COMPILER2
 
     if (UseBASE64Intrinsics) {
