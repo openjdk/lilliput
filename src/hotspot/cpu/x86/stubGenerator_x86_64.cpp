@@ -7962,8 +7962,6 @@ address generate_avx_ghash_processBlocks() {
     if (UseVectorizedMismatchIntrinsic) {
       StubRoutines::_vectorizedMismatch = generate_vectorizedMismatch();
     }
-
-    StubRoutines::_load_nklass = generate_load_nklass();
   }
 
  public:
