@@ -70,6 +70,7 @@
 #include "runtime/init.hpp"
 #include "runtime/java.hpp"
 #include "runtime/jniHandles.hpp"
+#include "runtime/objectMonitorManager.hpp"
 #include "runtime/thread.inline.hpp"
 #include "runtime/timerTrace.hpp"
 #include "services/memoryService.hpp"
@@ -796,6 +797,8 @@ jint universe_init() {
   }
 
   ResolvedMethodTable::create_table();
+
+  ObjectMonitorManager::initialize();
 
   return JNI_OK;
 }

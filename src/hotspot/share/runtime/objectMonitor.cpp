@@ -44,6 +44,7 @@
 #include "runtime/mutexLocker.hpp"
 #include "runtime/objectMonitor.hpp"
 #include "runtime/objectMonitor.inline.hpp"
+#include "runtime/objectMonitorManager.hpp"
 #include "runtime/orderAccess.hpp"
 #include "runtime/osThread.hpp"
 #include "runtime/perfData.hpp"
@@ -234,16 +235,17 @@ OopStorage* ObjectMonitor::_oop_storage = NULL;
 
 
 void* ObjectMonitor::operator new (size_t size) throw() {
-  return AllocateHeap(size, mtInternal);
+  assert(size == sizeof(ObjectMonitor), "size mismatch");
+  return ObjectMonitorManager::allocate_monitor();
 }
 void* ObjectMonitor::operator new[] (size_t size) throw() {
-  return operator new (size);
+  return AllocateHeap(size, mtInternal);
 }
 void ObjectMonitor::operator delete(void* p) {
-  FreeHeap(p);
+  ObjectMonitorManager::free_monitor(reinterpret_cast<ObjectMonitor*>(p));
 }
 void ObjectMonitor::operator delete[] (void *p) {
-  operator delete(p);
+  FreeHeap(p);
 }
 
 // Check that object() and set_object() are called from the right context:
