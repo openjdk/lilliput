@@ -5286,21 +5286,16 @@ instruct loadKlass(rRegP dst, memory mem)
 %}
 
 // Load narrow Klass Pointer
-instruct loadNKlass(rRegN dst, memory mem, rRegP tmp, rFlagsReg cr)
+instruct loadNKlass(rRegN dst, indOffset8 mem, rFlagsReg cr)
 %{
   match(Set dst (LoadNKlass mem));
-  effect(TEMP_DEF dst, TEMP tmp, KILL cr);
+  effect(TEMP_DEF dst, KILL cr);
   ins_cost(125); // XXX
   format %{ "movl    $dst, $mem\t# compressed klass ptr" %}
   ins_encode %{
     assert($mem$$disp == oopDesc::nklass_offset_in_bytes(), "expect correct offset 4, but got: %d", $mem$$disp);
-    // emit bogus load to make implicit null-checking happy. Sorry. ;-)
-    // In the future, we want to emit straightforward load from offset into the header.
-    __ movl($dst$$Register, $mem$$Address);
-    // We are getting indirect and indexed addresses as input, the offset is always nklass_offset.
-    // Figure out the base oop by subtracting nklass_offset().
-    __ lea($tmp$$Register, $mem$$Address.plus_disp(-oopDesc::nklass_offset_in_bytes()));
-    __ load_nklass($dst$$Register, $tmp$$Register);
+    assert($mem$$index == 4, "expect no index register: %d", $mem$$index);
+    __ load_nklass($dst$$Register, $mem$$base$$Register);
   %}
   ins_pipe(pipe_slow); // XXX
 %}

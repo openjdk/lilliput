@@ -3194,9 +3194,10 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
 
   Address src_length_addr = Address(src, arrayOopDesc::length_offset_in_bytes());
   Address dst_length_addr = Address(dst, arrayOopDesc::length_offset_in_bytes());
-  Address src_klass_addr = Address(src, oopDesc::nklass_offset_in_bytes());
-  Address dst_klass_addr = Address(dst, oopDesc::nklass_offset_in_bytes());
-
+#ifndef _LP64
+  Address src_klass_addr = Address(src, oopDesc::klass_offset_in_bytes());
+  Address dst_klass_addr = Address(dst, oopDesc::klass_offset_in_bytes());
+#endif
   // length and pos's are all sign extended at this point on 64bit
 
   // test for NULL
@@ -3261,11 +3262,14 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
     // We don't know the array types are compatible
     if (basic_type != T_OBJECT) {
       // Simple test for basic type arrays
-      assert(UseCompressedClassPointers, "Lilliput");
-      // (rare) locked objects may give false negatives, which lead to slow-path.
-      // False positives are impossible.
+#ifdef _LP64
+      __ load_nklass(tmp, src);
+      __ load_nklass(tmp2, dst);
+      __ cmpl(tmp, tmp2);
+#else
       __ movptr(tmp, src_klass_addr);
-      __ cmpl(tmp, dst_klass_addr);
+      __ cmpptr(tmp, dst_klass_addr);
+#endif
       __ jcc(Assembler::notEqual, *stub->entry());
     } else {
       // For object arrays, if src is a sub class of dst then we can
@@ -3421,22 +3425,27 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
     Label known_ok, halt;
     __ mov_metadata(tmp, default_type->constant_encoding());
 #ifdef _LP64
-    if (UseCompressedClassPointers) {
-      __ encode_klass_not_null(tmp, rscratch1);
-    }
-#endif
-
     assert(UseCompressedClassPointers, "Lilliput");
+    __ encode_klass_not_null(tmp, rscratch1);
     if (basic_type != T_OBJECT) {
-      __ load_nklass(tmp2, dst, tmp_load_klass);
+      __ load_nklass(tmp2, dst);
       __ cmpl(tmp, tmp2);
       __ jcc(Assembler::notEqual, halt);
-      __ load_nklass(tmp2, src, tmp_load_klass);
+      __ load_nklass(tmp2, src);
       __ cmpl(tmp, tmp2);
       __ jcc(Assembler::equal, known_ok);
     } else {
-      __ load_nklass(tmp2, dst, tmp_load_klass);
+      __ load_nklass(tmp2, dst);
       __ cmpl(tmp, tmp2);
+#else
+    if (basic_type != T_OBJECT) {
+      __ cmpptr(tmp, dst_klass_addr);
+      __ jcc(Assembler::notEqual, halt);
+      __ cmpptr(tmp, src_klass_addr);
+      __ jcc(Assembler::equal, known_ok);
+    } else {
+      __ cmpptr(tmp, dst_klass_addr);
+#endif
       __ jcc(Assembler::equal, known_ok);
       __ cmpptr(src, dst);
       __ jcc(Assembler::equal, known_ok);

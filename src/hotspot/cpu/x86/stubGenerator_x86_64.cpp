@@ -7439,6 +7439,7 @@ address generate_avx_ghash_processBlocks() {
   // rax: call argument (object)
   // rax: return object's narrowKlass
   // Preserves all caller-saved registers, except rax
+#ifdef _LP64
   address generate_load_nklass() {
     __ align(CodeEntryAlignment);
     StubCodeMark(this, "StubRoutines", "load_nklass");
@@ -7472,6 +7473,7 @@ address generate_avx_ghash_processBlocks() {
     __ ret(0);
     return start;
   }
+#endif // _LP64
 
 #undef __
 #define __ masm->
@@ -7699,6 +7701,10 @@ address generate_avx_ghash_processBlocks() {
     generate_safefetch("SafeFetchN", sizeof(intptr_t), &StubRoutines::_safefetchN_entry,
                                                        &StubRoutines::_safefetchN_fault_pc,
                                                        &StubRoutines::_safefetchN_continuation_pc);
+
+#ifdef _LP64
+    StubRoutines::_load_nklass = generate_load_nklass();
+#endif
   }
 
   void generate_all() {
@@ -7956,8 +7962,6 @@ address generate_avx_ghash_processBlocks() {
     if (UseVectorizedMismatchIntrinsic) {
       StubRoutines::_vectorizedMismatch = generate_vectorizedMismatch();
     }
-
-    StubRoutines::_load_nklass = generate_load_nklass();
   }
 
  public:

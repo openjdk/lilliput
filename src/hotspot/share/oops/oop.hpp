@@ -293,7 +293,14 @@ class oopDesc {
 
   // for code generation
   static int mark_offset_in_bytes()      { return offset_of(oopDesc, _mark); }
-  static int nklass_offset_in_bytes()    { return 4; }
+  static int nklass_offset_in_bytes()    {
+#ifdef _LP64
+    STATIC_ASSERT(markWord::klass_shift % 8 == 0);
+    return mark_offset_in_bytes() + markWord::klass_shift / 8;
+#else
+    return klass_offset_in_bytes();
+#endif
+  }
 
   // for error reporting
   static void* load_oop_raw(oop obj, int offset);
