@@ -163,18 +163,8 @@ void C1_MacroAssembler::initialize_header(Register obj, Register klass, Register
   assert_different_registers(obj, klass, len);
   ldr(t1, Address(klass, Klass::prototype_header_offset()));
   str(t1, Address(obj, oopDesc::mark_offset_in_bytes()));
-
-  if (UseCompressedClassPointers) { // Take care not to kill klass
-    encode_klass_not_null(t1, klass);
-    strw(t1, Address(obj, oopDesc::klass_offset_in_bytes()));
-  } else {
-    str(klass, Address(obj, oopDesc::klass_offset_in_bytes()));
-  }
-
   if (len->is_valid()) {
     strw(len, Address(obj, arrayOopDesc::length_offset_in_bytes()));
-  } else if (UseCompressedClassPointers) {
-    store_klass_gap(obj, zr);
   }
 }
 
@@ -192,6 +182,11 @@ void C1_MacroAssembler::initialize_body(Register obj, Register len_in_bytes, int
   subs(len_in_bytes, len_in_bytes, hdr_size_in_bytes);
   br(Assembler::EQ, done);
 
+  // Zero first 4 bytes, if start offset is not 64bit aligned.
+  if ((hdr_size_in_bytes & (BytesPerWord - 1)) != 0) {
+    strw(zr, Address(obj, hdr_size_in_bytes));
+    hdr_size_in_bytes += BytesPerInt;
+  }
   // zero_words() takes ptr in r10 and count in words in r11
   mov(rscratch1, len_in_bytes);
   lea(t1, Address(obj, hdr_size_in_bytes));
@@ -241,7 +236,7 @@ void C1_MacroAssembler::initialize_object(Register obj, Register klass, Register
 
   verify_oop(obj);
 }
-void C1_MacroAssembler::allocate_array(Register obj, Register len, Register t1, Register t2, int header_size, int f, Register klass, Label& slow_case) {
+void C1_MacroAssembler::allocate_array(Register obj, Register len, Register t1, Register t2, int header_size_in_bytes, int f, Register klass, Label& slow_case) {
   assert_different_registers(obj, len, t1, t2, klass);
 
   // determine alignment mask
@@ -254,7 +249,7 @@ void C1_MacroAssembler::allocate_array(Register obj, Register len, Register t1, 
 
   const Register arr_size = t2; // okay to be the same
   // align object end
-  mov(arr_size, (int32_t)header_size * BytesPerWord + MinObjAlignmentInBytesMask);
+  mov(arr_size, (int32_t)header_size_in_bytes + MinObjAlignmentInBytesMask);
   add(arr_size, arr_size, len, ext::uxtw, f);
   andr(arr_size, arr_size, ~MinObjAlignmentInBytesMask);
 
@@ -263,7 +258,7 @@ void C1_MacroAssembler::allocate_array(Register obj, Register len, Register t1, 
   initialize_header(obj, klass, len, t1, t2);
 
   // clear rest of allocated space
-  initialize_body(obj, arr_size, header_size * BytesPerWord, t1, t2);
+  initialize_body(obj, arr_size, header_size_in_bytes, t1, t2);
 
   membar(StoreStore);
 
