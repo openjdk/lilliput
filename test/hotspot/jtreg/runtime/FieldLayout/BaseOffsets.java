@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,22 +23,10 @@
 
 /*
  * @test
- * @bug 8239014
- * @summary -XX:-UseEmptySlotsInSupers sometime fails to reproduce the layout of the old code
  * @library /test/lib
  * @modules java.base/jdk.internal.misc
  *          java.management
- * @requires vm.bits == "64" & vm.opt.final.UseCompressedOops == true & vm.gc != "Z"
- * @run main/othervm -XX:+UseCompressedClassPointers -XX:-UseEmptySlotsInSupers OldLayoutCheck
- */
-
-/*
- * @test
- * @requires vm.bits == "32"
- * @library /test/lib
- * @modules java.base/jdk.internal.misc
- *          java.management
- * @run main/othervm -XX:-UseEmptySlotsInSupers OldLayoutCheck
+ * @run main/othervm BaseOffsets
  */
 
 import java.lang.reflect.Field;
@@ -48,16 +36,14 @@ import jdk.internal.misc.Unsafe;
 
 import jdk.test.lib.Asserts;
 
-public class OldLayoutCheck {
+public class BaseOffsets {
 
     static class LIClass {
-        public long l;
         public int i;
     }
 
-    // @0:  8 byte header,  @8: long field, @16:  int field
-    static final long INT_OFFSET  = 16L;
-    static final long LONG_OFFSET = 8L;
+    // @0:  8 byte header,  @8: int field
+    static final long INT_OFFSET  = 8L;
 
     static public void main(String[] args) {
         Unsafe unsafe = Unsafe.getUnsafe();
@@ -67,11 +53,20 @@ public class OldLayoutCheck {
             long offset = unsafe.objectFieldOffset(fields[i]);
             if (fields[i].getType() == int.class) {
                 Asserts.assertEquals(offset, INT_OFFSET, "Misplaced int field");
-            } else if (fields[i].getType() == long.class) {
-                Asserts.assertEquals(offset, LONG_OFFSET, "Misplaced long field");
             } else {
                 Asserts.fail("Unexpected field type");
             }
         }
+        Asserts.assertEquals(unsafe.arrayBaseOffset(boolean[].class), 12, "Misplaced boolean array base");
+        Asserts.assertEquals(unsafe.arrayBaseOffset(byte[].class),    12, "Misplaced byte    array base");
+        Asserts.assertEquals(unsafe.arrayBaseOffset(char[].class),    12, "Misplaced char    array base");
+        Asserts.assertEquals(unsafe.arrayBaseOffset(short[].class),   12, "Misplaced short   array base");
+        Asserts.assertEquals(unsafe.arrayBaseOffset(int[].class),     12, "Misplaced int     array base");
+        Asserts.assertEquals(unsafe.arrayBaseOffset(long[].class),    16, "Misplaced long    array base");
+        Asserts.assertEquals(unsafe.arrayBaseOffset(float[].class),   12, "Misplaced float   array base");
+        Asserts.assertEquals(unsafe.arrayBaseOffset(double[].class),  16, "Misplaced double  array base");
+        boolean coops = (System.getProperty("java.vm.compressedOopsMode") != null);
+        int expected_objary_offset = coops ? 12 : 16;
+        Asserts.assertEquals(unsafe.arrayBaseOffset(Object[].class),  expected_objary_offset, "Misplaced object  array base");
     }
 }
