@@ -2977,7 +2977,7 @@ void State::dump(int depth) {
     tty->print("   ");
   }
   tty->print("--N: ");
-  _leaf->dump();
+  _leaf->dump(3);
   uint i;
   for (i = 0; i < _LAST_MACH_OPER; i++) {
     // Check for valid entry
