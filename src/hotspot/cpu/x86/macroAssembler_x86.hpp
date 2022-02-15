@@ -366,8 +366,9 @@ class MacroAssembler: public Assembler {
 #ifdef _LP64
   void load_nklass(Register dst, Register src);
 #endif
+#ifndef _LP64
   void store_klass(Register dst, Register src, Register tmp);
-
+#endif
   void access_load_at(BasicType type, DecoratorSet decorators, Register dst, Address src,
                       Register tmp1, Register thread_tmp);
   void access_store_at(BasicType type, DecoratorSet decorators, Address dst, Register src,

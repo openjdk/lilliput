@@ -4023,6 +4023,9 @@ void TemplateTable::_new() {
     __ pop(rcx);   // get saved klass back in the register.
     __ movptr(rbx, Address(rcx, Klass::prototype_header_offset()));
     __ movptr(Address(rax, oopDesc::mark_offset_in_bytes ()), rbx);
+#ifndef _LP64
+    __ store_klass(rax, rcx, noreg);  // klass
+#endif
     {
       SkipIfEqual skip_if(_masm, &DTraceAllocProbes, 0);
       // Trigger dtrace event for fastpath

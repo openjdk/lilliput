@@ -3595,6 +3595,7 @@ void MacroAssembler::zero_memory(Register address, Register length_in_bytes, int
 
   xorptr(temp, temp);    // use _zero reg to clear memory (shorter code)
 
+#ifdef _LP64
   if ((offset_in_bytes & (BytesPerWord - 1)) != 0) {
     movl(Address(address, offset_in_bytes), temp);
     offset_in_bytes += BytesPerInt;
@@ -3604,6 +3605,7 @@ void MacroAssembler::zero_memory(Register address, Register length_in_bytes, int
 
   testptr(length_in_bytes, length_in_bytes);
   jcc(Assembler::zero, done);
+#endif
 
   // initialize topmost word, divide index by 2, check if odd and test if zero
   // note: for the remaining code to work, index must be a multiple of BytesPerWord
@@ -4619,6 +4621,14 @@ void MacroAssembler::load_klass(Register dst, Register src, Register tmp, bool n
   movptr(dst, Address(src, oopDesc::klass_offset_in_bytes()));
 #endif
 }
+
+#ifndef _LP64
+void MacroAssembler::store_klass(Register dst, Register src, Register tmp) {
+  assert_different_registers(src, tmp);
+  assert_different_registers(dst, tmp);
+  movptr(Address(dst, oopDesc::klass_offset_in_bytes()), src);
+}
+#endif
 
 void MacroAssembler::access_load_at(BasicType type, DecoratorSet decorators, Register dst, Address src,
                                     Register tmp1, Register thread_tmp) {

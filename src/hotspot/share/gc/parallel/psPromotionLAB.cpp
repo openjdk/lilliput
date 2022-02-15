@@ -84,6 +84,9 @@ void PSPromotionLAB::flush() {
   HeapWord* tlab_end = end() + filler_header_size;
   typeArrayOop filler_oop = (typeArrayOop) cast_to_oop(top());
   filler_oop->set_mark(Universe::intArrayKlassObj()->prototype_header());
+#ifndef _LP64
+  oopDesc::release_set_klass(top(), Universe::intArrayKlassObj());
+#endif
   const size_t array_length_bytes = pointer_delta(tlab_end, top()) * HeapWordSize
                                     - typeArrayOopDesc::header_size_in_bytes(T_INT);
   assert(array_length_bytes % sizeof(jint) == 0, "expect header to align to int size");

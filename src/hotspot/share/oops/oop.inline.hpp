@@ -94,8 +94,8 @@ void oopDesc::init_mark() {
   set_mark(header);
 }
 
-narrowKlass oopDesc::nklass() const {
 #ifdef _LP64
+narrowKlass oopDesc::nklass() const {
   assert(UseCompressedClassPointers, "only with compressed class pointers");
   markWord header = mark();
   if (!header.is_neutral()) {
@@ -103,10 +103,8 @@ narrowKlass oopDesc::nklass() const {
   }
   narrowKlass nklass = header.narrow_klass();
   return nklass;
-#else
-  return _metadata._klass;
-#endif
 }
+#endif
 
 Klass* oopDesc::klass() const {
 #ifdef _LP64
@@ -149,6 +147,19 @@ Klass* oopDesc::klass_or_null_acquire() const {
   return Atomic::load_acquire(&_metadata._klass);
 #endif
 }
+
+#ifndef _LP64
+void oopDesc::release_set_klass(HeapWord* mem, Klass* k) {
+  assert(Universe::is_bootstrapping() || (k != NULL && k->is_klass()), "incorrect Klass");
+  char* raw_mem = ((char*)mem + klass_offset_in_bytes());
+  if (UseCompressedClassPointers) {
+    Atomic::release_store((narrowKlass*)raw_mem,
+                          CompressedKlassPointers::encode_not_null(k));
+  } else {
+    Atomic::release_store((Klass**)raw_mem, k);
+  }
+}
+#endif
 
 bool oopDesc::is_a(Klass* k) const {
   return klass()->is_subtype_of(k);

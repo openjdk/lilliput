@@ -446,6 +446,9 @@ void HeapShared::copy_roots() {
   {
     // This is copied from MemAllocator::finish
     oopDesc::release_set_mark(mem, k->prototype_header());
+#ifndef _LP64
+    oopDesc::release_set_klass(mem, k);
+#endif
   }
   {
     // This is copied from ObjArrayAllocator::initialize

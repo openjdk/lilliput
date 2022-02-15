@@ -385,6 +385,9 @@ oop MemAllocator::finish(HeapWord* mem) const {
   // object zeroing are visible before setting the klass non-NULL, for
   // concurrent collectors.
   oopDesc::release_set_mark(mem, _klass->prototype_header());
+#ifndef _LP64
+  oopDesc::release_set_klass(mem, _klass);
+#endif
   return cast_to_oop(mem);
 }
 

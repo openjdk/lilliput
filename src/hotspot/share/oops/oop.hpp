@@ -55,6 +55,12 @@ class oopDesc {
   friend class JVMCIVMStructs;
  private:
   volatile markWord _mark;
+#ifndef _LP64
+  union _metadata {
+    Klass*      _klass;
+    narrowKlass _compressed_klass;
+  } _metadata;
+#endif
 
   // There may be ordering constraints on the initialization of fields that
   // make use of the C++ copy/assign incorrect.
@@ -80,10 +86,16 @@ class oopDesc {
   // objects during a GC) -- requires a valid klass pointer
   inline void init_mark();
 
+#ifdef _LP64
   inline narrowKlass nklass() const;
+#endif
   inline Klass* klass() const;
   inline Klass* klass_or_null() const;
   inline Klass* klass_or_null_acquire() const;
+
+#ifndef _LP64
+  static inline void release_set_klass(HeapWord* mem, Klass* klass);
+#endif
 
   // size of object header, aligned to platform wordSize
   static int header_size() { return sizeof(oopDesc)/HeapWordSize; }
@@ -293,12 +305,12 @@ class oopDesc {
 
   // for code generation
   static int mark_offset_in_bytes()      { return offset_of(oopDesc, _mark); }
-  static int nklass_offset_in_bytes()    {
+  static int klass_offset_in_bytes()    {
 #ifdef _LP64
     STATIC_ASSERT(markWord::klass_shift % 8 == 0);
     return mark_offset_in_bytes() + markWord::klass_shift / 8;
 #else
-    return klass_offset_in_bytes();
+    return offset_of(oopDesc, _metadata._klass);
 #endif
   }
 

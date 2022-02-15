@@ -403,7 +403,9 @@ size_t CollectedHeap::max_tlab_size() const {
   // which is fine, since we'll be able to fill that.
   int header_size_bytes = typeArrayOopDesc::header_size_in_bytes(T_INT);
   assert(header_size_bytes % sizeof(jint) == 0, "header size must align to int");
-  size_t max_int_size = (header_size_bytes / sizeof(jint) + max_jint) / (HeapWordSize / sizeof(jint));
+  size_t max_int_size = header_size_bytes / HeapWordSize +
+              sizeof(jint) *
+              ((juint) max_jint / (size_t) HeapWordSize);
   return align_down(max_int_size, MinObjAlignment);
 }
 
