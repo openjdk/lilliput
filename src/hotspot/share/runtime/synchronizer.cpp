@@ -1636,19 +1636,13 @@ size_t ObjectSynchronizer::deflate_idle_monitors(ObjectMonitorsHashtable* table)
 
     // After the handshake, safely free the ObjectMonitors that were
     // deflated in this cycle.
-    ObjectMonitorStorage::bulk_deallocate(delete_list);
-
+    ObjectMonitorStorage::bulk_deallocate(delete_list); // Todo: safepoint check inside?
     size_t deleted_count = delete_list.length();
-//    for (ObjectMonitor* monitor: delete_list) {
-//      delete monitor;
-//      deleted_count++;
-
-      if (current->is_Java_thread()) {
-        // A JavaThread must check for a safepoint/handshake and honor it.
-        chk_for_block_req(JavaThread::cast(current), "deletion", "deleted_count",
-                          deleted_count, ls, &timer);
-      }
-//    }
+    if (current->is_Java_thread()) {
+      // A JavaThread must check for a safepoint/handshake and honor it.
+      chk_for_block_req(JavaThread::cast(current), "deletion", "deleted_count",
+                        deleted_count, ls, &timer);
+    }
   }
 
   if (ls != NULL) {
