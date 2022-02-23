@@ -3876,9 +3876,10 @@ Node* GraphKit::new_array(Node* klass_node,     // array klass (maybe variable)
     int       hsize  = Klass::layout_helper_header_size(layout_con);
     int       eshift = Klass::layout_helper_log2_element_size(layout_con);
     BasicType etype  = Klass::layout_helper_element_type(layout_con);
+    assert(arrayOopDesc::header_size_in_bytes(etype) == hsize, "header size must match: hsize: %d", hsize);
     if ((round_mask & ~right_n_bits(eshift)) == 0)
       round_mask = 0;  // strength-reduce it if it goes away completely
-    assert((hsize & right_n_bits(eshift)) == 0, "hsize is pre-rounded");
+    assert((hsize & right_n_bits(eshift)) == 0, "hsize is pre-rounded: hsize: %d, eshift: %d", hsize, eshift);
     assert(header_size_min <= hsize, "generic minimum is smallest");
     header_size_min = hsize;
     header_size = intcon(hsize + round_mask);

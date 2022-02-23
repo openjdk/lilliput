@@ -102,12 +102,12 @@ final class PKCS5Padding implements Padding {
 
         int start = idx - padValue;
         if (start < off) {
-            return -1;
+            return -2;
         }
 
         for (int i = start; i < idx; i++) {
             if (in[i] != lastByte) {
-                return -1;
+                return -3;
             }
         }
         return start;
