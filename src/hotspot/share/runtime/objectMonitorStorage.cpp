@@ -106,9 +106,8 @@ void ObjectMonitorStorage::bulk_deallocate(const GrowableArray<ObjectMonitor*>& 
       _array->print_on(&ls);
       ls.cr();
     }
-
+    DEBUG_ONLY(verify();)
   }
-  DEBUG_ONLY(verify();)
 }
 
 void ObjectMonitorStorage::initialize() {
@@ -128,6 +127,7 @@ void ObjectMonitorStorage::print(outputStream* st) {
 
 #ifdef ASSERT
 void ObjectMonitorStorage::verify() {
+  assert_lock_strong(ObjectMonitorStorage_lock);
   if (_array != NULL) {
     _array->verify(be_paranoid);
   }
