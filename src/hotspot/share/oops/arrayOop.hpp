@@ -132,7 +132,7 @@ class arrayOopDesc : public oopDesc {
   static int header_size_in_bytes(BasicType type) {
     size_t typesize_in_bytes = header_size_in_bytes();
     return (int)(element_type_should_be_aligned(type)
-      ? align_up(typesize_in_bytes, HeapWordSize)
+      ? align_up(typesize_in_bytes, BytesPerLong)
       : typesize_in_bytes);
   }
 
