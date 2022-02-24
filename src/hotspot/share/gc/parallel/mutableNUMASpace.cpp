@@ -109,7 +109,7 @@ void MutableNUMASpace::ensure_parsability() {
             size_t touched_words = words_to_fill;
 #ifndef ASSERT
             if (!ZapUnusedHeapArea) {
-              touched_words = MIN2((size_t)align_object_size(align_up(typeArrayOopDesc::header_size_in_bytes(T_INT), HEAP_WORD_SIZE) / HeapWordSize),
+              touched_words = MIN2((size_t)align_object_size(align_up(typeArrayOopDesc::header_size_in_bytes(T_INT), HeapWordSize) / HeapWordSize),
                 touched_words);
             }
 #endif
