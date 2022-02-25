@@ -56,6 +56,8 @@ class ObjectMonitorStorage : public AllStatic {
     return Thread::current()->_om_freelist;
   }
 
+  static void log_with_state(const char* fmt, ...);
+
 public:
 
   // On behalf of the current thread allocate a single monitor, preferably from
