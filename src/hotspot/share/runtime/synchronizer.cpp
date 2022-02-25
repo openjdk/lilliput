@@ -1636,12 +1636,25 @@ size_t ObjectSynchronizer::deflate_idle_monitors(ObjectMonitorsHashtable* table)
 
     // After the handshake, safely free the ObjectMonitors that were
     // deflated in this cycle.
-    ObjectMonitorStorage::bulk_deallocate(delete_list); // Todo: safepoint check inside?
-    size_t deleted_count = delete_list.length();
-    if (current->is_Java_thread()) {
-      // A JavaThread must check for a safepoint/handshake and honor it.
-      chk_for_block_req(JavaThread::cast(current), "deletion", "deleted_count",
-                        deleted_count, ls, &timer);
+    // We prepare the OM freelist off-lock, the chain the prepared list to the
+    // ObjectMonitorStorage freelist. That way time spent inside the lock is O(1).
+    {
+      const unsigned check_safepoint_interval = 256 * K;
+      unsigned iter = 0;
+      OMFreeListType omlist;
+      for (ObjectMonitor* m : delete_list) {
+        // We need to call ~ObjectMonitor explicitely. And we need to do this before adding
+        // it to the freelist since the latter is a destructive call, so order matters.
+        m->~ObjectMonitor();
+        omlist.prepend(m);
+        iter++;
+        if ((iter % check_safepoint_interval) == 0) {
+          chk_for_block_req(JavaThread::cast(current), "deletion", "deleted_count",
+                            delete_list.length(), ls, &timer);
+        }
+      }
+      // Now free the prepared list.
+      ObjectMonitorStorage::bulk_deallocate(omlist);
     }
   }
 

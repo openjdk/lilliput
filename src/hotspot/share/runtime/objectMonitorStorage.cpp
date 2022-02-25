@@ -69,10 +69,6 @@ void ObjectMonitorStorage::cleanup_before_thread_death(Thread* t) {
   // not yet initialized, so no need to destroy them.
   OMFreeListType& tl_list = t->_om_freelist;
   if (tl_list.empty() == false) {
-    MutexLocker ml(ObjectMonitorStorage_lock, Mutex::_no_safepoint_check_flag);
-    _array->bulk_deallocate(tl_list);
-    DEBUG_ONLY(verify();)
-
     LogTarget(Debug, monitorinflation) lt;
     if (lt.is_enabled()) {
       LogStream ls(lt);
@@ -80,33 +76,31 @@ void ObjectMonitorStorage::cleanup_before_thread_death(Thread* t) {
       _array->print_on(&ls);
       ls.cr();
     }
-
+    {
+      MutexLocker ml(ObjectMonitorStorage_lock, Mutex::_no_safepoint_check_flag);
+      _array->bulk_deallocate(tl_list);
+      DEBUG_ONLY(verify();)
+    }
   }
   assert(tl_list.empty(), "thread local list should now be empty");
 }
 
 // deallocate a list of monitors
-void ObjectMonitorStorage::bulk_deallocate(const GrowableArray<ObjectMonitor*>& list) {
-  // Build up freelist off-lock, then prepend the whole list under lock protection
-  OMFreeListType omlist;
-  for (ObjectMonitor* m : list) {
-    // Call ObjectMonitor destructor explicitely, then add OM to freelist. Note that the
-    // latter destroys OM's content, so order matters.
-    m->~ObjectMonitor();
-    omlist.prepend(m);
-  }
+void ObjectMonitorStorage::bulk_deallocate(OMFreeListType& omlist) {
   if (omlist.empty() == false) {
-    MutexLocker ml(ObjectMonitorStorage_lock, Mutex::_no_safepoint_check_flag);
-    _array->bulk_deallocate(omlist);
     // log log log
     LogTarget(Debug, monitorinflation) lt;
     if (lt.is_enabled()) {
       LogStream ls(lt);
-      ls.print("bulk_deallocate %d oms: ", list.length());
+      ls.print("bulk_deallocate " UINTX_FORMAT ": ", omlist.count());
       _array->print_on(&ls);
       ls.cr();
     }
-    DEBUG_ONLY(verify();)
+    {
+      MutexLocker ml(ObjectMonitorStorage_lock, Mutex::_no_safepoint_check_flag);
+      _array->bulk_deallocate(omlist);
+      DEBUG_ONLY(verify();)
+    }
   }
 }
 

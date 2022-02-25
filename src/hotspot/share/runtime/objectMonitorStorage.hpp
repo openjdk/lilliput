@@ -79,8 +79,8 @@ public:
     tl_list.prepend(m);
   }
 
-  // deallocate a list of monitors
-  static void bulk_deallocate(const GrowableArray<ObjectMonitor*>& list);
+  // deallocate a list of monitors; empties out the donor list.
+  static void bulk_deallocate(OMFreeListType& omlist);
 
   static void cleanup_before_thread_death(Thread* t);
 
