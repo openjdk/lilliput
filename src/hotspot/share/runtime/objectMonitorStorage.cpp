@@ -112,7 +112,10 @@ void ObjectMonitorStorage::bulk_deallocate(const GrowableArray<ObjectMonitor*>& 
 
 void ObjectMonitorStorage::initialize() {
   assert(_array == NULL, "Already initialized?");
-  _array = new ArrayType(MAX2(MaxObjectMonitors, (uintx)1024), 1024);
+  const uintx initial_cap = 1024;
+  const uintx max_cap = clamp(MaxObjectMonitors, (uintx)1024, (uintx)UINT_MAX - 1);
+  const uintx cap_increase = 1024;
+  _array = new ArrayType(initial_cap, cap_increase, max_cap);
   MemTracker::record_virtual_memory_type((address)_array->base(), mtObjectMonitor);
 }
 

@@ -46,7 +46,8 @@ class AddressStableArray : public CHeapObj<mtInternal> {
 
   ReservedSpace _rs;              // Underlying address range
   T* const _elements;
-  const uintx _max_capacity;      // max number of slots
+  const uintx _cap_increase;      // step width of capacity increase
+  const uintx _max_capacity;      // max number of slots (determines size of underlying address range)
   uintx _capacity;                // number of slots usable without committing additional memory
   uintx _used;                    // number of slots used (includes those in freelist)
 
@@ -68,13 +69,15 @@ class AddressStableArray : public CHeapObj<mtInternal> {
 
 public:
 
-  AddressStableArray(uintx max_capacity, uintx initial_capacity) :
+  AddressStableArray(uintx initial_capacity, uintx cap_increase, uintx max_capacity) :
     _rs(align_up(bytes_needed(max_capacity), os::vm_allocation_granularity())),
     _elements((T*)_rs.base()),
+    _cap_increase(cap_increase),
     _max_capacity(max_capacity),
     _capacity(0), _used(0)
   {
     assert(_max_capacity >= initial_capacity, "sanity");
+    assert(_cap_increase <= max_capacity, "sanity");
     if ((initial_capacity) > 0) {
       enlarge_capacity(initial_capacity);
     }
@@ -141,8 +144,8 @@ class AddressStableHeap : public CHeapObj<mtInternal> {
 
 public:
 
-  AddressStableHeap(uintx max_capacity, uintx initial_capacity) :
-    _array(max_capacity, initial_capacity),
+  AddressStableHeap(uintx initial_capacity, uintx cap_increase, uintx max_capacity) :
+    _array(initial_capacity, cap_increase, max_capacity),
     _freelist()
   {}
 

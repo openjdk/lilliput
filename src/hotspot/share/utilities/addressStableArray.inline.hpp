@@ -38,7 +38,7 @@ void AddressStableArray<T>::enlarge_capacity(uintx min_needed_capacity) {
 
   assert(_capacity < _max_capacity, "cannot enlarge capacity");
   const uintx new_capacity =
-      clamp((uintx)(_capacity * 1.25), min_needed_capacity, _max_capacity);
+      clamp((uintx)(_capacity + _cap_increase), min_needed_capacity, _max_capacity);
 
   const size_t committed_bytes = bytes_needed_page_aligned(_capacity);
   const size_t new_committed_bytes = bytes_needed_page_aligned(new_capacity);

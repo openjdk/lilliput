@@ -34,8 +34,8 @@
 #include "testutils.hpp"
 
 template <class T>
-static void test_fill_empty_repeat(uintx max_size, uintx initialsize) {
-  AddressStableHeap<T> a1(max_size, initialsize);
+static void test_fill_empty_repeat(uintx initialsize, uintx cap_increase, uintx max_size) {
+  AddressStableHeap<T> a1(initialsize, cap_increase, max_size);
   T** elems = NEW_C_HEAP_ARRAY(T*, max_size, mtTest);
   memset(elems, 0, sizeof(T*) * max_size);
   if (initialsize == 0) {
@@ -67,8 +67,8 @@ static void test_fill_empty_repeat(uintx max_size, uintx initialsize) {
 }
 
 template <class T>
-static void test_fill_empty_randomly(uintx max_size, uintx initialsize) {
-  AddressStableHeap<T> a1(max_size, initialsize);
+static void test_fill_empty_randomly(uintx initialsize, uintx cap_increase, uintx max_size) {
+  AddressStableHeap<T> a1(initialsize, cap_increase, max_size);
   T** elems = NEW_C_HEAP_ARRAY(T*, max_size, mtTest);
   memset(elems, 0, sizeof(T*) * max_size);
   DEBUG_ONLY(a1.verify();)
@@ -101,19 +101,21 @@ static void test_fill_empty_randomly(uintx max_size, uintx initialsize) {
 }
 
 template <class T>
-static void run_all_tests(uintx max_capacity, uintx initial_capacity) {
-  test_fill_empty_repeat<T>(max_capacity, initial_capacity);
-  test_fill_empty_randomly<T>(max_capacity, initial_capacity);
+static void run_all_tests(uintx initialsize, uintx cap_increase, uintx max_size) {
+  test_fill_empty_repeat<T>(initialsize, cap_increase, max_size);
+  test_fill_empty_randomly<T>(initialsize, cap_increase, max_size);
 }
 
 template <class T>
 static void run_all_tests() {
   uintx max_max = (10 * M) / sizeof(T);           // don't use more than 10M in total
   max_max = MIN2(max_max, (uintx)100000);         // and limit to 100000 entries
-  run_all_tests<T>(1, 0);
-  run_all_tests<T>(10, 0);
-  run_all_tests<T>(max_max, 0);
-  run_all_tests<T>(max_max, max_max/2);
+  run_all_tests<T>(0, 1, 1);
+  run_all_tests<T>(1, 1, 10);
+  run_all_tests<T>(10, 1, 10);
+  run_all_tests<T>(0, 1, max_max);
+  run_all_tests<T>(0, max_max/100, max_max);
+  run_all_tests<T>(max_max/2, max_max/100, max_max);
 }
 
 #define test_stable_array(T) \
