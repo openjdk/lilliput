@@ -33,15 +33,13 @@
 #include "unittest.hpp"
 #include "testutils.hpp"
 
-#define ASSERT_LIST_COUNT(list, n)            \
-  if (list.counting()) {                      \
-    ASSERT_EQ(list.count(), (uintx)n);        \
-  }
+#define ASSERT_LIST_COUNT(list, n) ASSERT_EQ(list.count(), (uintx)n);
 
-#define ASSERT_LIST_PEAK(list, n)             \
-  if (list.counting()) {                      \
-    ASSERT_EQ(list.peak_count(), (uintx)n);   \
-  }
+#ifdef ASSERT
+#define ASSERT_LIST_PEAK(list, n)  ASSERT_EQ(list.peak_count(), (uintx)n);
+#else
+#define ASSERT_LIST_PEAK(list, n)
+#endif
 
 #define ASSERT_LIST_EMPTY(list)    \
   ASSERT_TRUE(list.empty());       \

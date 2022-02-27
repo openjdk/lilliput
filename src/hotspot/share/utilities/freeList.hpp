@@ -45,21 +45,18 @@ static void set_Tptr_at_null(T* p)        { set_Tptr_at(p, (T*) NULL); }
 template <class T>
 class FreeList {
 
-  static const bool _counting = true;//DEBUG_ONLY(true) NOT_DEBUG(false);
-
   T* _head;
   T* _tail;
   uintx _count;
-  uintx _peak_count;
+  DEBUG_ONLY(uintx _peak_count;)
 
 #ifdef ASSERT
   void quick_verify() const {
     assert((_head == NULL) == (_tail == NULL), "malformed list");
-    if (_counting) {
-      assert( (_count == 0 && _head == NULL && _tail == NULL) ||
-              (_count == 1 && _head == _tail) ||
-              (_count > 1 && _head != _tail), "malformed list");
-    }
+    assert( (_count == 0 && _head == NULL && _tail == NULL) ||
+            (_count == 1 && _head == _tail) ||
+            (_count > 1 && _head != _tail), "malformed list");
+    DEBUG_ONLY(assert(_peak_count >= _count, "peak count off");)
   }
 #endif
 
@@ -67,12 +64,18 @@ public:
 
   FreeList() :
     _head(NULL), _tail(NULL),
-    _count(0), _peak_count(0)
+    _count(0)
+#ifdef ASSERT
+    , _peak_count(0)
+#endif
   {}
 
   FreeList(T* head, T* tail, uintx count) :
     _head(head), _tail(tail),
-    _count(count), _peak_count(count)
+    _count(count)
+#ifdef ASSERT
+    , _peak_count(count)
+#endif
   {}
 
   T* head() const { return _head; }
@@ -86,10 +89,8 @@ public:
       if (_head == NULL) {
         _tail = NULL;
       }
-      if (_counting) {
-        assert(_count > 0, "sanity");
-        _count --;
-      }
+      assert(_count > 0, "sanity");
+      _count --;
       DEBUG_ONLY(set_Tptr_at_null(p);)
       DEBUG_ONLY(quick_verify();)
     }
@@ -98,18 +99,16 @@ public:
 
   void prepend(T* elem) {
     if (_head == NULL) {
-      assert(!_counting || 0 == _count, "invalid freelist count");
+      assert(0 == _count, "invalid freelist count");
       _head = _tail = elem;
       set_Tptr_at_null(_head);
     } else {
-      assert(!_counting || 0 < _count, "invalid freelist count");
+      assert(0 < _count, "invalid freelist count");
       set_Tptr_at(elem, _head);
       _head = elem;
     }
-    if (_counting) {
-      _count ++;
-      _peak_count = MAX2(_peak_count, _count);
-    }
+    _count ++;
+    DEBUG_ONLY(_peak_count = MAX2(_peak_count, _count);)
     DEBUG_ONLY(quick_verify();)
   }
 
@@ -119,10 +118,8 @@ public:
     if (!other.empty()) {
       _head = other.head();
       _tail = other.tail();
-      if (_counting) {
-        _count = other.count();
-        _peak_count = other.peak_count();
-      }
+      _count = other.count();
+      DEBUG_ONLY(_peak_count = other.peak_count();)
       other.reset();
       DEBUG_ONLY(verify();)
     }
@@ -137,10 +134,8 @@ public:
       } else {
         set_Tptr_at(other.tail(), _head);
         _head = other.head();
-        if (_counting) {
-          _count += other.count();
-          _peak_count = MAX2(_peak_count, _count);
-        }
+        _count += other.count();
+        DEBUG_ONLY(_peak_count = MAX2(_peak_count, _count);)
         DEBUG_ONLY(verify();)
         other.reset();
       }
@@ -155,17 +150,14 @@ public:
   // Reset also resets the peak count, so the history is lost.
   void reset() {
     _head = _tail = NULL;
-    if (_counting) {
-      _count = _peak_count = 0;
-    }
+    _count = 0;
+    DEBUG_ONLY(_peak_count = 0;)
   }
 
   bool empty() const { return _head == NULL; }
 
-  // True if list counts itself
-  bool counting() const       { return _counting; }
-  uintx count() const         { return _count; }      // Note: only if counting
-  uintx peak_count() const    { return _peak_count; } // Note: only if counting
+  uintx count() const { return _count; }
+  DEBUG_ONLY(uintx peak_count() const { return _peak_count; })
 
   struct Closure {
     // return false to stop iterating

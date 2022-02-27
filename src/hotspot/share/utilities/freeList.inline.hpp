@@ -52,18 +52,17 @@ void FreeList<T>::verify(bool paranoid) const {
   quick_verify();
 
   // Simple verify list and list length. Also call verify_closure if it is set.
-  if (_counting) {
-    uintx counted = 0;
-    for (const T* p = head(); p != NULL; p = Tptr_at(p)) {
-      assert(counted < _count, "too many elements (more than " UINTX_FORMAT ")?", _count);
-      counted ++;
-    }
-    assert(!_counting || _count == counted, "count is off");
+  uintx counted = 0;
+  for (const T* p = head(); p != NULL; p = Tptr_at(p)) {
+    assert(counted < _count, "too many elements (more than " UINTX_FORMAT ")?", _count);
+    counted ++;
   }
+  assert(_count == counted, "count is off (found: " UINTX_FORMAT ", expected: " UINTX_FORMAT ".",
+         counted, _count);
 
   // In paranoid mode, or if we have know we have fewer than n elements,
   // we check for duplicates. Slow (O(n^2)/2).
-  if (paranoid || (_counting && _count < 10)) {
+  if (paranoid || _count < 5) {
     for (const T* p = head(); p != NULL; p = Tptr_at(p)) {
       for (const T* p2 = Tptr_at(p); p2 != NULL; p2 = Tptr_at(p2)) {
         assert(p2 != p, "duplicate in list");
@@ -75,18 +74,10 @@ void FreeList<T>::verify(bool paranoid) const {
 
 template <class T>
 void FreeList<T>::print_on(outputStream* st, bool print_elems) const {
-  if (_counting) {
-    st->print(UINTX_FORMAT " elems (peak: " UINTX_FORMAT " elems)", _count, _peak_count);
-  } else {
-    // No count, do the best we can
-    if (_head == NULL) {
-      st->print("0 elems");
-    } else if (_head == _tail) {
-      st->print("1 elems");
-    } else {
-      st->print(">1 elems");
-    }
-  }
+  st->print(UINTX_FORMAT " elems", _count);
+#ifdef ASSERT
+  st->print(" (peak: " UINTX_FORMAT " elems)", _peak_count);
+#endif
   if (print_elems) {
     st->cr();
     for (const T* p = head(); p != NULL; p = Tptr_at(p)) {
