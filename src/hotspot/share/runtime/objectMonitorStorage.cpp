@@ -38,10 +38,10 @@ static const bool be_paranoid = false;
 
 ObjectMonitorStorage::ArrayType* ObjectMonitorStorage::_array = NULL;
 
-#define LOG(...) {                        \
+#define LOG(fmt, ...) {                   \
 	LogTarget(Info, monitorinflation) lt;   \
   if (lt.is_enabled()) {                  \
-    log_with_state(__VA_ARGS__);          \
+    log_with_state(fmt, __VA_ARGS__);     \
   }                                       \
 }
 
