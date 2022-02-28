@@ -53,7 +53,7 @@ void ObjectMonitorStorage::bulk_allocate_new_list(OMFreeListType& freelist_to_fi
   for (int i = 0; i < (int)PreallocatedObjectMonitors - 1; i ++) {
     ObjectMonitor* m = _array->allocate();
     if (m == NULL) {
-      fatal("Maximum number of object monitors allocated (" UINTX_FORMAT "), increase MaxObjectMonitors.",
+      fatal("Maximum number of object monitors allocated (" UINTX_FORMAT "), increase MonitorStorageSize.",
             _array->capacity());
     }
     freelist_to_fill.prepend(m);
@@ -92,7 +92,8 @@ void ObjectMonitorStorage::bulk_deallocate(OMFreeListType& omlist) {
 void ObjectMonitorStorage::initialize() {
   assert(_array == NULL, "Already initialized?");
   const uintx initial_cap = 1024;
-  const uintx max_cap = clamp(MaxObjectMonitors, (uintx)1024, (uintx)UINT_MAX - 1);
+  const uintx max_object_monitors = MonitorStorageSize / sizeof(ObjectMonitor);
+  const uintx max_cap = clamp(max_object_monitors, (uintx)1024, (uintx)UINT_MAX - 1);
   const uintx cap_increase = 1024;
   _array = new ArrayType(initial_cap, cap_increase, max_cap);
   MemTracker::record_virtual_memory_type((address)_array->base(), mtObjectMonitor);

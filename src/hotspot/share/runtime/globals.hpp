@@ -716,9 +716,8 @@ const intx ObjectAlignmentInBytes = 8;
           "before adjusting the in_use_list_ceiling up (0 is off).")        \
           range(0, max_uintx)                                               \
                                                                             \
-                                                                            \
-  product(uintx, MaxObjectMonitors, NOT_LP64(100000) LP64_ONLY(20 * M),     \
-           "Max. number of object monitors")                                \
+  product(uintx, MonitorStorageSize, NOT_LP64(64*M) LP64_ONLY(4 * G),       \
+           "Size of object monitor store")                                  \
                                                                             \
   product(uintx, PreallocatedObjectMonitors, NOT_LP64(8) LP64_ONLY(64),     \
            "Max. thread local preallocated OMs")                            \
