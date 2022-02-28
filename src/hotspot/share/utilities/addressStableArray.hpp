@@ -78,6 +78,7 @@ public:
   {
     assert(_max_capacity >= initial_capacity, "sanity");
     assert(_cap_increase <= max_capacity, "sanity");
+    assert(_rs.is_reserved(), "Failed to reserve memory");
     if ((initial_capacity) > 0) {
       enlarge_capacity(initial_capacity);
     }
