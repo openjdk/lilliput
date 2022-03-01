@@ -56,7 +56,7 @@ class ObjectMonitorStorage : public AllStatic {
     return Thread::current()->_om_freelist;
   }
 
-  static void log_with_state(const char* fmt, ...);
+  static void log_with_state(const char* fmt, ...) ATTRIBUTE_PRINTF(1, 2);
 
 public:
 
