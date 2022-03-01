@@ -78,7 +78,8 @@ public:
   {
     assert(_max_capacity >= initial_capacity, "sanity");
     assert(_cap_increase <= max_capacity, "sanity");
-    assert(_rs.is_reserved(), "Failed to reserve memory");
+    assert(initial_capacity == _max_capacity ||
+           _cap_increase >= 1, "increase must be larger than 0 if we don't fully commit upfront");
     if ((initial_capacity) > 0) {
       enlarge_capacity(initial_capacity);
     }
@@ -121,9 +122,12 @@ public:
     return bytes_needed_page_aligned(_capacity);
   }
 
-  uintx capacity() const {
-    return _capacity;
-  }
+  uintx capacity() const { return _capacity; }
+  uintx used() const     { return _used; }
+
+  // uncommit the underlying memory and reset the commit watermark.
+  // (note: range stays reserved)
+  void uncommit();
 
   DEBUG_ONLY(void verify() const;)
   void print_on(outputStream* st) const;
@@ -167,12 +171,23 @@ public:
     _freelist.prepend_list(list);
   }
 
+  // If all elements are free (there are no outstanding elements, all have been
+  // returned to the freelist), uncommit the underlying memory range and reset the
+  // freelist. Returns true if that worked, false otherwise.
+  bool try_uncommit();
+
   uintx obj_to_index(const T* t) const   { return _array.obj_to_index(t); }
   T* index_to_obj(uintx idx)             { return _array.index_to_obj(idx); }
   const T* index_to_obj(uintx idx) const { return _array.index_to_obj(idx); }
   size_t committed_bytes() const         { return _array.committed_bytes(); }
-  uintx capacity() const                 { return _array.capacity(); }
   bool contains(const T* v) const        { return _array.contains(v); }
+
+  // Returns the committed capacity, in number of elements
+  uintx capacity() const                  { return _array.capacity(); }
+  // Returns the number of outstanding allocations
+  uintx used() const                      { return _array.used() - free(); }
+  // Returns the number of elements in the freelist waiting for reuse
+  uintx free() const                      { return _freelist.count(); }
 
   DEBUG_ONLY(void verify(bool paranoid = false) const;)
   void print_on(outputStream* st) const;

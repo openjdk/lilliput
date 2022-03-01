@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2011, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2022 SAP SE. All rights reserved.
+ * Copyright (c) 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,105 +34,292 @@
 #include "unittest.hpp"
 #include "testutils.hpp"
 
+
+// helper, calc expected committed range size for a given element number
+template <class T>
+static size_t expected_committed_bytes(uintx elems) {
+  return align_up(sizeof(T) * elems, os::vm_page_size());
+}
+
+// capacity is difficult to predict, since it increases in larger steps and the increase
+// depends on page size and cap increase steps. I just do some range checks here
+#define ASSERT_CAP_EQ(array, n)                                       \
+  ASSERT_EQ(array.capacity(), (uintx)n);                              \
+  ASSERT_EQ(array.committed_bytes(), expected_committed_bytes<T>(n));
+
+// Range check for cap. Note range is including on both ends ([])
+#define ASSERT_CAP_IN_RANGE(array, n1, n2)                             \
+	ASSERT_GE(array.capacity(), (uintx)n1);                              \
+  ASSERT_LE(array.capacity(), (uintx)n2);                              \
+  ASSERT_GE(array.committed_bytes(), expected_committed_bytes<T>(n1)); \
+  ASSERT_LE(array.committed_bytes(), expected_committed_bytes<T>(n2)); \
+
+#define ASSERT_USED(array, n)   ASSERT_EQ(array.used(), (uintx)n)
+#define ASSERT_FREE(array, n)   ASSERT_EQ(array.free(), (uintx)n)
+
+#define ASSERT_USED_FREE(array, used, free) \
+	  ASSERT_USED(array, used);               \
+	  ASSERT_FREE(array, free);
+
+// Test expectation that heap is completely filled. Stats should reflect that.
+// Allocation should return NULL and leave stats unchanged.
+#define ASSERT_ARRAY_IS_FULL(a1)        \
+		ASSERT_USED_FREE(a1, max_size, 0);  \
+		ASSERT_CAP_EQ(a1, max_size);        \
+		ASSERT_EQ(a1.allocate(), (T*)NULL); \
+		ASSERT_USED_FREE(a1, max_size, 0);  \
+		ASSERT_CAP_EQ(a1, max_size);
+
+// Allocate from array a single element, and if not null, stamp it
+template <class T> T* allocate_from_array(AddressStableHeap<T>& a) {
+  T* p = a.allocate();
+  if (p != NULL) {
+    GtestUtils::mark_range(p, sizeof(T));
+  }
+  return p;
+}
+
+// Return an element to the array. Before doing that, check stamp.
+template <class T> void deallocate_to_array(AddressStableHeap<T>& a, T* elem) {
+  ASSERT_TRUE(GtestUtils::check_range(elem, sizeof(T)));
+  a.deallocate(elem);
+}
+
+template <class T> class SimpleArray {
+  T* const _v;
+public:
+  SimpleArray(uintx size) : _v(NEW_C_HEAP_ARRAY(T, size, mtTest)) {
+    ::memset(_v, 0, sizeof(T) * size);
+  }
+  ~SimpleArray() { FREE_C_HEAP_ARRAY(T, _v); }
+  T* v() { return _v; }
+};
+
 template <class T>
 static void test_fill_empty_repeat(uintx initialsize, uintx cap_increase, uintx max_size) {
   AddressStableHeap<T> a1(initialsize, cap_increase, max_size);
-  T** elems = NEW_C_HEAP_ARRAY(T*, max_size, mtTest);
-  memset(elems, 0, sizeof(T*) * max_size);
-  if (initialsize == 0) {
-    ASSERT_EQ(a1.committed_bytes(), (size_t)0);
-  }
+  ASSERT_USED_FREE(a1, 0, 0);
+  ASSERT_CAP_IN_RANGE(a1, initialsize, max_size);
+
+  SimpleArray<T*> elems_holder(max_size);
+  T** elems = elems_holder.v();
+
   DEBUG_ONLY(a1.verify();)
-  const size_t fully_committed_size = align_up(sizeof(T) * max_size, os::vm_page_size());
+
+  uintx expected_used = 0;
+  uintx expected_free = 0;
   for (int cycle = 0; cycle < 3; cycle ++) {
-    // (Re)fill
+
+    // fill completely
     for (uintx i = 0; i < max_size; i ++) {
-      T* p = a1.allocate();
-      if (i < max_size) {
-        ASSERT_NE(p, (T*)NULL);
-        elems[i] = p;
+      T* p = allocate_from_array(a1);
+      ASSERT_NE(p, (T*)NULL);
+      elems[i] = p;
+      expected_used ++;
+      if (expected_free > 0) {
+        expected_free --;
       }
+      // used increases, cap increases in spurts,
+      // free stays 0 since freelist gets only filled after deallocs,
+      ASSERT_USED_FREE(a1, expected_used, expected_free);
+      ASSERT_CAP_IN_RANGE(a1, expected_used + expected_free, max_size);
     }
-    // We should be right at the limit now
-    ASSERT_EQ(a1.allocate(), (T*)NULL);
-    ASSERT_EQ(a1.committed_bytes(), fully_committed_size);
-    DEBUG_ONLY(a1.verify(true);)
-    // Empty out
+
+    ASSERT_EQ(expected_used, max_size);
+    ASSERT_EQ(expected_free, (uintx)0);
+
+    // We should be right at the edge now
+    ASSERT_ARRAY_IS_FULL(a1)
+
+    // Return all elements
     for (uintx i = 0; i < max_size; i ++) {
-      a1.deallocate(elems[i]);
+      deallocate_to_array(a1, elems[i]);
+      expected_used --;
+      expected_free ++;
+      // used, free change, cap stays at max
+      ASSERT_USED_FREE(a1, expected_used, expected_free);
+      ASSERT_CAP_EQ(a1, max_size);
     }
-    ASSERT_EQ(a1.committed_bytes(), fully_committed_size);
+
+    ASSERT_EQ(expected_used, (uintx)0);
+    ASSERT_EQ(expected_free, max_size);
+
     DEBUG_ONLY(a1.verify();)
   }
-  FREE_C_HEAP_ARRAY(T, elems);
 }
 
 template <class T>
 static void test_fill_empty_randomly(uintx initialsize, uintx cap_increase, uintx max_size) {
   AddressStableHeap<T> a1(initialsize, cap_increase, max_size);
-  T** elems = NEW_C_HEAP_ARRAY(T*, max_size, mtTest);
-  memset(elems, 0, sizeof(T*) * max_size);
+  ASSERT_USED_FREE(a1, 0, 0);
+  ASSERT_CAP_IN_RANGE(a1, initialsize, max_size);
+
+  SimpleArray<T*> elems_holder(max_size);
+  T** elems = elems_holder.v();
+
   DEBUG_ONLY(a1.verify();)
-  for (uintx iter = 0; iter < MIN2(max_size * 4, (uintx)1024); iter ++) {
+
+  // randomly alloc or dealloc a number of times and observe stats
+  uintx expected_used = 0;
+  uintx expected_free = 0;
+ASSERT_USED_FREE(a1, expected_used, expected_free);
+  for (uintx iter = 0; iter < MAX2(max_size * 10, (uintx)256); iter ++) {
     const int idx = os::random() % max_size;
     if (elems[idx] == NULL) {
-      T* p = a1.allocate();
+      T* p = allocate_from_array(a1);
       ASSERT_NE(p, (T*)NULL);
       elems[idx] = p;
+      expected_used ++;
+      if (expected_free > 0) {
+        expected_free --;
+      }
     } else {
-      a1.deallocate(elems[idx]);
+      deallocate_to_array(a1, elems[idx]);
       elems[idx] = NULL;
+      expected_free ++;
+      expected_used --;
     }
+    ASSERT_USED_FREE(a1, expected_used, expected_free);
+    ASSERT_CAP_IN_RANGE(a1, expected_used + expected_free, max_size);
     if ((iter % 256) == 0) {
-      DEBUG_ONLY(a1.verify(iter % 1024 == 0);)
+      DEBUG_ONLY(a1.verify(false);)
     }
   }
   DEBUG_ONLY(a1.verify(true);)
-  // Now allocate the full complement, just what we think is the container fill grade is right
+
+  // Now allocate fully
   for (uintx i = 0; i < max_size; i++) {
     if (elems[i] == 0) {
-      T* p = a1.allocate();
+      T* p = allocate_from_array(a1);
       ASSERT_NE(p, (T*)NULL);
       elems[i] = p;
+      expected_used ++;
+      if (expected_free > 0) {
+        expected_free --;
+      }
+      ASSERT_USED_FREE(a1, expected_used, expected_free);
+      ASSERT_CAP_IN_RANGE(a1, expected_used + expected_free, max_size);
     }
   }
-  // We should be right at the limit now
-  ASSERT_EQ(a1.allocate(), (T*)NULL);
-  FREE_C_HEAP_ARRAY(T, elems);
+
+  // We should be right at the edge now
+  ASSERT_ARRAY_IS_FULL(a1)
+
+  DEBUG_ONLY(a1.verify(true);)
 }
 
 template <class T>
-static void run_all_tests(uintx initialsize, uintx cap_increase, uintx max_size) {
-  test_fill_empty_repeat<T>(initialsize, cap_increase, max_size);
-  test_fill_empty_randomly<T>(initialsize, cap_increase, max_size);
+static void test_commit_and_uncommit(uintx initialsize, uintx cap_increase, uintx max_size) {
+  AddressStableHeap<T> a1(initialsize, cap_increase, max_size);
+  ASSERT_USED_FREE(a1, 0, 0);
+  ASSERT_CAP_IN_RANGE(a1, initialsize, max_size);
+
+  SimpleArray<T*> elems_holder(max_size);
+  T** elems = elems_holder.v();
+
+  for (int cycle = 0; cycle < 5; cycle ++) {
+
+    // fill completely
+    for (uintx i = 0; i < max_size; i ++) {
+      T* p = allocate_from_array(a1);
+      ASSERT_NE(p, (T*)NULL);
+      elems[i] = p;
+      // used increases, cap increases in spurts,
+      // free stays 0 since freelist gets only filled after deallocs,
+      ASSERT_USED_FREE(a1, i + 1, 0);
+      ASSERT_CAP_IN_RANGE(a1, i + 1, max_size);
+    }
+
+    ASSERT_ARRAY_IS_FULL(a1);
+
+    // uncommiting should fail, since elements are not free, and should
+    // leave array unchanged
+    ASSERT_FALSE(a1.try_uncommit());
+    ASSERT_ARRAY_IS_FULL(a1);
+
+    // release all but one
+    // fill array completely
+    for (uintx i = 0; i < max_size - 1; i ++) {
+      deallocate_to_array(a1, elems[i]);
+    }
+
+    // capacity is max, but almost all are free now:
+    ASSERT_USED_FREE(a1, 1, max_size - 1);
+    ASSERT_CAP_EQ(a1, max_size);
+
+    // uncommiting should still fail, since elements are not free, and should
+    // leave array unchanged
+    ASSERT_FALSE(a1.try_uncommit());
+    ASSERT_USED_FREE(a1, 1, max_size - 1);
+    ASSERT_CAP_EQ(a1, max_size);
+
+    // release the last element
+    deallocate_to_array(a1, elems[max_size - 1]);
+
+    // now all should be free, still fully committed though
+    ASSERT_USED_FREE(a1, 0, max_size);
+    ASSERT_CAP_EQ(a1, max_size);
+
+    // release should work and reset the whole array
+    ASSERT_TRUE(a1.try_uncommit());
+    ASSERT_USED_FREE(a1, 0, 0);
+    ASSERT_CAP_EQ(a1, 0);
+
+    // a second release on an empty array should work too and be a noop
+    ASSERT_TRUE(a1.try_uncommit());
+    ASSERT_USED_FREE(a1, 0, 0);
+    ASSERT_CAP_EQ(a1, 0);
+  }
 }
 
-template <class T>
-static void run_all_tests() {
-  uintx max_max = (10 * M) / sizeof(T);           // don't use more than 10M in total
-  max_max = MIN2(max_max, (uintx)100000);         // and limit to 100000 entries
-  run_all_tests<T>(0, 1, 1);
-  run_all_tests<T>(1, 1, 10);
-  run_all_tests<T>(10, 1, 10);
-  run_all_tests<T>(0, 1, max_max);
-  run_all_tests<T>(0, max_max/100, max_max);
-  run_all_tests<T>(max_max/2, max_max/100, max_max);
+static const size_t max_memory = 10 * M; // a single test should not use more than that
+
+#define xstr(s) str(s)
+#define str(s) #s
+
+#define TEST_single(T, function, initialsize, cap_increase, max_size)                         \
+TEST_VM(AddressStableArray, function##_##T##_##initialsize##_##cap_increase##_##max_size)     \
+{                                                                                             \
+	ASSERT_LT(expected_committed_bytes<T>(max_size), max_memory);                               \
+	function<T>(initialsize, cap_increase, max_size);                                           \
 }
 
-#define test_stable_array(T) \
-TEST_VM(AddressStableArray, fill_empty_repeat_##T) \
-{ \
-	run_all_tests<T>(); \
-}
+#define TEST_all_functions(T, initialsize, cap_increase, max_size)                    \
+  TEST_single(T, test_fill_empty_repeat, initialsize, cap_increase, max_size)         \
+  TEST_single(T, test_fill_empty_randomly, initialsize, cap_increase, max_size)       \
+  TEST_single(T, test_commit_and_uncommit, initialsize, cap_increase, max_size)
 
-test_stable_array(uint64_t);
+#define TEST_all_functions_small_sizes(T)                                             \
+		TEST_all_functions(T, 0, 1, 1)                                                    \
+    TEST_all_functions(T, 1, 0, 1)                                                    \
+    TEST_all_functions(T, 10, 0, 10)                                                  \
+    TEST_all_functions(T, 10, 3, 100)                                                 \
+    TEST_all_functions(T, 3, 13, 128)
 
-struct s3 { void* p[3]; };
-test_stable_array(s3);
+#define TEST_all_functions_all_sizes(T)                                               \
+		TEST_all_functions_small_sizes(T)                                                 \
+		TEST_all_functions(T, 0, 128, 10000)                                              \
+		TEST_all_functions(T, 5000, 128, 10000)
+
+struct s3   { void* p[3]; };
+
+#ifndef _LP64
+TEST_all_functions_all_sizes(uint32_t)
+#endif
+
+TEST_all_functions_all_sizes(uint64_t)
+TEST_all_functions_all_sizes(s3)
+
+// Some larger types
 
 struct s216 { char p[216]; };
-test_stable_array(s216);
 
-// almost, but not quite, a page
-struct almost_one_page { char m[4096 - 8]; };
-test_stable_array(almost_one_page);
+// almost, but not quite, a page (note: sizeof all types for AddressStableArray must be pointer aligned)
+struct almost4k { char m[4096 - sizeof(intptr_t)]; };
+
+// large
+struct s64k { char m[64 * 1024]; };
+
+TEST_all_functions_small_sizes(s216)
+TEST_all_functions_small_sizes(almost4k)
+TEST_all_functions_small_sizes(s64k)

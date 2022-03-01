@@ -33,8 +33,16 @@
 #include "utilities/freeList.inline.hpp"
 #include "utilities/globalDefinitions.hpp"
 
+//
+//
+/////// AddressStableArray /////////////////////////////////////
+//
+//
+
 template <class T>
 void AddressStableArray<T>::enlarge_capacity(uintx min_needed_capacity) {
+
+  assert(_rs.is_reserved(), "address space not reserved");
 
   assert(_capacity < _max_capacity, "cannot enlarge capacity");
   const uintx new_capacity =
@@ -53,6 +61,19 @@ void AddressStableArray<T>::enlarge_capacity(uintx min_needed_capacity) {
   _capacity = MIN2(capacity_of(new_committed_bytes), _max_capacity);
 
   DEBUG_ONLY(verify();)
+}
+
+// uncommit the underlying memory and reset the commit watermark.
+// (note: range stays reserved)
+template <class T>
+void AddressStableArray<T>::uncommit() {
+  if (_capacity > 0) {
+    const size_t committed_bytes = bytes_needed_page_aligned(_capacity);
+    bool rc = os::uncommit_memory(_rs.base(), committed_bytes, false);
+    assert(rc, "uncommit failed");
+    _capacity = 0;
+    _used = 0;
+  }
 }
 
 #ifdef ASSERT
@@ -79,7 +100,11 @@ void AddressStableArray<T>::print_on(outputStream* st) const {
       );
 }
 
-// AddressStableHeap = AddressStableArray + freelist
+//
+//
+/////// AddressStableHeap /////////////////////////////////////
+//
+//
 
 template <class T>
 struct VerifyFreeListClosure : public FreeList<T>::Closure {
@@ -93,6 +118,9 @@ struct VerifyFreeListClosure : public FreeList<T>::Closure {
 #ifdef ASSERT
 template <class T>
 void AddressStableHeap<T>::verify(bool paranoid) const {
+  assert((used() + free()) <= capacity(),
+         "number mismatch (" UINTX_FORMAT ", " UINTX_FORMAT ", " UINTX_FORMAT ")",
+         capacity(), used(), free());
   _array.verify();
   _freelist.verify(paranoid);
   // verify that all elements are part of the array
@@ -109,5 +137,25 @@ void AddressStableHeap<T>::print_on(outputStream* st) const {
   _freelist.print_on(st, false);
 }
 
+// If all elements are free (there are no outstanding elements, all have been
+// returned to the freelist), uncommit the underlying memory range and reset the
+// freelist. Returns true if that worked, false otherwise.
+template <class T>
+bool AddressStableHeap<T>::try_uncommit() {
+  // if we are already completely uncommitted, its a benign noop.
+  if (_array.used() == 0) {
+    assert(_array.committed_bytes() == 0, "sanity");
+    return true;
+  }
+  // if we have committed some slots, but all of them are in the freelist,
+  // we can uncommit.
+  if (_array.used() > 0 &&
+      _array.used() == _freelist.count()) {
+    _freelist.reset();
+    _array.uncommit();
+    return true;
+  }
+  return false;
+}
 
 #endif // SHARE_UTILITIES_ADDRESSSTABLEARRAY_INLINE_HPP
