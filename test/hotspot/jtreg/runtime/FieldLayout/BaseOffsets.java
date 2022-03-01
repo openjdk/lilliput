@@ -22,15 +22,16 @@
  */
 
 /*
- * @test
+ * @test id=default
  * @library /test/lib
  * @modules java.base/jdk.internal.misc
  *          java.management
- * @run main/othervm -XX:+UseCompressedOops BaseOffsets
+ * @run main/othervm BaseOffsets
  */
 /*
- * @test
+ * @test id=no-coops
  * @library /test/lib
+ * @requires vm.bits == "64"
  * @modules java.base/jdk.internal.misc
  *          java.management
  * @run main/othervm -XX:-UseCompressedOops BaseOffsets
@@ -42,6 +43,7 @@ import java.util.Comparator;
 import jdk.internal.misc.Unsafe;
 
 import jdk.test.lib.Asserts;
+import jdk.test.lib.Platform;
 
 public class BaseOffsets {
 
@@ -72,8 +74,9 @@ public class BaseOffsets {
         Asserts.assertEquals(unsafe.arrayBaseOffset(long[].class),    16, "Misplaced long    array base");
         Asserts.assertEquals(unsafe.arrayBaseOffset(float[].class),   12, "Misplaced float   array base");
         Asserts.assertEquals(unsafe.arrayBaseOffset(double[].class),  16, "Misplaced double  array base");
-        boolean coops = (System.getProperty("java.vm.compressedOopsMode") != null);
-        int expected_objary_offset = coops ? 12 : 16;
+        boolean narrowOops = System.getProperty("java.vm.compressedOopsMode") != null ||
+                             !Platform.is64bit();
+        int expected_objary_offset = narrowOops ? 12 : 16;
         Asserts.assertEquals(unsafe.arrayBaseOffset(Object[].class),  expected_objary_offset, "Misplaced object  array base");
     }
 }
