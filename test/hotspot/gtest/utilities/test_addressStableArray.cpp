@@ -49,7 +49,7 @@ static size_t expected_committed_bytes(uintx elems) {
 
 // Range check for cap. Note range is including on both ends ([])
 #define ASSERT_CAP_IN_RANGE(array, n1, n2)                             \
-	ASSERT_GE(array.capacity(), (uintx)n1);                              \
+  ASSERT_GE(array.capacity(), (uintx)n1);                              \
   ASSERT_LE(array.capacity(), (uintx)n2);                              \
   ASSERT_GE(array.committed_bytes(), expected_committed_bytes<T>(n1)); \
   ASSERT_LE(array.committed_bytes(), expected_committed_bytes<T>(n2)); \
@@ -58,17 +58,17 @@ static size_t expected_committed_bytes(uintx elems) {
 #define ASSERT_FREE(array, n)   ASSERT_EQ(array.free(), (uintx)n)
 
 #define ASSERT_USED_FREE(array, used, free) \
-	  ASSERT_USED(array, used);               \
-	  ASSERT_FREE(array, free);
+    ASSERT_USED(array, used);               \
+    ASSERT_FREE(array, free);
 
 // Test expectation that heap is completely filled. Stats should reflect that.
 // Allocation should return NULL and leave stats unchanged.
 #define ASSERT_ARRAY_IS_FULL(a1)        \
-		ASSERT_USED_FREE(a1, max_size, 0);  \
-		ASSERT_CAP_EQ(a1, max_size);        \
-		ASSERT_EQ(a1.allocate(), (T*)NULL); \
-		ASSERT_USED_FREE(a1, max_size, 0);  \
-		ASSERT_CAP_EQ(a1, max_size);
+    ASSERT_USED_FREE(a1, max_size, 0);  \
+    ASSERT_CAP_EQ(a1, max_size);        \
+    ASSERT_EQ(a1.allocate(), (T*)NULL); \
+    ASSERT_USED_FREE(a1, max_size, 0);  \
+    ASSERT_CAP_EQ(a1, max_size);
 
 // Allocate from array a single element, and if not null, stamp it
 template <class T> T* allocate_from_array(AddressStableHeap<T>& a) {
@@ -280,8 +280,8 @@ static const size_t max_memory = 10 * M; // a single test should not use more th
 #define TEST_single(T, function, initialsize, max_size)                         \
 TEST_VM(AddressStableArray, function##_##T##_##initialsize##_##max_size)        \
 {                                                                               \
-	ASSERT_LT(expected_committed_bytes<T>(max_size), max_memory);                 \
-	function<T>(initialsize, max_size);                                           \
+  ASSERT_LT(expected_committed_bytes<T>(max_size), max_memory);                 \
+  function<T>(initialsize, max_size);                                           \
 }
 
 #define TEST_all_functions(T, initialsize, max_size)                            \
@@ -290,17 +290,17 @@ TEST_VM(AddressStableArray, function##_##T##_##initialsize##_##max_size)        
   TEST_single(T, test_commit_and_uncommit, initialsize, max_size)
 
 #define TEST_all_functions_small_sizes(T)                                       \
-		TEST_all_functions(T, 0, 1)                                                 \
-    TEST_all_functions(T, 1, 1)                                                 \
-    TEST_all_functions(T, 0, 100)                                               \
-    TEST_all_functions(T, 10, 100)
+  TEST_all_functions(T, 0, 1)                                                   \
+  TEST_all_functions(T, 1, 1)                                                   \
+  TEST_all_functions(T, 0, 100)                                                 \
+  TEST_all_functions(T, 10, 100)
 
 
 // This we only execute for small types
 #define TEST_all_functions_all_sizes(T)                                         \
-		TEST_all_functions_small_sizes(T)                                           \
-		TEST_all_functions(T, 0, 10000)                                             \
-		TEST_all_functions(T, 1000, 10000)
+  TEST_all_functions_small_sizes(T)                                             \
+  TEST_all_functions(T, 0, 10000)                                               \
+  TEST_all_functions(T, 1000, 10000)
 
 struct s3 { void* p[3]; };
 
