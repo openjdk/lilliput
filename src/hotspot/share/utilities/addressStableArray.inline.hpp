@@ -45,8 +45,13 @@ void AddressStableArray<T>::enlarge_capacity(uintx min_needed_capacity) {
   assert(_rs.is_reserved(), "address space not reserved");
 
   assert(_capacity < _max_capacity, "cannot enlarge capacity");
+
+  // We increase by a quarter, but at least 4 pages.
+  const uintx cap_increase =
+      MAX2(_capacity / 4, capacity_of(os::vm_page_size() * 4));
+
   const uintx new_capacity =
-      clamp((uintx)(_capacity + _cap_increase), min_needed_capacity, _max_capacity);
+      clamp((uintx)(_capacity + cap_increase), min_needed_capacity, _max_capacity);
 
   const size_t committed_bytes = bytes_needed_page_aligned(_capacity);
   const size_t new_committed_bytes = bytes_needed_page_aligned(new_capacity);

@@ -96,8 +96,8 @@ public:
 };
 
 template <class T>
-static void test_fill_empty_repeat(uintx initialsize, uintx cap_increase, uintx max_size) {
-  AddressStableHeap<T> a1(initialsize, cap_increase, max_size);
+static void test_fill_empty_repeat(uintx initialsize, uintx max_size) {
+  AddressStableHeap<T> a1(initialsize, max_size);
   ASSERT_USED_FREE(a1, 0, 0);
   ASSERT_CAP_IN_RANGE(a1, initialsize, max_size);
 
@@ -149,8 +149,8 @@ static void test_fill_empty_repeat(uintx initialsize, uintx cap_increase, uintx 
 }
 
 template <class T>
-static void test_fill_empty_randomly(uintx initialsize, uintx cap_increase, uintx max_size) {
-  AddressStableHeap<T> a1(initialsize, cap_increase, max_size);
+static void test_fill_empty_randomly(uintx initialsize, uintx max_size) {
+  AddressStableHeap<T> a1(initialsize, max_size);
   ASSERT_USED_FREE(a1, 0, 0);
   ASSERT_CAP_IN_RANGE(a1, initialsize, max_size);
 
@@ -162,7 +162,7 @@ static void test_fill_empty_randomly(uintx initialsize, uintx cap_increase, uint
   // randomly alloc or dealloc a number of times and observe stats
   uintx expected_used = 0;
   uintx expected_free = 0;
-ASSERT_USED_FREE(a1, expected_used, expected_free);
+
   for (uintx iter = 0; iter < MAX2(max_size * 10, (uintx)256); iter ++) {
     const int idx = os::random() % max_size;
     if (elems[idx] == NULL) {
@@ -209,8 +209,8 @@ ASSERT_USED_FREE(a1, expected_used, expected_free);
 }
 
 template <class T>
-static void test_commit_and_uncommit(uintx initialsize, uintx cap_increase, uintx max_size) {
-  AddressStableHeap<T> a1(initialsize, cap_increase, max_size);
+static void test_commit_and_uncommit(uintx initialsize, uintx max_size) {
+  AddressStableHeap<T> a1(initialsize, max_size);
   ASSERT_USED_FREE(a1, 0, 0);
   ASSERT_CAP_IN_RANGE(a1, initialsize, max_size);
 
@@ -277,31 +277,32 @@ static const size_t max_memory = 10 * M; // a single test should not use more th
 #define xstr(s) str(s)
 #define str(s) #s
 
-#define TEST_single(T, function, initialsize, cap_increase, max_size)                         \
-TEST_VM(AddressStableArray, function##_##T##_##initialsize##_##cap_increase##_##max_size)     \
-{                                                                                             \
-	ASSERT_LT(expected_committed_bytes<T>(max_size), max_memory);                               \
-	function<T>(initialsize, cap_increase, max_size);                                           \
+#define TEST_single(T, function, initialsize, max_size)                         \
+TEST_VM(AddressStableArray, function##_##T##_##initialsize##_##max_size)        \
+{                                                                               \
+	ASSERT_LT(expected_committed_bytes<T>(max_size), max_memory);                 \
+	function<T>(initialsize, max_size);                                           \
 }
 
-#define TEST_all_functions(T, initialsize, cap_increase, max_size)                    \
-  TEST_single(T, test_fill_empty_repeat, initialsize, cap_increase, max_size)         \
-  TEST_single(T, test_fill_empty_randomly, initialsize, cap_increase, max_size)       \
-  TEST_single(T, test_commit_and_uncommit, initialsize, cap_increase, max_size)
+#define TEST_all_functions(T, initialsize, max_size)                            \
+  TEST_single(T, test_fill_empty_repeat, initialsize, max_size)                 \
+  TEST_single(T, test_fill_empty_randomly, initialsize, max_size)               \
+  TEST_single(T, test_commit_and_uncommit, initialsize, max_size)
 
-#define TEST_all_functions_small_sizes(T)                                             \
-		TEST_all_functions(T, 0, 1, 1)                                                    \
-    TEST_all_functions(T, 1, 0, 1)                                                    \
-    TEST_all_functions(T, 10, 0, 10)                                                  \
-    TEST_all_functions(T, 10, 3, 100)                                                 \
-    TEST_all_functions(T, 3, 13, 128)
+#define TEST_all_functions_small_sizes(T)                                       \
+		TEST_all_functions(T, 0, 1)                                                 \
+    TEST_all_functions(T, 1, 1)                                                 \
+    TEST_all_functions(T, 0, 100)                                               \
+    TEST_all_functions(T, 10, 100)
 
-#define TEST_all_functions_all_sizes(T)                                               \
-		TEST_all_functions_small_sizes(T)                                                 \
-		TEST_all_functions(T, 0, 128, 10000)                                              \
-		TEST_all_functions(T, 5000, 128, 10000)
 
-struct s3   { void* p[3]; };
+// This we only execute for small types
+#define TEST_all_functions_all_sizes(T)                                         \
+		TEST_all_functions_small_sizes(T)                                           \
+		TEST_all_functions(T, 0, 10000)                                             \
+		TEST_all_functions(T, 1000, 10000)
+
+struct s3 { void* p[3]; };
 
 #ifndef _LP64
 TEST_all_functions_all_sizes(uint32_t)

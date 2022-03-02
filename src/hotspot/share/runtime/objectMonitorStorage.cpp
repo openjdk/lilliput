@@ -87,8 +87,7 @@ void ObjectMonitorStorage::initialize() {
   const uintx initial_cap = 1024;
   const uintx max_object_monitors = MonitorStorageSize / sizeof(ObjectMonitor);
   const uintx max_cap = clamp(max_object_monitors, (uintx)1024, (uintx)UINT_MAX - 1);
-  const uintx cap_increase = 1024;
-  _array = new ArrayType(initial_cap, cap_increase, max_cap);
+  _array = new ArrayType(initial_cap, max_cap);
   MemTracker::record_virtual_memory_type((address)_array->base(), mtObjectMonitor);
 }
 
