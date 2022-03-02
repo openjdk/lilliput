@@ -49,8 +49,8 @@ class objArrayOopDesc : public arrayOopDesc {
 
 private:
   // Give size of objArrayOop in HeapWords minus the header
-  static int array_size_in_bytes(int length) {
-    return length * heapOopSize;
+  static size_t array_size_in_bytes(int length) {
+    return (size_t)length * heapOopSize;
   }
 
  public:
@@ -75,11 +75,11 @@ private:
 
   static size_t object_size(int length) {
     // This returns the object size in HeapWords.
-    uint asz = array_size_in_bytes(length);
-    uint size_words = align_up(header_size_in_bytes() + asz, HeapWordSize) / HeapWordSize;
-    uint osz = align_object_size(size_words);
-    assert((int)osz > 0, "no overflow");
-    return (size_t)osz;
+    size_t asz = array_size_in_bytes(length);
+    size_t size_words = align_up(header_size_in_bytes() + asz, HeapWordSize) / HeapWordSize;
+    size_t osz = align_object_size(size_words);
+    assert(osz < max_jint, "no overflow");
+    return osz;
   }
 
   Klass* element_klass();
