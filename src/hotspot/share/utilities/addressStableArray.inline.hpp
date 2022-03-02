@@ -42,7 +42,7 @@
 template <class T>
 void AddressStableArray<T>::enlarge_capacity(uintx min_needed_capacity) {
 
-  assert(_rs.is_reserved(), "address space not reserved");
+  assert(_elements != NULL, "address space not reserved?");
 
   assert(_capacity < _max_capacity, "cannot enlarge capacity");
 
@@ -60,7 +60,7 @@ void AddressStableArray<T>::enlarge_capacity(uintx min_needed_capacity) {
   // committed, this should hold always true:
   assert(new_committed_bytes > committed_bytes, "_capacity not at commit boundary");
 
-  os::commit_memory_or_exit(_rs.base() + committed_bytes,
+  os::commit_memory_or_exit((char*)_elements + committed_bytes,
                         new_committed_bytes - committed_bytes,
                         false, "");
   _capacity = MIN2(capacity_of(new_committed_bytes), _max_capacity);
@@ -74,7 +74,7 @@ template <class T>
 void AddressStableArray<T>::uncommit() {
   if (_capacity > 0) {
     const size_t committed_bytes = bytes_needed_page_aligned(_capacity);
-    bool rc = os::uncommit_memory(_rs.base(), committed_bytes, false);
+    bool rc = os::uncommit_memory((char*)_elements, committed_bytes, false);
     assert(rc, "uncommit failed");
     _capacity = 0;
     _used = 0;
@@ -84,10 +84,8 @@ void AddressStableArray<T>::uncommit() {
 #ifdef ASSERT
 template <class T>
 void AddressStableArray<T>::verify() const {
-  assert(_rs.is_reserved(), "no space");
-  assert(_elements != NULL, "elements null");
+  assert(_elements != NULL, "not reserved?");
   assert(_capacity <= _max_capacity, "Sanity");
-  assert(_max_capacity <= capacity_of(_rs.size()), "Space too small?");
   assert(_used <= _capacity, "Sanity");
 }
 #endif // ASSERT
@@ -99,8 +97,8 @@ void AddressStableArray<T>::print_on(outputStream* st) const {
       "used/capacity/max: " UINTX_FORMAT "/" UINTX_FORMAT "/" UINTX_FORMAT
       ,
       sizeof(T),
-      p2i(_rs.base()), p2i(_rs.base() + _rs.size()),
-      _rs.size(), bytes_needed_page_aligned(_capacity),
+      p2i(_elements), p2i(_elements + _max_capacity),
+      reserved_bytes(), committed_bytes(),
       _used, _capacity, _max_capacity
       );
 }

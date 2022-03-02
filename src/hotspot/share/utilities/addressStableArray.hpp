@@ -37,18 +37,25 @@
 class outputStream;
 
 // An growable array of homogenous things, living in a pre-reserved address range
-//  (and hence ultimately limited in size). Does its own on-demand committing/uncommitting.
+//  (and hence ultimately limited in size).
+// It does not own the reserved memory range (does get handed in) but does its own
+//  on-demand committing/uncommitting.
 
 template <class T>
 class AddressStableArray : public CHeapObj<mtInternal> {
   STATIC_ASSERT(sizeof(T) >= sizeof(T*));              // (1)
   STATIC_ASSERT(is_aligned(sizeof(T), sizeof(T*)));    // (2)
 
-  ReservedSpace _rs;              // Underlying address range
+  // Underlying address range [_elements, _elements + _max_capacity). Gets
+  // handed in from outside. Note that we commit and uncommit page wise and
+  // therefore the start pointer has to be page aligned. End does not have to
+  // be (we can curtail _max_capacity beyond what the last page could
+  // accomodate) but nothing else should live in the remainder of the last page.
   T* const _elements;
-  const uintx _max_capacity;      // max number of slots (determines size of underlying address range)
-  uintx _capacity;                // number of slots usable without committing additional memory
-  uintx _used;                    // number of slots used (includes those in freelist)
+  const uintx _max_capacity;      // max number of slots
+
+  uintx _capacity;                // number of slots committed
+  uintx _used;                    // number of slots allocated
 
   static uintx capacity_of(size_t bytes)  { return bytes / sizeof(T); }
 
@@ -68,12 +75,14 @@ class AddressStableArray : public CHeapObj<mtInternal> {
 
 public:
 
-  AddressStableArray(uintx initial_capacity, uintx max_capacity) :
-    _rs(align_up(bytes_needed(max_capacity), os::vm_allocation_granularity())),
-    _elements((T*)_rs.base()),
+  AddressStableArray(T* elements, uintx initial_capacity, uintx max_capacity) :
+    _elements(elements),
     _max_capacity(max_capacity),
     _capacity(0), _used(0)
   {
+    assert(_elements != NULL, "sanity");
+    assert(is_aligned(_elements, os::vm_page_size()), "start address must be page aligned");
+    assert(_max_capacity > 0, "empty range?");
     assert(_max_capacity >= initial_capacity, "sanity");
     if ((initial_capacity) > 0) {
       enlarge_capacity(initial_capacity);
@@ -113,6 +122,10 @@ public:
     return _elements + idx;
   }
 
+  size_t reserved_bytes() const {
+    return bytes_needed_page_aligned(_max_capacity);
+  }
+
   size_t committed_bytes() const {
     return bytes_needed_page_aligned(_capacity);
   }
@@ -144,8 +157,8 @@ class AddressStableHeap : public CHeapObj<mtInternal> {
 
 public:
 
-  AddressStableHeap(uintx initial_capacity, uintx max_capacity) :
-    _array(initial_capacity, max_capacity),
+  AddressStableHeap(T* elements, uintx initial_capacity, uintx max_capacity) :
+    _array(elements, initial_capacity, max_capacity),
     _freelist()
   {}
 

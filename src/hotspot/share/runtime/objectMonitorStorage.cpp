@@ -36,6 +36,7 @@
 //static const bool be_paranoid = true;
 static const bool be_paranoid = false;
 
+ReservedSpace ObjectMonitorStorage::_rs;
 ObjectMonitorStorage::ArrayType* ObjectMonitorStorage::_array = NULL;
 
 // re-build a new list of newly allocated free monitors and return its head
@@ -84,11 +85,29 @@ void ObjectMonitorStorage::bulk_deallocate(OMFreeListType& omlist) {
 
 void ObjectMonitorStorage::initialize() {
   assert(_array == NULL, "Already initialized?");
-  const uintx initial_cap = 1024;
-  const uintx max_object_monitors = MonitorStorageSize / sizeof(ObjectMonitor);
-  const uintx max_cap = clamp(max_object_monitors, (uintx)1024, (uintx)UINT_MAX - 1);
-  _array = new ArrayType(initial_cap, max_cap);
-  MemTracker::record_virtual_memory_type((address)_array->base(), mtObjectMonitor);
+
+  // Calc size of underlying address range
+  const uintx min_object_monitors = 1024;
+  const uintx max_object_monitors = (uintx)UINT_MAX - 1; // lets say, for now, it should fit into 32 bits
+  const size_t range_size = align_up(
+      clamp(MonitorStorageSize,
+            min_object_monitors * sizeof(ObjectMonitor),
+            max_object_monitors * sizeof(ObjectMonitor)),
+            os::vm_page_size());
+  const uintx max_capacity = range_size / sizeof(ObjectMonitor);
+
+  // Reserve space
+  _rs = ReservedSpace(range_size);
+  if (_rs.is_reserved()) {
+    log_with_state("Reserved: [" PTR_FORMAT "-" PTR_FORMAT "), " SIZE_FORMAT " bytes (" UINTX_FORMAT " monitors).",
+                   p2i(_rs.base()), p2i(_rs.end()), _rs.size(), max_capacity);
+    _array = new ArrayType((ObjectMonitor*)_rs.base(), min_object_monitors, max_capacity);
+  } else {
+    vm_exit_out_of_memory(range_size, OOM_MMAP_ERROR, "Failed to reserve Object Monitor Store");
+  }
+
+  // Register with NMT
+  MemTracker::record_virtual_memory_type(_rs.base(), mtObjectMonitor);
 }
 
 void ObjectMonitorStorage::print(outputStream* st) {

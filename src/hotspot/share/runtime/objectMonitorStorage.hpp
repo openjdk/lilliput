@@ -47,6 +47,8 @@ class ObjectMonitorStorage : public AllStatic {
   typedef AddressStableHeap<ObjectMonitor> ArrayType;
   static ArrayType* _array;
 
+  static ReservedSpace _rs;
+
   // re-build a new list of newly allocated free monitors and return its head
   static void bulk_allocate_new_list(OMFreeListType& freelist_to_fill);
 

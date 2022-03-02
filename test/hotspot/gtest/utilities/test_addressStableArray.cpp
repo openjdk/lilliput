@@ -35,6 +35,22 @@
 #include "testutils.hpp"
 
 
+static const size_t max_memory = 10 * M; // a single test should not use more than that
+
+// Helper class to reserve memory for a test
+template <class T>
+class MemoryReserver {
+  ReservedSpace _rs;
+public:
+  MemoryReserver(uintx max_elems) :
+    _rs(align_up(max_elems * sizeof(T), (size_t)os::vm_allocation_granularity()))
+  {
+    assert(_rs.base() != NULL, "Failed to reserve space");
+    assert(_rs.size() <= max_memory, "too much memory for test");
+  }
+  T* elements() { return (T*)_rs.base(); }
+};
+
 // helper, calc expected committed range size for a given element number
 template <class T>
 static size_t expected_committed_bytes(uintx elems) {
@@ -96,8 +112,8 @@ public:
 };
 
 template <class T>
-static void test_fill_empty_repeat(uintx initialsize, uintx max_size) {
-  AddressStableHeap<T> a1(initialsize, max_size);
+static void test_fill_empty_repeat(AddressStableHeap<T>& a1, uintx initialsize, uintx max_size) {
+
   ASSERT_USED_FREE(a1, 0, 0);
   ASSERT_CAP_IN_RANGE(a1, initialsize, max_size);
 
@@ -149,8 +165,8 @@ static void test_fill_empty_repeat(uintx initialsize, uintx max_size) {
 }
 
 template <class T>
-static void test_fill_empty_randomly(uintx initialsize, uintx max_size) {
-  AddressStableHeap<T> a1(initialsize, max_size);
+static void test_fill_empty_randomly(AddressStableHeap<T>& a1, uintx initialsize, uintx max_size) {
+
   ASSERT_USED_FREE(a1, 0, 0);
   ASSERT_CAP_IN_RANGE(a1, initialsize, max_size);
 
@@ -209,8 +225,8 @@ static void test_fill_empty_randomly(uintx initialsize, uintx max_size) {
 }
 
 template <class T>
-static void test_commit_and_uncommit(uintx initialsize, uintx max_size) {
-  AddressStableHeap<T> a1(initialsize, max_size);
+static void test_commit_and_uncommit(AddressStableHeap<T>& a1, uintx initialsize, uintx max_size) {
+
   ASSERT_USED_FREE(a1, 0, 0);
   ASSERT_CAP_IN_RANGE(a1, initialsize, max_size);
 
@@ -272,16 +288,15 @@ static void test_commit_and_uncommit(uintx initialsize, uintx max_size) {
   }
 }
 
-static const size_t max_memory = 10 * M; // a single test should not use more than that
-
 #define xstr(s) str(s)
 #define str(s) #s
 
 #define TEST_single(T, function, initialsize, max_size)                         \
 TEST_VM(AddressStableArray, function##_##T##_##initialsize##_##max_size)        \
 {                                                                               \
-  ASSERT_LT(expected_committed_bytes<T>(max_size), max_memory);                 \
-  function<T>(initialsize, max_size);                                           \
+  MemoryReserver<T> reserver(max_size);                                         \
+  AddressStableHeap<T> a(reserver.elements(), initialsize, max_size);           \
+  function<T>(a, initialsize, max_size);                                        \
 }
 
 #define TEST_all_functions(T, initialsize, max_size)                            \
@@ -299,8 +314,8 @@ TEST_VM(AddressStableArray, function##_##T##_##initialsize##_##max_size)        
 // This we only execute for small types
 #define TEST_all_functions_all_sizes(T)                                         \
   TEST_all_functions_small_sizes(T)                                             \
-  TEST_all_functions(T, 0, 10000)                                               \
-  TEST_all_functions(T, 1000, 10000)
+  TEST_all_functions(T, 0, 50000)                                               \
+  TEST_all_functions(T, 1000, 50000)
 
 struct s3 { void* p[3]; };
 
