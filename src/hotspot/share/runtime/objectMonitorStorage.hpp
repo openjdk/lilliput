@@ -88,8 +88,9 @@ public:
 
   static void cleanup_before_thread_death(Thread* t);
 
-  static ObjectMonitor* ref_to_om(OMRef ref)       { return _array->index_to_obj((uintx)ref); }
-  static OMRef om_to_ref(const ObjectMonitor* om)  { return (OMRef)_array->obj_to_index(om); }
+  // IMplement Todo
+  //static ObjectMonitor* ref_to_om(OMRef ref);
+  //static OMRef om_to_ref(const ObjectMonitor* om);
 
   static void initialize();
 

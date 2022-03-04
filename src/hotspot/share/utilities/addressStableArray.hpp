@@ -106,22 +106,6 @@ public:
     return p;
   }
 
-  uintx obj_to_index(const T* t) const {
-    assert(t != NULL, "element is NULL");
-    assert(contains(t), "elements outside this heap");
-    return (uintx)(t - _elements);
-  }
-
-  T* index_to_obj(uintx idx) {
-    check_index(idx);
-    return _elements + idx;
-  }
-
-  const T* index_to_obj(uintx idx) const {
-    check_index(idx);
-    return _elements + idx;
-  }
-
   size_t reserved_bytes() const {
     return bytes_needed_page_aligned(_max_capacity);
   }
@@ -184,9 +168,6 @@ public:
   // freelist. Returns true if that worked, false otherwise.
   bool try_uncommit();
 
-  uintx obj_to_index(const T* t) const   { return _array.obj_to_index(t); }
-  T* index_to_obj(uintx idx)             { return _array.index_to_obj(idx); }
-  const T* index_to_obj(uintx idx) const { return _array.index_to_obj(idx); }
   size_t committed_bytes() const         { return _array.committed_bytes(); }
   bool contains(const T* v) const        { return _array.contains(v); }
 
@@ -199,9 +180,6 @@ public:
 
   DEBUG_ONLY(void verify(bool paranoid = false) const;)
   void print_on(outputStream* st) const;
-
-  // Base address (exposed to set NMT cat; TODO: this is annoying, should be done better
-  const T* base() const { return _array.base(); }
 
 };
 
