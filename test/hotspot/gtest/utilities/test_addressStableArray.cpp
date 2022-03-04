@@ -295,7 +295,8 @@ static void test_commit_and_uncommit(AddressStableArrayWithFreeList<T>& a1, uint
 TEST_VM(AddressStableArray, function##_##T##_##initialsize##_##max_size)        \
 {                                                                               \
   MemoryReserver<T> reserver(max_size);                                         \
-  AddressStableArrayWithFreeList<T> a(reserver.elements(), initialsize, max_size);           \
+  AddressStableArrayWithFreeList<T> a;                                          \
+  a.initialize(reserver.elements(), initialsize, max_size);                     \
   function<T>(a, initialsize, max_size);                                        \
 }
 

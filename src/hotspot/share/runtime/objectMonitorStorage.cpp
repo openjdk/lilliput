@@ -37,7 +37,7 @@
 static const bool be_paranoid = false;
 
 ReservedSpace ObjectMonitorStorage::_rs;
-ObjectMonitorStorage::ArrayType* ObjectMonitorStorage::_array = NULL;
+ObjectMonitorStorage::ArrayType ObjectMonitorStorage::_array;
 
 // re-build a new list of newly allocated free monitors and return its head
 void ObjectMonitorStorage::bulk_allocate_new_list(OMFreeListType& freelist_to_fill) {
@@ -45,10 +45,10 @@ void ObjectMonitorStorage::bulk_allocate_new_list(OMFreeListType& freelist_to_fi
   MutexLocker ml(ObjectMonitorStorage_lock, Mutex::_no_safepoint_check_flag);
 
   for (int i = 0; i < (int)PreallocatedObjectMonitors - 1; i ++) {
-    ObjectMonitor* m = _array->allocate();
+    ObjectMonitor* m = _array.allocate();
     if (m == NULL) {
       fatal("Maximum number of object monitors allocated (" UINTX_FORMAT "), increase MonitorStorageSize.",
-            _array->capacity());
+            _array.capacity());
     }
     freelist_to_fill.prepend(m);
   }
@@ -66,7 +66,7 @@ void ObjectMonitorStorage::cleanup_before_thread_death(Thread* t) {
     MutexLocker ml(ObjectMonitorStorage_lock, Mutex::_no_safepoint_check_flag);
     log_with_state("cleanup_before_thread_death: returning " UINTX_FORMAT " unused monitors",
                    tl_list.count());
-    _array->bulk_deallocate(tl_list);
+    _array.bulk_deallocate(tl_list);
     DEBUG_ONLY(verify();)
   }
   assert(tl_list.empty(), "thread local list should now be empty");
@@ -78,13 +78,12 @@ void ObjectMonitorStorage::bulk_deallocate(OMFreeListType& omlist) {
     MutexLocker ml(ObjectMonitorStorage_lock, Mutex::_no_safepoint_check_flag);
     log_with_state("bulk_deallocate: returning " UINTX_FORMAT " deflated monitors",
                    omlist.count());
-    _array->bulk_deallocate(omlist);
+    _array.bulk_deallocate(omlist);
     DEBUG_ONLY(verify();)
   }
 }
 
 void ObjectMonitorStorage::initialize() {
-  assert(_array == NULL, "Already initialized?");
 
   // Calc size of underlying address range
   const uintx min_object_monitors = 1024;
@@ -101,7 +100,7 @@ void ObjectMonitorStorage::initialize() {
   if (_rs.is_reserved()) {
     log_with_state("Reserved: [" PTR_FORMAT "-" PTR_FORMAT "), " SIZE_FORMAT " bytes (" UINTX_FORMAT " monitors).",
                    p2i(_rs.base()), p2i(_rs.end()), _rs.size(), max_capacity);
-    _array = new ArrayType((ObjectMonitor*)_rs.base(), min_object_monitors, max_capacity);
+    _array.initialize((ObjectMonitor*)_rs.base(), min_object_monitors, max_capacity);
   } else {
     vm_exit_out_of_memory(range_size, OOM_MMAP_ERROR, "Failed to reserve Object Monitor Store");
   }
@@ -111,20 +110,14 @@ void ObjectMonitorStorage::initialize() {
 }
 
 void ObjectMonitorStorage::print(outputStream* st) {
-  if (_array != NULL) {
-    _array->print_on(st);
-    st->cr();
-  } else {
-    st->print_cr("Not initialized");
-  }
+  _array.print_on(st);
+  st->cr();
 }
 
 #ifdef ASSERT
 void ObjectMonitorStorage::verify() {
   assert_lock_strong(ObjectMonitorStorage_lock);
-  if (_array != NULL) {
-    _array->verify(be_paranoid);
-  }
+  _array.verify(be_paranoid);
 }
 #endif
 

@@ -51,8 +51,8 @@ class AddressStableArray : public CHeapObj<mtInternal> {
   // therefore the start pointer has to be page aligned. End does not have to
   // be (we can curtail _max_capacity beyond what the last page could
   // accomodate) but nothing else should live in the remainder of the last page.
-  T* const _elements;
-  const uintx _max_capacity;      // max number of slots
+  T* _elements;
+  uintx _max_capacity;            // max number of slots
 
   uintx _capacity;                // number of slots committed
   uintx _used;                    // number of slots allocated
@@ -75,15 +75,19 @@ class AddressStableArray : public CHeapObj<mtInternal> {
 
 public:
 
-  AddressStableArray(T* elements, uintx initial_capacity, uintx max_capacity) :
-    _elements(elements),
-    _max_capacity(max_capacity),
-    _capacity(0), _used(0)
-  {
-    assert(_elements != NULL, "sanity");
-    assert(is_aligned(_elements, os::vm_page_size()), "start address must be page aligned");
-    assert(_max_capacity > 0, "empty range?");
-    assert(_max_capacity >= initial_capacity, "sanity");
+  AddressStableArray() : _elements(NULL), _max_capacity(0), _capacity(0), _used(0) {}
+
+  void initialize(T* elements, uintx initial_capacity, uintx max_capacity) {
+    assert(elements != NULL, "sanity");
+    assert(is_aligned(elements, os::vm_page_size()), "start address must be page aligned");
+    assert(max_capacity > 0, "empty range?");
+    assert(max_capacity >= initial_capacity, "sanity");
+
+    assert(_elements == NULL, "already initialized?");
+    _elements = elements;
+    _max_capacity = max_capacity;
+    _capacity = _used = 0;
+
     if ((initial_capacity) > 0) {
       enlarge_capacity(initial_capacity);
     }
@@ -141,10 +145,9 @@ class AddressStableArrayWithFreeList : public CHeapObj<mtInternal> {
 
 public:
 
-  AddressStableArrayWithFreeList(T* elements, uintx initial_capacity, uintx max_capacity) :
-    _array(elements, initial_capacity, max_capacity),
-    _freelist()
-  {}
+  void initialize(T* elements, uintx initial_capacity, uintx max_capacity) {
+    _array.initialize(elements, initial_capacity, max_capacity);
+  }
 
   T* allocate() {
     T* p = _freelist.take_top();
