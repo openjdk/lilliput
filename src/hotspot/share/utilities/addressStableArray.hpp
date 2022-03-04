@@ -131,7 +131,7 @@ public:
 
 // Same, but with freelist supporting deallocation
 template <class T>
-class AddressStableHeap : public CHeapObj<mtInternal> {
+class AddressStableArrayWithFreeList : public CHeapObj<mtInternal> {
 
   typedef AddressStableArray<T> ArrayType;
   typedef FreeList<T> FreeListType;
@@ -141,7 +141,7 @@ class AddressStableHeap : public CHeapObj<mtInternal> {
 
 public:
 
-  AddressStableHeap(T* elements, uintx initial_capacity, uintx max_capacity) :
+  AddressStableArrayWithFreeList(T* elements, uintx initial_capacity, uintx max_capacity) :
     _array(elements, initial_capacity, max_capacity),
     _freelist()
   {}

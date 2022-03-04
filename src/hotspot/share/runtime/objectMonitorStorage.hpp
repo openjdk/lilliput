@@ -44,7 +44,7 @@ typedef uint32_t OMRef;
 
 class ObjectMonitorStorage : public AllStatic {
 
-  typedef AddressStableHeap<ObjectMonitor> ArrayType;
+  typedef AddressStableArrayWithFreeList<ObjectMonitor> ArrayType;
   static ArrayType* _array;
 
   static ReservedSpace _rs;

@@ -105,13 +105,13 @@ void AddressStableArray<T>::print_on(outputStream* st) const {
 
 //
 //
-/////// AddressStableHeap /////////////////////////////////////
+/////// AddressStableArrayWithFreeList /////////////////////////////////////
 //
 //
 
 template <class T>
 struct VerifyFreeListClosure : public FreeList<T>::Closure {
-  const AddressStableHeap<T>* _container;
+  const AddressStableArrayWithFreeList<T>* _container;
   bool do_it(const T* p) override {
     assert(_container->contains(p), "kukuck");
     return true;
@@ -120,7 +120,7 @@ struct VerifyFreeListClosure : public FreeList<T>::Closure {
 
 #ifdef ASSERT
 template <class T>
-void AddressStableHeap<T>::verify(bool paranoid) const {
+void AddressStableArrayWithFreeList<T>::verify(bool paranoid) const {
   assert((used() + free()) <= capacity(),
          "number mismatch (" UINTX_FORMAT ", " UINTX_FORMAT ", " UINTX_FORMAT ")",
          capacity(), used(), free());
@@ -134,7 +134,7 @@ void AddressStableHeap<T>::verify(bool paranoid) const {
 #endif // ASSERT
 
 template <class T>
-void AddressStableHeap<T>::print_on(outputStream* st) const {
+void AddressStableArrayWithFreeList<T>::print_on(outputStream* st) const {
   _array.print_on(st);
   st->print(", freelist: ");
   _freelist.print_on(st, false);
@@ -144,7 +144,7 @@ void AddressStableHeap<T>::print_on(outputStream* st) const {
 // returned to the freelist), uncommit the underlying memory range and reset the
 // freelist. Returns true if that worked, false otherwise.
 template <class T>
-bool AddressStableHeap<T>::try_uncommit() {
+bool AddressStableArrayWithFreeList<T>::try_uncommit() {
   // if we are already completely uncommitted, its a benign noop.
   if (_array.used() == 0) {
     assert(_array.committed_bytes() == 0, "sanity");

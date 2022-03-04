@@ -87,7 +87,7 @@ static size_t expected_committed_bytes(uintx elems) {
     ASSERT_CAP_EQ(a1, max_size);
 
 // Allocate from array a single element, and if not null, stamp it
-template <class T> T* allocate_from_array(AddressStableHeap<T>& a) {
+template <class T> T* allocate_from_array(AddressStableArrayWithFreeList<T>& a) {
   T* p = a.allocate();
   if (p != NULL) {
     GtestUtils::mark_range(p, sizeof(T));
@@ -96,7 +96,7 @@ template <class T> T* allocate_from_array(AddressStableHeap<T>& a) {
 }
 
 // Return an element to the array. Before doing that, check stamp.
-template <class T> void deallocate_to_array(AddressStableHeap<T>& a, T* elem) {
+template <class T> void deallocate_to_array(AddressStableArrayWithFreeList<T>& a, T* elem) {
   ASSERT_TRUE(GtestUtils::check_range(elem, sizeof(T)));
   a.deallocate(elem);
 }
@@ -112,7 +112,7 @@ public:
 };
 
 template <class T>
-static void test_fill_empty_repeat(AddressStableHeap<T>& a1, uintx initialsize, uintx max_size) {
+static void test_fill_empty_repeat(AddressStableArrayWithFreeList<T>& a1, uintx initialsize, uintx max_size) {
 
   ASSERT_USED_FREE(a1, 0, 0);
   ASSERT_CAP_IN_RANGE(a1, initialsize, max_size);
@@ -165,7 +165,7 @@ static void test_fill_empty_repeat(AddressStableHeap<T>& a1, uintx initialsize, 
 }
 
 template <class T>
-static void test_fill_empty_randomly(AddressStableHeap<T>& a1, uintx initialsize, uintx max_size) {
+static void test_fill_empty_randomly(AddressStableArrayWithFreeList<T>& a1, uintx initialsize, uintx max_size) {
 
   ASSERT_USED_FREE(a1, 0, 0);
   ASSERT_CAP_IN_RANGE(a1, initialsize, max_size);
@@ -225,7 +225,7 @@ static void test_fill_empty_randomly(AddressStableHeap<T>& a1, uintx initialsize
 }
 
 template <class T>
-static void test_commit_and_uncommit(AddressStableHeap<T>& a1, uintx initialsize, uintx max_size) {
+static void test_commit_and_uncommit(AddressStableArrayWithFreeList<T>& a1, uintx initialsize, uintx max_size) {
 
   ASSERT_USED_FREE(a1, 0, 0);
   ASSERT_CAP_IN_RANGE(a1, initialsize, max_size);
@@ -295,7 +295,7 @@ static void test_commit_and_uncommit(AddressStableHeap<T>& a1, uintx initialsize
 TEST_VM(AddressStableArray, function##_##T##_##initialsize##_##max_size)        \
 {                                                                               \
   MemoryReserver<T> reserver(max_size);                                         \
-  AddressStableHeap<T> a(reserver.elements(), initialsize, max_size);           \
+  AddressStableArrayWithFreeList<T> a(reserver.elements(), initialsize, max_size);           \
   function<T>(a, initialsize, max_size);                                        \
 }
 
