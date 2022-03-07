@@ -44,7 +44,7 @@ class objArrayOopDesc : public arrayOopDesc {
 
   template <class T>
   static ptrdiff_t obj_at_offset(int index) {
-    return base_offset_in_bytes() + sizeof(T) * (ptrdiff_t)index;
+    return base_offset_in_bytes() + sizeof(T) * index;
   }
 
 private:

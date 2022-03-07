@@ -97,7 +97,7 @@ public class HugeCapacity {
 
     private static class MyHugeCharSeq implements CharSequence {
         public char charAt(int i) {
-            return 42;
+            throw new UnsupportedOperationException();
         }
         public int length() { return Integer.MAX_VALUE; }
         public CharSequence subSequence(int st, int e) {

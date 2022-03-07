@@ -6547,8 +6547,6 @@ bool LibraryCallKit::inline_digestBase_implCompress(vmIntrinsics::ID id) {
   }
   // 'src_start' points to src array + offset
   src = must_be_not_null(src, true);
-  assert(arrayOopDesc::base_offset_in_bytes(src_elem) == 12, "correct header offset");
-  assert(exact_log2(type2aelembytes(src_elem)) == 0, "correct element shift");
   Node* src_start = array_element_address(src, ofs, src_elem);
   Node* state = NULL;
   Node* digest_length = NULL;

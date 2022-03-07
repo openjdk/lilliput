@@ -121,7 +121,7 @@ private:
     int element_shift = Klass::layout_helper_log2_element_size(lh);
     DEBUG_ONLY(BasicType etype = Klass::layout_helper_element_type(lh));
     assert(length <= arrayOopDesc::max_array_length(etype), "no overflow");
-    assert(instance_header_size == arrayOopDesc::header_size_in_bytes(etype), "header size must match");
+
     julong size_in_bytes = (juint)length;
     size_in_bytes <<= element_shift;
     size_in_bytes += instance_header_size;
