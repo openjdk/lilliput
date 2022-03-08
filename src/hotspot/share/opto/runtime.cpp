@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1998, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -958,7 +958,7 @@ const TypeFunc* OptoRuntime::counterMode_aescrypt_Type() {
 //for counterMode calls of aescrypt encrypt/decrypt, four pointers and a length, returning int
 const TypeFunc* OptoRuntime::galoisCounterMode_aescrypt_Type() {
   // create input type (domain)
-  int num_args = 9;
+  int num_args = 8;
   int argcnt = num_args;
   const Type** fields = TypeTuple::fields(argcnt);
   int argp = TypeFunc::Parms;
@@ -969,7 +969,6 @@ const TypeFunc* OptoRuntime::galoisCounterMode_aescrypt_Type() {
   fields[argp++] = TypePtr::NOTNULL; // byte[] key from AESCrypt obj
   fields[argp++] = TypePtr::NOTNULL; // long[] state from GHASH obj
   fields[argp++] = TypePtr::NOTNULL; // long[] subkeyHtbl from GHASH obj
-  fields[argp++] = TypePtr::NOTNULL; // long[] avx512_subkeyHtbl newly created
   fields[argp++] = TypePtr::NOTNULL; // byte[] counter from GCTR obj
 
   assert(argp == TypeFunc::Parms + argcnt, "correct decoding");
@@ -1465,6 +1464,12 @@ address OptoRuntime::rethrow_C(oopDesc* exception, JavaThread* thread, address r
 
   // Enable WXWrite: the function called directly by compiled code.
   MACOS_AARCH64_ONLY(ThreadWXEnable wx(WXWrite, thread));
+
+  // ret_pc will have been loaded from the stack, so for AArch64 will be signed.
+  // This needs authenticating, but to do that here requires the fp of the previous frame.
+  // A better way of doing it would be authenticate in the caller by adding a
+  // AuthPAuthNode and using it in GraphKit::gen_stub. For now, just strip it.
+  AARCH64_PORT_ONLY(ret_pc = pauth_strip_pointer(ret_pc));
 
 #ifndef PRODUCT
   SharedRuntime::_rethrow_ctr++;               // count rethrows

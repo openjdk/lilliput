@@ -253,6 +253,31 @@ void MonitorExitStub::emit_code(LIR_Assembler* ce) {
   __ far_jump(RuntimeAddress(Runtime1::entry_for(exit_id)));
 }
 
+void LoadKlassStub::emit_code(LIR_Assembler* ce) {
+  __ bind(_entry);
+  Register res = _result->as_register();
+  ce->store_parameter(_obj->as_register(), 0);
+  if (res != r0) {
+    // Note: we cannot push/pop r0 around the call, because that
+    // would mess with the stack pointer sp, and we need that to
+    // remain intact for store_paramater/load_argument to work correctly.
+    // We swap r0 and res instead, which preserves current r0 in res.
+    // The preserved value is later saved and restored around the
+    // call in Runtime1::load_klass_id.
+    __ mov(rscratch1, r0);
+    __ mov(r0, res);
+    __ mov(res, rscratch1);
+  }
+  __ far_call(RuntimeAddress(Runtime1::entry_for(Runtime1::load_klass_id)));
+  if (res != r0) {
+    // Swap back r0 and res. This brings the call return value
+    // from r0 into res, and the preserved value in res back into r0.
+    __ mov(rscratch1, r0);
+    __ mov(r0, res);
+    __ mov(res, rscratch1);
+  }
+  __ b(_continuation);
+}
 
 // Implementation of patching:
 // - Copy the code at given offset to an inlined buffer (first the bytes, then the number of bytes)

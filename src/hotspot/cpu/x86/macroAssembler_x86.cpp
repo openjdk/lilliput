@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -2705,6 +2705,15 @@ void MacroAssembler::movss(XMMRegister dst, AddressLiteral src) {
   }
 }
 
+void MacroAssembler::vmovddup(XMMRegister dst, AddressLiteral src, int vector_len, Register rscratch) {
+  if (reachable(src)) {
+    Assembler::vmovddup(dst, as_Address(src), vector_len);
+  } else {
+    lea(rscratch, src);
+    Assembler::vmovddup(dst, Address(rscratch, 0), vector_len);
+  }
+}
+
 void MacroAssembler::mulsd(XMMRegister dst, AddressLiteral src) {
   if (reachable(src)) {
     Assembler::mulsd(dst, as_Address(src));
@@ -3154,6 +3163,15 @@ void MacroAssembler::vpbroadcastw(XMMRegister dst, XMMRegister src, int vector_l
   Assembler::vpbroadcastw(dst, src, vector_len);
 }
 
+void MacroAssembler::vbroadcastsd(XMMRegister dst, AddressLiteral src, int vector_len, Register rscratch) {
+  if (reachable(src)) {
+    Assembler::vbroadcastsd(dst, as_Address(src), vector_len);
+  } else {
+    lea(rscratch, src);
+    Assembler::vbroadcastsd(dst, Address(rscratch, 0), vector_len);
+  }
+}
+
 void MacroAssembler::vpcmpeqb(XMMRegister dst, XMMRegister nds, XMMRegister src, int vector_len) {
   assert(((dst->encoding() < 16 && src->encoding() < 16 && nds->encoding() < 16) || VM_Version::supports_avx512vlbw()),"XMM register should be 0-15");
   Assembler::vpcmpeqb(dst, nds, src, vector_len);
@@ -3222,7 +3240,7 @@ void MacroAssembler::vpcmpCC(XMMRegister dst, XMMRegister nds, XMMRegister src, 
   }
 }
 
-void MacroAssembler::vpcmpCCW(XMMRegister dst, XMMRegister nds, XMMRegister src, ComparisonPredicate cond, Width width, int vector_len, Register scratch_reg) {
+void MacroAssembler::vpcmpCCW(XMMRegister dst, XMMRegister nds, XMMRegister src, XMMRegister xtmp, ComparisonPredicate cond, Width width, int vector_len) {
   int eq_cond_enc = 0x29;
   int gt_cond_enc = 0x37;
   if (width != Assembler::Q) {
@@ -3235,15 +3253,18 @@ void MacroAssembler::vpcmpCCW(XMMRegister dst, XMMRegister nds, XMMRegister src,
     break;
   case neq:
     vpcmpCC(dst, nds, src, eq_cond_enc, width, vector_len);
-    vpxor(dst, dst, ExternalAddress(StubRoutines::x86::vector_all_bits_set()), vector_len, scratch_reg);
+    vallones(xtmp, vector_len);
+    vpxor(dst, xtmp, dst, vector_len);
     break;
   case le:
     vpcmpCC(dst, nds, src, gt_cond_enc, width, vector_len);
-    vpxor(dst, dst, ExternalAddress(StubRoutines::x86::vector_all_bits_set()), vector_len, scratch_reg);
+    vallones(xtmp, vector_len);
+    vpxor(dst, xtmp, dst, vector_len);
     break;
   case nlt:
     vpcmpCC(dst, src, nds, gt_cond_enc, width, vector_len);
-    vpxor(dst, dst, ExternalAddress(StubRoutines::x86::vector_all_bits_set()), vector_len, scratch_reg);
+    vallones(xtmp, vector_len);
+    vpxor(dst, xtmp, dst, vector_len);
     break;
   case lt:
     vpcmpCC(dst, src, nds, gt_cond_enc, width, vector_len);
@@ -4550,58 +4571,57 @@ void MacroAssembler::load_method_holder(Register holder, Register method) {
   movptr(holder, Address(holder, ConstantPool::pool_holder_offset_in_bytes())); // InstanceKlass*
 }
 
-void MacroAssembler::load_klass(Register dst, Register src, Register tmp, bool null_check_src) {
-  assert_different_registers(src, tmp);
-  assert_different_registers(dst, tmp);
 #ifdef _LP64
+void MacroAssembler::load_nklass(Register dst, Register src) {
+  assert_different_registers(src, dst);
   assert(UseCompressedClassPointers, "expect compressed class pointers");
 
   Label slow, done;
-  if (null_check_src) {
-    null_check(src, oopDesc::mark_offset_in_bytes());
-  }
-  movq(tmp, Address(src, oopDesc::mark_offset_in_bytes()));
+  movq(dst, Address(src, oopDesc::mark_offset_in_bytes()));
   // NOTE: While it would seem nice to use xorb instead (for which we don't have an encoding in our assembler),
   // the encoding for xorq uses the signed version (0x81/6) of xor, which encodes as compact as xorb would,
   // and does't make a difference performance-wise.
-  xorq(tmp, markWord::unlocked_value);
-  testb(tmp, markWord::lock_mask_in_place);
+  xorq(dst, markWord::unlocked_value);
+  testb(dst, markWord::lock_mask_in_place);
   jccb(Assembler::notZero, slow);
 
-  movq(dst, tmp);
   shrq(dst, markWord::klass_shift);
-  decode_klass_not_null(dst, tmp);
   jmp(done);
   bind(slow);
 
   if (dst != rax) {
     push(rax);
   }
-  push(rdi);
-  push(rsi);
-  push(rdx);
-  push(rcx);
-  push(r8);
-  push(r9);
-  push(r10);
-  push(r11);
-
-  MacroAssembler::call_VM_leaf(CAST_FROM_FN_PTR(address, oopDesc::load_klass_runtime), src);
-
-  pop(r11);
-  pop(r10);
-  pop(r9);
-  pop(r8);
-  pop(rcx);
-  pop(rdx);
-  pop(rsi);
-  pop(rdi);
+  if (src != rax) {
+    mov(rax, src);
+  }
+  call(RuntimeAddress(StubRoutines::load_nklass()));
   if (dst != rax) {
     mov(dst, rax);
     pop(rax);
   }
 
   bind(done);
+}
+#endif
+
+void MacroAssembler::load_klass(Register dst, Register src, Register tmp, bool null_check_src) {
+  assert_different_registers(src, tmp);
+  assert_different_registers(dst, tmp);
+#ifdef _LP64
+  assert(UseCompressedClassPointers, "expect compressed class pointers");
+  Register d = dst;
+  if (src == dst) {
+    d = tmp;
+  }
+  if (null_check_src) {
+    null_check(src, oopDesc::mark_offset_in_bytes());
+  }
+  load_nklass(d, src);
+  if (src == dst) {
+    mov(dst, d);
+  }
+  decode_klass_not_null(dst, tmp);
 #else
   if (null_check_src) {
     null_check(src, oopDesc::klass_offset_in_bytes());
@@ -4610,17 +4630,11 @@ void MacroAssembler::load_klass(Register dst, Register src, Register tmp, bool n
 #endif
 }
 
-void MacroAssembler::store_klass(Register dst, Register src, Register tmp) {
-  assert_different_registers(src, tmp);
-  assert_different_registers(dst, tmp);
-#ifdef _LP64
-  if (UseCompressedClassPointers) {
-    encode_klass_not_null(src, tmp);
-    movl(Address(dst, oopDesc::klass_offset_in_bytes()), src);
-  } else
-#endif
-    movptr(Address(dst, oopDesc::klass_offset_in_bytes()), src);
+#ifndef _LP64
+void MacroAssembler::store_klass(Register dst, Register src) {
+  movptr(Address(dst, oopDesc::klass_offset_in_bytes()), src);
 }
+#endif
 
 void MacroAssembler::access_load_at(BasicType type, DecoratorSet decorators, Register dst, Address src,
                                     Register tmp1, Register thread_tmp) {
@@ -4668,25 +4682,25 @@ void MacroAssembler::store_heap_oop_null(Address dst) {
 }
 
 #ifdef _LP64
-void MacroAssembler::store_klass_gap(Register dst, Register src) {
-  if (UseCompressedClassPointers) {
-    // Store to klass gap in destination
-    movl(Address(dst, oopDesc::klass_gap_offset_in_bytes()), src);
-  }
-}
-
 #ifdef ASSERT
 void MacroAssembler::verify_heapbase(const char* msg) {
   assert (UseCompressedOops, "should be compressed");
   assert (Universe::heap() != NULL, "java heap should be initialized");
   if (CheckCompressedOops) {
     Label ok;
-    push(rscratch1); // cmpptr trashes rscratch1
-    cmpptr(r12_heapbase, ExternalAddress((address)CompressedOops::ptrs_base_addr()));
+    const auto src2 = ExternalAddress((address)CompressedOops::ptrs_base_addr());
+    assert(!src2.is_lval(), "should not be lval");
+    const bool is_src2_reachable = reachable(src2);
+    if (!is_src2_reachable) {
+      push(rscratch1);  // cmpptr trashes rscratch1
+    }
+    cmpptr(r12_heapbase, src2);
     jcc(Assembler::equal, ok);
     STOP(msg);
     bind(ok);
-    pop(rscratch1);
+    if (!is_src2_reachable) {
+      pop(rscratch1);
+    }
   }
 }
 #endif

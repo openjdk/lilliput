@@ -141,27 +141,15 @@ bool oopDesc::is_array_noinline()             const { return is_array();        
 bool oopDesc::is_objArray_noinline()          const { return is_objArray();            }
 bool oopDesc::is_typeArray_noinline()         const { return is_typeArray();           }
 
-bool oopDesc::has_klass_gap() {
-  // Only has a klass gap when compressed class pointers are used.
-  return UseCompressedClassPointers;
-}
-
-#if INCLUDE_CDS_JAVA_HEAP
-void oopDesc::set_narrow_klass(narrowKlass nk) {
-  assert(DumpSharedSpaces, "Used by CDS only. Do not abuse!");
-  assert(UseCompressedClassPointers, "must be");
-  _metadata._compressed_klass = nk;
-}
-#endif
-
 void* oopDesc::load_klass_raw(oop obj) {
-  if (UseCompressedClassPointers) {
-    narrowKlass narrow_klass = obj->_metadata._compressed_klass;
-    if (narrow_klass == 0) return NULL;
-    return (void*)CompressedKlassPointers::decode_raw(narrow_klass);
-  } else {
-    return obj->_metadata._klass;
-  }
+  // TODO: Remove method altogether and replace with calls to obj->klass() ?
+  // OTOH, we may eventually get rid of locking in header, and then no
+  // longer have to deal with that anymore.
+#ifdef _LP64
+  return obj->klass();
+#else
+  return obj->_klass;
+#endif
 }
 
 void* oopDesc::load_oop_raw(oop obj, int offset) {
@@ -175,10 +163,20 @@ void* oopDesc::load_oop_raw(oop obj, int offset) {
   }
 }
 
-JRT_LEAF(Klass*, oopDesc::load_klass_runtime(oopDesc* o))
+#ifdef _LP64
+JRT_LEAF(narrowKlass, oopDesc::load_nklass_runtime(oopDesc* o))
   assert(o != NULL, "null-check");
-  return oop(o)->klass();
+  oop obj = oop(o);
+  assert(oopDesc::is_oop(obj), "need a valid oop here: " PTR_FORMAT, p2i(o));
+  markWord header = obj->mark();
+  if (!header.is_neutral()) {
+    header = ObjectSynchronizer::stable_mark(obj);
+  }
+  assert(header.is_neutral(), "expect neutral header here");
+  narrowKlass nklass = header.narrow_klass();
+  return nklass;
 JRT_END
+#endif
 
 oop oopDesc::obj_field_acquire(int offset) const                      { return HeapAccess<MO_ACQUIRE>::oop_load_at(as_oop(), offset); }
 

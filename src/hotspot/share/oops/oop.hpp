@@ -55,10 +55,9 @@ class oopDesc {
   friend class JVMCIVMStructs;
  private:
   volatile markWord _mark;
-  union _metadata {
-    Klass*      _klass;
-    narrowKlass _compressed_klass;
-  } _metadata;
+#ifndef _LP64
+  Klass*            _klass;
+#endif
 
   // There may be ordering constraints on the initialization of fields that
   // make use of the C++ copy/assign incorrect.
@@ -76,6 +75,7 @@ class oopDesc {
   static inline void set_mark(HeapWord* mem, markWord m);
 
   inline void release_set_mark(markWord m);
+  static inline void release_set_mark(HeapWord* mem, markWord m);
   inline markWord cas_set_mark(markWord new_mark, markWord old_mark);
   inline markWord cas_set_mark(markWord new_mark, markWord old_mark, atomic_memory_order order);
 
@@ -87,18 +87,13 @@ class oopDesc {
   inline Klass* klass_or_null() const;
   inline Klass* klass_or_null_acquire() const;
 
-  narrowKlass narrow_klass_legacy() const { return _metadata._compressed_klass; }
-  void set_narrow_klass(narrowKlass nk) NOT_CDS_JAVA_HEAP_RETURN;
+#ifndef _LP64
   inline void set_klass(Klass* k);
   static inline void release_set_klass(HeapWord* mem, Klass* k);
-
-  // For klass field compression
-  inline int klass_gap() const;
-  inline void set_klass_gap(int z);
-  static inline void set_klass_gap(HeapWord* mem, int z);
+#endif
 
   // size of object header, aligned to platform wordSize
-  static int header_size() { return sizeof(oopDesc)/HeapWordSize; }
+  static constexpr int header_size() { return sizeof(oopDesc)/HeapWordSize; }
 
   // Returns whether this is an instance of k or an instance of a subclass of k
   inline bool is_a(Klass* k) const;
@@ -303,14 +298,15 @@ class oopDesc {
   inline bool mark_must_be_preserved() const;
   inline bool mark_must_be_preserved(markWord m) const;
 
-  static bool has_klass_gap();
-
   // for code generation
   static int mark_offset_in_bytes()      { return offset_of(oopDesc, _mark); }
-  static int klass_offset_in_bytes()     { return offset_of(oopDesc, _metadata._klass); }
-  static int klass_gap_offset_in_bytes() {
-    assert(has_klass_gap(), "only applicable to compressed klass pointers");
-    return klass_offset_in_bytes() + sizeof(narrowKlass);
+  static int klass_offset_in_bytes()     {
+#ifdef _LP64
+    STATIC_ASSERT(markWord::klass_shift % 8 == 0);
+    return mark_offset_in_bytes() + markWord::klass_shift / 8;
+#else
+    return offset_of(oopDesc, _klass);
+#endif
   }
 
   // for error reporting
@@ -318,7 +314,9 @@ class oopDesc {
   static void* load_oop_raw(oop obj, int offset);
 
   // Runtime entry
-  static Klass* load_klass_runtime(oopDesc* o);
+#ifdef _LP64
+  static narrowKlass load_nklass_runtime(oopDesc* o);
+#endif
 
   // Avoid include gc_globals.hpp in oop.inline.hpp
   DEBUG_ONLY(bool get_UseParallelGC();)

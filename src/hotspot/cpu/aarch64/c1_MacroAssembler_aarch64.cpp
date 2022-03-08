@@ -164,17 +164,8 @@ void C1_MacroAssembler::initialize_header(Register obj, Register klass, Register
   ldr(t1, Address(klass, Klass::prototype_header_offset()));
   str(t1, Address(obj, oopDesc::mark_offset_in_bytes()));
 
-  if (UseCompressedClassPointers) { // Take care not to kill klass
-    encode_klass_not_null(t1, klass);
-    strw(t1, Address(obj, oopDesc::klass_offset_in_bytes()));
-  } else {
-    str(klass, Address(obj, oopDesc::klass_offset_in_bytes()));
-  }
-
   if (len->is_valid()) {
     strw(len, Address(obj, arrayOopDesc::length_offset_in_bytes()));
-  } else if (UseCompressedClassPointers) {
-    store_klass_gap(obj, zr);
   }
 }
 
@@ -280,7 +271,7 @@ void C1_MacroAssembler::inline_cache_check(Register receiver, Register iCache) {
   verify_oop(receiver);
   // explicit NULL check not needed since load from [klass_offset] causes a trap
   // check against inline cache
-  assert(!MacroAssembler::needs_explicit_null_check(oopDesc::klass_offset_in_bytes()), "must add explicit null check");
+  assert(!MacroAssembler::needs_explicit_null_check(oopDesc::mark_offset_in_bytes()), "must add explicit null check");
 
   cmp_klass(receiver, iCache, rscratch1);
 }
@@ -303,7 +294,7 @@ void C1_MacroAssembler::remove_frame(int framesize) {
 }
 
 
-void C1_MacroAssembler::verified_entry() {
+void C1_MacroAssembler::verified_entry(bool breakAtEntry) {
   // If we have to make this method not-entrant we'll overwrite its
   // first instruction with a jump.  For this action to be legal we
   // must ensure that this first instruction is a B, BL, NOP, BKPT,

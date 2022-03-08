@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -363,7 +363,11 @@ class MacroAssembler: public Assembler {
 
   // oop manipulations
   void load_klass(Register dst, Register src, Register tmp, bool null_check_src = false);
-  void store_klass(Register dst, Register src, Register tmp);
+#ifdef _LP64
+  void load_nklass(Register dst, Register src);
+#else
+  void store_klass(Register dst, Register src);
+#endif
 
   void access_load_at(BasicType type, DecoratorSet decorators, Register dst, Address src,
                       Register tmp1, Register thread_tmp);
@@ -382,8 +386,6 @@ class MacroAssembler: public Assembler {
   void store_heap_oop_null(Address dst);
 
 #ifdef _LP64
-  void store_klass_gap(Register dst, Register src);
-
   // This dummy is to prevent a call to store_heap_oop from
   // converting a zero (like NULL) into a Register by giving
   // the compiler two choices it can't resolve
@@ -1199,6 +1201,9 @@ public:
   void movsd(XMMRegister dst, Address src)     { Assembler::movsd(dst, src); }
   void movsd(XMMRegister dst, AddressLiteral src);
 
+  using Assembler::vmovddup;
+  void vmovddup(XMMRegister dst, AddressLiteral src, int vector_len, Register rscratch = rscratch1);
+
   void mulpd(XMMRegister dst, XMMRegister src)    { Assembler::mulpd(dst, src); }
   void mulpd(XMMRegister dst, Address src)        { Assembler::mulpd(dst, src); }
   void mulpd(XMMRegister dst, AddressLiteral src);
@@ -1307,6 +1312,9 @@ public:
   void vpbroadcastw(XMMRegister dst, XMMRegister src, int vector_len);
   void vpbroadcastw(XMMRegister dst, Address src, int vector_len) { Assembler::vpbroadcastw(dst, src, vector_len); }
 
+  using Assembler::vbroadcastsd;
+  void vbroadcastsd(XMMRegister dst, AddressLiteral src, int vector_len, Register rscratch = rscratch1);
+
   void vpcmpeqb(XMMRegister dst, XMMRegister nds, XMMRegister src, int vector_len);
 
   void vpcmpeqw(XMMRegister dst, XMMRegister nds, XMMRegister src, int vector_len);
@@ -1333,7 +1341,7 @@ public:
   void evpbroadcast(BasicType type, XMMRegister dst, Register src, int vector_len);
 
   // Emit comparison instruction for the specified comparison predicate.
-  void vpcmpCCW(XMMRegister dst, XMMRegister nds, XMMRegister src, ComparisonPredicate cond, Width width, int vector_len, Register scratch_reg);
+  void vpcmpCCW(XMMRegister dst, XMMRegister nds, XMMRegister src, XMMRegister xtmp, ComparisonPredicate cond, Width width, int vector_len);
   void vpcmpCC(XMMRegister dst, XMMRegister nds, XMMRegister src, int cond_encoding, Width width, int vector_len);
 
   void vpmovzxbw(XMMRegister dst, Address src, int vector_len);
@@ -1512,8 +1520,14 @@ public:
   void vpxor(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register scratch_reg = rscratch1);
 
   // Simple version for AVX2 256bit vectors
-  void vpxor(XMMRegister dst, XMMRegister src) { Assembler::vpxor(dst, dst, src, true); }
-  void vpxor(XMMRegister dst, Address src) { Assembler::vpxor(dst, dst, src, true); }
+  void vpxor(XMMRegister dst, XMMRegister src) {
+    assert(UseAVX >= 2, "Should be at least AVX2");
+    Assembler::vpxor(dst, dst, src, AVX_256bit);
+  }
+  void vpxor(XMMRegister dst, Address src) {
+    assert(UseAVX >= 2, "Should be at least AVX2");
+    Assembler::vpxor(dst, dst, src, AVX_256bit);
+  }
 
   void vpermd(XMMRegister dst, XMMRegister nds, XMMRegister src, int vector_len) { Assembler::vpermd(dst, nds, src, vector_len); }
   void vpermd(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register scratch_reg);
