@@ -197,6 +197,7 @@ public:
       _end(end) {}
 
   virtual void work() {
+    SuspendibleThreadSetJoiner sts_joiner;
     for (;;) {
       // Get granule offset
       const size_t size = ZGranuleSize;

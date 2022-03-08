@@ -689,7 +689,6 @@ typedef ClaimingCLDToOopClosure<ClassLoaderData::_claim_strong> ZMarkCLDClosure;
 class ZMarkRootsTask : public ZTask {
 private:
   ZMark* const               _mark;
-  SuspendibleThreadSetJoiner _sts_joiner;
   ZRootsIterator             _roots;
 
   ZMarkOopClosure            _cl;
@@ -701,7 +700,6 @@ public:
   ZMarkRootsTask(ZMark* mark) :
       ZTask("ZMarkRootsTask"),
       _mark(mark),
-      _sts_joiner(),
       _roots(ClassLoaderData::_claim_strong),
       _cl(),
       _cld_cl(&_cl),
@@ -715,6 +713,7 @@ public:
   }
 
   virtual void work() {
+    SuspendibleThreadSetJoiner sts_joiner;
     _roots.apply(&_cl,
                  &_cld_cl,
                  &_thread_cl,
@@ -746,6 +745,7 @@ public:
   }
 
   virtual void work() {
+    SuspendibleThreadSetJoiner sts_joiner;
     _mark->work(_timeout_in_micros);
   }
 };

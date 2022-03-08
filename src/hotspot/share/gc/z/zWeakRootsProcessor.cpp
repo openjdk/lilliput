@@ -22,6 +22,7 @@
  */
 
 #include "precompiled.hpp"
+#include "gc/shared/suspendibleThreadSet.hpp"
 #include "gc/z/zBarrier.inline.hpp"
 #include "gc/z/zRootsIterator.hpp"
 #include "gc/z/zTask.hpp"
@@ -68,6 +69,7 @@ public:
   }
 
   virtual void work() {
+    SuspendibleThreadSetJoiner sts_joiner;
     ZPhantomCleanOopClosure cl;
     _weak_roots.apply(&cl);
   }

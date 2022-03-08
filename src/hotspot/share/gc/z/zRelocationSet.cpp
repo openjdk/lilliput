@@ -22,6 +22,7 @@
  */
 
 #include "precompiled.hpp"
+#include "gc/shared/suspendibleThreadSet.hpp"
 #include "gc/z/zArray.inline.hpp"
 #include "gc/z/zForwarding.inline.hpp"
 #include "gc/z/zForwardingAllocator.inline.hpp"
@@ -84,6 +85,7 @@ public:
   }
 
   virtual void work() {
+    SuspendibleThreadSetJoiner sts_joiner;
     // Allocate and install forwardings for small pages
     for (ZPage* page; _small_iter.next(&page);) {
       ZForwarding* const forwarding = ZForwarding::alloc(_allocator, page);
