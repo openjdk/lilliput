@@ -197,7 +197,6 @@ public:
       _end(end) {}
 
   virtual void work() {
-    SuspendibleThreadSetJoiner sts_joiner;
     for (;;) {
       // Get granule offset
       const size_t size = ZGranuleSize;
@@ -799,6 +798,7 @@ size_t ZPageAllocator::uncommit(uint64_t* timeout) {
   }
 
   {
+    SuspendibleThreadSetJoiner joiner(!ZVerifyViews);
     ZLocker<ZLock> locker(&_lock);
 
     // Adjust claimed and capacity to reflect the uncommit
