@@ -799,7 +799,6 @@ size_t ZPageAllocator::uncommit(uint64_t* timeout) {
   }
 
   {
-    SuspendibleThreadSetJoiner joiner(!ZVerifyViews);
     ZLocker<ZLock> locker(&_lock);
 
     // Adjust claimed and capacity to reflect the uncommit

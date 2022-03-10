@@ -333,6 +333,9 @@ private:
       _target->reset_for_in_place_relocation();
       _forwarding->set_in_place();
     }
+    if (SuspendibleThreadSet::should_yield()) {
+      SuspendibleThreadSet::yield();
+    }
   }
 
 public:

@@ -25,7 +25,6 @@
 #include "classfile/javaClasses.inline.hpp"
 #include "gc/shared/referencePolicy.hpp"
 #include "gc/shared/referenceProcessorStats.hpp"
-#include "gc/shared/suspendibleThreadSet.hpp"
 #include "gc/z/zHeap.inline.hpp"
 #include "gc/z/zReferenceProcessor.hpp"
 #include "gc/z/zStat.hpp"
@@ -417,7 +416,6 @@ public:
       _reference_processor(reference_processor) {}
 
   virtual void work() {
-    SuspendibleThreadSetJoiner sts_joiner;
     _reference_processor->work();
   }
 };

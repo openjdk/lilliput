@@ -361,6 +361,10 @@ bool ZMark::drain(ZMarkContext* context, T* timeout) {
   while (stacks->pop(&_allocator, &_stripes, stripe, entry)) {
     mark_and_follow(context, entry);
 
+    if (SuspendibleThreadSet::should_yield()) {
+      SuspendibleThreadSet::yield();
+    }
+
     // Check timeout
     if (timeout->has_expired()) {
       // Timeout

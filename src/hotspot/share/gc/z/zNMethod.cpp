@@ -363,7 +363,6 @@ public:
   }
 
   virtual void work() {
-    SuspendibleThreadSetJoiner sts_joiner;
     ICRefillVerifierMark mark(_verifier);
     ZNMethodTable::nmethods_do(&_cl);
   }
@@ -418,7 +417,6 @@ public:
   }
 
   virtual void work() {
-    SuspendibleThreadSetJoiner sts_joiner;
     ZNMethodTable::nmethods_do(&_cl);
   }
 };
