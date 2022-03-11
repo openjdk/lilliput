@@ -333,10 +333,6 @@ private:
       _target->reset_for_in_place_relocation();
       _forwarding->set_in_place();
     }
-
-    if (SuspendibleThreadSet::should_yield()) {
-      SuspendibleThreadSet::yield();
-    }
   }
 
 public:
@@ -408,7 +404,6 @@ public:
     ZRelocateClosure<ZRelocateSmallAllocator> small(&_small_allocator);
     ZRelocateClosure<ZRelocateMediumAllocator> medium(&_medium_allocator);
 
-    SuspendibleThreadSetJoiner sts_joiner;
     for (ZForwarding* forwarding; _iter.next(&forwarding);) {
       if (is_small(forwarding)) {
         small.do_forwarding(forwarding);
