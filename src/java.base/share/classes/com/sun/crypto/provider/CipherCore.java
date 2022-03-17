@@ -860,7 +860,7 @@ final class CipherCore {
         if (padStart < 0) {
             throw new BadPaddingException("Given final block not " +
             "properly padded. Such issues can arise if a bad key " +
-            "is used during decryption. padding: " + padding + ", padStart: " + padStart + ", outLen: " + outLen + ", off: " + off + ", buf length: " + outWithPadding.length);
+            "is used during decryption.");
         }
         return padStart - off;
     }
