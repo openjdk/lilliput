@@ -66,6 +66,7 @@ public class BaseOffsets {
                 Asserts.fail("Unexpected field type");
             }
         }
+
         Asserts.assertEquals(unsafe.arrayBaseOffset(boolean[].class), 12, "Misplaced boolean array base");
         Asserts.assertEquals(unsafe.arrayBaseOffset(byte[].class),    12, "Misplaced byte    array base");
         Asserts.assertEquals(unsafe.arrayBaseOffset(char[].class),    12, "Misplaced char    array base");
