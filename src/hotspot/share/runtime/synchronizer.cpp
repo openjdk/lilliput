@@ -58,6 +58,7 @@
 #include "utilities/dtrace.hpp"
 #include "utilities/events.hpp"
 #include "utilities/preserveException.hpp"
+#include "gc/shenandoah/shenandoahHeap.hpp"
 
 class CleanupObjectMonitorsHashtable: StackObj {
  public:
@@ -733,7 +734,7 @@ struct SharedGlobals {
 
 static SharedGlobals GVars;
 
-markWord ObjectSynchronizer::read_stable_mark(const oop obj) {
+static markWord read_stable_mark(const oop obj) {
   markWord mark = obj->mark_acquire();
   if (!mark.is_being_inflated()) {
     return mark;       // normal fast-path return
@@ -800,8 +801,6 @@ markWord ObjectSynchronizer::read_stable_mark(const oop obj) {
 // read and return the real mark word.
 markWord ObjectSynchronizer::stable_mark(oop object) {
   for (;;) {
-    assert(object != nullptr, "null object");
-    assert(Universe::heap()->is_in(object), "object not in heap: " PTR_FORMAT, p2i(object));
     const markWord mark = object->mark_acquire();
 
     // The mark can be in one of the following states:
@@ -809,18 +808,8 @@ markWord ObjectSynchronizer::stable_mark(oop object) {
     // *  Stack-locked - coerce it to inflating, and then return displaced mark
     // *  INFLATING    - busy wait for conversion to complete
     // *  Neutral      - return mark
-    // *  Marked       - object is forwarded, try again on forwardee (GC specific)
 
-    // CASE: Forwarded
-    if (mark.is_marked()) {
-      DEBUG_ONLY(oop orig = object;)
-      if (BarrierSet::barrier_set()->load_header_handle_forwarding(object, mark)) {
-        assert(orig != object, "need to see forwarded object");
-        assert(object != nullptr, "null object");
-        assert(Universe::heap()->is_in(object), "object not in heap: " PTR_FORMAT ", orig: " PTR_FORMAT ", header: " INTPTR_FORMAT, p2i(object), p2i(orig), mark.value());
-        continue;
-      }
-    }
+    assert(!mark.is_marked() || !UseShenandoahGC || ShenandoahHeap::heap()->is_full_gc_in_progress(), "should not see marked header here");
 
     // CASE: inflated
     if (mark.has_monitor()) {
@@ -837,7 +826,6 @@ markWord ObjectSynchronizer::stable_mark(oop object) {
     // Currently, we spin/yield/park and poll the markword, waiting for inflation to finish.
     // We could always eliminate polling by parking the thread on some auxiliary list.
     if (mark == markWord::INFLATING()) {
-      read_stable_mark(object);
       continue;
     }
 

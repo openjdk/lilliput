@@ -382,6 +382,11 @@ void oopDesc::oop_iterate(OopClosureType* cl) {
 }
 
 template <typename OopClosureType>
+void oopDesc::oop_iterate(OopClosureType* cl, Klass* klass) {
+  OopIteratorClosureDispatch::oop_oop_iterate(cl, this, klass);
+}
+
+template <typename OopClosureType>
 void oopDesc::oop_iterate(OopClosureType* cl, MemRegion mr) {
   OopIteratorClosureDispatch::oop_oop_iterate(cl, this, klass(), mr);
 }

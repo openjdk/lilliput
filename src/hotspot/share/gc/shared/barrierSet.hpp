@@ -145,11 +145,6 @@ public:
 
   virtual void make_parsable(JavaThread* thread) {}
 
-  // When safely accessing the object header, deal with concurrently-forwarded
-  // objects. This may change the obj argument to the forwarded object.
-  // Returns true, if caller should retry (e.g. with forwarded object), false otherwise.
-  virtual bool load_header_handle_forwarding(oop& obj, markWord header) const { return false; }
-
 public:
   // Print a description of the memory for the barrier set
   virtual void print_on(outputStream* st) const = 0;

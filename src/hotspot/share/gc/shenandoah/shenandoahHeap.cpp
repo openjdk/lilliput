@@ -1281,6 +1281,7 @@ void ShenandoahHeap::ensure_parsability(bool retire_tlabs) {
  * is allowed to report dead objects, but is not required to do so.
  */
 void ShenandoahHeap::object_iterate(ObjectClosure* cl) {
+  assert(SafepointSynchronize::is_at_safepoint(), "can only safely iterate objects at safepoint");
   // Reset bitmap
   if (!prepare_aux_bitmap_for_iteration())
     return;
@@ -1290,10 +1291,15 @@ void ShenandoahHeap::object_iterate(ObjectClosure* cl) {
   // Seed the stack with root scan
   scan_roots_for_iteration(&oop_stack, &oops);
 
+  ShenandoahBarrierSet* const bs = ShenandoahBarrierSet::barrier_set();
+
   // Work through the oop stack to traverse heap
   while (! oop_stack.is_empty()) {
     oop obj = oop_stack.pop();
     assert(oopDesc::is_oop(obj), "must be a valid oop");
+    // We must not expose from-space oops to the rest of runtime, or else it
+    // will call klass() on it, which might fail because of unexpected header.
+    obj = bs->load_reference_barrier(obj);
     cl->do_object(obj);
     obj->oop_iterate(&oops);
   }
