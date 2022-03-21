@@ -29,7 +29,6 @@
 #include "memory/memRegion.hpp"
 #include "oops/access.hpp"
 #include "oops/accessBackend.hpp"
-#include "oops/markWord.hpp"
 #include "oops/oopsHierarchy.hpp"
 #include "utilities/fakeRttiSupport.hpp"
 #include "utilities/macros.hpp"
