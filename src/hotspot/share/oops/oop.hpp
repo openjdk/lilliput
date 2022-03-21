@@ -269,9 +269,6 @@ class oopDesc {
   inline void oop_iterate(OopClosureType* cl);
 
   template <typename OopClosureType>
-  inline void oop_iterate(OopClosureType* cl, Klass* klass);
-
-  template <typename OopClosureType>
   inline void oop_iterate(OopClosureType* cl, MemRegion mr);
 
   template <typename OopClosureType>

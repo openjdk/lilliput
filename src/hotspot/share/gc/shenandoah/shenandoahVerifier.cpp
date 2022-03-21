@@ -306,7 +306,7 @@ public:
   void verify_oops_from(oop obj) {
     _loc = obj;
     Klass* klass = ShenandoahObjectUtils::klass(obj);
-    obj->oop_iterate(this, klass);
+    obj->oop_iterate_backwards(this, klass);
     _loc = NULL;
   }
 

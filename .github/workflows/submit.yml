@@ -1,4 +1,5 @@
 name: Pre-submit tests
+
 on:
   push:
     branches-ignore:
