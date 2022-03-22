@@ -25,6 +25,7 @@
 #ifndef SHARE_GC_SHENANDOAH_SHENANDOAHOBJECTUTILS_INLINE_HPP
 #define SHARE_GC_SHENANDOAH_SHENANDOAHOBJECTUTILS_INLINE_HPP
 
+#include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahObjectUtils.hpp"
 #include "oops/klass.hpp"
 #include "oops/markWord.inline.hpp"
@@ -37,6 +38,7 @@
 // code is supposed to observe from-space objects.
 markWord ShenandoahObjectUtils::stable_mark(oop obj) {
   for (;;) {
+    assert(ShenandoahHeap::heap()->is_in(obj), "object not in heap: " PTR_FORMAT, p2i(obj));
     markWord mark = obj->mark_acquire();
 
     // The mark can be in one of the following states:
