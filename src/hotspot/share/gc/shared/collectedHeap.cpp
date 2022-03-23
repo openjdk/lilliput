@@ -47,6 +47,7 @@
 #include "memory/universe.hpp"
 #include "oops/instanceMirrorKlass.hpp"
 #include "oops/oop.inline.hpp"
+#include "prims/jvmtiTagMap.hpp"
 #include "runtime/handles.inline.hpp"
 #include "runtime/init.hpp"
 #include "runtime/perfData.hpp"
@@ -586,6 +587,7 @@ void CollectedHeap::initialize_reserved_region(const ReservedHeapSpace& rs) {
 void CollectedHeap::post_initialize() {
   StringDedup::initialize();
   initialize_serviceability();
+  ObjectMarker::initialize(_reserved);
 }
 
 #ifndef PRODUCT

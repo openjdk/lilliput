@@ -68,7 +68,9 @@ inline oop ShenandoahForwarding::get_forwardee_mutator(oop obj) {
 }
 
 inline oop ShenandoahForwarding::get_forwardee(oop obj) {
-  shenandoah_assert_correct(NULL, obj);
+  // Note (Lilliput): We used to assert correct object here, but this attempts to load the
+  // object's Klass* which will access the header, which will not work if object is forwarded.
+  // shenandoah_assert_correct(NULL, obj);
   return get_forwardee_raw_unchecked(obj);
 }
 

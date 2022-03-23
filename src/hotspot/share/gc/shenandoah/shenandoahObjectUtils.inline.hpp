@@ -37,8 +37,9 @@
 // handles forwarded objects. This is intended to be used by concurrent evacuation only. No other
 // code is supposed to observe from-space objects.
 markWord ShenandoahObjectUtils::stable_mark(oop obj) {
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
   for (;;) {
-    assert(ShenandoahHeap::heap()->is_in(obj), "object not in heap: " PTR_FORMAT, p2i(obj));
+    assert(heap->is_in(obj), "object not in heap: " PTR_FORMAT, p2i(obj));
     markWord mark = obj->mark_acquire();
 
     // The mark can be in one of the following states:
@@ -55,6 +56,10 @@ markWord ShenandoahObjectUtils::stable_mark(oop obj) {
 
     // If object is already forwarded, then resolve it, and try again.
     if (mark.is_marked()) {
+      if (heap->is_full_gc_move_in_progress() || heap->is_heap_walk_in_progress()) {
+        // In these cases, we want to return the header as-is: the Klass* would not be overloaded.
+        return mark;
+      }
       obj = cast_to_oop(mark.decode_pointer());
       continue;
     }
@@ -118,6 +123,7 @@ markWord ShenandoahObjectUtils::stable_mark(oop obj) {
 
 Klass* ShenandoahObjectUtils::klass(oop obj) {
   markWord header = stable_mark(obj);
+  assert(header.narrow_klass() != 0, "klass must not be NULL: " INTPTR_FORMAT, header.value());
   return header.klass();
 }
 
