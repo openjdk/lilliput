@@ -27,12 +27,27 @@
 #ifndef SHARE_PRIMS_JVMTITAGMAP_HPP
 #define SHARE_PRIMS_JVMTITAGMAP_HPP
 
+#include "gc/shared/markBitMap.hpp"
 #include "jvmtifiles/jvmti.h"
 #include "memory/allocation.hpp"
 
 class JvmtiEnv;
 class JvmtiTagMapTable;
 class JvmtiTagMapEntryClosure;
+
+// ObjectMarker provides the mark and visited functions
+class ObjectMarker : AllStatic {
+private:
+  static MarkBitMap _mark_bit_map;
+  static MemRegion  _bitmap_region;
+public:
+  static void initialize(MemRegion heap_region);
+  static void init();                       // initialize
+  static void done();                       // clean-up
+
+  static inline void mark(oop o);           // mark an object
+  static inline bool visited(oop o);        // check if object has been visited
+};
 
 class JvmtiTagMap :  public CHeapObj<mtInternal> {
  private:
