@@ -38,6 +38,7 @@
 #include "gc/shared/gcWhen.hpp"
 #include "gc/shared/gc_globals.hpp"
 #include "gc/shared/memAllocator.hpp"
+#include "gc/shared/objectMarker.hpp"
 #include "gc/shared/tlab_globals.hpp"
 #include "logging/log.hpp"
 #include "logging/logStream.hpp"
@@ -47,7 +48,6 @@
 #include "memory/universe.hpp"
 #include "oops/instanceMirrorKlass.hpp"
 #include "oops/oop.inline.hpp"
-#include "prims/jvmtiTagMap.hpp"
 #include "runtime/handles.inline.hpp"
 #include "runtime/init.hpp"
 #include "runtime/perfData.hpp"
@@ -587,7 +587,6 @@ void CollectedHeap::initialize_reserved_region(const ReservedHeapSpace& rs) {
 void CollectedHeap::post_initialize() {
   StringDedup::initialize();
   initialize_serviceability();
-  ObjectMarker::initialize(_reserved);
 }
 
 #ifndef PRODUCT
@@ -652,4 +651,12 @@ uint32_t CollectedHeap::hash_oop(oop obj) const {
 void CollectedHeap::update_capacity_and_used_at_gc() {
   _capacity_at_last_gc = capacity();
   _used_at_last_gc     = used();
+}
+
+ObjectMarker* CollectedHeap::init_object_marker() {
+  if (UseBitmapObjectMarker) {
+    return new BitmapObjectMarker(_reserved);
+  } else {
+    return new HeaderObjectMarker();
+  }
 }
