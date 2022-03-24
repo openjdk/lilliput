@@ -34,8 +34,6 @@ class JvmtiEnv;
 class JvmtiTagMapTable;
 class JvmtiTagMapEntryClosure;
 
-// ObjectMarker provides the mark and visited functions
-
 class JvmtiTagMap :  public CHeapObj<mtInternal> {
  private:
 
