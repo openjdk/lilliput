@@ -23,15 +23,11 @@
  */
 
 #include "gc/shared/collectedHeap.hpp"
-#include "gc/shared/markBitMap.inline.hpp"
 #include "gc/shared/objectMarker.hpp"
-#include "logging/log.hpp"
-#include "memory/virtualspace.hpp"
 #include "memory/universe.hpp"
 #include "oops/klass.hpp"
 #include "oops/markWord.hpp"
 #include "oops/oop.inline.hpp"
-#include "runtime/os.hpp"
 #include "utilities/growableArray.hpp"
 
 ObjectMarker* ObjectMarkerController::_marker = NULL;
@@ -126,34 +122,4 @@ void HeaderObjectMarker::mark(oop o) {
 // return true if object is marked
 bool HeaderObjectMarker::is_marked(oop o) {
   return o->mark().is_marked();
-}
-
-BitmapObjectMarker::BitmapObjectMarker(MemRegion heap_region) :
-  _mark_bit_map(),
-  _bitmap_region() {
-  size_t bitmap_size = MarkBitMap::compute_size(heap_region.byte_size());
-  ReservedSpace bitmap(bitmap_size);
-  _bitmap_region = MemRegion((HeapWord*) bitmap.base(), bitmap.size() / HeapWordSize);
-  _mark_bit_map.initialize(heap_region, _bitmap_region);
-
-  os::commit_memory_or_exit((char*)_bitmap_region.start(), _bitmap_region.byte_size(), false,
-                          "Could not commit native memory for auxiliary marking bitmap for JVMTI object marking");
-  _mark_bit_map.clear();
-}
-
-BitmapObjectMarker::~BitmapObjectMarker() {
-  if (!os::uncommit_memory((char*)_bitmap_region.start(), _bitmap_region.byte_size())) {
-    log_warning(gc)("Could not uncommit native memory for auxiliary marking bitmap for JVMTI object marking");
-  }
-}
-
-void BitmapObjectMarker::mark(oop o) {
-  assert(Universe::heap()->is_in(o), "sanity check");
-  assert(!is_marked(o), "should only mark an object once");
-  _mark_bit_map.mark(o);
-}
-
-bool BitmapObjectMarker::is_marked(oop o) {
-  assert(Universe::heap()->is_in(o), "sanity check");
-  return _mark_bit_map.is_marked(o);
 }

@@ -25,7 +25,6 @@
 #ifndef SHARE_GC_SHARED_OBJECTMARKER_HPP
 #define SHARE_GC_SHARED_OBJECTMARKER_HPP
 
-#include "gc/shared/markBitMap.hpp"
 #include "memory/allocation.hpp"
 #include "oops/oopsHierarchy.hpp"
 
@@ -82,19 +81,6 @@ public:
   void mark(oop o) override;
   bool is_marked(oop o) override;
   void set_needs_reset(bool needs_reset) override;
-};
-
-// Implementation that uses a bitmap.
-class BitmapObjectMarker : public ObjectMarker {
-private:
-  MarkBitMap _mark_bit_map;
-  MemRegion  _bitmap_region;
-public:
-  BitmapObjectMarker(MemRegion heap_region);
-  ~BitmapObjectMarker();
-
-  void mark(oop o) override;
-  bool is_marked(oop o) override;
 };
 
 #endif // SHARE_GC_SHARED_OBJECTMARKER_HPP
