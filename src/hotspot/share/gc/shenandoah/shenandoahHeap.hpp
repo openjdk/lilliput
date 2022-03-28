@@ -276,9 +276,6 @@ public:
 
     // Heap is under weak-reference/roots processing: needs weak-LRB barriers.
     WEAK_ROOTS_BITPOS  = 4,
-
-    // JVMTI Heap-walk is in progress, need to ignore forwarding (JVMTI does its own marking).
-    HEAP_WALK_BITPOS = 5,
   };
 
   enum GCState {
@@ -297,7 +294,6 @@ private:
   ShenandoahSharedFlag   _full_gc_move_in_progress;
   ShenandoahSharedFlag   _progress_last_gc;
   ShenandoahSharedFlag   _concurrent_strong_root_in_progress;
-  ShenandoahSharedFlag   _heap_walk_in_progress;
 
   void set_gc_state_all_threads(char state);
   void set_gc_state_mask(uint mask, bool value);
@@ -315,7 +311,6 @@ public:
   void set_has_forwarded_objects(bool cond);
   void set_concurrent_strong_root_in_progress(bool cond);
   void set_concurrent_weak_root_in_progress(bool cond);
-  void set_heap_walk_in_progress(bool in_progress);
 
   inline bool is_stable() const;
   inline bool is_idle() const;
@@ -330,7 +325,6 @@ public:
   inline bool is_stw_gc_in_progress() const;
   inline bool is_concurrent_strong_root_in_progress() const;
   inline bool is_concurrent_weak_root_in_progress() const;
-  inline bool is_heap_walk_in_progress() const;
 
 private:
   enum CancelState {

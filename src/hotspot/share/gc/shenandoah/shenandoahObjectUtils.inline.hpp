@@ -56,7 +56,7 @@ markWord ShenandoahObjectUtils::stable_mark(oop obj) {
 
     // If object is already forwarded, then resolve it, and try again.
     if (mark.is_marked()) {
-      if (heap->is_full_gc_move_in_progress() || heap->is_heap_walk_in_progress()) {
+      if (heap->is_full_gc_move_in_progress()) {
         // In these cases, we want to return the header as-is: the Klass* would not be overloaded.
         return mark;
       }

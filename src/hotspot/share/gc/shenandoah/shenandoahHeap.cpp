@@ -1295,8 +1295,6 @@ void ShenandoahHeap::object_iterate(ObjectClosure* cl) {
   // Seed the stack with root scan
   scan_roots_for_iteration(&oop_stack, &oops);
 
-  set_heap_walk_in_progress(true);
-
   // Work through the oop stack to traverse heap
   while (! oop_stack.is_empty()) {
     oop obj = oop_stack.pop();
@@ -1307,7 +1305,6 @@ void ShenandoahHeap::object_iterate(ObjectClosure* cl) {
   }
 
   assert(oop_stack.is_empty(), "should be empty");
-  set_heap_walk_in_progress(false);
   // Reclaim bitmap
   reclaim_aux_bitmap_for_iteration();
 }
@@ -1914,10 +1911,6 @@ void ShenandoahHeap::set_full_gc_move_in_progress(bool in_progress) {
 
 void ShenandoahHeap::set_update_refs_in_progress(bool in_progress) {
   set_gc_state_mask(UPDATEREFS, in_progress);
-}
-
-void ShenandoahHeap::set_heap_walk_in_progress(bool in_progress) {
-  _heap_walk_in_progress.set_cond(in_progress);
 }
 
 void ShenandoahHeap::register_nmethod(nmethod* nm) {
