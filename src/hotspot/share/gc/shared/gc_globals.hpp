@@ -696,7 +696,6 @@
           constraint(GCCardSizeInBytesConstraintFunc,AtParse)
   // end of GC_FLAGS
 
-
 DECLARE_FLAGS(GC_FLAGS)
 
 #endif // SHARE_GC_SHARED_GC_GLOBALS_HPP
