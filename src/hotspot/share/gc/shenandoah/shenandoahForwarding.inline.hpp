@@ -44,9 +44,9 @@ inline oop ShenandoahForwarding::get_forwardee_raw_unchecked(oop obj) {
   // the object itself.
   markWord mark = obj->mark();
   if (mark.is_marked()) {
-    oop fwd = cast_to_oop(mark.decode_pointer());
-    if (ShenandoahHeap::heap()->is_in(fwd)) {
-      return fwd;
+    HeapWord* fwdptr = (HeapWord*) mark.clear_lock_bits().to_pointer();
+    if (fwdptr != NULL) {
+      return cast_to_oop(fwdptr);
     }
   }
   return obj;
@@ -90,7 +90,8 @@ inline oop ShenandoahForwarding::try_update_forwardee(oop obj, oop update) {
     if (prev_mark == old_mark) {
       return update;
     } else if (prev_mark == markWord::INFLATING()) {
-      // This happens when we encounter a stack-locked object in from-space. Busy for completion.
+      // This happens when we encounter a stack-locked object in from-space.
+      // Busy-wait for completion.
       continue;
     } else {
       return cast_to_oop(prev_mark.clear_lock_bits().to_pointer());
