@@ -655,9 +655,5 @@ void CollectedHeap::update_capacity_and_used_at_gc() {
 }
 
 ObjectMarker* CollectedHeap::init_object_marker() {
-  if (UseBitmapObjectMarker) {
-    return new BitmapObjectMarker(_reserved);
-  } else {
-    return new HeaderObjectMarker();
-  }
+  return new HeaderObjectMarker();
 }
