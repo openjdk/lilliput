@@ -31,6 +31,7 @@
 #include "gc/shared/gcTraceTime.inline.hpp"
 #include "gc/shared/locationPrinter.inline.hpp"
 #include "gc/shared/memAllocator.hpp"
+#include "gc/shared/objectMarker.hpp"
 #include "gc/shared/plab.hpp"
 #include "gc/shared/slidingForwarding.hpp"
 #include "gc/shared/tlab_globals.hpp"
@@ -1300,7 +1301,7 @@ void ShenandoahHeap::object_iterate(ObjectClosure* cl) {
   while (! oop_stack.is_empty()) {
     oop obj = oop_stack.pop();
     assert(oopDesc::is_oop(obj), "must be a valid oop");
-    assert(!in_collection_set(obj), "must not expose from-space objects");
+    shenandoah_assert_not_in_cset_except(NULL, obj, cancelled_gc());
     cl->do_object(obj);
     obj->oop_iterate(&oops);
   }
@@ -2319,4 +2320,8 @@ void ShenandoahHeap::flush_liveness_cache(uint worker_id) {
       ld[i] = 0;
     }
   }
+}
+
+ObjectMarker* ShenandoahHeap::init_object_marker() {
+  return new BitmapObjectMarker(_reserved);
 }
