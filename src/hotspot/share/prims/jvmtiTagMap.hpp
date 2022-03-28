@@ -27,7 +27,6 @@
 #ifndef SHARE_PRIMS_JVMTITAGMAP_HPP
 #define SHARE_PRIMS_JVMTITAGMAP_HPP
 
-#include "gc/shared/markBitMap.hpp"
 #include "jvmtifiles/jvmti.h"
 #include "memory/allocation.hpp"
 
