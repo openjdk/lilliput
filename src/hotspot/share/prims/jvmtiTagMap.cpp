@@ -29,7 +29,7 @@
 #include "classfile/vmClasses.hpp"
 #include "classfile/vmSymbols.hpp"
 #include "gc/shared/collectedHeap.hpp"
-#include "gc/shared/markBitMap.inline.hpp"
+#include "gc/shared/objectMarker.hpp"
 #include "jvmtifiles/jvmtiEnv.hpp"
 #include "logging/log.hpp"
 #include "memory/allocation.inline.hpp"
@@ -1332,97 +1332,6 @@ jvmtiError JvmtiTagMap::get_objects_with_tags(const jlong* tags,
   return collector.result(count_ptr, object_result_ptr, tag_result_ptr);
 }
 
-
-// ObjectMarker is used to support the marking objects when walking the
-// heap.
-//
-// This implementation uses the existing mark bits in an object for
-// marking. Objects that are marked must later have their headers restored.
-// As most objects are unlocked and don't have their identity hash computed
-// we don't have to save their headers. Instead we save the headers that
-// are "interesting". Later when the headers are restored this implementation
-// restores all headers to their initial value and then restores the few
-// objects that had interesting headers.
-//
-// Future work: This implementation currently uses growable arrays to save
-// the oop and header of interesting objects. As an optimization we could
-// use the same technique as the GC and make use of the unused area
-// between top() and end().
-//
-
-// An ObjectClosure used to restore the mark bits of an object
-class RestoreMarksClosure : public ObjectClosure {
- public:
-  void do_object(oop o) {
-    if (o != NULL) {
-      markWord mark = o->mark();
-      if (mark.is_marked()) {
-        o->init_mark();
-      }
-    }
-  }
-};
-
-MarkBitMap ObjectMarker::_mark_bit_map;
-MemRegion  ObjectMarker::_bitmap_region;
-
-void ObjectMarker::initialize(MemRegion heap_region) {
-  new (&_mark_bit_map) MarkBitMap();
-  size_t bitmap_size = MarkBitMap::compute_size(heap_region.byte_size());
-  ReservedSpace bitmap(bitmap_size);
-  _bitmap_region = MemRegion((HeapWord*) bitmap.base(), bitmap.size() / HeapWordSize);
-  _mark_bit_map.initialize(heap_region, _bitmap_region);
-}
-
-// initialize ObjectMarker - prepares for object marking
-void ObjectMarker::init() {
-  assert(Thread::current()->is_VM_thread(), "must be VMThread");
-  assert(SafepointSynchronize::is_at_safepoint(), "must be at a safepoint");
-
-  // prepare heap for iteration
-  Universe::heap()->ensure_parsability(false);  // no need to retire TLABs
-
-  // create stacks for interesting headers
-  if (!os::commit_memory((char*)_bitmap_region.start(), _bitmap_region.byte_size(), false)) {
-    vm_exit_out_of_memory(_bitmap_region.byte_size(), OOM_MALLOC_ERROR,
-                          "Could not commit native memory for auxiliary marking bitmap for JVMTI object marking");
-  }
-  _mark_bit_map.clear();
-}
-
-// Object marking is done so restore object headers
-void ObjectMarker::done() {
-  if (!os::uncommit_memory((char*)_bitmap_region.start(), _bitmap_region.byte_size())) {
-    log_warning(gc)("Could not uncommit native memory for auxiliary marking bitmap for JVMTI object marking");
-  }
-}
-
-// mark an object
-inline void ObjectMarker::mark(oop o) {
-  assert(Universe::heap()->is_in(o), "sanity check");
-  assert(!o->mark().is_marked(), "should only mark an object once");
-  _mark_bit_map.mark(o);
-}
-
-// return true if object is marked
-inline bool ObjectMarker::visited(oop o) {
-  return _mark_bit_map.is_marked(o);
-}
-
-// Stack allocated class to help ensure that ObjectMarker is used
-// correctly. Constructor initializes ObjectMarker, destructor calls
-// ObjectMarker's done() function to restore object headers.
-class ObjectMarkerController : public StackObj {
- public:
-  ObjectMarkerController() {
-    ObjectMarker::init();
-  }
-  ~ObjectMarkerController() {
-    ObjectMarker::done();
-  }
-};
-
-
 // helper to map a jvmtiHeapReferenceKind to an old style jvmtiHeapRootKind
 // (not performance critical as only used for roots)
 static jvmtiHeapRootKind toJvmtiHeapRootKind(jvmtiHeapReferenceKind kind) {
@@ -1564,7 +1473,7 @@ class CallbackInvoker : AllStatic {
   // if the object hasn't been visited then push it onto the visit stack
   // so that it will be visited later
   static inline bool check_for_visit(oop obj) {
-    if (!ObjectMarker::visited(obj)) visit_stack()->push(obj);
+    if (!ObjectMarkerController::is_marked(obj)) visit_stack()->push(obj);
     return true;
   }
 
@@ -2851,8 +2760,8 @@ inline bool VM_HeapWalkOperation::collect_stack_roots() {
 //
 bool VM_HeapWalkOperation::visit(oop o) {
   // mark object as visited
-  assert(!ObjectMarker::visited(o), "can't visit same object more than once");
-  ObjectMarker::mark(o);
+  assert(!ObjectMarkerController::is_marked(o), "can't visit same object more than once");
+  ObjectMarkerController::mark(o);
 
   // instance
   if (o->is_instance()) {
@@ -2890,12 +2799,14 @@ void VM_HeapWalkOperation::doit() {
 
   // the heap walk starts with an initial object or the heap roots
   if (initial_object().is_null()) {
-    // Calling collect_stack_roots() before collect_simple_roots()
     // can result in a big performance boost for an agent that is
     // focused on analyzing references in the thread stacks.
     if (!collect_stack_roots()) return;
 
     if (!collect_simple_roots()) return;
+
+    // no early return so enable heap traversal to reset the mark bits
+    ObjectMarkerController::set_needs_reset(true);
   } else {
     visit_stack()->push(initial_object()());
   }
@@ -2907,7 +2818,7 @@ void VM_HeapWalkOperation::doit() {
     // visited or the callback asked to terminate the iteration.
     while (!visit_stack()->is_empty()) {
       oop o = visit_stack()->pop();
-      if (!ObjectMarker::visited(o)) {
+      if (!ObjectMarkerController::is_marked(o)) {
         if (!visit(o)) {
           break;
         }
