@@ -49,6 +49,10 @@ class ObjectMonitorStorage : public AllStatic {
 
   static ReservedSpace _rs;
 
+  // Precalculated for quick access
+  static address _base;
+  static uintx _max_capacity;
+
   // re-build a new list of newly allocated free monitors and return its head
   static void bulk_allocate_new_list(OMFreeListType& freelist_to_fill);
 
@@ -73,6 +77,7 @@ public:
       assert(om != NULL, "sanity");
     }
     om = new (om) ObjectMonitor(object);
+    assert(decode(encode(om)) == om, "Decoding problem.");
     return om; // done
   }
 
@@ -88,15 +93,27 @@ public:
 
   static void cleanup_before_thread_death(Thread* t);
 
-  // IMplement Todo
-  //static ObjectMonitor* ref_to_om(OMRef ref);
-  //static OMRef om_to_ref(const ObjectMonitor* om);
-
   static void initialize();
 
   static void print(outputStream* st);
 
   DEBUG_ONLY(static void verify();)
+
+  // Encoding, decoding
+  static address base()           { return _base; }
+  static ObjectMonitor* ombase()  { return (ObjectMonitor*) base(); }
+
+  static ObjectMonitor* decode(OMRef ref) {
+    assert(ref < _max_capacity, "OM ref oob (%u)", ref);
+    return ombase() + ref;
+  }
+
+  static OMRef encode(const ObjectMonitor* om) {
+    assert(om >= ombase() && om < (ombase() + _max_capacity),
+           "OM oob (" PTR_FORMAT ")", p2i(om));
+    assert(is_aligned(om, BytesPerWord), "om unaligned or has tag bits (" PTR_FORMAT ")", p2i(om));
+    return (OMRef)(om - ombase());
+  }
 
 };
 

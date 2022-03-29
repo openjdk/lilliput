@@ -38,6 +38,8 @@ static const bool be_paranoid = false;
 
 ReservedSpace ObjectMonitorStorage::_rs;
 ObjectMonitorStorage::ArrayType ObjectMonitorStorage::_array;
+address ObjectMonitorStorage::_base = NULL;
+uintx ObjectMonitorStorage::_max_capacity = 0;
 
 // re-build a new list of newly allocated free monitors and return its head
 void ObjectMonitorStorage::bulk_allocate_new_list(OMFreeListType& freelist_to_fill) {
@@ -101,6 +103,8 @@ void ObjectMonitorStorage::initialize() {
     log_with_state("Reserved: [" PTR_FORMAT "-" PTR_FORMAT "), " SIZE_FORMAT " bytes (" UINTX_FORMAT " monitors).",
                    p2i(_rs.base()), p2i(_rs.end()), _rs.size(), max_capacity);
     _array.initialize((ObjectMonitor*)_rs.base(), min_object_monitors, max_capacity);
+    _base = (address) _rs.base();
+    _max_capacity = max_capacity;
   } else {
     vm_exit_out_of_memory(range_size, OOM_MMAP_ERROR, "Failed to reserve Object Monitor Store");
   }
