@@ -46,7 +46,6 @@
 #include "oops/compressedOops.inline.hpp"
 #include "oops/oop.inline.hpp"
 #include "runtime/atomic.hpp"
-#include "runtime/objectMonitor.inline.hpp"
 #include "runtime/prefetch.inline.hpp"
 #include "runtime/thread.hpp"
 #include "utilities/copy.hpp"

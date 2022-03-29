@@ -198,7 +198,7 @@ void ShenandoahAsserts::assert_correct(void* interior_loc, oop obj, const char* 
                   file, line);
   }
 
-  Klass* obj_klass = ShenandoahObjectUtils::klass(obj) ; // obj->klass_or_null();
+  Klass* obj_klass = ShenandoahObjectUtils::klass(obj);
   if (obj_klass == NULL) {
     print_failure(_safe_unknown, obj, interior_loc, NULL, "Shenandoah assert_correct failed",
                   "Object klass pointer should not be NULL",

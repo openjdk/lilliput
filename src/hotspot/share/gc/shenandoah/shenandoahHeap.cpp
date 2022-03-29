@@ -1285,7 +1285,6 @@ void ShenandoahHeap::ensure_parsability(bool retire_tlabs) {
  * is allowed to report dead objects, but is not required to do so.
  */
 void ShenandoahHeap::object_iterate(ObjectClosure* cl) {
-  assert(SafepointSynchronize::is_at_safepoint(), "can only safely iterate objects at safepoint");
   // Reset bitmap
   if (!prepare_aux_bitmap_for_iteration())
     return;

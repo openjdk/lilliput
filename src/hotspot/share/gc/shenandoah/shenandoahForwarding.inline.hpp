@@ -28,7 +28,6 @@
 #include "gc/shenandoah/shenandoahForwarding.hpp"
 
 #include "gc/shenandoah/shenandoahAsserts.hpp"
-#include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "oops/markWord.hpp"
 #include "runtime/thread.hpp"
 
