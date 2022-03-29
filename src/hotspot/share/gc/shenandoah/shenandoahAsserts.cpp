@@ -198,18 +198,18 @@ void ShenandoahAsserts::assert_correct(void* interior_loc, oop obj, const char* 
                   file, line);
   }
 
-//  Klass* obj_klass = ShenandoahObjectUtils::klass(obj) ; // obj->klass_or_null();
-//  if (obj_klass == NULL) {
-//    print_failure(_safe_unknown, obj, interior_loc, NULL, "Shenandoah assert_correct failed",
-//                  "Object klass pointer should not be NULL",
-//                  file,line);
-//  }
-//
-//  if (!Metaspace::contains(obj_klass)) {
-//    print_failure(_safe_unknown, obj, interior_loc, NULL, "Shenandoah assert_correct failed",
-//                  "Object klass pointer must go to metaspace",
-//                  file,line);
-//  }
+  Klass* obj_klass = ShenandoahObjectUtils::klass(obj) ; // obj->klass_or_null();
+  if (obj_klass == NULL) {
+    print_failure(_safe_unknown, obj, interior_loc, NULL, "Shenandoah assert_correct failed",
+                  "Object klass pointer should not be NULL",
+                  file,line);
+  }
+
+  if (!Metaspace::contains(obj_klass)) {
+    print_failure(_safe_unknown, obj, interior_loc, NULL, "Shenandoah assert_correct failed",
+                  "Object klass pointer must go to metaspace",
+                  file,line);
+  }
 
   oop fwd = ShenandoahForwarding::get_forwardee_raw_unchecked(obj);
 
@@ -230,11 +230,11 @@ void ShenandoahAsserts::assert_correct(void* interior_loc, oop obj, const char* 
                     file, line);
     }
 
-//    if (obj_klass != ShenandoahObjectUtils::klass(fwd)) {
-//      print_failure(_safe_oop, obj, interior_loc, NULL, "Shenandoah assert_correct failed",
-//                    "Forwardee klass disagrees with object class",
-//                    file, line);
-//    }
+    if (obj_klass != ShenandoahObjectUtils::klass(fwd)) {
+      print_failure(_safe_oop, obj, interior_loc, NULL, "Shenandoah assert_correct failed",
+                    "Forwardee klass disagrees with object class",
+                    file, line);
+    }
 
     // Step 3. Check that forwardee points to correct region
     if (heap->heap_region_index_containing(fwd) == heap->heap_region_index_containing(obj)) {
