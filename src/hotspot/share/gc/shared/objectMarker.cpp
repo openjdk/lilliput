@@ -22,6 +22,7 @@
  *
  */
 
+#include "precompiled.hpp"
 #include "gc/shared/collectedHeap.hpp"
 #include "gc/shared/objectMarker.hpp"
 #include "memory/universe.hpp"
