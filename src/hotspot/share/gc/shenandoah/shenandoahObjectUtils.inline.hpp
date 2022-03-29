@@ -36,6 +36,7 @@
 // This is a variant of ObjectSynchronizer::safe_load_mark(), which does the same thing, but also
 // handles forwarded objects. This is intended to be used by concurrent evacuation only. No other
 // code is supposed to observe from-space objects.
+#ifdef _LP64
 markWord ShenandoahObjectUtils::stable_mark(oop obj) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   for (;;) {
@@ -120,11 +121,16 @@ markWord ShenandoahObjectUtils::stable_mark(oop obj) {
     }
   }
 }
+#endif
 
 Klass* ShenandoahObjectUtils::klass(oop obj) {
+#ifdef _LP64
   markWord header = stable_mark(obj);
   assert(header.narrow_klass() != 0, "klass must not be NULL: " INTPTR_FORMAT, header.value());
   return header.klass();
+#else
+  return obj->klass();
+#endif
 }
 
 size_t ShenandoahObjectUtils::size(oop obj) {

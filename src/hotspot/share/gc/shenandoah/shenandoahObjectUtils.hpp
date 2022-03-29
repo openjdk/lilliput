@@ -33,7 +33,9 @@ class Klass;
 
 class ShenandoahObjectUtils : public AllStatic {
 public:
+#ifdef _LP64
   static inline markWord stable_mark(oop obj);
+#endif
   static inline Klass* klass(oop obj);
   static inline size_t size(oop obj);
 };
