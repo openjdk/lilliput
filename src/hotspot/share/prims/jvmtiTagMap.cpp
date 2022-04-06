@@ -1351,7 +1351,7 @@ jvmtiError JvmtiTagMap::get_objects_with_tags(const jlong* tags,
 
 // An ObjectClosure used to restore the mark bits of an object
 class RestoreMarksClosure : public ObjectClosure {
-public:
+ public:
   void do_object(oop o) {
     if (o != NULL) {
       markWord mark = o->mark();
@@ -1364,13 +1364,13 @@ public:
 
 // ObjectMarker provides the mark and visited functions
 class ObjectMarker : AllStatic {
-private:
+ private:
   // saved headers
   static GrowableArray<oop>* _saved_oop_stack;
   static GrowableArray<markWord>* _saved_mark_stack;
   static bool _needs_reset;                  // do we need to reset mark bits?
 
-public:
+ public:
   static void init();                       // initialize
   static void done();                       // clean-up
 
@@ -1410,6 +1410,7 @@ void ObjectMarker::done() {
     // flag to the default for the next call.
     set_needs_reset(true);
   }
+
   // now restore the interesting headers
   for (int i = 0; i < _saved_oop_stack->length(); i++) {
     oop o = _saved_oop_stack->at(i);
@@ -1448,7 +1449,7 @@ inline bool ObjectMarker::visited(oop o) {
 // correctly. Constructor initializes ObjectMarker, destructor calls
 // ObjectMarker's done() function to restore object headers.
 class ObjectMarkerController : public StackObj {
-public:
+ public:
   ObjectMarkerController() {
     ObjectMarker::init();
   }
