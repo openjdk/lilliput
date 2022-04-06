@@ -35,7 +35,6 @@
 #include "gc/shared/slidingForwarding.hpp"
 #include "gc/shared/tlab_globals.hpp"
 
-#include "gc/shenandoah/bitmapObjectMarker.hpp"
 #include "gc/shenandoah/shenandoahBarrierSet.hpp"
 #include "gc/shenandoah/shenandoahClosures.inline.hpp"
 #include "gc/shenandoah/shenandoahCollectionSet.hpp"
@@ -2312,8 +2311,4 @@ void ShenandoahHeap::flush_liveness_cache(uint worker_id) {
       ld[i] = 0;
     }
   }
-}
-
-ObjectMarker* ShenandoahHeap::init_object_marker() {
-  return new BitmapObjectMarker(_reserved);
 }

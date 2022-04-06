@@ -42,7 +42,6 @@
 
 class ConcurrentGCTimer;
 class ObjectIterateScanRootClosure;
-class ObjectMarker;
 class ShenandoahCollectorPolicy;
 class ShenandoahControlThread;
 class ShenandoahGCSession;
@@ -171,10 +170,7 @@ public:
     return true;
   }
 
-private:
-  ObjectMarker* init_object_marker();
-
-  // ---------- Heap counters and metrics
+// ---------- Heap counters and metrics
 //
 private:
            size_t _initial_size;
