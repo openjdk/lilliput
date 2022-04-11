@@ -25,7 +25,6 @@
 #include "precompiled.hpp"
 #include "classfile/vmSymbols.hpp"
 #include "jfr/jfrEvents.hpp"
-#include "gc/shared/collectedHeap.hpp"
 #include "gc/shared/suspendibleThreadSet.hpp"
 #include "logging/log.hpp"
 #include "logging/logStream.hpp"
@@ -733,7 +732,7 @@ struct SharedGlobals {
 
 static SharedGlobals GVars;
 
-markWord ObjectSynchronizer::read_stable_mark(const oop obj) {
+static markWord read_stable_mark(oop obj) {
   markWord mark = obj->mark_acquire();
   if (!mark.is_being_inflated()) {
     return mark;       // normal fast-path return
@@ -798,10 +797,8 @@ markWord ObjectSynchronizer::read_stable_mark(const oop obj) {
 // word in order to prevent an stack-locks or inflations from interferring (or detect such
 // interference and retry), but then, instead of creating and installing a monitor, simply
 // read and return the real mark word.
-markWord ObjectSynchronizer::stable_mark(oop object) {
+markWord ObjectSynchronizer::safe_load_mark(oop object) {
   for (;;) {
-    assert(object != nullptr, "null object");
-    assert(Universe::heap()->is_in(object), "object not in heap: " PTR_FORMAT, p2i(object));
     const markWord mark = object->mark_acquire();
 
     // The mark can be in one of the following states:
@@ -809,24 +806,12 @@ markWord ObjectSynchronizer::stable_mark(oop object) {
     // *  Stack-locked - coerce it to inflating, and then return displaced mark
     // *  INFLATING    - busy wait for conversion to complete
     // *  Neutral      - return mark
-    // *  Marked       - object is forwarded, try again on forwardee (GC specific)
-
-    // CASE: Forwarded
-    if (mark.is_marked()) {
-      DEBUG_ONLY(oop orig = object;)
-      if (BarrierSet::barrier_set()->load_header_handle_forwarding(object, mark)) {
-        assert(orig != object, "need to see forwarded object");
-        assert(object != nullptr, "null object");
-        assert(Universe::heap()->is_in(object), "object not in heap: " PTR_FORMAT ", orig: " PTR_FORMAT ", header: " INTPTR_FORMAT, p2i(object), p2i(orig), mark.value());
-        continue;
-      }
-    }
 
     // CASE: inflated
     if (mark.has_monitor()) {
       ObjectMonitor* inf = mark.monitor();
       markWord dmw = inf->header();
-      assert(dmw.is_neutral(), "invariant: header=" INTPTR_FORMAT ", original mark: " INTPTR_FORMAT, dmw.value(), mark.value());
+      assert(dmw.is_neutral(), "invariant: header=" INTPTR_FORMAT, dmw.value());
       return dmw;
     }
 
@@ -875,9 +860,31 @@ markWord ObjectSynchronizer::stable_mark(oop object) {
     // CASE: neutral
     // Catch if the object's header is not neutral (not locked and
     // not marked is what we care about here).
-    assert(mark.is_neutral() || mark.is_marked(), "invariant: header=" INTPTR_FORMAT, mark.value());
+    assert(mark.is_neutral(), "invariant: header=" INTPTR_FORMAT, mark.value());
     return mark;
   }
+}
+
+markWord ObjectSynchronizer::stable_mark(const oop obj) {
+  markWord mark = read_stable_mark(obj);
+  if (!mark.is_neutral() && !mark.is_marked()) {
+    if (mark.has_monitor()) {
+      ObjectMonitor* monitor = mark.monitor();
+      mark = monitor->header();
+      assert(mark.is_neutral(), "invariant: header=" INTPTR_FORMAT, mark.value());
+    } else if (SafepointSynchronize::is_at_safepoint() || Thread::current()->is_lock_owned((address) mark.locker())) {
+      // This is a stack lock owned by the calling thread so fetch the
+      // displaced markWord from the BasicLock on the stack.
+      assert(mark.has_displaced_mark_helper(), "must be displaced header here");
+      mark = mark.displaced_mark_helper();
+      assert(mark.is_neutral(), "invariant: header=" INTPTR_FORMAT, mark.value());
+    } else {
+      mark = safe_load_mark(obj);
+      assert(mark.is_neutral(), "invariant: header=" INTPTR_FORMAT, mark.value());
+      assert(!mark.is_marked(), "no forwarded objects here");
+    }
+  }
+  return mark;
 }
 
 // hashCode() generation :

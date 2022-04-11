@@ -28,17 +28,8 @@
 #include "gc/shenandoah/shenandoahForwarding.hpp"
 
 #include "gc/shenandoah/shenandoahAsserts.hpp"
-#include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "oops/markWord.hpp"
 #include "runtime/thread.hpp"
-
-static inline markWord stable_mark(oop obj) {
-  markWord mark = obj->mark();
-  if (mark.is_neutral()) {
-    return mark;
-  }
-  return ObjectSynchronizer::read_stable_mark(obj);
-}
 
 inline oop ShenandoahForwarding::get_forwardee_raw(oop obj) {
   shenandoah_assert_in_heap(NULL, obj);
@@ -50,11 +41,11 @@ inline oop ShenandoahForwarding::get_forwardee_raw_unchecked(oop obj) {
   // On this path, we can encounter the "marked" object, but with NULL
   // fwdptr. That object is still not forwarded, and we need to return
   // the object itself.
-  markWord mark = stable_mark(obj);
+  markWord mark = obj->mark();
   if (mark.is_marked()) {
-    oop fwd = cast_to_oop(mark.decode_pointer());
-    if (ShenandoahHeap::heap()->is_in(fwd)) {
-      return fwd;
+    HeapWord* fwdptr = (HeapWord*) mark.clear_lock_bits().to_pointer();
+    if (fwdptr != NULL) {
+      return cast_to_oop(fwdptr);
     }
   }
   return obj;
@@ -65,7 +56,7 @@ inline oop ShenandoahForwarding::get_forwardee_mutator(oop obj) {
   shenandoah_assert_correct(NULL, obj);
   assert(Thread::current()->is_Java_thread(), "Must be a mutator thread");
 
-  markWord mark = stable_mark(obj);
+  markWord mark = obj->mark();
   if (mark.is_marked()) {
     HeapWord* fwdptr = (HeapWord*) mark.clear_lock_bits().to_pointer();
     assert(fwdptr != NULL, "Forwarding pointer is never null here");
@@ -81,11 +72,11 @@ inline oop ShenandoahForwarding::get_forwardee(oop obj) {
 }
 
 inline bool ShenandoahForwarding::is_forwarded(oop obj) {
-  return stable_mark(obj).is_marked();
+  return obj->mark().is_marked();
 }
 
 inline oop ShenandoahForwarding::try_update_forwardee(oop obj, oop update) {
-  markWord old_mark = stable_mark(obj);
+  markWord old_mark = obj->mark();
   if (old_mark.is_marked()) {
     return cast_to_oop(old_mark.clear_lock_bits().to_pointer());
   }
@@ -96,7 +87,8 @@ inline oop ShenandoahForwarding::try_update_forwardee(oop obj, oop update) {
     if (prev_mark == old_mark) {
       return update;
     } else if (prev_mark == markWord::INFLATING()) {
-      // This happens when we encounter a stack-locked object in from-space. Busy for completion.
+      // This happens when we encounter a stack-locked object in from-space.
+      // Busy-wait for completion.
       continue;
     } else {
       return cast_to_oop(prev_mark.clear_lock_bits().to_pointer());
