@@ -845,7 +845,7 @@ markWord ObjectSynchronizer::stable_mark(oop object) {
 
       // Must preserve store ordering. The monitor state must
       // be stable at the time of publishing the monitor address.
-      guarantee(object->mark() == markWord::INFLATING(), "invariant");
+      assert(object->mark() == markWord::INFLATING(), "invariant");
       // Release semantics so that above set_object() is seen first.
       object->release_set_mark(mark);
 
