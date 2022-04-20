@@ -33,7 +33,7 @@
 #include "runtime/objectMonitor.inline.hpp"
 #include "runtime/thread.hpp"
 
-// This is a variant of ObjectSynchronizer::safe_load_mark(), which does the same thing, but also
+// This is a variant of ObjectSynchronizer::stable_mark(), which does the same thing, but also
 // handles forwarded objects. This is intended to be used by concurrent evacuation only. No other
 // code is supposed to observe from-space objects.
 #ifdef _LP64
