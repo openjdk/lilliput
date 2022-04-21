@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -39,7 +39,9 @@
 #include "oops/compressedOops.inline.hpp"
 #include "runtime/arguments.hpp"
 #include "utilities/bitMap.inline.hpp"
+#include "utilities/debug.hpp"
 #include "utilities/formatBuffer.hpp"
+#include "utilities/globalDefinitions.hpp"
 
 CHeapBitMap* ArchivePtrMarker::_ptrmap = NULL;
 VirtualSpace* ArchivePtrMarker::_vs;
@@ -202,12 +204,26 @@ void DumpRegion::commit_to(char* newtop) {
 }
 
 
-char* DumpRegion::allocate(size_t num_bytes) {
-  char* p = (char*)align_up(_top, (size_t)SharedSpaceObjectAlignment);
-  char* newtop = p + align_up(num_bytes, (size_t)SharedSpaceObjectAlignment);
+char* DumpRegion::allocate(size_t num_bytes, size_t alignment) {
+  // We align the starting address of each allocation.
+  char* p = (char*)align_up(_top, alignment);
+  char* newtop = p + num_bytes;
+  // Leave _top always SharedSpaceObjectAlignment aligned. But not more -
+  //  if we allocate with large alignments, lets not waste the gaps.
+  // Ideally we would not need to align _top to anything here but CDS has
+  //  a number of implicit alignment assumptions. Leaving this unaligned
+  //  here will trip of at least ReadClosure (assuming word alignment) and
+  //  DumpAllocStats (will get confused about counting bytes on 32-bit
+  //  platforms if we align to anything less than SharedSpaceObjectAlignment
+  //  here).
+  newtop = align_up(newtop, SharedSpaceObjectAlignment);
   expand_top_to(newtop);
-  memset(p, 0, newtop - p);
+  memset(p, 0, newtop - p); // todo: needed? debug_only?
   return p;
+}
+
+char* DumpRegion::allocate(size_t num_bytes) {
+  return allocate(num_bytes, SharedSpaceObjectAlignment);
 }
 
 void DumpRegion::append_intptr_t(intptr_t n, bool need_to_mark) {
@@ -264,7 +280,7 @@ void WriteClosure::do_oop(oop* o) {
   } else {
     assert(HeapShared::can_write(), "sanity");
     _dump_region->append_intptr_t(
-      (intptr_t)CompressedOops::encode_not_null(*o));
+      UseCompressedOops ? (intptr_t)CompressedOops::encode_not_null(*o) : (intptr_t)((void*)(*o)));
   }
 }
 
@@ -301,18 +317,28 @@ void ReadClosure::do_tag(int tag) {
   int old_tag;
   old_tag = (int)(intptr_t)nextPtr();
   // do_int(&old_tag);
-  assert(tag == old_tag, "old tag doesn't match");
+  assert(tag == old_tag, "tag doesn't match (%d, expected %d)", old_tag, tag);
   FileMapInfo::assert_mark(tag == old_tag);
 }
 
 void ReadClosure::do_oop(oop *p) {
-  narrowOop o = CompressedOops::narrow_oop_cast(nextPtr());
-  if (CompressedOops::is_null(o) || !HeapShared::is_fully_available()) {
-    *p = NULL;
+  if (UseCompressedOops) {
+    narrowOop o = CompressedOops::narrow_oop_cast(nextPtr());
+    if (CompressedOops::is_null(o) || !HeapShared::is_fully_available()) {
+      *p = NULL;
+    } else {
+      assert(HeapShared::can_use(), "sanity");
+      assert(HeapShared::is_fully_available(), "must be");
+      *p = HeapShared::decode_from_archive(o);
+    }
   } else {
-    assert(HeapShared::can_use(), "sanity");
-    assert(HeapShared::is_fully_available(), "must be");
-    *p = HeapShared::decode_from_archive(o);
+    intptr_t dumptime_oop = nextPtr();
+    if (dumptime_oop == 0 || !HeapShared::is_fully_available()) {
+      *p = NULL;
+    } else {
+      intptr_t runtime_oop = dumptime_oop + HeapShared::runtime_delta();
+      *p = cast_to_oop(runtime_oop);
+    }
   }
 }
 

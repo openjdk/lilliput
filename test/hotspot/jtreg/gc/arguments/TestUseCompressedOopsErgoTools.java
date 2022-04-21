@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,7 +32,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 import jdk.test.lib.Asserts;
-import jdk.test.lib.process.ProcessTools;
 import jdk.test.lib.process.OutputAnalyzer;
 import java.lang.management.ManagementFactory;
 import sun.hotspot.WhiteBox;
@@ -127,7 +126,9 @@ class TestUseCompressedOopsErgoTools {
     checkUseCompressedOops(join(gcflags, "-XX:ObjectAlignmentInBytes=16"), maxHeapForCompressedOops + 1, false);
 
     // use a different CompressedClassSpaceSize
-    String compressedClassSpaceSizeArg = "-XX:CompressedClassSpaceSize=" + 2 * getCompressedClassSpaceSize();
+    // Lilliput: do not assume a max. class space size, since that is subject to change. Instead, use a value slightly smaller
+    //  than what the parent VM runs with (which is the default size).
+    String compressedClassSpaceSizeArg = "-XX:CompressedClassSpaceSize=" + (getCompressedClassSpaceSize() - 1);
     maxHeapForCompressedOops = getMaxHeapForCompressedOops(join(gcflags, compressedClassSpaceSizeArg));
 
     checkUseCompressedOops(join(gcflags, compressedClassSpaceSizeArg), maxHeapForCompressedOops, true);

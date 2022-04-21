@@ -85,6 +85,7 @@ G1ParScanThreadState::G1ParScanThreadState(G1CollectedHeap* g1h,
     _num_optional_regions(optional_cset_length),
     _numa(g1h->numa()),
     _obj_alloc_stat(NULL),
+    EVAC_FAILURE_INJECTOR_ONLY(_evac_failure_inject_counter(0) COMMA)
     _preserved_marks(preserved_marks),
     _evacuation_failed_info(),
     _evac_failure_regions(evac_failure_regions)
@@ -212,14 +213,7 @@ void G1ParScanThreadState::do_oop_evac(T* p) {
   }
   RawAccess<IS_NOT_NULL>::oop_store(p, obj);
 
-  assert(obj != NULL, "Must be");
-  if (HeapRegion::is_in_same_region(p, obj)) {
-    return;
-  }
-  HeapRegion* from = _g1h->heap_region_containing(p);
-  if (!from->is_young()) {
-    enqueue_card_if_tracked(_g1h->region_attr(obj), p, obj);
-  }
+  write_ref_field_post(p, obj);
 }
 
 MAYBE_INLINE_EVACUATION
@@ -242,8 +236,8 @@ void G1ParScanThreadState::do_partial_array(PartialArrayScanTask task) {
     push_on_queue(ScannerTask(PartialArrayScanTask(from_obj)));
   }
 
-  HeapRegion* hr = _g1h->heap_region_containing(to_array);
-  G1ScanInYoungSetter x(&_scanner, hr->is_young());
+  G1HeapRegionAttr dest_attr = _g1h->region_attr(to_array);
+  G1SkipCardEnqueueSetter x(&_scanner, dest_attr.is_new_survivor());
   // Process claimed task.  The length of to_array is not correct, but
   // fortunately the iteration ignores the length field and just relies
   // on start/end.
@@ -274,7 +268,12 @@ void G1ParScanThreadState::start_partial_objarray(G1HeapRegionAttr dest_attr,
     push_on_queue(ScannerTask(PartialArrayScanTask(from_obj)));
   }
 
-  G1ScanInYoungSetter x(&_scanner, dest_attr.is_young());
+  // Skip the card enqueue iff the object (to_array) is in survivor region.
+  // However, HeapRegion::is_survivor() is too expensive here.
+  // Instead, we use dest_attr.is_young() because the two values are always
+  // equal: successfully allocated young regions must be survivor regions.
+  assert(dest_attr.is_young() == _g1h->heap_region_containing(to_array)->is_survivor(), "must be");
+  G1SkipCardEnqueueSetter x(&_scanner, dest_attr.is_young());
   // Process the initial chunk.  No need to process the type in the
   // klass, as it will already be handled by processing the built-in
   // module. The length of to_array is not correct, but fortunately
@@ -377,15 +376,15 @@ G1HeapRegionAttr G1ParScanThreadState::next_region_attr(G1HeapRegionAttr const r
 }
 
 void G1ParScanThreadState::report_promotion_event(G1HeapRegionAttr const dest_attr,
-                                                  oop const old, size_t word_sz, uint age,
+                                                  oop const old, Klass* klass, size_t word_sz, uint age,
                                                   HeapWord * const obj_ptr, uint node_index) const {
   PLAB* alloc_buf = _plab_allocator->alloc_buffer(dest_attr, node_index);
   if (alloc_buf->contains(obj_ptr)) {
-    _g1h->gc_tracer_stw()->report_promotion_in_new_plab_event(old->klass(), word_sz * HeapWordSize, age,
+    _g1h->gc_tracer_stw()->report_promotion_in_new_plab_event(klass, word_sz * HeapWordSize, age,
                                                               dest_attr.type() == G1HeapRegionAttr::Old,
                                                               alloc_buf->word_sz() * HeapWordSize);
   } else {
-    _g1h->gc_tracer_stw()->report_promotion_outside_plab_event(old->klass(), word_sz * HeapWordSize, age,
+    _g1h->gc_tracer_stw()->report_promotion_outside_plab_event(klass, word_sz * HeapWordSize, age,
                                                                dest_attr.type() == G1HeapRegionAttr::Old);
   }
 }
@@ -393,6 +392,7 @@ void G1ParScanThreadState::report_promotion_event(G1HeapRegionAttr const dest_at
 NOINLINE
 HeapWord* G1ParScanThreadState::allocate_copy_slow(G1HeapRegionAttr* dest_attr,
                                                    oop old,
+                                                   Klass* klass,
                                                    size_t word_sz,
                                                    uint age,
                                                    uint node_index) {
@@ -415,11 +415,17 @@ HeapWord* G1ParScanThreadState::allocate_copy_slow(G1HeapRegionAttr* dest_attr,
     update_numa_stats(node_index);
     if (_g1h->gc_tracer_stw()->should_report_promotion_events()) {
       // The events are checked individually as part of the actual commit
-      report_promotion_event(*dest_attr, old, word_sz, age, obj_ptr, node_index);
+      report_promotion_event(*dest_attr, old, klass, word_sz, age, obj_ptr, node_index);
     }
   }
   return obj_ptr;
 }
+
+#if EVAC_FAILURE_INJECTOR
+bool G1ParScanThreadState::inject_evacuation_failure(uint region_idx) {
+  return _g1h->evac_failure_injector()->evacuation_should_fail(_evac_failure_inject_counter, region_idx);
+}
+#endif
 
 NOINLINE
 void G1ParScanThreadState::undo_allocation(G1HeapRegionAttr dest_attr,
@@ -427,6 +433,12 @@ void G1ParScanThreadState::undo_allocation(G1HeapRegionAttr dest_attr,
                                            size_t word_sz,
                                            uint node_index) {
   _plab_allocator->undo_allocation(dest_attr, obj_ptr, word_sz, node_index);
+}
+
+void G1ParScanThreadState::update_bot_after_copying(oop obj, size_t word_sz) {
+  HeapWord* obj_start = cast_from_oop<HeapWord*>(obj);
+  HeapRegion* region = _g1h->heap_region_containing(obj_start);
+  region->update_bot_for_obj(obj_start, word_sz);
 }
 
 // Private inline function, for direct internal use and providing the
@@ -449,6 +461,7 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
     mark = mark.displaced_mark_helper();
   }
   markWord orig_mark = mark;
+  Klass* klass = mark.klass();
 
   const size_t old_size = old->size(mark);
   size_t new_size = old->copy_size(old_size, mark);
@@ -463,7 +476,7 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
   // PLAB allocations should succeed most of the time, so we'll
   // normally check against NULL once and that's it.
   if (obj_ptr == NULL) {
-    obj_ptr = allocate_copy_slow(&dest_attr, old, new_size, age, node_index);
+    obj_ptr = allocate_copy_slow(&dest_attr, old, klass, new_size, age, node_index);
     if (obj_ptr == NULL) {
       // This will either forward-to-self, or detect that someone else has
       // installed a forwarding pointer.
@@ -475,7 +488,7 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
   assert(_g1h->is_in_reserved(obj_ptr), "Allocated memory should be in the heap");
 
   // Should this evacuation fail?
-  if (_g1h->evac_failure_injector()->evacuation_should_fail()) {
+  if (inject_evacuation_failure(from_region->hrm_index())) {
     // Doing this after all the allocation attempts also tests the
     // undo_allocation() method too.
     undo_allocation(dest_attr, obj_ptr, new_size, node_index);
@@ -487,6 +500,10 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
   Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(old), obj_ptr, old_size);
 
   const oop obj = cast_to_oop(obj_ptr);
+  // Because the forwarding is done with memory_order_relaxed there is no
+  // ordering with the above copy.  Clients that get the forwardee must not
+  // examine its contents without other synchronization, since the contents
+  // may not be up to date for them.
   const oop forward_ptr = old->forward_to_atomic(obj, old_mark, memory_order_relaxed);
   if (forward_ptr == NULL) {
 
@@ -506,6 +523,8 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
       }
       mark = mark.set_age(age);
       _age_table.add(age, new_size);
+    } else {
+      update_bot_after_copying(obj, new_size);
     }
 
     // Update mark if necessary (changed age or hashctrl bits)
@@ -549,10 +568,14 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
       _string_dedup_requests.add(old);
     }
 
-    G1ScanInYoungSetter x(&_scanner, dest_attr.is_young());
+    // Skip the card enqueue iff the object (obj) is in survivor region.
+    // However, HeapRegion::is_survivor() is too expensive here.
+    // Instead, we use dest_attr.is_young() because the two values are always
+    // equal: successfully allocated young regions must be survivor regions.
+    assert(dest_attr.is_young() == _g1h->heap_region_containing(obj)->is_survivor(), "must be");
+    G1SkipCardEnqueueSetter x(&_scanner, dest_attr.is_young());
     obj->oop_iterate_backwards(&_scanner, klass);
     return obj;
-
   } else {
     _plab_allocator->undo_allocation(dest_attr, obj_ptr, new_size, node_index);
     return forward_ptr;
@@ -629,6 +652,11 @@ oop G1ParScanThreadState::handle_evacuation_failure_par(oop old, markWord m, siz
     // Forward-to-self succeeded. We are the "owner" of the object.
     HeapRegion* r = _g1h->heap_region_containing(old);
 
+    // Objects failing evacuation will turn into old objects since the regions
+    // are relabeled as such. We mark the failing objects in the prev bitmap and
+    // later use it to handle all failed objects.
+    _g1h->mark_evac_failure_object(old, _worker_id);
+
     if (_evac_failure_regions->record(r->hrm_index())) {
       _g1h->hr_printer()->evac_failure(r);
     }
@@ -636,7 +664,14 @@ oop G1ParScanThreadState::handle_evacuation_failure_par(oop old, markWord m, siz
     _preserved_marks->push_if_necessary(old, m);
     _evacuation_failed_info.register_copy_failure(word_sz);
 
-    G1ScanInYoungSetter x(&_scanner, r->is_young());
+    // For iterating objects that failed evacuation currently we can reuse the
+    // existing closure to scan evacuated objects because:
+    // - for objects referring into the collection set we do not need to gather
+    // cards at this time. The regions they are in will be unconditionally turned
+    // to old regions without remembered sets.
+    // - since we are iterating from a collection set region (i.e. never a Survivor
+    // region), we always need to gather cards for this case.
+    G1SkipCardEnqueueSetter x(&_scanner, false /* skip_card_enqueue */);
     old->oop_iterate_backwards(&_scanner);
 
     return old;

@@ -64,7 +64,7 @@ RangeCheckStub::RangeCheckStub(CodeEmitInfo* info, LIR_Opr index, LIR_Opr array)
 }
 
 RangeCheckStub::RangeCheckStub(CodeEmitInfo* info, LIR_Opr index)
-  : _index(index), _array(NULL), _throw_index_out_of_bounds_exception(true) {
+  : _index(index), _array(), _throw_index_out_of_bounds_exception(true) {
   assert(info != NULL, "must have info");
   _info = new CodeEmitInfo(info);
 }
@@ -243,6 +243,10 @@ void MonitorExitStub::emit_code(LIR_Assembler* ce) {
   __ b(_continuation);
 }
 
+void LoadKlassStub::emit_code(LIR_Assembler* ce) {
+  // Currently not needed.
+  Unimplemented();
+}
 
 // Call return is directly after patch word
 int PatchingStub::_patch_info_offset = 0;

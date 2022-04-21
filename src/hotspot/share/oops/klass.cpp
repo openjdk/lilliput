@@ -48,7 +48,9 @@
 #include "prims/jvmtiExport.hpp"
 #include "runtime/arguments.hpp"
 #include "runtime/atomic.hpp"
+#include "runtime/globals.hpp"
 #include "runtime/handles.inline.hpp"
+#include "utilities/align.hpp"
 #include "utilities/macros.hpp"
 #include "utilities/powerOfTwo.hpp"
 #include "utilities/stack.inline.hpp"
@@ -105,7 +107,7 @@ bool Klass::is_subclass_of(const Klass* k) const {
   return false;
 }
 
-void Klass::release_C_heap_structures() {
+void Klass::release_C_heap_structures(bool release_constant_pool) {
   if (_name != NULL) _name->decrement_refcount();
 }
 
@@ -194,14 +196,16 @@ Method* Klass::uncached_lookup_method(const Symbol* name, const Symbol* signatur
 }
 
 void* Klass::operator new(size_t size, ClassLoaderData* loader_data, size_t word_size, TRAPS) throw() {
-  return Metaspace::allocate(loader_data, word_size, MetaspaceObj::ClassType, THREAD);
+  MetaWord* p = Metaspace::allocate(loader_data, word_size, MetaspaceObj::ClassType, THREAD);
+  assert(is_aligned(p, KlassAlignmentInBytes), "metaspace returned badly aligned memory.");
+  return p;
 }
 
 // "Normal" instantiation is preceeded by a MetaspaceObj allocation
 // which zeros out memory - calloc equivalent.
 // The constructor is also used from CppVtableCloner,
 // which doesn't zero out the memory before calling the constructor.
-Klass::Klass(KlassID id) : _id(id),
+Klass::Klass(KlassKind kind) : _kind(kind),
                            _prototype_header(markWord::prototype() LP64_ONLY(.set_klass(this))),
                            _shared_class_path_index(-1) {
   CDS_ONLY(_shared_class_flags = 0;)
@@ -770,6 +774,10 @@ void Klass::verify_on(outputStream* st) {
   // in the CLD graph but not in production.
   assert(Metaspace::contains((address)this), "Should be");
 
+  if (UseCompressedClassPointers) {
+    assert(is_aligned(this, KlassAlignmentInBytes), "misaligned Klass structure");
+  }
+
   guarantee(this->is_klass(),"should be klass");
 
   if (super() != NULL) {
@@ -960,6 +968,6 @@ const char* Klass::class_in_module_of_loader(bool use_are, bool include_parent_l
 }
 
 bool Klass::hash_requires_reallocation(oop obj) const {
-  assert(hash_offset_in_bytes(obj) <= (obj->base_size_given_klass(this) * HeapWordSize), "hash offset must be eq or lt base size: hash offset: %d, base size: %d", hash_offset_in_bytes(obj), obj->base_size_given_klass(this) * HeapWordSize);
+  assert((size_t)hash_offset_in_bytes(obj) <= (obj->base_size_given_klass(this) * HeapWordSize), "hash offset must be eq or lt base size: hash offset: %d, base size: " SIZE_FORMAT, hash_offset_in_bytes(obj), obj->base_size_given_klass(this) * HeapWordSize);
   return obj->base_size_given_klass(this) * HeapWordSize - hash_offset_in_bytes(obj) < (int)sizeof(uint32_t);
 }

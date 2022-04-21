@@ -28,10 +28,13 @@
 #include "memory/iterator.hpp"
 #include "memory/memRegion.hpp"
 #include "oops/accessDecorators.hpp"
+#include "oops/compressedKlass.hpp"
 #include "oops/markWord.hpp"
 #include "oops/metadata.hpp"
 #include "runtime/atomic.hpp"
+#include "utilities/globalDefinitions.hpp"
 #include "utilities/macros.hpp"
+#include <type_traits>
 
 // oopDesc is the top baseclass for objects classes. The {name}Desc classes describe
 // the format of Java objects so the fields can be accessed from C++.
@@ -52,12 +55,18 @@ class oopDesc {
   friend class JVMCIVMStructs;
  private:
   volatile markWord _mark;
-  union _metadata {
-    Klass*      _klass;
-    narrowKlass _compressed_klass;
-  } _metadata;
+#ifndef _LP64
+  Klass*            _klass;
+#endif
+
+  // There may be ordering constraints on the initialization of fields that
+  // make use of the C++ copy/assign incorrect.
+  NONCOPYABLE(oopDesc);
 
  public:
+  // Must be trivial; see verifying static assert after the class.
+  oopDesc() = default;
+
   inline markWord  mark()          const;
   inline markWord  safe_mark()     const;
   inline markWord  mark_acquire()  const;
@@ -67,6 +76,7 @@ class oopDesc {
   static inline void set_mark(HeapWord* mem, markWord m);
 
   inline void release_set_mark(markWord m);
+  static inline void release_set_mark(HeapWord* mem, markWord m);
   inline markWord cas_set_mark(markWord new_mark, markWord old_mark);
   inline markWord cas_set_mark(markWord new_mark, markWord old_mark, atomic_memory_order order);
 
@@ -79,51 +89,48 @@ class oopDesc {
   inline Klass* klass_or_null() const;
   inline Klass* klass_or_null_acquire() const;
 
-  narrowKlass narrow_klass_legacy() const { return _metadata._compressed_klass; }
-  void set_narrow_klass(narrowKlass nk) NOT_CDS_JAVA_HEAP_RETURN;
+#ifndef _LP64
   inline void set_klass(Klass* k);
   static inline void release_set_klass(HeapWord* mem, Klass* k);
-
-  // For klass field compression
-  inline int klass_gap() const;
-  inline void set_klass_gap(int z);
-  static inline void set_klass_gap(HeapWord* mem, int z);
+#endif
 
   // size of object header, aligned to platform wordSize
-  static int header_size() { return sizeof(oopDesc)/HeapWordSize; }
+  static constexpr int header_size() { return sizeof(oopDesc)/HeapWordSize; }
 
   // Returns whether this is an instance of k or an instance of a subclass of k
   inline bool is_a(Klass* k) const;
 
-  inline int base_size_given_klass(const Klass* klass);
+  inline size_t base_size_given_klass(const Klass* klass);
 
   // Returns the actual oop size of the object
-  inline int size();
-  inline int size(markWord mrk);
+  inline size_t size();
+  inline size_t size(markWord mrk);
+  inline size_t copy_size(size_t size, markWord mrk) const;
 
-  inline int copy_size(int size, markWord mrk) const;
+  // Sometimes (for complicated concurrency-related reasons), it is useful
+  // to be able to figure out the size of an object knowing its klass.
+  inline size_t size_given_mark_and_klass(const markWord m, const Klass* klass);
 
   // type test operations (inlined in oop.inline.hpp)
-  inline bool is_instance()            const;
-  inline bool is_array()               const;
-  inline bool is_objArray()            const;
-  inline bool is_typeArray()           const;
+  inline bool is_instance()    const;
+  inline bool is_instanceRef() const;
+  inline bool is_array()       const;
+  inline bool is_objArray()    const;
+  inline bool is_typeArray()   const;
 
   // type test operations that don't require inclusion of oop.inline.hpp.
-  bool is_instance_noinline()          const;
-  bool is_array_noinline()             const;
-  bool is_objArray_noinline()          const;
-  bool is_typeArray_noinline()         const;
+  bool is_instance_noinline()    const;
+  bool is_instanceRef_noinline() const;
+  bool is_array_noinline()       const;
+  bool is_objArray_noinline()    const;
+  bool is_typeArray_noinline()   const;
 
  protected:
   inline oop        as_oop() const { return const_cast<oopDesc*>(this); }
 
  public:
-  // field addresses in oop
-  inline void* field_addr(int offset) const;
-
-  // Need this as public for garbage collection.
-  template <class T> inline T* obj_field_addr(int offset) const;
+  template<typename T>
+  inline T* field_addr(int offset) const;
 
   template <typename T> inline size_t field_offset(T* p) const;
 
@@ -273,10 +280,10 @@ class oopDesc {
   inline void oop_iterate(OopClosureType* cl, MemRegion mr);
 
   template <typename OopClosureType>
-  inline int oop_iterate_size(OopClosureType* cl);
+  inline size_t oop_iterate_size(OopClosureType* cl);
 
   template <typename OopClosureType>
-  inline int oop_iterate_size(OopClosureType* cl, MemRegion mr);
+  inline size_t oop_iterate_size(OopClosureType* cl, MemRegion mr);
 
   template <typename OopClosureType>
   inline void oop_iterate_backwards(OopClosureType* cl);
@@ -303,23 +310,35 @@ public:
   inline bool mark_must_be_preserved() const;
   inline bool mark_must_be_preserved(markWord m) const;
 
-  static bool has_klass_gap();
-
   // for code generation
   static int mark_offset_in_bytes()      { return offset_of(oopDesc, _mark); }
-  static int klass_offset_in_bytes()     { return offset_of(oopDesc, _metadata._klass); }
-  static int klass_gap_offset_in_bytes() {
-    assert(has_klass_gap(), "only applicable to compressed klass pointers");
-    return klass_offset_in_bytes() + sizeof(narrowKlass);
+  static int klass_offset_in_bytes()     {
+#ifdef _LP64
+    return mark_offset_in_bytes() + markWord::klass_shift / 8;
+#else
+    return offset_of(oopDesc, _klass);
+#endif
   }
 
   // for error reporting
   static void* load_klass_raw(oop obj);
   static void* load_oop_raw(oop obj, int offset);
 
+  // Runtime entry
+#ifdef _LP64
+  static narrowKlass load_nklass_runtime(oopDesc* o);
+#endif
+
   // Avoid include gc_globals.hpp in oop.inline.hpp
   DEBUG_ONLY(bool get_UseParallelGC();)
   DEBUG_ONLY(bool get_UseG1GC();)
 };
+
+// An oopDesc is not initialized via a constructor.  Space is allocated in
+// the Java heap, and static functions provided here on HeapWord* are used
+// to fill in certain parts of that memory.  The allocated memory is then
+// treated as referring to an oopDesc.  For that to be valid, the oopDesc
+// class must have a trivial default constructor (C++14 3.8/1).
+static_assert(std::is_trivially_default_constructible<oopDesc>::value, "required");
 
 #endif // SHARE_OOPS_OOP_HPP

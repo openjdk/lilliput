@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,10 +30,10 @@
 #include "oops/oop.hpp"
 #include "utilities/stack.hpp"
 
-class AbstractGangTask;
+class WorkerTask;
 class PreservedMarksSet;
-class WorkGang;
 class SlidingForwarding;
+class WorkerThreads;
 
 class PreservedMarks {
 private:
@@ -59,8 +59,8 @@ private:
 
 public:
   size_t size() const { return _stack.size(); }
-  inline void push(oop obj, markWord m);
   inline void push_if_necessary(oop obj, markWord m);
+  inline void push_always(oop obj, markWord m);
   // Iterate over the stack, restore all preserved marks, and
   // reclaim the memory taken up by the stack segments.
   void restore();
@@ -73,18 +73,12 @@ public:
   void adjust_during_full_gc(const SlidingForwarding* const forwarding);
 
   void restore_and_increment(volatile size_t* const _total_size_addr);
-  inline static void init_forwarded_mark(oop obj);
 
   // Assert the stack is empty and has no cached segments.
   void assert_empty() PRODUCT_RETURN;
 
   inline PreservedMarks();
   ~PreservedMarks() { assert_empty(); }
-};
-
-class RemoveForwardedPointerClosure: public ObjectClosure {
-public:
-  virtual void do_object(oop obj);
 };
 
 class PreservedMarksSet : public CHeapObj<mtGC> {
@@ -117,11 +111,11 @@ public:
   void init(uint num);
 
   // Iterate over all stacks, restore all preserved marks, and reclaim
-  // the memory taken up by the stack segments using the given WorkGang. If the WorkGang
+  // the memory taken up by the stack segments using the given WorkerThreads. If the WorkerThreads
   // is NULL, perform the work serially in the current thread.
-  void restore(WorkGang* workers);
+  void restore(WorkerThreads* workers);
 
-  AbstractGangTask* create_task();
+  WorkerTask* create_task();
 
   // Reclaim stack array.
   void reclaim();

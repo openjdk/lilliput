@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -35,37 +35,17 @@ inline bool PreservedMarks::should_preserve_mark(oop obj, markWord m) const {
   return obj->mark_must_be_preserved(m);
 }
 
-inline void PreservedMarks::push(oop obj, markWord m) {
-  assert(should_preserve_mark(obj, m), "pre-condition");
-  OopAndMarkWord elem(obj, m);
-  _stack.push(elem);
-}
-
 inline void PreservedMarks::push_if_necessary(oop obj, markWord m) {
   if (should_preserve_mark(obj, m)) {
-    push(obj, m);
+    OopAndMarkWord elem(obj, m);
+    _stack.push(elem);
   }
 }
 
-inline void PreservedMarks::init_forwarded_mark(oop obj) {
-  assert(obj->is_forwarded(), "only forwarded here");
-#ifdef _LP64
-  oop forwardee = obj->forwardee();
-  markWord header = forwardee->mark();
-  if (header.has_displaced_mark_helper()) {
-    header = header.displaced_mark_helper();
-  }
-  // If object has been copied, and the hashcode has just been installed in the
-  // copy, me must clear the copied flag in the original object, otherwise sizing
-  // would be off by 1.
-  if (forwardee != obj && header.hash_is_hashed() && header.hash_is_copied()) {
-    header = header.hash_clear_copied();
-  }
-  markWord mark = markWord(header.value() & (markWord::klass_mask_in_place | markWord::hashctrl_mask_in_place)).set_unlocked();
-  obj->set_mark(mark);
-#else
-  obj->set_mark(markWord::prototype());
-#endif
+inline void PreservedMarks::push_always(oop obj, markWord m) {
+  assert(!m.is_marked(), "precondition");
+  OopAndMarkWord elem(obj, m);
+  _stack.push(elem);
 }
 
 inline PreservedMarks::PreservedMarks()

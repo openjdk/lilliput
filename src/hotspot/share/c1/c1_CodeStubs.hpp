@@ -513,9 +513,6 @@ class SimpleExceptionStub: public CodeStub {
 
 
 class ArrayStoreExceptionStub: public SimpleExceptionStub {
- private:
-  CodeEmitInfo* _info;
-
  public:
   ArrayStoreExceptionStub(LIR_Opr obj, CodeEmitInfo* info): SimpleExceptionStub(Runtime1::throw_array_store_exception_id, obj, info) {}
 #ifndef PRODUCT
@@ -546,6 +543,25 @@ class ArrayCopyStub: public CodeStub {
   }
 #ifndef PRODUCT
   virtual void print_name(outputStream* out) const { out->print("ArrayCopyStub"); }
+#endif // PRODUCT
+};
+
+class LoadKlassStub: public CodeStub {
+private:
+  LIR_Opr          _obj;
+  LIR_Opr          _result;
+
+public:
+  LoadKlassStub(LIR_Opr obj, LIR_Opr result) :
+    CodeStub(), _obj(obj), _result(result) {};
+
+  virtual void emit_code(LIR_Assembler* e);
+  virtual void visit(LIR_OpVisitState* visitor) {
+    visitor->do_input(_obj);
+    visitor->do_output(_result);
+  }
+#ifndef PRODUCT
+virtual void print_name(outputStream* out) const { out->print("LoadKlassStub"); }
 #endif // PRODUCT
 };
 

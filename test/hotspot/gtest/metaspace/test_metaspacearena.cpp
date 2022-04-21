@@ -27,6 +27,7 @@
 #include "memory/metaspace/commitLimiter.hpp"
 #include "memory/metaspace/counters.hpp"
 #include "memory/metaspace/internalStats.hpp"
+#include "memory/metaspace/metaspaceAlignment.hpp"
 #include "memory/metaspace/metaspaceArena.hpp"
 #include "memory/metaspace/metaspaceArenaGrowthPolicy.hpp"
 #include "memory/metaspace/metaspaceSettings.hpp"
@@ -50,11 +51,6 @@ using metaspace::SizeAtomicCounter;
 using metaspace::Settings;
 using metaspace::ArenaStats;
 
-// See metaspaceArena.cpp : needed for predicting commit sizes.
-namespace metaspace {
-  extern size_t get_raw_word_size_for_requested_word_size(size_t net_word_size);
-}
-
 class MetaspaceArenaTestHelper {
 
   MetaspaceGtestContext& _context;
@@ -62,16 +58,18 @@ class MetaspaceArenaTestHelper {
   Mutex* _lock;
   const ArenaGrowthPolicy* _growth_policy;
   SizeAtomicCounter _used_words_counter;
+  int _alignment_words;
   MetaspaceArena* _arena;
 
-  void initialize(const ArenaGrowthPolicy* growth_policy, const char* name = "gtest-MetaspaceArena") {
+  void initialize(const ArenaGrowthPolicy* growth_policy, int alignment_words,
+                  const char* name = "gtest-MetaspaceArena") {
     _growth_policy = growth_policy;
-    _lock = new Mutex(Monitor::leaf, "gtest-MetaspaceArenaTest-lock", Monitor::_safepoint_check_never);
+    _lock = new Mutex(Monitor::nosafepoint, "gtest-MetaspaceArenaTest_lock");
     // Lock during space creation, since this is what happens in the VM too
     //  (see ClassLoaderData::metaspace_non_null(), which we mimick here).
     {
       MutexLocker ml(_lock,  Mutex::_no_safepoint_check_flag);
-      _arena = new MetaspaceArena(&_context.cm(), _growth_policy, _lock, &_used_words_counter, name);
+      _arena = new MetaspaceArena(&_context.cm(), _growth_policy, alignment_words, _lock, &_used_words_counter, name);
     }
     DEBUG_ONLY(_arena->verify());
 
@@ -85,7 +83,7 @@ public:
                             const char* name = "gtest-MetaspaceArena") :
     _context(helper)
   {
-    initialize(ArenaGrowthPolicy::policy_for_space_type(space_type, is_class), name);
+    initialize(ArenaGrowthPolicy::policy_for_space_type(space_type, is_class), metaspace::MetaspaceMinAlignmentWords, name);
   }
 
   // Create a helper; growth policy is directly specified
@@ -93,7 +91,7 @@ public:
                            const char* name = "gtest-MetaspaceArena") :
     _context(helper)
   {
-    initialize(growth_policy, name);
+    initialize(growth_policy, metaspace::MetaspaceMinAlignmentWords, name);
   }
 
   ~MetaspaceArenaTestHelper() {
@@ -281,7 +279,7 @@ static void test_chunk_enlargment_simple(Metaspace::MetaspaceType spacetype, boo
          metaspace::InternalStats::num_chunks_enlarged() == n1) {
     size_t s = IntRange(32, 128).random_value();
     helper.allocate_from_arena_with_tests_expect_success(s);
-    allocated += metaspace::get_raw_word_size_for_requested_word_size(s);
+    allocated += metaspace::get_raw_word_size_for_requested_word_size(s, metaspace::MetaspaceMinAlignmentWords);
   }
 
   EXPECT_GT(metaspace::InternalStats::num_chunks_enlarged(), n1);
@@ -338,7 +336,7 @@ TEST_VM(metaspace, MetaspaceArena_test_enlarge_in_place_2) {
   while (allocated <= MAX_CHUNK_WORD_SIZE) {
     size_t s = IntRange(32, 128).random_value();
     helper.allocate_from_arena_with_tests_expect_success(s);
-    allocated += metaspace::get_raw_word_size_for_requested_word_size(s);
+    allocated += metaspace::get_raw_word_size_for_requested_word_size(s, metaspace::MetaspaceMinAlignmentWords);
     if (allocated <= MAX_CHUNK_WORD_SIZE) {
       // Chunk should have been enlarged in place
       ASSERT_EQ(1, helper.get_number_of_chunks());
@@ -595,7 +593,7 @@ static void test_controlled_growth(Metaspace::MetaspaceType type, bool is_class,
     }
 
     smhelper.allocate_from_arena_with_tests_expect_success(alloc_words);
-    words_allocated += metaspace::get_raw_word_size_for_requested_word_size(alloc_words);
+    words_allocated += metaspace::get_raw_word_size_for_requested_word_size(alloc_words, metaspace::MetaspaceMinAlignmentWords);
     num_allocated++;
 
     size_t used2 = 0, committed2 = 0, capacity2 = 0;
@@ -739,3 +737,48 @@ TEST_VM(metaspace, MetaspaceArena_growth_boot_nc_not_inplace) {
                          word_size_for_level(CHUNK_LEVEL_4M), false);
 }
 */
+
+// Test that repeated allocation-deallocation cycles with the same block size
+//  do not increase metaspace usage after the initial allocation (the deallocated
+//  block should be reused by the next allocation).
+static void test_repeatedly_allocate_and_deallocate(bool is_topmost) {
+  // Test various sizes, including (important) the max. possible block size = 1 root chunk
+  for (size_t blocksize = Metaspace::max_allocation_word_size(); blocksize >= 1; blocksize /= 2) {
+    size_t used1 = 0, used2 = 0, committed1 = 0, committed2 = 0;
+    MetaWord* p = NULL, *p2 = NULL;
+
+    MetaspaceGtestContext context;
+    MetaspaceArenaTestHelper helper(context, Metaspace::StandardMetaspaceType, false);
+
+    // First allocation
+    helper.allocate_from_arena_with_tests_expect_success(&p, blocksize);
+    if (!is_topmost) {
+      // another one on top, size does not matter.
+      helper.allocate_from_arena_with_tests_expect_success(0x10);
+    }
+
+    // Measure
+    helper.usage_numbers_with_test(&used1, &committed1, NULL);
+
+    // Dealloc, alloc several times with the same size.
+    for (int i = 0; i < 5; i ++) {
+      helper.deallocate_with_tests(p, blocksize);
+      helper.allocate_from_arena_with_tests_expect_success(&p2, blocksize);
+      // We should get the same pointer back.
+      EXPECT_EQ(p2, p);
+    }
+
+    // Measure again
+    helper.usage_numbers_with_test(&used2, &committed2, NULL);
+    EXPECT_EQ(used2, used1);
+    EXPECT_EQ(committed1, committed2);
+  }
+}
+
+TEST_VM(metaspace, MetaspaceArena_test_repeatedly_allocate_and_deallocate_top_allocation) {
+  test_repeatedly_allocate_and_deallocate(true);
+}
+
+TEST_VM(metaspace, MetaspaceArena_test_repeatedly_allocate_and_deallocate_nontop_allocation) {
+  test_repeatedly_allocate_and_deallocate(false);
+}

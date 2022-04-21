@@ -250,19 +250,13 @@ class StubRoutines: AllStatic {
   static address _dlibm_tan_cot_huge;
   static address _dtan;
 
-  // Safefetch stubs.
-  static address _safefetch32_entry;
-  static address _safefetch32_fault_pc;
-  static address _safefetch32_continuation_pc;
-  static address _safefetchN_entry;
-  static address _safefetchN_fault_pc;
-  static address _safefetchN_continuation_pc;
-
   // Vector Math Routines
   static address _vector_f_math[VectorSupport::NUM_VEC_SIZES][VectorSupport::NUM_SVML_OP];
   static address _vector_d_math[VectorSupport::NUM_VEC_SIZES][VectorSupport::NUM_SVML_OP];
 
- public:
+  static address _load_nklass;
+
+public:
   // Initialization/Testing
   static void    initialize1();                            // must happen before universe::genesis
   static void    initialize2();                            // must happen after  universe::genesis
@@ -426,35 +420,9 @@ class StubRoutines: AllStatic {
   static address dlibm_tan_cot_huge()  { return _dlibm_tan_cot_huge; }
   static address dtan()                { return _dtan; }
 
+  static address load_nklass()         { return _load_nklass; }
+
   static address select_fill_function(BasicType t, bool aligned, const char* &name);
-
-  //
-  // Safefetch stub support
-  //
-
-  typedef int      (*SafeFetch32Stub)(int*      adr, int      errValue);
-  typedef intptr_t (*SafeFetchNStub) (intptr_t* adr, intptr_t errValue);
-
-  static SafeFetch32Stub SafeFetch32_stub() { return CAST_TO_FN_PTR(SafeFetch32Stub, _safefetch32_entry); }
-  static SafeFetchNStub  SafeFetchN_stub()  { return CAST_TO_FN_PTR(SafeFetchNStub,  _safefetchN_entry); }
-
-  static bool is_safefetch_fault(address pc) {
-    return pc != NULL &&
-          (pc == _safefetch32_fault_pc ||
-           pc == _safefetchN_fault_pc);
-  }
-
-  static address continuation_for_safefetch_fault(address pc) {
-    assert(_safefetch32_continuation_pc != NULL &&
-           _safefetchN_continuation_pc  != NULL,
-           "not initialized");
-
-    if (pc == _safefetch32_fault_pc) return _safefetch32_continuation_pc;
-    if (pc == _safefetchN_fault_pc)  return _safefetchN_continuation_pc;
-
-    ShouldNotReachHere();
-    return NULL;
-  }
 
   //
   // Default versions of the above arraycopy functions for platforms which do

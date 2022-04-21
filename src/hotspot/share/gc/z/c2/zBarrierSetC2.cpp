@@ -135,7 +135,9 @@ address ZLoadBarrierStubC2::slow_path() const {
 }
 
 RegMask& ZLoadBarrierStubC2::live() const {
-  return *barrier_set_state()->live(_node);
+  RegMask* mask = barrier_set_state()->live(_node);
+  assert(mask != NULL, "must be mach-node with barrier");
+  return *mask;
 }
 
 Label* ZLoadBarrierStubC2::entry() {
@@ -296,7 +298,6 @@ void ZBarrierSetC2::clone_at_expansion(PhaseMacroExpand* phase, ArrayCopyNode* a
       assert(src_offset == dest_offset, "should be equal");
       jlong offset = src_offset->get_long();
       if (offset != arrayOopDesc::base_offset_in_bytes(T_OBJECT)) {
-        assert(!UseCompressedClassPointers, "should only happen without compressed class pointers");
         assert((arrayOopDesc::base_offset_in_bytes(T_OBJECT) - offset) == BytesPerLong, "unexpected offset");
         length = phase->transform_later(new SubLNode(length, phase->longcon(1))); // Size is in longs
         src_offset = phase->longcon(arrayOopDesc::base_offset_in_bytes(T_OBJECT));

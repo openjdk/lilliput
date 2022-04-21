@@ -42,8 +42,8 @@ public:
     _oop.set_mark(m);
   }
 
-  static markWord originalMark() { return markWord(markWord::lock_mask_in_place); }
-  markWord changedMark()  { return markWord((intptr_t)(void*)(&_lock)); }
+  static markWord originalMark() { return markWord(markWord::unlocked_value); }
+  static markWord changedMark()  { return markWord(0x4711); }
 };
 
 #define ASSERT_MARK_WORD_EQ(a, b) ASSERT_EQ((a).value(), (b).value())
@@ -68,8 +68,8 @@ TEST_VM(PreservedMarks, iterate_and_restore) {
   ASSERT_MARK_WORD_EQ(o2.mark(), o2.changedMark());
 
   // Push o1 and o2 to have their marks preserved.
-  pm.push(o1.get_oop(), o1.mark());
-  pm.push(o2.get_oop(), o2.mark());
+  pm.push_if_necessary(o1.get_oop(), o1.mark());
+  pm.push_if_necessary(o2.get_oop(), o2.mark());
 
   // Fake a move from o1->o3 and o2->o4.
   o1.forward_to(o3.get_oop());

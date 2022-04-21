@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,7 +28,7 @@
 #include "c1/c1_FrameMap.hpp"
 #include "code/stubs.hpp"
 #include "interpreter/interpreter.hpp"
-#include "memory/allocation.hpp"
+#include "memory/allStatic.hpp"
 #include "runtime/deoptimization.hpp"
 
 class StubAssembler;
@@ -63,6 +63,7 @@ class StubAssembler;
   stub(monitorenter_nofpu)             /* optimized version that does not preserve fpu registers */ \
   stub(monitorexit)                  \
   stub(monitorexit_nofpu)              /* optimized version that does not preserve fpu registers */ \
+  stub(load_klass)                   \
   stub(deoptimize)                   \
   stub(access_field_patching)        \
   stub(load_klass_patching)          \

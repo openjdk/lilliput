@@ -3235,7 +3235,7 @@ void TemplateTable::invokevirtual_helper(Register index,
   __ bind(notFinal);
 
   // get receiver klass
-  __ null_check(recv, oopDesc::klass_offset_in_bytes());
+  __ null_check(recv, oopDesc::mark_offset_in_bytes());
   __ load_klass(r0, recv);
 
   // profile this call
@@ -3325,7 +3325,7 @@ void TemplateTable::invokeinterface(int byte_no) {
   __ tbz(r3, ConstantPoolCacheEntry::is_vfinal_shift, notVFinal);
 
   // Get receiver klass into r3 - also a null check
-  __ null_check(r2, oopDesc::klass_offset_in_bytes());
+  __ null_check(r2, oopDesc::mark_offset_in_bytes());
   __ load_klass(r3, r2);
 
   Label subtype;
@@ -3342,7 +3342,7 @@ void TemplateTable::invokeinterface(int byte_no) {
 
   // Get receiver klass into r3 - also a null check
   __ restore_locals();
-  __ null_check(r2, oopDesc::klass_offset_in_bytes());
+  __ null_check(r2, oopDesc::mark_offset_in_bytes());
   __ load_klass(r3, r2);
 
   Label no_such_method;
@@ -3553,17 +3553,15 @@ void TemplateTable::_new() {
 
     // initialize object header only.
     __ bind(initialize_header);
-    __ mov(rscratch1, (intptr_t)markWord::prototype().value());
+    __ ldr(rscratch1, Address(r4, Klass::prototype_header_offset()));
     __ str(rscratch1, Address(r0, oopDesc::mark_offset_in_bytes()));
-    __ store_klass_gap(r0, zr);  // zero klass gap for compressed oops
-    __ store_klass(r0, r4);      // store klass last
 
     {
       SkipIfEqual skip(_masm, &DTraceAllocProbes, false);
       // Trigger dtrace event for fastpath
       __ push(atos); // save the return value
       __ call_VM_leaf(
-           CAST_FROM_FN_PTR(address, SharedRuntime::dtrace_object_alloc), r0);
+           CAST_FROM_FN_PTR(address, static_cast<int (*)(oopDesc*)>(SharedRuntime::dtrace_object_alloc)), r0);
       __ pop(atos); // restore the return value
 
     }
@@ -3686,7 +3684,8 @@ void TemplateTable::instanceof() {
   __ get_vm_result_2(r0, rthread);
   __ pop(r3); // restore receiver
   __ verify_oop(r3);
-  __ load_klass(r3, r3);
+  __ load_klass(rscratch1, r3);
+  __ mov(r3, rscratch1);
   __ b(resolved);
 
   // Get superklass in r0 and subklass in r3

@@ -144,26 +144,13 @@ void C1_MacroAssembler::initialize_header(Register obj, Register klass, Register
   assert_different_registers(obj, klass, len, t1, t2);
   movptr(t1, Address(klass, Klass::prototype_header_offset()));
   movptr(Address(obj, oopDesc::mark_offset_in_bytes()), t1);
-#ifdef _LP64
-  if (UseCompressedClassPointers) { // Take care not to kill klass
-    movptr(t1, klass);
-    encode_klass_not_null(t1, tmp_encode_klass);
-    movl(Address(obj, oopDesc::klass_offset_in_bytes()), t1);
-  } else
+#ifndef _LP64
+  movptr(Address(obj, oopDesc::klass_offset_in_bytes()), klass);
 #endif
-  {
-    movptr(Address(obj, oopDesc::klass_offset_in_bytes()), klass);
-  }
 
   if (len->is_valid()) {
     movl(Address(obj, arrayOopDesc::length_offset_in_bytes()), len);
   }
-#ifdef _LP64
-  else if (UseCompressedClassPointers) {
-    xorptr(t1, t1);
-    store_klass_gap(obj, t1);
-  }
-#endif
 }
 
 
@@ -331,18 +318,18 @@ void C1_MacroAssembler::remove_frame(int frame_size_in_bytes) {
 }
 
 
-void C1_MacroAssembler::verified_entry() {
-  if (C1Breakpoint || VerifyFPU) {
+void C1_MacroAssembler::verified_entry(bool breakAtEntry) {
+  if (breakAtEntry || VerifyFPU) {
     // Verified Entry first instruction should be 5 bytes long for correct
     // patching by patch_verified_entry().
     //
-    // C1Breakpoint and VerifyFPU have one byte first instruction.
+    // Breakpoint and VerifyFPU have one byte first instruction.
     // Also first instruction will be one byte "push(rbp)" if stack banging
     // code is not generated (see build_frame() above).
     // For all these cases generate long instruction first.
     fat_nop();
   }
-  if (C1Breakpoint)int3();
+  if (breakAtEntry) int3();
   // build frame
   IA32_ONLY( verify_FPU(0, "method_entry"); )
 }

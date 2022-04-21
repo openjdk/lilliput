@@ -24,8 +24,8 @@
  */
 
 #include "precompiled.hpp"
-#include "memory/metaspace/allocationGuard.hpp"
 #include "memory/metaspace/freeBlocks.hpp"
+#include "memory/metaspace/metaspaceAlignment.hpp"
 #include "memory/metaspace/metaspaceCommon.hpp"
 #include "memory/metaspace/metaspaceSettings.hpp"
 #include "memory/metaspace/virtualSpaceNode.hpp"
@@ -167,30 +167,6 @@ void print_number_of_classes(outputStream* out, uintx classes, uintx classes_sha
   if (classes_shared > 0) {
     out->print(" (" UINTX_FORMAT " shared)", classes_shared);
   }
-}
-
-// Given a net allocation word size, return the raw word size we actually allocate.
-// Note: externally visible for gtests.
-//static
-size_t get_raw_word_size_for_requested_word_size(size_t word_size) {
-  size_t byte_size = word_size * BytesPerWord;
-
-  // Deallocated metablocks are kept in a binlist which limits their minimal
-  //  size to at least the size of a binlist item (2 words).
-  byte_size = MAX2(byte_size, FreeBlocks::MinWordSize * BytesPerWord);
-
-  // Metaspace allocations are aligned to word size.
-  byte_size = align_up(byte_size, AllocationAlignmentByteSize);
-
-  // If we guard allocations, we need additional space for a prefix.
-#ifdef ASSERT
-  if (Settings::use_allocation_guard()) {
-    byte_size += align_up(prefix_size(), AllocationAlignmentByteSize);
-  }
-#endif
-  size_t raw_word_size = byte_size / BytesPerWord;
-  assert(raw_word_size * BytesPerWord == byte_size, "Sanity");
-  return raw_word_size;
 }
 
 } // namespace metaspace

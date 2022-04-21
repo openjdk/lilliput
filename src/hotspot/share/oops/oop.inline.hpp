@@ -31,6 +31,7 @@
 #include "oops/access.inline.hpp"
 #include "oops/arrayKlass.hpp"
 #include "oops/arrayOop.hpp"
+#include "oops/compressedKlass.inline.hpp"
 #include "oops/compressedOops.inline.hpp"
 #include "oops/markWord.inline.hpp"
 #include "oops/oopsHierarchy.hpp"
@@ -55,12 +56,11 @@ markWord oopDesc::mark_acquire() const {
 }
 
 markWord oopDesc::safe_mark() const {
-  assert(SafepointSynchronize::is_at_safepoint(), "can only resolve displaced mark at safepoint");
-  markWord m = mark();
-  if (m.has_displaced_mark_helper()) {
-    m = m.displaced_mark_helper();
+  markWord header = mark();
+  if (!header.is_neutral()) {
+    header = ObjectSynchronizer::stable_mark(cast_to_oop(this));
   }
-  return m;
+  return header;
 }
 
 markWord* oopDesc::mark_addr() const {
@@ -79,6 +79,10 @@ void oopDesc::release_set_mark(markWord m) {
   Atomic::release_store(&_mark, m);
 }
 
+void oopDesc::release_set_mark(HeapWord* mem, markWord m) {
+  Atomic::release_store((markWord*)(((char*)mem) + mark_offset_in_bytes()), m);
+}
+
 markWord oopDesc::cas_set_mark(markWord new_mark, markWord old_mark) {
   return Atomic::cmpxchg(&_mark, old_mark, new_mark);
 }
@@ -90,7 +94,6 @@ markWord oopDesc::cas_set_mark(markWord new_mark, markWord old_mark, atomic_memo
 void oopDesc::init_mark() {
 #ifdef _LP64
   markWord header = ObjectSynchronizer::stable_mark(cast_to_oop(this));
-  assert(_metadata._compressed_klass == header.narrow_klass(), "klass must match: " PTR_FORMAT, header.value());
   assert(UseCompressedClassPointers, "expect compressed klass pointers");
   header = markWord((header.value() & (markWord::klass_mask_in_place | markWord::hashctrl_mask_in_place)) | markWord::prototype().value());
 #else
@@ -111,12 +114,9 @@ Klass* oopDesc::klass() const {
   if (!header.is_neutral()) {
     header = ObjectSynchronizer::stable_mark(cast_to_oop(this));
   }
-  assert(_metadata._compressed_klass == header.narrow_klass(), "narrow klass must be equal, obj: " PTR_FORMAT ", header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, p2i(cast_to_oop(this)), header.value(), intptr_t(_metadata._compressed_klass));
-  Klass* klass = header.klass();
-  assert(klass == CompressedKlassPointers::decode_not_null(_metadata._compressed_klass), "klass must match: header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, header.value(), intptr_t(_metadata._compressed_klass));
-  return klass;
+  return header.klass();
 #else
-  return _metadata._klass;
+  return _klass;
 #endif
 }
 
@@ -127,12 +127,9 @@ Klass* oopDesc::klass_or_null() const {
   if (!header.is_neutral()) {
     header = ObjectSynchronizer::stable_mark(cast_to_oop(this));
   }
-  assert(_metadata._compressed_klass == header.narrow_klass(), "narrow klass must be equal, header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, header.value(), intptr_t(_metadata._compressed_klass));
-  Klass* klass = header.klass_or_null();
-  assert(klass == CompressedKlassPointers::decode(_metadata._compressed_klass), "klass must match: header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, header.value(), intptr_t(_metadata._compressed_klass));
-  return klass;
+  return header.klass_or_null();
 #else
-  return _metadata._klass;
+  return _klass;
 #endif
 }
 
@@ -143,22 +140,16 @@ Klass* oopDesc::klass_or_null_acquire() const {
   if (!header.is_neutral()) {
     header = ObjectSynchronizer::stable_mark(cast_to_oop(this));
   }
-  assert(_metadata._compressed_klass == header.narrow_klass(), "narrow klass must be equal, header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, header.value(), intptr_t(_metadata._compressed_klass));
-  Klass* klass = header.klass_or_null();
-  assert(klass == CompressedKlassPointers::decode(_metadata._compressed_klass), "klass must match: header: " INTPTR_FORMAT ", nklass: " INTPTR_FORMAT, header.value(), intptr_t(_metadata._compressed_klass));
-  return klass;
+  return header.klass_or_null();
 #else
-  return Atomic::load_acquire(&_metadata._klass);
+  return Atomic::load_acquire(&_klass);
 #endif
 }
 
+#ifndef _LP64
 void oopDesc::set_klass(Klass* k) {
   assert(Universe::is_bootstrapping() || (k != NULL && k->is_klass()), "incorrect Klass");
-  if (UseCompressedClassPointers) {
-    _metadata._compressed_klass = CompressedKlassPointers::encode_not_null(k);
-  } else {
-    _metadata._klass = k;
-  }
+  _klass = k;
 }
 
 void oopDesc::release_set_klass(HeapWord* mem, Klass* k) {
@@ -171,28 +162,15 @@ void oopDesc::release_set_klass(HeapWord* mem, Klass* k) {
     Atomic::release_store((Klass**)raw_mem, k);
   }
 }
-
-int oopDesc::klass_gap() const {
-  return *(int*)(((intptr_t)this) + klass_gap_offset_in_bytes());
-}
-
-void oopDesc::set_klass_gap(HeapWord* mem, int v) {
-  if (UseCompressedClassPointers) {
-    *(int*)(((char*)mem) + klass_gap_offset_in_bytes()) = v;
-  }
-}
-
-void oopDesc::set_klass_gap(int v) {
-  set_klass_gap((HeapWord*)this, v);
-}
+#endif
 
 bool oopDesc::is_a(Klass* k) const {
   return klass()->is_subtype_of(k);
 }
 
-int oopDesc::base_size_given_klass(const Klass* klass)  {
-  int lh = klass->layout_helper();
-  int s;
+size_t oopDesc::base_size_given_klass(const Klass* kls)  {
+  int lh = kls->layout_helper();
+  size_t s;
 
   // lh is now a value computed at class initialization that may hint
   // at the size.  For instances, this is positive and equal to the
@@ -209,7 +187,7 @@ int oopDesc::base_size_given_klass(const Klass* klass)  {
     if (!Klass::layout_helper_needs_slow_path(lh)) {
       s = lh >> LogHeapWordSize;  // deliver size scaled by wordSize
     } else {
-      s = klass->oop_size(this);
+      s = kls->oop_size(this);
     }
   } else if (lh <= Klass::_lh_neutral_value) {
     // The most common case is instances; fall through if so.
@@ -225,47 +203,50 @@ int oopDesc::base_size_given_klass(const Klass* klass)  {
       // This code could be simplified, but by keeping array_header_in_bytes
       // in units of bytes and doing it this way we can round up just once,
       // skipping the intermediate round to HeapWordSize.
-      s = (int)(align_up(size_in_bytes, MinObjAlignmentInBytes) / HeapWordSize);
+      s = align_up(size_in_bytes, MinObjAlignmentInBytes) / HeapWordSize;
 
       // UseParallelGC and UseG1GC can change the length field
       // of an "old copy" of an object array in the young gen so it indicates
       // the grey portion of an already copied array. This will cause the first
       // disjunct below to fail if the two comparands are computed across such
       // a concurrent change.
-      assert((s == klass->oop_size(this)) ||
+      assert((s == kls->oop_size(this)) ||
              (Universe::is_gc_active() && is_objArray() && is_forwarded() && (get_UseParallelGC() || get_UseG1GC())),
              "wrong array object size");
     } else {
       // Must be zero, so bite the bullet and take the virtual call.
-      s = klass->oop_size(this);
+      s = kls->oop_size(this);
     }
   }
 
-  assert(s > 0, "Oop size must be greater than zero, not %d", s);
-  assert(is_object_aligned(s), "Oop size is not properly aligned: %d", s);
+  assert(s > 0, "Oop size must be greater than zero, not " SIZE_FORMAT, s);
+  assert(is_object_aligned(s), "Oop size is not properly aligned: " SIZE_FORMAT, s);
   return s;
 }
 
-int oopDesc::size(markWord mrk) {
-  Klass* klass = mrk.klass();
-  int size = base_size_given_klass(klass);
-  if (mrk.hash_is_copied() && klass->hash_requires_reallocation(cast_to_oop(this))) {
-    size = align_object_size(size + 1);
+size_t oopDesc::size_given_mark_and_klass(const markWord mrk, const Klass* kls) {
+  size_t sz = base_size_given_klass(kls);
+  if (mrk.hash_is_copied() && kls->hash_requires_reallocation(cast_to_oop(this))) {
+    sz = align_object_size(sz + 1);
   }
-  assert(is_object_aligned(size), "Oop size is not properly aligned: %d", size);
-  return size;
+  return sz;
 }
 
-int oopDesc::copy_size(int size, markWord mrk) const {
+size_t oopDesc::size(markWord mrk) {
+  Klass* klass = mrk.klass();
+  return size_given_mark_and_klass(mrk, klass);
+}
+
+size_t oopDesc::copy_size(size_t size, markWord mrk) const {
   Klass* klass = mrk.klass();
   if (mrk.hash_is_hashed() && (!mrk.hash_is_copied()) && klass->hash_requires_reallocation(cast_to_oop(this))) {
     size = align_object_size(size + 1);
   }
-  assert(is_object_aligned(size), "Oop size is not properly aligned: %d", size);
+  assert(is_object_aligned(size), "Oop size is not properly aligned: " SIZE_FORMAT, size);
   return size;
 }
 
-int oopDesc::size() {
+size_t oopDesc::size() {
   markWord mrk = mark();
   if (!mrk.is_neutral()) {
     mrk = ObjectSynchronizer::stable_mark(cast_to_oop(this));
@@ -273,15 +254,14 @@ int oopDesc::size() {
   return size(mrk);
 }
 
-bool oopDesc::is_instance()  const { return klass()->is_instance_klass();  }
-bool oopDesc::is_array()     const { return klass()->is_array_klass();     }
-bool oopDesc::is_objArray()  const { return klass()->is_objArray_klass();  }
-bool oopDesc::is_typeArray() const { return klass()->is_typeArray_klass(); }
+bool oopDesc::is_instance()    const { return klass()->is_instance_klass();           }
+bool oopDesc::is_instanceRef() const { return klass()->is_reference_instance_klass(); }
+bool oopDesc::is_array()       const { return klass()->is_array_klass();              }
+bool oopDesc::is_objArray()    const { return klass()->is_objArray_klass();           }
+bool oopDesc::is_typeArray()   const { return klass()->is_typeArray_klass();          }
 
-void*    oopDesc::field_addr(int offset)     const { return reinterpret_cast<void*>(cast_from_oop<intptr_t>(as_oop()) + offset); }
-
-template <class T>
-T*       oopDesc::obj_field_addr(int offset) const { return (T*) field_addr(offset); }
+template<typename T>
+T*       oopDesc::field_addr(int offset)     const { return reinterpret_cast<T*>(cast_from_oop<intptr_t>(as_oop()) + offset); }
 
 template <typename T>
 size_t   oopDesc::field_offset(T* p) const { return pointer_delta((void*)p, (void*)this, 1); }
@@ -292,30 +272,30 @@ inline oop  oopDesc::obj_field(int offset) const                    { return Hea
 
 inline void oopDesc::obj_field_put(int offset, oop value)           { HeapAccess<>::oop_store_at(as_oop(), offset, value); }
 
-inline jbyte oopDesc::byte_field(int offset) const                  { return HeapAccess<>::load_at(as_oop(), offset);  }
-inline void  oopDesc::byte_field_put(int offset, jbyte value)       { HeapAccess<>::store_at(as_oop(), offset, value); }
+inline jbyte oopDesc::byte_field(int offset) const                  { return *field_addr<jbyte>(offset);  }
+inline void  oopDesc::byte_field_put(int offset, jbyte value)       { *field_addr<jbyte>(offset) = value; }
 
-inline jchar oopDesc::char_field(int offset) const                  { return HeapAccess<>::load_at(as_oop(), offset);  }
-inline void  oopDesc::char_field_put(int offset, jchar value)       { HeapAccess<>::store_at(as_oop(), offset, value); }
+inline jchar oopDesc::char_field(int offset) const                  { return *field_addr<jchar>(offset);  }
+inline void  oopDesc::char_field_put(int offset, jchar value)       { *field_addr<jchar>(offset) = value; }
 
-inline jboolean oopDesc::bool_field(int offset) const               { return HeapAccess<>::load_at(as_oop(), offset); }
-inline void     oopDesc::bool_field_put(int offset, jboolean value) { HeapAccess<>::store_at(as_oop(), offset, jboolean(value & 1)); }
-inline jboolean oopDesc::bool_field_volatile(int offset) const      { return HeapAccess<MO_SEQ_CST>::load_at(as_oop(), offset); }
-inline void     oopDesc::bool_field_put_volatile(int offset, jboolean value) { HeapAccess<MO_SEQ_CST>::store_at(as_oop(), offset, jboolean(value & 1)); }
-inline jshort oopDesc::short_field(int offset) const                { return HeapAccess<>::load_at(as_oop(), offset);  }
-inline void   oopDesc::short_field_put(int offset, jshort value)    { HeapAccess<>::store_at(as_oop(), offset, value); }
+inline jboolean oopDesc::bool_field(int offset) const               { return *field_addr<jboolean>(offset); }
+inline void     oopDesc::bool_field_put(int offset, jboolean value) { *field_addr<jboolean>(offset) = jboolean(value & 1); }
+inline jboolean oopDesc::bool_field_volatile(int offset) const      { return RawAccess<MO_SEQ_CST>::load(field_addr<jboolean>(offset)); }
+inline void     oopDesc::bool_field_put_volatile(int offset, jboolean value) { RawAccess<MO_SEQ_CST>::store(field_addr<jboolean>(offset), jboolean(value & 1)); }
+inline jshort oopDesc::short_field(int offset) const                { return *field_addr<jshort>(offset);   }
+inline void   oopDesc::short_field_put(int offset, jshort value)    { *field_addr<jshort>(offset) = value;  }
 
-inline jint oopDesc::int_field(int offset) const                    { return HeapAccess<>::load_at(as_oop(), offset);  }
-inline void oopDesc::int_field_put(int offset, jint value)          { HeapAccess<>::store_at(as_oop(), offset, value); }
+inline jint oopDesc::int_field(int offset) const                    { return *field_addr<jint>(offset);     }
+inline void oopDesc::int_field_put(int offset, jint value)          { *field_addr<jint>(offset) = value;    }
 
-inline jlong oopDesc::long_field(int offset) const                  { return HeapAccess<>::load_at(as_oop(), offset);  }
-inline void  oopDesc::long_field_put(int offset, jlong value)       { HeapAccess<>::store_at(as_oop(), offset, value); }
+inline jlong oopDesc::long_field(int offset) const                  { return *field_addr<jlong>(offset);    }
+inline void  oopDesc::long_field_put(int offset, jlong value)       { *field_addr<jlong>(offset) = value;   }
 
-inline jfloat oopDesc::float_field(int offset) const                { return HeapAccess<>::load_at(as_oop(), offset);  }
-inline void   oopDesc::float_field_put(int offset, jfloat value)    { HeapAccess<>::store_at(as_oop(), offset, value); }
+inline jfloat oopDesc::float_field(int offset) const                { return *field_addr<jfloat>(offset);   }
+inline void   oopDesc::float_field_put(int offset, jfloat value)    { *field_addr<jfloat>(offset) = value;  }
 
-inline jdouble oopDesc::double_field(int offset) const              { return HeapAccess<>::load_at(as_oop(), offset);  }
-inline void    oopDesc::double_field_put(int offset, jdouble value) { HeapAccess<>::store_at(as_oop(), offset, value); }
+inline jdouble oopDesc::double_field(int offset) const              { return *field_addr<jdouble>(offset);  }
+inline void    oopDesc::double_field_put(int offset, jdouble value) { *field_addr<jdouble>(offset) = value; }
 
 bool oopDesc::is_locked() const {
   return mark().is_locked();
@@ -346,6 +326,7 @@ void oopDesc::forward_to(oop p) {
 }
 
 void oopDesc::forward_to_self() {
+#ifdef _LP64
   verify_forwardee(this);
   markWord m = mark();
   // If mark is displaced, we need to preserve the Klass* from real header.
@@ -356,6 +337,9 @@ void oopDesc::forward_to_self() {
   m = m.set_self_forwarded();
   assert(forwardee(m) == cast_to_oop(this), "encoding must be reversable");
   set_mark(m);
+#else
+  forward_to(oop(this));
+#endif
 }
 
 oop oopDesc::forward_to_atomic(oop p, markWord compare, atomic_memory_order order) {
@@ -371,6 +355,7 @@ oop oopDesc::forward_to_atomic(oop p, markWord compare, atomic_memory_order orde
 }
 
 oop oopDesc::forward_to_self_atomic(markWord compare, atomic_memory_order order) {
+#ifdef _LP64
   verify_forwardee(this);
   markWord m = compare;
   // If mark is displaced, we need to preserve the Klass* from real header.
@@ -387,6 +372,9 @@ oop oopDesc::forward_to_self_atomic(markWord compare, atomic_memory_order order)
     assert(old_mark.is_marked(), "must be marked here");
     return forwardee(old_mark);
   }
+#else
+  return forward_to_atomic(oop(this), compare, order);
+#endif
 }
 
 // Note that the forwardee is not the same thing as the displaced_mark.
@@ -398,16 +386,20 @@ oop oopDesc::forwardee() const {
 
 oop oopDesc::forwardee(markWord header) const {
   assert(header.is_marked(), "must be forwarded");
+#ifdef _LP64
   if (header.self_forwarded()) {
     return cast_to_oop(this);
-  } else {
+  } else
+#endif
+  {
+    assert(header.is_marked(), "only decode when actually forwarded");
     return cast_to_oop(header.decode_pointer());
   }
 }
 
 // The following method needs to be MT safe.
 uint oopDesc::age() const {
-  assert(!is_forwarded(), "Attempt to read age from forwarded mark");
+  assert(!mark().is_marked(), "Attempt to read age from forwarded mark");
   if (has_displaced_mark()) {
     return displaced_mark().age();
   } else {
@@ -416,7 +408,7 @@ uint oopDesc::age() const {
 }
 
 void oopDesc::incr_age() {
-  assert(!is_forwarded(), "Attempt to increment age of forwarded mark");
+  assert(!mark().is_marked(), "Attempt to increment age of forwarded mark");
   if (has_displaced_mark()) {
     set_displaced_mark(displaced_mark().incr_age());
   } else {
@@ -435,19 +427,19 @@ void oopDesc::oop_iterate(OopClosureType* cl, MemRegion mr) {
 }
 
 template <typename OopClosureType>
-int oopDesc::oop_iterate_size(OopClosureType* cl) {
-  Klass* k = klass();
-  // TODO: Optimize to fetch header once, and figure out size and Klass* from there.
-  int sz = size();
+size_t oopDesc::oop_iterate_size(OopClosureType* cl) {
+  markWord m = safe_mark();
+  Klass* k = m.klass();
+  size_t sz = size_given_mark_and_klass(m, k);
   OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k);
   return sz;
 }
 
 template <typename OopClosureType>
-int oopDesc::oop_iterate_size(OopClosureType* cl, MemRegion mr) {
-  Klass* k = klass();
-  // TODO: Optimize to fetch header once, and figure out size and Klass* from there.
-  int sz = size();
+size_t oopDesc::oop_iterate_size(OopClosureType* cl, MemRegion mr) {
+  markWord m = safe_mark();
+  Klass* k = m.klass();
+  size_t sz = size_given_mark_and_klass(m, k);
   OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k, mr);
   return sz;
 }

@@ -239,7 +239,7 @@ void MemAllocator::Allocation::notify_allocation_dtrace_sampler() {
     Klass* klass = obj()->klass();
     size_t word_size = _allocator._word_size;
     if (klass != NULL && klass->name() != NULL) {
-      SharedRuntime::dtrace_object_alloc(obj(), (int)word_size);
+      SharedRuntime::dtrace_object_alloc(Thread::current(), obj(), word_size);
     }
   }
 }
@@ -376,17 +376,20 @@ void MemAllocator::mem_clear(HeapWord* mem) const {
   assert(mem != NULL, "cannot initialize NULL object");
   const size_t hs = oopDesc::header_size();
   assert(_word_size >= hs, "unexpected object size");
-  oopDesc::set_klass_gap(mem, 0);
   Copy::fill_to_aligned_words(mem + hs, _word_size - hs);
 }
 
 oop MemAllocator::finish(HeapWord* mem) const {
   assert(mem != NULL, "NULL object pointer");
-  oopDesc::set_mark(mem, _klass->prototype_header());
   // Need a release store to ensure array/class length, mark word, and
   // object zeroing are visible before setting the klass non-NULL, for
   // concurrent collectors.
+#ifdef _LP64
+  oopDesc::release_set_mark(mem, _klass->prototype_header());
+#else
+  oopDesc::set_mark(mem, _klass->prototype_header());
   oopDesc::release_set_klass(mem, _klass);
+#endif
   return cast_to_oop(mem);
 }
 
@@ -422,6 +425,6 @@ oop ClassAllocator::initialize(HeapWord* mem) const {
   // concurrent GC.
   assert(_word_size > 0, "oop_size must be positive.");
   mem_clear(mem);
-  java_lang_Class::set_oop_size(mem, (int)_word_size);
+  java_lang_Class::set_oop_size(mem, _word_size);
   return finish(mem);
 }

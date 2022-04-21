@@ -31,6 +31,7 @@
 #include "gc/shared/plab.hpp"
 #include "gc/shared/threadLocalAllocBuffer.hpp"
 #include "gc/shared/tlab_globals.hpp"
+#include "memory/metaspace.hpp"
 #include "runtime/arguments.hpp"
 #include "runtime/globals.hpp"
 #include "runtime/globals_extension.hpp"
@@ -400,6 +401,21 @@ JVMFlag::Error SurvivorRatioConstraintFunc(uintx value, bool verbose) {
   }
 }
 
+JVMFlag::Error CompressedClassSpaceSizeConstraintFunc(size_t value, bool verbose) {
+#ifdef _LP64
+  // There is no minimal value check, although class space will be transparently enlarged
+  // to a multiple of metaspace root chunk size (4m).
+  // The max. value of class space size depends on narrow klass pointer encoding range size
+  // and CDS, see metaspace.cpp.
+  if (value > Metaspace::max_class_space_size()) {
+    JVMFlag::printError(verbose, "CompressedClassSpaceSize " SIZE_FORMAT " too large (max: " SIZE_FORMAT ")\n",
+                        value, Metaspace::max_class_space_size());
+    return JVMFlag::VIOLATES_CONSTRAINT;
+  }
+#endif
+  return JVMFlag::SUCCESS;
+}
+
 JVMFlag::Error MetaspaceSizeConstraintFunc(size_t value, bool verbose) {
   if (value > MaxMetaspaceSize) {
     JVMFlag::printError(verbose,
@@ -418,6 +434,18 @@ JVMFlag::Error MaxMetaspaceSizeConstraintFunc(size_t value, bool verbose) {
                         "MaxMetaspaceSize (" SIZE_FORMAT ") must be "
                         "greater than or equal to MetaspaceSize (" SIZE_FORMAT ")\n",
                         value, MaxMetaspaceSize);
+    return JVMFlag::VIOLATES_CONSTRAINT;
+  } else {
+    return JVMFlag::SUCCESS;
+  }
+}
+
+JVMFlag::Error GCCardSizeInBytesConstraintFunc(uint value, bool verbose) {
+  if (!is_power_of_2(value)) {
+    JVMFlag::printError(verbose,
+                        "GCCardSizeInBytes ( %u ) must be "
+                        "a power of 2\n",
+                        value);
     return JVMFlag::VIOLATES_CONSTRAINT;
   } else {
     return JVMFlag::SUCCESS;
