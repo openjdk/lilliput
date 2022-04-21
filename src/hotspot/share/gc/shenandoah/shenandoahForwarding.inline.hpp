@@ -76,13 +76,19 @@ inline bool ShenandoahForwarding::is_forwarded(oop obj) {
 }
 
 inline oop ShenandoahForwarding::try_update_forwardee(oop obj, oop update) {
-  markWord old_mark = obj->mark();
-  if (old_mark.is_marked()) {
-    return cast_to_oop(old_mark.clear_lock_bits().to_pointer());
-  }
 
   markWord new_mark = markWord::encode_pointer_as_mark(update);
+  markWord old_mark = obj->mark();
   while (true) {
+    if (old_mark.is_marked()) {
+      return cast_to_oop(old_mark.clear_lock_bits().to_pointer());
+    }
+    if (old_mark.is_being_inflated()) {
+      // Inflating - this can only happen when concurrent evacuating thread tries to read
+      // the header for fetching the object Klass*/size. Retry.
+      old_mark = obj->mark();
+      continue;
+    }
     markWord prev_mark = obj->cas_set_mark(new_mark, old_mark, memory_order_conservative);
     if (prev_mark == old_mark) {
       return update;
