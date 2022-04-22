@@ -97,7 +97,6 @@ inline oop ShenandoahForwarding::try_update_forwardee(oop obj, oop update) {
       // This happens when we encounter a stack-locked object in from-space.
       // Busy-wait for completion.
       SpinPause();
-      continue;
     } else {
       assert(prev_mark.is_marked(), "must be forwarded");
       return cast_to_oop(prev_mark.clear_lock_bits().to_pointer());
