@@ -66,7 +66,9 @@ static uintptr_t relocate_object_inner(ZForwarding* forwarding, uintptr_t from_a
 
   // Allocate object
   const size_t size = ZUtils::object_size(from_addr);
-  const uintptr_t to_addr = ZHeap::heap()->alloc_object_for_relocation(size);
+  const size_t new_size = ZUtils::object_copy_size(from_addr, size);
+
+  const uintptr_t to_addr = ZHeap::heap()->alloc_object_for_relocation(new_size);
   if (to_addr == 0) {
     // Allocation failed
     return 0;
@@ -74,12 +76,13 @@ static uintptr_t relocate_object_inner(ZForwarding* forwarding, uintptr_t from_a
 
   // Copy object
   ZUtils::object_copy_disjoint(from_addr, to_addr, size);
+  ZUtils::install_hashcode_if_necessary(from_addr, to_addr);
 
   // Insert forwarding
   const uintptr_t to_addr_final = forwarding_insert(forwarding, from_addr, to_addr, cursor);
   if (to_addr_final != to_addr) {
     // Already relocated, try undo allocation
-    ZHeap::heap()->undo_alloc_object_for_relocation(to_addr, size);
+    ZHeap::heap()->undo_alloc_object_for_relocation(to_addr, new_size);
   }
 
   return to_addr_final;
@@ -290,7 +293,9 @@ private:
 
     // Allocate object
     const size_t size = ZUtils::object_size(from_addr);
-    const uintptr_t to_addr = _allocator->alloc_object(_target, size);
+    const size_t new_size = ZUtils::object_copy_size(from_addr, size);
+
+    const uintptr_t to_addr = _allocator->alloc_object(_target, new_size);
     if (to_addr == 0) {
       // Allocation failed
       return false;
@@ -298,16 +303,17 @@ private:
 
     // Copy object. Use conjoint copying if we are relocating
     // in-place and the new object overlapps with the old object.
-    if (_forwarding->in_place() && to_addr + size > from_addr) {
+    if (_forwarding->in_place() && to_addr + new_size > from_addr) {
       ZUtils::object_copy_conjoint(from_addr, to_addr, size);
     } else {
       ZUtils::object_copy_disjoint(from_addr, to_addr, size);
     }
+    ZUtils::install_hashcode_if_necessary(from_addr, to_addr);
 
     // Insert forwarding
     if (forwarding_insert(_forwarding, from_addr, to_addr, &cursor) != to_addr) {
       // Already relocated, undo allocation
-      _allocator->undo_alloc_object(_target, to_addr, size);
+      _allocator->undo_alloc_object(_target, to_addr, new_size);
     }
 
     return true;
