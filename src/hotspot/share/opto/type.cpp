@@ -4685,7 +4685,7 @@ void TypeAryPtr::dump2( Dict &d, uint depth, outputStream *st ) const {
 
   if( _offset != 0 ) {
     BasicType basic_elem_type = elem()->basic_type();
-    int header_size = arrayOopDesc::header_size_in_bytes(basic_elem_type);
+    int header_size = arrayOopDesc::base_offset_in_bytes(basic_elem_type);
     if( _offset == OffsetTop )       st->print("+undefined");
     else if( _offset == OffsetBot )  st->print("+any");
     else if( _offset < header_size ) st->print("+%d", _offset);

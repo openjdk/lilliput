@@ -44,7 +44,7 @@ oop ZObjArrayAllocator::finish(HeapWord* mem) const {
   // suggested that it offered a good trade-off between allocation
   // time and time-to-safepoint
   const size_t segment_max = ZUtils::bytes_to_words(64 * K);
-  const size_t skip = align_up(arrayOopDesc::header_size_in_bytes(ArrayKlass::cast(_klass)->element_type()), HeapWordSize) / HeapWordSize;
+  const size_t skip = align_up(arrayOopDesc::base_offset_in_bytes(ArrayKlass::cast(_klass)->element_type()), HeapWordSize) / HeapWordSize;
   size_t remaining = _word_size - skip;
 
   while (remaining > 0) {

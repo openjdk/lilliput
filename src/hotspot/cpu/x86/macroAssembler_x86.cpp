@@ -3788,7 +3788,7 @@ void MacroAssembler::zero_memory(Register address, Register length_in_bytes, int
   // Emit single 32bit store to clear leading bytes, if necessary.
   xorptr(temp, temp);    // use _zero reg to clear memory (shorter code)
 #ifdef _LP64
-  if ((offset_in_bytes & (BytesPerWord - 1)) != 0) {
+  if (!is_aligned(offset_in_bytes, BytesPerWord)) {
     movl(Address(address, offset_in_bytes), temp);
     offset_in_bytes += BytesPerInt;
     decrement(length_in_bytes, BytesPerInt);
