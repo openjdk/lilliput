@@ -41,6 +41,7 @@
 #include "runtime/mutexLocker.hpp"
 #include "runtime/objectMonitor.hpp"
 #include "runtime/objectMonitor.inline.hpp"
+#include "runtime/objectMonitorStorage.hpp"
 #include "runtime/os.inline.hpp"
 #include "runtime/osThread.hpp"
 #include "runtime/perfData.hpp"
@@ -1314,14 +1315,14 @@ ObjectMonitor* ObjectSynchronizer::inflate(Thread* current, oop object,
     LogStreamHandle(Trace, monitorinflation) lsh;
 
     if (mark.has_locker()) {
-      ObjectMonitor* m = new ObjectMonitor(object);
+      ObjectMonitor* m = ObjectMonitorStorage::allocate_monitor(object);
       // Optimistically prepare the ObjectMonitor - anticipate successful CAS
       // We do this before the CAS in order to minimize the length of time
       // in which INFLATING appears in the mark.
 
       markWord cmp = object->cas_set_mark(markWord::INFLATING(), mark);
       if (cmp != mark) {
-        delete m;
+        ObjectMonitorStorage::deallocate_monitor(m);
         continue;       // Interference -- just retry
       }
 
@@ -1408,12 +1409,12 @@ ObjectMonitor* ObjectSynchronizer::inflate(Thread* current, oop object,
     // Catch if the object's header is not neutral (not locked and
     // not marked is what we care about here).
     assert(mark.is_neutral(), "invariant: header=" INTPTR_FORMAT, mark.value());
-    ObjectMonitor* m = new ObjectMonitor(object);
+    ObjectMonitor* m = ObjectMonitorStorage::allocate_monitor(object);
     // prepare m for installation - set monitor to initial state
     m->set_header(mark);
 
     if (object->cas_set_mark(markWord::encode(m), mark) != mark) {
-      delete m;
+      ObjectMonitorStorage::deallocate_monitor(m);
       m = NULL;
       continue;
       // interference - the markword changed - just retry.
@@ -1607,16 +1608,25 @@ size_t ObjectSynchronizer::deflate_idle_monitors(ObjectMonitorsHashtable* table)
 
     // After the handshake, safely free the ObjectMonitors that were
     // deflated in this cycle.
-    size_t deleted_count = 0;
-    for (ObjectMonitor* monitor: delete_list) {
-      delete monitor;
-      deleted_count++;
-
-      if (current->is_Java_thread()) {
-        // A JavaThread must check for a safepoint/handshake and honor it.
-        chk_for_block_req(JavaThread::cast(current), "deletion", "deleted_count",
-                          deleted_count, ls, &timer);
+    // We prepare the OM freelist off-lock, the chain the prepared list to the
+    // ObjectMonitorStorage freelist. That way time spent inside the lock is O(1).
+    {
+      const unsigned check_safepoint_interval = 256 * K;
+      unsigned iter = 0;
+      OMFreeListType omlist;
+      for (ObjectMonitor* m : delete_list) {
+        // We need to call ~ObjectMonitor explicitely. And we need to do this before adding
+        // it to the freelist since the latter is a destructive call, so order matters.
+        m->~ObjectMonitor();
+        omlist.prepend(m);
+        iter++;
+        if ((iter % check_safepoint_interval) == 0) {
+          chk_for_block_req(JavaThread::cast(current), "deletion", "deleted_count",
+                            delete_list.length(), ls, &timer);
+        }
       }
+      // Now free the prepared list.
+      ObjectMonitorStorage::bulk_deallocate(omlist);
     }
   }
 
