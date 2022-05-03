@@ -456,7 +456,7 @@ int LIR_Assembler::emit_unwind_handler() {
     __ mov(rbx, rax);  // Preserve the exception (rbx is always callee-saved)
   }
 
-  // Preform needed unlocking
+  // Perform needed unlocking
   MonitorExitStub* stub = NULL;
   if (method()->is_synchronized()) {
     monitor_address(0, FrameMap::rax_opr);
@@ -1647,7 +1647,7 @@ void LIR_Assembler::emit_alloc_array(LIR_OpAllocArray* op) {
                       len,
                       tmp1,
                       tmp2,
-                      arrayOopDesc::header_size(op->type()),
+                      arrayOopDesc::base_offset_in_bytes(op->type()),
                       array_element_size(op->type()),
                       op->klass()->as_register(),
                       *op->stub()->entry());
@@ -2271,7 +2271,7 @@ void LIR_Assembler::arith_op(LIR_Code code, LIR_Opr left, LIR_Opr right, LIR_Opr
         raddr = frame_map()->address_for_slot(right->single_stack_ix());
       } else if (right->is_constant()) {
         address const_addr = float_constant(right->as_jfloat());
-        assert(const_addr != NULL, "incorrect float/double constant maintainance");
+        assert(const_addr != NULL, "incorrect float/double constant maintenance");
         // hack for now
         raddr = __ as_Address(InternalAddress(const_addr));
       } else {
@@ -3672,7 +3672,7 @@ void LIR_Assembler::emit_profile_type(LIR_OpProfileType* op) {
   } else {
     __ testptr(tmp, tmp);
     __ jcc(Assembler::notZero, update);
-    __ stop("unexpect null obj");
+    __ stop("unexpected null obj");
 #endif
   }
 

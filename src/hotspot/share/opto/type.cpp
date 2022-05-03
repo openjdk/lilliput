@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -1438,7 +1438,7 @@ const TypeInteger* TypeInteger::minus_1(BasicType bt) {
 }
 
 //=============================================================================
-// Convience common pre-built types.
+// Convenience common pre-built types.
 const TypeInt *TypeInt::MAX;    // INT_MAX
 const TypeInt *TypeInt::MIN;    // INT_MIN
 const TypeInt *TypeInt::MINUS_1;// -1
@@ -1609,7 +1609,7 @@ const Type *TypeInt::narrow( const Type *old ) const {
   if (olo == min_jint && ohi == max_jint)  return this;
 
   if (_lo < olo || _hi > ohi)
-    return this;                // doesn't narrow; pretty wierd
+    return this;                // doesn't narrow; pretty weird
 
   // The new type narrows the old type, so look for a "death march".
   // See comments on PhaseTransform::saturate.
@@ -1875,7 +1875,7 @@ const Type *TypeLong::narrow( const Type *old ) const {
   if (olo == min_jlong && ohi == max_jlong)  return this;
 
   if (_lo < olo || _hi > ohi)
-    return this;                // doesn't narrow; pretty wierd
+    return this;                // doesn't narrow; pretty weird
 
   // The new type narrows the old type, so look for a "death march".
   // See comments on PhaseTransform::saturate.
@@ -3454,7 +3454,7 @@ intptr_t TypeOopPtr::get_con() const {
     // code and dereferenced at the time the nmethod is made.  Until that time,
     // it is not reasonable to do arithmetic with the addresses of oops (we don't
     // have access to the addresses!).  This does not seem to currently happen,
-    // but this assertion here is to help prevent its occurence.
+    // but this assertion here is to help prevent its occurrence.
     tty->print_cr("Found oop constant with non-zero offset");
     ShouldNotReachHere();
   }
@@ -4684,12 +4684,12 @@ void TypeAryPtr::dump2( Dict &d, uint depth, outputStream *st ) const {
   }
 
   if( _offset != 0 ) {
-    int header_size = objArrayOopDesc::header_size() * wordSize;
+    BasicType basic_elem_type = elem()->basic_type();
+    int header_size = arrayOopDesc::base_offset_in_bytes(basic_elem_type);
     if( _offset == OffsetTop )       st->print("+undefined");
     else if( _offset == OffsetBot )  st->print("+any");
     else if( _offset < header_size ) st->print("+%d", _offset);
     else {
-      BasicType basic_elem_type = elem()->basic_type();
       int array_base = arrayOopDesc::base_offset_in_bytes(basic_elem_type);
       int elem_size = type2aelembytes(basic_elem_type);
       st->print("[%d]", (_offset - array_base)/elem_size);
@@ -4941,7 +4941,7 @@ intptr_t TypeMetadataPtr::get_con() const {
     // code and dereferenced at the time the nmethod is made.  Until that time,
     // it is not reasonable to do arithmetic with the addresses of oops (we don't
     // have access to the addresses!).  This does not seem to currently happen,
-    // but this assertion here is to help prevent its occurence.
+    // but this assertion here is to help prevent its occurrence.
     tty->print_cr("Found oop constant with non-zero offset");
     ShouldNotReachHere();
   }
@@ -5173,7 +5173,7 @@ intptr_t TypeKlassPtr::get_con() const {
     // code and dereferenced at the time the nmethod is made.  Until that time,
     // it is not reasonable to do arithmetic with the addresses of oops (we don't
     // have access to the addresses!).  This does not seem to currently happen,
-    // but this assertion here is to help prevent its occurence.
+    // but this assertion here is to help prevent its occurrence.
     tty->print_cr("Found oop constant with non-zero offset");
     ShouldNotReachHere();
   }
