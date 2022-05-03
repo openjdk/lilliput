@@ -497,14 +497,14 @@ InstanceKlass::InstanceKlass(const ClassFileParser& parser, KlassKind kind) :
   _nest_host_index(0),
   _init_state(allocated),
   _reference_type(parser.reference_type()),
-  _init_thread(NULL)
+  _init_thread(NULL),
+  _hash_offset(parser.hash_offset())
 {
   set_vtable_length(parser.vtable_size());
   set_access_flags(parser.access_flags());
   if (parser.is_hidden()) set_is_hidden();
   set_layout_helper(Klass::instance_layout_helper(parser.layout_size(),
                                                     false));
-
   assert(NULL == _methods, "underlying memory not zeroed?");
   assert(is_instance_klass(), "is layout incorrect?");
   assert(size_helper() == parser.layout_size(), "incorrect size_helper?");

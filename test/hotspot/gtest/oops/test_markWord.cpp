@@ -95,7 +95,7 @@ TEST_VM(markWord, printing) {
 
   // Hash the object then print it.
   intx hash = h_obj->identity_hash();
-  assert_test_pattern(h_obj, "is_neutral hash=0x");
+  assert_test_pattern(h_obj, "is_neutral hashed");
 
   // Wait gets the lock inflated.
   {

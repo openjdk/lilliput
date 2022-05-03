@@ -848,6 +848,7 @@ public:
       HeapWord* compact_from = cast_from_oop<HeapWord*>(p);
       HeapWord* compact_to = cast_from_oop<HeapWord*>(_forwarding->forwardee(p));
       Copy::aligned_conjoint_words(compact_from, compact_to, size);
+      Unimplemented();
       oop new_obj = cast_to_oop(compact_to);
       new_obj->init_mark();
     }

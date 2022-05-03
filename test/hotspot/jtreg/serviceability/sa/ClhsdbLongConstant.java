@@ -87,18 +87,12 @@ public class ClhsdbLongConstant {
 
     private static void checkForTruncation(String longConstantOutput) throws Exception {
 
-        // Expected values obtained from the hash_mask_in_place definition in markWord.hpp
-
         // Expected output snippet is of the form (on x64-64):
         // ...
         // longConstant VM_Version::CPU_SHA 17179869184
         // longConstant markWord::age_shift 3
         // longConstant markWord::hash_mask_in_place 549755813632
         // ...
-
-        checkLongValue("markWord::hash_mask_in_place",
-                       longConstantOutput,
-                       4294967168L);
 
         String arch = System.getProperty("os.arch");
         if (arch.equals("amd64") || arch.equals("i386") || arch.equals("x86")) {

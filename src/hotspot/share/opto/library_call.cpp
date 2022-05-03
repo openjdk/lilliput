@@ -3851,7 +3851,7 @@ bool LibraryCallKit::inline_native_hashcode(bool is_virtual, bool is_static) {
   assert(is_static == callee()->is_static(), "correct intrinsic selection");
   assert(!(is_virtual && is_static), "either virtual, special, or static");
 
-  enum { _slow_path = 1, _fast_path, _null_path, PATH_LIMIT };
+  enum { _slow_path = 1, _null_path, PATH_LIMIT };
 
   RegionNode* result_reg = new RegionNode(PATH_LIMIT);
   PhiNode*    result_val = new PhiNode(result_reg, TypeInt::INT);
@@ -3882,71 +3882,17 @@ bool LibraryCallKit::inline_native_hashcode(bool is_virtual, bool is_static) {
     return true;
   }
 
-  // We only go to the fast case code if we pass a number of guards.  The
-  // paths which do not pass are accumulated in the slow_region.
-  RegionNode* slow_region = new RegionNode(1);
-  record_for_igvn(slow_region);
-
-  // If this is a virtual call, we generate a funny guard.  We pull out
-  // the vtable entry corresponding to hashCode() from the target object.
-  // If the target method which we are calling happens to be the native
-  // Object hashCode() method, we pass the guard.  We do not need this
-  // guard for non-virtual calls -- the caller is known to be the native
-  // Object hashCode().
-  if (is_virtual) {
-    // After null check, get the object's klass.
-    Node* obj_klass = load_object_klass(obj);
-    generate_virtual_guard(obj_klass, slow_region);
-  }
-
-  // Get the header out of the object, use LoadMarkNode when available
-  Node* header_addr = basic_plus_adr(obj, oopDesc::mark_offset_in_bytes());
-  // The control of the load must be NULL. Otherwise, the load can move before
-  // the null check after castPP removal.
-  Node* no_ctrl = NULL;
-  Node* header = make_load(no_ctrl, header_addr, TypeX_X, TypeX_X->basic_type(), MemNode::unordered);
-
-  // Test the header to see if it is unlocked.
-  Node *lock_mask      = _gvn.MakeConX(markWord::lock_mask_in_place);
-  Node *lmasked_header = _gvn.transform(new AndXNode(header, lock_mask));
-  Node *unlocked_val   = _gvn.MakeConX(markWord::unlocked_value);
-  Node *chk_unlocked   = _gvn.transform(new CmpXNode( lmasked_header, unlocked_val));
-  Node *test_unlocked  = _gvn.transform(new BoolNode( chk_unlocked, BoolTest::ne));
-
-  generate_slow_guard(test_unlocked, slow_region);
-
-  // Get the hash value and check to see that it has been properly assigned.
-  // We depend on hash_mask being at most 32 bits and avoid the use of
-  // hash_mask_in_place because it could be larger than 32 bits in a 64-bit
-  // vm: see markWord.hpp.
-  Node *hash_mask      = _gvn.intcon(markWord::hash_mask);
-  Node *hash_shift     = _gvn.intcon(markWord::hash_shift);
-  Node *hshifted_header= _gvn.transform(new URShiftXNode(header, hash_shift));
-  // This hack lets the hash bits live anywhere in the mark object now, as long
-  // as the shift drops the relevant bits into the low 32 bits.  Note that
-  // Java spec says that HashCode is an int so there's no point in capturing
-  // an 'X'-sized hashcode (32 in 32-bit build or 64 in 64-bit build).
-  hshifted_header      = ConvX2I(hshifted_header);
-  Node *hash_val       = _gvn.transform(new AndINode(hshifted_header, hash_mask));
-
-  Node *no_hash_val    = _gvn.intcon(markWord::no_hash);
-  Node *chk_assigned   = _gvn.transform(new CmpINode( hash_val, no_hash_val));
-  Node *test_assigned  = _gvn.transform(new BoolNode( chk_assigned, BoolTest::eq));
-
-  generate_slow_guard(test_assigned, slow_region);
+  // TODO: We could generate a fast case here under the following conditions:
+  // - The hashctrl is set to hash_is_copied (see markWord::hash_is_copied())
+  // - The type of the object is known
+  // Then we can load the identity hashcode from the int field at Klass::hash_offset_in_bytes() of the object.
 
   Node* init_mem = reset_memory();
   // fill in the rest of the null path:
   result_io ->init_req(_null_path, i_o());
   result_mem->init_req(_null_path, init_mem);
 
-  result_val->init_req(_fast_path, hash_val);
-  result_reg->init_req(_fast_path, control());
-  result_io ->init_req(_fast_path, i_o());
-  result_mem->init_req(_fast_path, init_mem);
-
   // Generate code for the slow case.  We make a call to hashCode().
-  set_control(_gvn.transform(slow_region));
   if (!stopped()) {
     // No need for PreserveJVMState, because we're using up the present state.
     set_all_memory(init_mem);

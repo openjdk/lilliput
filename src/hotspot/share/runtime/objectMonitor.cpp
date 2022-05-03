@@ -1654,7 +1654,7 @@ void ObjectMonitor::wait(jlong millis, bool interruptible, TRAPS) {
   // Verify a few postconditions
   assert(owner_raw() == current, "invariant");
   assert(_succ != current, "invariant");
-  assert(object()->mark() == markWord::encode(this), "invariant");
+  assert(object()->mark() == markWord::encode(this), "invariant: object->mark(): " INTPTR_FORMAT ", encode(this): " INTPTR_FORMAT, object()->mark().value(), markWord::encode(this).value());
 
   // check if the notification happened
   if (!WasNotified) {

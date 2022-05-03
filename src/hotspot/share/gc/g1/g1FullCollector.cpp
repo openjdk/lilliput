@@ -119,7 +119,7 @@ G1FullCollector::G1FullCollector(G1CollectedHeap* heap,
     _oop_queue_set(_num_workers),
     _array_queue_set(_num_workers),
     _preserved_marks_set(true),
-    _serial_compaction_point(),
+    _serial_compaction_point(NULL /*_preserved_marks_set.get(0)*/),
     _is_alive(this, heap->concurrent_mark()->next_mark_bitmap()),
     _is_alive_mutator(heap->ref_processor_stw(), &_is_alive),
     _always_subject_to_discovery(),
@@ -137,8 +137,8 @@ G1FullCollector::G1FullCollector(G1CollectedHeap* heap,
   }
 
   for (uint i = 0; i < _num_workers; i++) {
-    _markers[i] = new G1FullGCMarker(this, i, _preserved_marks_set.get(i), _live_stats);
-    _compaction_points[i] = new G1FullGCCompactionPoint();
+    _markers[i] = new G1FullGCMarker(this, i, _live_stats);
+    _compaction_points[i] = new G1FullGCCompactionPoint(_preserved_marks_set.get(i));
     _oop_queue_set.register_queue(i, marker(i)->oop_stack());
     _array_queue_set.register_queue(i, marker(i)->objarray_stack());
   }

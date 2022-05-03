@@ -53,6 +53,8 @@ public class Oop {
     headerSize = type.getSize();
   }
 
+  public static long HASH_SIZE_IN_BYTES = 4;
+
   private OopHandle  handle;
   private ObjectHeap heap;
 
@@ -96,6 +98,10 @@ public class Oop {
     return ((InstanceKlass)k).getObjectSize(this);
   }
 
+  public boolean hashRequiresExtraWord(long baseSize, long hashOffset) {
+     return (baseSize - hashOffset) < HASH_SIZE_IN_BYTES;
+  }
+
   // Type test operations
   public boolean isInstance()          { return false; }
   public boolean isInstanceRef()       { return false; }
@@ -125,14 +131,7 @@ public class Oop {
 
   /** Identity hash in the target VM */
   public long identityHash() {
-    Mark mark = getMark();
-    if (mark.isUnlocked() && (!mark.hasNoHash())) {
-      return (int) mark.hash();
-    } else if (mark.isMarked()) {
-      return (int) mark.hash();
-    } else {
-      return slowIdentityHash();
-    }
+    return slowIdentityHash();
   }
 
   public long slowIdentityHash() {

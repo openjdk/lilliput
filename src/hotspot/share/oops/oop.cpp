@@ -39,6 +39,7 @@
 #include "runtime/thread.inline.hpp"
 #include "utilities/copy.hpp"
 #include "utilities/macros.hpp"
+#include "logging/log.hpp"
 
 void oopDesc::print_on(outputStream* st) const {
   klass()->oop_print_on(const_cast<oopDesc*>(this), st);
@@ -99,6 +100,22 @@ intptr_t oopDesc::slow_identity_hash() {
   HandleMark hm(current);
   Handle object(current, this);
   return ObjectSynchronizer::identity_hash_value_for(object);
+}
+
+markWord oopDesc::initialize_hash_if_necessary(oop obj, markWord m) {
+  if (m.hash_is_hashed()) {
+    if (!m.hash_is_copied()) {
+      uint32_t hash = ObjectSynchronizer::generate_hash(obj);
+      Klass* k = m.klass();
+      //log_info(gc)("Initializing hash for " PTR_FORMAT ", old: " PTR_FORMAT ", hash: %d, offset: %d", p2i(this), p2i(obj), hash, k->hash_offset_in_bytes(cast_to_oop(this)));
+      int_field_put(k->hash_offset_in_bytes(cast_to_oop(this)), (jint)hash);
+      m = m.hash_set_copied();
+    } else {
+      //log_info(gc)("Clearing hashed flag for " PTR_FORMAT ", old: " PTR_FORMAT, p2i(this), p2i(obj));
+      m = m.hash_clear_hashed();
+    }
+  }
+  return m;
 }
 
 // used only for asserts and guarantees

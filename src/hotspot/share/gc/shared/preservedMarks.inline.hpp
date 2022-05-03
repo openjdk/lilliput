@@ -57,6 +57,9 @@ inline PreservedMarks::PreservedMarks()
              0 /* max_cache_size */) { }
 
 void PreservedMarks::OopAndMarkWord::set_mark() const {
+  assert(_m.has_displaced_mark_helper(), "only displaced marks");
+  markWord mark = _m.displaced_mark_helper();
+  _m.set_displaced_mark_helper(mark.hash_copy_hashctrl_from(_o->mark()));
   _o->set_mark(_m);
 }
 

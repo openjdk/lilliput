@@ -55,6 +55,14 @@ markWord oopDesc::mark_acquire() const {
   return Atomic::load_acquire(&_mark);
 }
 
+markWord oopDesc::safe_mark() const {
+  markWord header = mark();
+  if (!header.is_neutral()) {
+    header = ObjectSynchronizer::stable_mark(cast_to_oop(this));
+  }
+  return header;
+}
+
 markWord* oopDesc::mark_addr() const {
   return (markWord*) &_mark;
 }
@@ -87,11 +95,16 @@ void oopDesc::init_mark() {
 #ifdef _LP64
   markWord header = ObjectSynchronizer::stable_mark(cast_to_oop(this));
   assert(UseCompressedClassPointers, "expect compressed klass pointers");
-  header = markWord((header.value() & markWord::klass_mask_in_place) | markWord::prototype().value());
+  header = markWord((header.value() & (markWord::klass_mask_in_place | markWord::hashctrl_mask_in_place)) | markWord::prototype().value());
 #else
   markWord header = markWord::prototype();
 #endif
   set_mark(header);
+}
+
+void oopDesc::init_mark(markWord m) {
+  m = markWord(m.value() & (markWord::klass_mask_in_place | markWord::hashctrl_mask_in_place)).set_unlocked();
+  set_mark(m);
 }
 
 Klass* oopDesc::klass() const {
@@ -155,12 +168,8 @@ bool oopDesc::is_a(Klass* k) const {
   return klass()->is_subtype_of(k);
 }
 
-size_t oopDesc::size()  {
-  return size_given_klass(klass());
-}
-
-size_t oopDesc::size_given_klass(Klass* klass)  {
-  int lh = klass->layout_helper();
+size_t oopDesc::base_size_given_klass(const Klass* kls)  {
+  int lh = kls->layout_helper();
   size_t s;
 
   // lh is now a value computed at class initialization that may hint
@@ -178,7 +187,7 @@ size_t oopDesc::size_given_klass(Klass* klass)  {
     if (!Klass::layout_helper_needs_slow_path(lh)) {
       s = lh >> LogHeapWordSize;  // deliver size scaled by wordSize
     } else {
-      s = klass->oop_size(this);
+      s = kls->oop_size(this);
     }
   } else if (lh <= Klass::_lh_neutral_value) {
     // The most common case is instances; fall through if so.
@@ -201,18 +210,48 @@ size_t oopDesc::size_given_klass(Klass* klass)  {
       // the grey portion of an already copied array. This will cause the first
       // disjunct below to fail if the two comparands are computed across such
       // a concurrent change.
-      assert((s == klass->oop_size(this)) ||
+      assert((s == kls->oop_size(this)) ||
              (Universe::is_gc_active() && is_objArray() && is_forwarded() && (get_UseParallelGC() || get_UseG1GC())),
              "wrong array object size");
     } else {
       // Must be zero, so bite the bullet and take the virtual call.
-      s = klass->oop_size(this);
+      s = kls->oop_size(this);
     }
   }
 
   assert(s > 0, "Oop size must be greater than zero, not " SIZE_FORMAT, s);
   assert(is_object_aligned(s), "Oop size is not properly aligned: " SIZE_FORMAT, s);
   return s;
+}
+
+size_t oopDesc::size_given_mark_and_klass(const markWord mrk, const Klass* kls) {
+  size_t sz = base_size_given_klass(kls);
+  if (mrk.hash_is_copied() && kls->hash_requires_reallocation(cast_to_oop(this))) {
+    sz = align_object_size(sz + 1);
+  }
+  return sz;
+}
+
+size_t oopDesc::size(markWord mrk) {
+  Klass* klass = mrk.klass();
+  return size_given_mark_and_klass(mrk, klass);
+}
+
+size_t oopDesc::copy_size(size_t size, markWord mrk) const {
+  Klass* klass = mrk.klass();
+  if (mrk.hash_is_hashed() && (!mrk.hash_is_copied()) && klass->hash_requires_reallocation(cast_to_oop(this))) {
+    size = align_object_size(size + 1);
+  }
+  assert(is_object_aligned(size), "Oop size is not properly aligned: " SIZE_FORMAT, size);
+  return size;
+}
+
+size_t oopDesc::size() {
+  markWord mrk = mark();
+  if (!mrk.is_neutral()) {
+    mrk = ObjectSynchronizer::stable_mark(cast_to_oop(this));
+  }
+  return size(mrk);
 }
 
 bool oopDesc::is_instance()    const { return klass()->is_instance_klass();           }
@@ -389,18 +428,20 @@ void oopDesc::oop_iterate(OopClosureType* cl, MemRegion mr) {
 
 template <typename OopClosureType>
 size_t oopDesc::oop_iterate_size(OopClosureType* cl) {
-  Klass* k = klass();
-  size_t size = size_given_klass(k);
+  markWord m = safe_mark();
+  Klass* k = m.klass();
+  size_t sz = size_given_mark_and_klass(m, k);
   OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k);
-  return size;
+  return sz;
 }
 
 template <typename OopClosureType>
 size_t oopDesc::oop_iterate_size(OopClosureType* cl, MemRegion mr) {
-  Klass* k = klass();
-  size_t size = size_given_klass(k);
+  markWord m = safe_mark();
+  Klass* k = m.klass();
+  size_t sz = size_given_mark_and_klass(m, k);
   OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k, mr);
-  return size;
+  return sz;
 }
 
 template <typename OopClosureType>
@@ -421,10 +462,9 @@ intptr_t oopDesc::identity_hash() {
   // Fast case; if the object is unlocked and the hash value is set, no locking is needed
   // Note: The mark must be read into local variable to avoid concurrent updates.
   markWord mrk = mark();
-  if (mrk.is_unlocked() && !mrk.has_no_hash()) {
-    return mrk.hash();
-  } else if (mrk.is_marked()) {
-    return mrk.hash();
+  if (mrk.is_neutral() && mrk.hash_is_copied()) {
+    Klass* klass = mrk.klass();
+    return int_field(klass->hash_offset_in_bytes(cast_to_oop(this)));
   } else {
     return slow_identity_hash();
   }

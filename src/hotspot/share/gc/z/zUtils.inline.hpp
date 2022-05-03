@@ -56,4 +56,32 @@ inline void ZUtils::object_copy_conjoint(uintptr_t from, uintptr_t to, size_t si
   }
 }
 
+inline size_t ZUtils::object_copy_size(uintptr_t addr, size_t size) {
+  oop obj = ZOop::from_address(addr);
+  markWord mrk = obj->safe_mark();
+  return obj->copy_size(size, mrk);
+}
+
+inline void ZUtils::install_hashcode_if_necessary(uintptr_t from_addr, uintptr_t to_addr) {
+  oop from_obj = ZOop::from_address(from_addr);
+  oop to_obj = ZOop::from_address(to_addr);
+  markWord old_mark = from_obj->mark();
+  markWord mark = old_mark;
+  if (mark.has_displaced_mark_helper()) {
+    mark = mark.displaced_mark_helper();
+  }
+  markWord orig_mark = mark;
+  markWord new_mark = to_obj->initialize_hash_if_necessary(from_obj, mark);
+  if (new_mark != orig_mark) {
+    if (old_mark.has_displaced_mark_helper()) {
+      old_mark.set_displaced_mark_helper(new_mark);
+      to_obj->set_mark(old_mark);
+    } else {
+      to_obj->set_mark(new_mark);
+    }
+  } else {
+    to_obj->set_mark(old_mark);
+  }
+}
+
 #endif // SHARE_GC_Z_ZUTILS_INLINE_HPP

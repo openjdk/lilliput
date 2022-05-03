@@ -215,3 +215,9 @@ void ArrayKlass::oop_verify_on(oop obj, outputStream* st) {
   arrayOop a = arrayOop(obj);
   guarantee(a->length() >= 0, "array with negative length?");
 }
+
+int ArrayKlass::hash_offset_in_bytes(oop obj) const {
+  arrayOop ary = arrayOop(obj);
+  BasicType type = element_type();
+  return ary->base_offset_in_bytes(type) + (ary->length() << log2_element_size());
+}

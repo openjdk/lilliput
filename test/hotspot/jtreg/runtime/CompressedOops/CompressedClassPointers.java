@@ -113,7 +113,7 @@ public class CompressedClassPointers {
             // For simplicity we exclude PPC.
             // OSX: similar.
             output.shouldNotContain("Narrow klass base: 0x0000000000000000");
-            output.shouldContain("Narrow klass shift: 0");
+            output.shouldContain("Narrow klass shift: 3");
         }
         output.shouldHaveExitValue(0);
     }
@@ -137,7 +137,7 @@ public class CompressedClassPointers {
             if (!(Platform.isAArch64() && Platform.isOSX())) { // see JDK-8262895
                 output.shouldContain("Narrow klass base: 0x0000000000000000");
                 if (!Platform.isAArch64() && !Platform.isOSX()) {
-                    output.shouldContain("Narrow klass shift: 0");
+                    output.shouldContain("Narrow klass shift: 3");
                 }
             }
         }

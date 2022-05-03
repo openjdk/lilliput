@@ -68,6 +68,7 @@ class oopDesc {
   oopDesc() = default;
 
   inline markWord  mark()          const;
+  inline markWord  safe_mark()     const;
   inline markWord  mark_acquire()  const;
   inline markWord* mark_addr() const;
 
@@ -82,6 +83,7 @@ class oopDesc {
   // Used only to re-initialize the mark word (e.g., of promoted
   // objects during a GC) -- requires a valid klass pointer
   inline void init_mark();
+  inline void init_mark(markWord m);
 
   inline Klass* klass() const;
   inline Klass* klass_or_null() const;
@@ -98,12 +100,16 @@ class oopDesc {
   // Returns whether this is an instance of k or an instance of a subclass of k
   inline bool is_a(Klass* k) const;
 
+  inline size_t base_size_given_klass(const Klass* klass);
+
   // Returns the actual oop size of the object
   inline size_t size();
+  inline size_t size(markWord mrk);
+  inline size_t copy_size(size_t size, markWord mrk) const;
 
   // Sometimes (for complicated concurrency-related reasons), it is useful
   // to be able to figure out the size of an object knowing its klass.
-  inline size_t size_given_klass(Klass* klass);
+  inline size_t size_given_mark_and_klass(const markWord m, const Klass* klass);
 
   // type test operations (inlined in oop.inline.hpp)
   inline bool is_instance()    const;
@@ -287,9 +293,13 @@ class oopDesc {
 
   inline static bool is_instanceof_or_null(oop obj, Klass* klass);
 
+public:
   // identity hash; returns the identity hash key (computes it if necessary)
   inline intptr_t identity_hash();
   intptr_t slow_identity_hash();
+
+  // Initialize identity hash code in hash word of object copy from original object.
+  markWord initialize_hash_if_necessary(oop obj, markWord m);
 
   // marks are forwarded to stack when object is locked
   inline bool     has_displaced_mark() const;
@@ -304,7 +314,6 @@ class oopDesc {
   static int mark_offset_in_bytes()      { return offset_of(oopDesc, _mark); }
   static int klass_offset_in_bytes()     {
 #ifdef _LP64
-    STATIC_ASSERT(markWord::klass_shift % 8 == 0);
     return mark_offset_in_bytes() + markWord::klass_shift / 8;
 #else
     return offset_of(oopDesc, _klass);

@@ -29,7 +29,7 @@
 #include "gc/serial/serialStringDedup.inline.hpp"
 #include "gc/serial/tenuredGeneration.hpp"
 #include "gc/shared/adaptiveSizePolicy.hpp"
-#include "gc/shared/ageTable.inline.hpp"
+#include "gc/shared/ageTable.hpp"
 #include "gc/shared/cardTableRS.hpp"
 #include "gc/shared/collectorCounters.hpp"
 #include "gc/shared/gcArguments.hpp"
@@ -723,18 +723,28 @@ void DefNewGeneration::handle_promotion_failure(oop old) {
 oop DefNewGeneration::copy_to_survivor_space(oop old) {
   assert(is_in_reserved(old) && !old->is_forwarded(),
          "shouldn't be scavenging this oop");
-  size_t s = old->size();
+
+  markWord real_mark = old->mark();
+  markWord mark = real_mark;
+  if (mark.has_displaced_mark_helper()) {
+    mark = mark.displaced_mark_helper();
+  }
+  markWord orig_mark = mark;
+
+  size_t old_size = old->size(mark);
+  size_t new_size = old->copy_size(old_size, mark);
+
   oop obj = NULL;
 
   // Try allocating obj in to-space (unless too old)
   if (old->age() < tenuring_threshold()) {
-    obj = cast_to_oop(to()->allocate(s));
+    obj = cast_to_oop(to()->allocate(new_size));
   }
 
   bool new_obj_is_tenured = false;
   // Otherwise try allocating obj tenured
   if (obj == NULL) {
-    obj = _old_gen->promote(old, s);
+    obj = _old_gen->promote(old, old_size, new_size);
     if (obj == NULL) {
       handle_promotion_failure(old);
       return old;
@@ -746,11 +756,24 @@ oop DefNewGeneration::copy_to_survivor_space(oop old) {
     Prefetch::write(obj, interval);
 
     // Copy obj
-    Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(old), cast_from_oop<HeapWord*>(obj), s);
+    Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(old), cast_from_oop<HeapWord*>(obj), old_size);
 
     // Increment age if obj still in new generation
-    obj->incr_age();
-    age_table()->add(obj, s);
+    mark = mark.incr_age();
+    age_table()->add(mark.age(), new_size);
+  }
+
+  // Initialize i-hash, if necessary.
+  mark = obj->initialize_hash_if_necessary(old, mark);
+
+  // Update mark with new age and possibly updated hashctrl bits.
+  if (mark != orig_mark) {
+    if (real_mark.has_displaced_mark_helper()) {
+      real_mark.set_displaced_mark_helper(mark);
+      obj->set_mark(real_mark);
+    } else {
+      obj->set_mark(mark);
+    }
   }
 
   // Done, insert forward pointer to obj in this header

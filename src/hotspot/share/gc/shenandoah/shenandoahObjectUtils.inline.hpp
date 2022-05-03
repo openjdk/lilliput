@@ -134,8 +134,9 @@ Klass* ShenandoahObjectUtils::klass(oop obj) {
 }
 
 size_t ShenandoahObjectUtils::size(oop obj) {
-  Klass* kls = klass(obj);
-  return obj->size_given_klass(kls);
+  markWord header = stable_mark(obj);
+  Klass* kls = header.klass();
+  return obj->size_given_mark_and_klass(header, kls);
 }
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHOBJECTUTILS_HPP

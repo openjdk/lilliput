@@ -23,13 +23,16 @@
  */
 
 #include "precompiled.hpp"
+#include "gc/g1/g1CollectedHeap.hpp"
 #include "gc/g1/g1FullGCCompactionPoint.hpp"
 #include "gc/g1/heapRegion.hpp"
+#include "gc/shared/preservedMarks.inline.hpp"
 #include "gc/shared/slidingForwarding.inline.hpp"
 #include "oops/oop.inline.hpp"
 #include "utilities/debug.hpp"
 
-G1FullGCCompactionPoint::G1FullGCCompactionPoint() :
+G1FullGCCompactionPoint::G1FullGCCompactionPoint(PreservedMarks* preserved_marks) :
+    _preserved_marks(preserved_marks),
     _current_region(NULL),
     _compaction_top(NULL) {
   _compaction_regions = new (ResourceObj::C_HEAP, mtGC) GrowableArray<HeapRegion*>(32, mtGC);
@@ -90,16 +93,26 @@ void G1FullGCCompactionPoint::switch_region() {
   initialize_values();
 }
 
-void G1FullGCCompactionPoint::forward(SlidingForwarding* const forwarding, oop object, size_t size) {
+void G1FullGCCompactionPoint::forward(SlidingForwarding* const forwarding, oop object, size_t old_size, size_t new_size) {
   assert(_current_region != NULL, "Must have been initialized");
 
+  size_t req_size = old_size;
+  if (cast_from_oop<HeapWord*>(object) != _compaction_top) {
+    req_size = new_size;
+  }
+
   // Ensure the object fit in the current region.
-  while (!object_will_fit(size)) {
+  while (!object_will_fit(req_size)) {
     switch_region();
   }
 
   // Store a forwarding pointer if the object should be moved.
   if (cast_from_oop<HeapWord*>(object) != _compaction_top) {
+    G1CollectedHeap* g1h = (G1CollectedHeap*)Universe::heap();
+    if (!g1h->is_humongous(old_size) && g1h->is_humongous(new_size)) {
+      assert(false, "expand non-humongous object to humongous");
+    }
+    _preserved_marks->push_if_necessary(object, object->mark());
     forwarding->forward_to(object, cast_to_oop(_compaction_top));
     assert(object->is_forwarded(), "must be forwarded");
   } else {
@@ -107,8 +120,8 @@ void G1FullGCCompactionPoint::forward(SlidingForwarding* const forwarding, oop o
   }
 
   // Update compaction values.
-  _compaction_top += size;
-  _current_region->update_bot_for_block(_compaction_top - size, _compaction_top);
+  _compaction_top += req_size;
+  _current_region->update_bot_for_block(_compaction_top - req_size, _compaction_top);
 }
 
 void G1FullGCCompactionPoint::add(HeapRegion* hr) {

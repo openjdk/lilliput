@@ -67,6 +67,10 @@ int InstanceMirrorKlass::compute_static_oop_field_count(oop obj) {
   return 0;
 }
 
+int InstanceMirrorKlass::hash_offset_in_bytes(oop obj) const {
+  return obj->base_size_given_klass(this) << LogBytesPerWord;
+}
+
 #if INCLUDE_CDS
 void InstanceMirrorKlass::serialize_offsets(SerializeClosure* f) {
   f->do_u4((u4*)&_offset_of_static_fields);

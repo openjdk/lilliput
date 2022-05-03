@@ -311,35 +311,38 @@ oop HeapShared::archive_object(oop obj) {
     return ao;
   }
 
-  int len = obj->size();
-  if (G1CollectedHeap::heap()->is_archive_alloc_too_large(len)) {
+  markWord mark = obj->safe_mark();
+  int old_size = obj->size(mark);
+  int new_size = obj->copy_size(old_size, mark);
+  if (G1CollectedHeap::heap()->is_archive_alloc_too_large(new_size)) {
     log_debug(cds, heap)("Cannot archive, object (" PTR_FORMAT ") is too large: " SIZE_FORMAT,
                          p2i(obj), (size_t)obj->size());
     return NULL;
   }
 
-  oop archived_oop = cast_to_oop(G1CollectedHeap::heap()->archive_mem_allocate(len));
+  oop archived_oop = cast_to_oop(G1CollectedHeap::heap()->archive_mem_allocate(new_size));
   if (archived_oop != NULL) {
-    Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(obj), cast_from_oop<HeapWord*>(archived_oop), len);
+    Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(obj), cast_from_oop<HeapWord*>(archived_oop), old_size);
     // Reinitialize markword to remove age/marking/locking/etc.
     //
     // We need to retain the identity_hash, because it may have been used by some hashtables
-    // in the shared heap. This also has the side effect of pre-initializing the
-    // identity_hash for all shared objects, so they are less likely to be written
-    // into during run time, increasing the potential of memory sharing.
-    int hash_original = obj->identity_hash();
-
-    assert(SafepointSynchronize::is_at_safepoint(), "resolving displaced headers only at safepoint");
-    markWord mark = obj->mark();
-    if (mark.has_displaced_mark_helper()) {
-      mark = mark.displaced_mark_helper();
-    }
+    // in the shared heap.
     narrowKlass nklass = mark.narrow_klass();
-    archived_oop->set_mark(markWord::prototype().copy_set_hash(hash_original) LP64_ONLY(.set_narrow_klass(nklass)));
+    markWord new_mark = markWord::prototype() LP64_ONLY(.set_narrow_klass(nklass)).hash_copy_hashctrl_from(mark);
+    new_mark = archived_oop->initialize_hash_if_necessary(obj, new_mark);
+    assert(!new_mark.is_marked(), "must not be forwarded");
+    archived_oop->set_mark(new_mark);
     assert(archived_oop->mark().is_unlocked(), "sanity");
 
-    DEBUG_ONLY(int hash_archived = archived_oop->identity_hash());
-    assert(hash_original == hash_archived, "Different hash codes: original %x, archived %x", hash_original, hash_archived);
+#ifdef ASSERT
+    if (mark.hash_is_hashed_or_copied()) {
+      int hash_original = obj->identity_hash();
+      int hash_archived = archived_oop->identity_hash();
+      assert(hash_original == hash_archived, "Different hash codes: original %x, archived %x", hash_original,
+             hash_archived);
+    }
+    assert(archived_oop->mark().is_unlocked(), "sanity");
+#endif
 
     ArchivedObjectCache* cache = archived_object_cache();
     CachedOopInfo info = make_cached_oop_info(archived_oop);

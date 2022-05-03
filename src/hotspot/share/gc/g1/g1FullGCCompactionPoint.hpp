@@ -30,9 +30,11 @@
 #include "utilities/growableArray.hpp"
 
 class HeapRegion;
+class PreservedMarks;
 class SlidingForwarding;
 
 class G1FullGCCompactionPoint : public CHeapObj<mtGC> {
+  PreservedMarks* _preserved_marks;
   HeapRegion* _current_region;
   HeapWord*   _compaction_top;
   GrowableArray<HeapRegion*>* _compaction_regions;
@@ -44,20 +46,24 @@ class G1FullGCCompactionPoint : public CHeapObj<mtGC> {
   HeapRegion* next_region();
 
 public:
-  G1FullGCCompactionPoint();
+  G1FullGCCompactionPoint(PreservedMarks* preserved_marks);
   ~G1FullGCCompactionPoint();
 
   bool has_regions();
   bool is_initialized();
   void initialize(HeapRegion* hr);
   void update();
-  void forward(SlidingForwarding* const forwarding, oop object, size_t size);
+  void forward(SlidingForwarding* const forwarding, oop object, size_t old_size, size_t new_size);
   void add(HeapRegion* hr);
 
   HeapRegion* remove_last();
   HeapRegion* current_region();
 
   GrowableArray<HeapRegion*>* regions();
+
+  PreservedMarks* preserved_stack() const {
+    return _preserved_marks;
+  }
 };
 
 #endif // SHARE_GC_G1_G1FULLGCCOMPACTIONPOINT_HPP

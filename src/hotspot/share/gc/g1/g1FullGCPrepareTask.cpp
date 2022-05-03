@@ -151,9 +151,11 @@ G1FullGCPrepareTask::G1PrepareCompactLiveClosure::G1PrepareCompactLiveClosure(G1
     _cp(cp), _forwarding(G1CollectedHeap::heap()->forwarding()) { }
 
 size_t G1FullGCPrepareTask::G1PrepareCompactLiveClosure::apply(oop object) {
-  size_t size = object->size();
-  _cp->forward(_forwarding, object, size);
-  return size;
+  markWord mark = object->safe_mark();
+  size_t old_size = object->size(mark);
+  size_t new_size = object->copy_size(old_size, mark);
+  _cp->forward(_forwarding, object, old_size, new_size);
+  return old_size;
 }
 
 void G1FullGCPrepareTask::G1CalculatePointersClosure::prepare_for_compaction(HeapRegion* hr) {

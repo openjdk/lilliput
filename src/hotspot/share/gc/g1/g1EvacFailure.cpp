@@ -94,7 +94,11 @@ public:
 
     _marked_words += obj_size;
     // Reset the markWord
-    obj->init_mark();
+    markWord m = obj->forwardee()->safe_mark();
+    if (m.hash_is_hashed() && m.hash_is_copied()) {
+      m = m.hash_clear_copied();
+    }
+    obj->set_mark(m.klass()->prototype_header().copy_set_hashctrl(m));
 
     HeapWord* obj_end = obj_addr + obj_size;
     _last_forwarded_object_end = obj_end;

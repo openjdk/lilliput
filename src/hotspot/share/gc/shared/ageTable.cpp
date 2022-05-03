@@ -24,7 +24,7 @@
 
 #include "precompiled.hpp"
 #include "jvm.h"
-#include "gc/shared/ageTable.inline.hpp"
+#include "gc/shared/ageTable.hpp"
 #include "gc/shared/ageTableTracer.hpp"
 #include "gc/shared/collectedHeap.hpp"
 #include "gc/shared/gc_globals.hpp"
