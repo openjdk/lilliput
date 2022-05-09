@@ -211,62 +211,6 @@ void C2_MacroAssembler::rtm_retry_lock_on_busy(Register retry_count_Reg, Registe
   incrementl(retry_count_Reg); // clear z flag
 }
 
-// Use RTM for normal stack locks
-// Input: objReg (object to lock)
-void C2_MacroAssembler::rtm_stack_locking(Register objReg, Register tmpReg, Register scrReg,
-                                         Register retry_on_abort_count_Reg,
-                                         RTMLockingCounters* stack_rtm_counters,
-                                         Metadata* method_data, bool profile_rtm,
-                                         Label& DONE_LABEL, Label& IsInflated) {
-  assert(UseRTMForStackLocks, "why call this otherwise?");
-  assert(tmpReg == rax, "");
-  assert(scrReg == rdx, "");
-  Label L_rtm_retry, L_decrement_retry, L_on_abort;
-
-  if (RTMRetryCount > 0) {
-    movl(retry_on_abort_count_Reg, RTMRetryCount); // Retry on abort
-    bind(L_rtm_retry);
-  }
-  movptr(tmpReg, Address(objReg, oopDesc::mark_offset_in_bytes()));
-  testptr(tmpReg, markWord::monitor_value);  // inflated vs stack-locked|neutral
-  jcc(Assembler::notZero, IsInflated);
-
-  if (PrintPreciseRTMLockingStatistics || profile_rtm) {
-    Label L_noincrement;
-    if (RTMTotalCountIncrRate > 1) {
-      // tmpReg, scrReg and flags are killed
-      branch_on_random_using_rdtsc(tmpReg, scrReg, RTMTotalCountIncrRate, L_noincrement);
-    }
-    assert(stack_rtm_counters != NULL, "should not be NULL when profiling RTM");
-    atomic_incptr(ExternalAddress((address)stack_rtm_counters->total_count_addr()), scrReg);
-    bind(L_noincrement);
-  }
-  xbegin(L_on_abort);
-  movptr(tmpReg, Address(objReg, oopDesc::mark_offset_in_bytes()));       // fetch markword
-  andptr(tmpReg, markWord::lock_mask_in_place);     // look at 2 lock bits
-  cmpptr(tmpReg, markWord::unlocked_value);         // bits = 01 unlocked
-  jcc(Assembler::equal, DONE_LABEL);        // all done if unlocked
-
-  Register abort_status_Reg = tmpReg; // status of abort is stored in RAX
-  if (UseRTMXendForLockBusy) {
-    xend();
-    movptr(abort_status_Reg, 0x2);   // Set the abort status to 2 (so we can retry)
-    jmp(L_decrement_retry);
-  }
-  else {
-    xabort(0);
-  }
-  bind(L_on_abort);
-  if (PrintPreciseRTMLockingStatistics || profile_rtm) {
-    rtm_profiling(abort_status_Reg, scrReg, stack_rtm_counters, method_data, profile_rtm);
-  }
-  bind(L_decrement_retry);
-  if (RTMRetryCount > 0) {
-    // retry on lock abort if abort status is 'can retry' (0x2) or 'memory conflict' (0x4)
-    rtm_retry_lock_on_abort(retry_on_abort_count_Reg, abort_status_Reg, L_rtm_retry);
-  }
-}
-
 // Use RTM for inflating locks
 // inputs: objReg (object to lock)
 //         boxReg (on-stack box address (displaced header location) - KILLED)
@@ -469,38 +413,12 @@ void C2_MacroAssembler::fast_lock(Register objReg, Register boxReg, Register tmp
     jcc(Assembler::notZero, DONE_LABEL);
   }
 
-#if INCLUDE_RTM_OPT
-  if (UseRTMForStackLocks && use_rtm) {
-    assert(!UseHeavyMonitors, "+UseHeavyMonitors and +UseRTMForStackLocks are mutually exclusive");
-    rtm_stack_locking(objReg, tmpReg, scrReg, cx2Reg,
-                      stack_rtm_counters, method_data, profile_rtm,
-                      DONE_LABEL, IsInflated);
-  }
-#endif // INCLUDE_RTM_OPT
-
   movptr(tmpReg, Address(objReg, oopDesc::mark_offset_in_bytes()));          // [FETCH]
   testptr(tmpReg, markWord::monitor_value); // inflated vs stack-locked|neutral
   jccb(Assembler::notZero, IsInflated);
 
-  if (!UseHeavyMonitors) {
-    // Attempt stack-locking ...
-    orptr (tmpReg, markWord::unlocked_value);
-    movptr(Address(boxReg, 0), tmpReg);          // Anticipate successful CAS
-    lock();
-    cmpxchgptr(boxReg, Address(objReg, oopDesc::mark_offset_in_bytes()));      // Updates tmpReg
-    jcc(Assembler::equal, DONE_LABEL);           // Success
-
-    // Recursive locking.
-    // The object is stack-locked: markword contains stack pointer to BasicLock.
-    // Locked by current thread if difference with current SP is less than one page.
-    subptr(tmpReg, rsp);
-    // Next instruction set ZFlag == 1 (Success) if difference is less then one page.
-    andptr(tmpReg, (int32_t) (NOT_LP64(0xFFFFF003) LP64_ONLY(7 - os::vm_page_size())) );
-    movptr(Address(boxReg, 0), tmpReg);
-  } else {
-    // Clear ZF so that we take the slow path at the DONE label. objReg is known to be not 0.
-    testptr(objReg, objReg);
-  }
+  // Clear ZF so that we take the slow path at the DONE label. objReg is known to be not 0.
+  testptr(objReg, objReg);
   jmp(DONE_LABEL);
 
   bind(IsInflated);
@@ -628,29 +546,7 @@ void C2_MacroAssembler::fast_unlock(Register objReg, Register boxReg, Register t
 
   Label DONE_LABEL, Stacked, CheckSucc;
 
-#if INCLUDE_RTM_OPT
-  if (UseRTMForStackLocks && use_rtm) {
-    assert(!UseHeavyMonitors, "+UseHeavyMonitors and +UseRTMForStackLocks are mutually exclusive");
-    Label L_regular_unlock;
-    movptr(tmpReg, Address(objReg, oopDesc::mark_offset_in_bytes())); // fetch markword
-    andptr(tmpReg, markWord::lock_mask_in_place);                     // look at 2 lock bits
-    cmpptr(tmpReg, markWord::unlocked_value);                         // bits = 01 unlocked
-    jccb(Assembler::notEqual, L_regular_unlock);                      // if !HLE RegularLock
-    xend();                                                           // otherwise end...
-    jmp(DONE_LABEL);                                                  // ... and we're done
-    bind(L_regular_unlock);
-  }
-#endif
-
-  if (!UseHeavyMonitors) {
-    cmpptr(Address(boxReg, 0), (int32_t)NULL_WORD);                   // Examine the displaced header
-    jcc   (Assembler::zero, DONE_LABEL);                              // 0 indicates recursive stack-lock
-  }
   movptr(tmpReg, Address(objReg, oopDesc::mark_offset_in_bytes())); // Examine the object's markword
-  if (!UseHeavyMonitors) {
-    testptr(tmpReg, markWord::monitor_value);                         // Inflated?
-    jccb  (Assembler::zero, Stacked);
-  }
 
   // It's inflated.
 #if INCLUDE_RTM_OPT
@@ -792,12 +688,6 @@ void C2_MacroAssembler::fast_unlock(Register objReg, Register boxReg, Register t
   testl (boxReg, 0);                      // set ICC.ZF=1 to indicate success
   jmpb  (DONE_LABEL);
 
-  if (!UseHeavyMonitors) {
-    bind  (Stacked);
-    movptr(tmpReg, Address (boxReg, 0));      // re-fetch
-    lock();
-    cmpxchgptr(tmpReg, Address(objReg, oopDesc::mark_offset_in_bytes())); // Uses RAX which is box
-  }
 #endif
   bind(DONE_LABEL);
 }

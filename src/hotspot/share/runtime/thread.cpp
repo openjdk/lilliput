@@ -3602,22 +3602,7 @@ JavaThread *Threads::owning_thread_from_monitor_owner(ThreadsList * t_list,
   // Cannot assert on lack of success here since this function may be
   // used by code that is trying to report useful problem information
   // like deadlock detection.
-  if (UseHeavyMonitors) return NULL;
-
-  // If we didn't find a matching Java thread and we didn't force use of
-  // heavyweight monitors, then the owner is the stack address of the
-  // Lock Word in the owning Java thread's stack.
-  //
-  JavaThread* the_owner = NULL;
-  for (JavaThread* q : *t_list) {
-    if (q->is_lock_owned(owner)) {
-      the_owner = q;
-      break;
-    }
-  }
-
-  // cannot assert on lack of success here; see above comment
-  return the_owner;
+  return NULL;
 }
 
 class PrintOnClosure : public ThreadClosure {

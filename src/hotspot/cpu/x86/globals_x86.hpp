@@ -148,9 +148,6 @@ define_pd_global(intx, InitArrayShortSize, 8*BytesPerLong);
   product(bool, UseRTMLocking, false,                                       \
           "Enable RTM lock eliding for inflated locks in compiled code")    \
                                                                             \
-  product(bool, UseRTMForStackLocks, false, EXPERIMENTAL,                   \
-          "Enable RTM lock eliding for stack locks in compiled code")       \
-                                                                            \
   product(bool, UseRTMDeopt, false,                                         \
           "Perform deopt and recompilation based on RTM abort ratio")       \
                                                                             \

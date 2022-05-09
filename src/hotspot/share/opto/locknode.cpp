@@ -165,11 +165,6 @@ void FastLockNode::create_rtm_lock_counter(JVMState* state) {
     RTMLockingNamedCounter* rlnc = (RTMLockingNamedCounter*)
            OptoRuntime::new_named_counter(state, NamedCounter::RTMLockingCounter);
     _rtm_counters = rlnc->counters();
-    if (UseRTMForStackLocks) {
-      rlnc = (RTMLockingNamedCounter*)
-           OptoRuntime::new_named_counter(state, NamedCounter::RTMLockingCounter);
-      _stack_rtm_counters = rlnc->counters();
-    }
   }
 #endif
 }

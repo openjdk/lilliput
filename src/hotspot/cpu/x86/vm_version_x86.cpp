@@ -1222,12 +1222,6 @@ void VM_Version::get_processor_features() {
       vm_exit_during_initialization("UseRTMLocking flag should be only set on command line");
     }
   } else { // !UseRTMLocking
-    if (UseRTMForStackLocks) {
-      if (!FLAG_IS_DEFAULT(UseRTMForStackLocks)) {
-        warning("UseRTMForStackLocks flag should be off when UseRTMLocking flag is off");
-      }
-      FLAG_SET_DEFAULT(UseRTMForStackLocks, false);
-    }
     if (UseRTMDeopt) {
       FLAG_SET_DEFAULT(UseRTMDeopt, false);
     }
