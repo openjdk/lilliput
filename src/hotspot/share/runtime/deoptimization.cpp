@@ -1502,7 +1502,7 @@ bool Deoptimization::relock_objects(JavaThread* thread, GrowableArray<MonitorInf
           }
         }
         BasicLock* lock = mon_info->lock();
-        ObjectSynchronizer::enter(obj, lock, deoptee_thread);
+        ObjectSynchronizer::enter(obj, deoptee_thread);
         assert(mon_info->owner()->is_locked(), "object must be locked now");
       }
     }
@@ -1577,7 +1577,7 @@ void Deoptimization::pop_frames_failed_reallocs(JavaThread* thread, vframeArray*
       for (int j = 0; j < monitors->number_of_monitors(); j++) {
         BasicObjectLock* src = monitors->at(j);
         if (src->obj() != NULL) {
-          ObjectSynchronizer::exit(src->obj(), src->lock(), thread);
+          ObjectSynchronizer::exit(src->obj(), thread);
         }
       }
       array->element(i)->free_monitors(thread);

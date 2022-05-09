@@ -2114,7 +2114,7 @@ void SharedRuntime::monitor_enter_helper(oopDesc* obj, BasicLock* lock, JavaThre
   if (!SafepointSynchronize::is_synchronizing()) {
     // Only try quick_enter() if we're not trying to reach a safepoint
     // so that the calling thread reaches the safepoint more quickly.
-    if (ObjectSynchronizer::quick_enter(obj, current, lock)) return;
+    if (ObjectSynchronizer::quick_enter(obj, current)) return;
   }
   // NO_ASYNC required because an async exception on the state transition destructor
   // would leave you with the lock held and it would never be released.
@@ -2122,7 +2122,7 @@ void SharedRuntime::monitor_enter_helper(oopDesc* obj, BasicLock* lock, JavaThre
   // and the model is that an exception implies the method failed.
   JRT_BLOCK_NO_ASYNC
   Handle h_obj(THREAD, obj);
-  ObjectSynchronizer::enter(h_obj, lock, current);
+  ObjectSynchronizer::enter(h_obj, current);
   assert(!HAS_PENDING_EXCEPTION, "Should have no exception here");
   JRT_BLOCK_END
 }
@@ -2144,7 +2144,7 @@ void SharedRuntime::monitor_exit_helper(oopDesc* obj, BasicLock* lock, JavaThrea
     }
     return;
   }
-  ObjectSynchronizer::exit(obj, lock, current);
+  ObjectSynchronizer::exit(obj, current);
 }
 
 // Handles the uncommon cases of monitor unlocking in compiled code

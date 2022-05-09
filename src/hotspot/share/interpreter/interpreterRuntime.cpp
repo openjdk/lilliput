@@ -733,7 +733,7 @@ JRT_ENTRY_NO_ASYNC(void, InterpreterRuntime::monitorenter(JavaThread* current, B
   Handle h_obj(current, elem->obj());
   assert(Universe::heap()->is_in_or_null(h_obj()),
          "must be NULL or an object");
-  ObjectSynchronizer::enter(h_obj, elem->lock(), current);
+  ObjectSynchronizer::enter(h_obj, current);
   assert(Universe::heap()->is_in_or_null(elem->obj()),
          "must be NULL or an object");
 #ifdef ASSERT
@@ -753,7 +753,7 @@ JRT_LEAF(void, InterpreterRuntime::monitorexit(BasicObjectLock* elem))
     }
     return;
   }
-  ObjectSynchronizer::exit(obj, elem->lock(), JavaThread::current());
+  ObjectSynchronizer::exit(obj, JavaThread::current());
   // Free entry. If it is not cleared, the exception handling code will try to unlock the monitor
   // again at method exit or in the case of an exception.
   elem->set_obj(NULL);
