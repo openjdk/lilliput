@@ -972,15 +972,9 @@ JvmtiEnvBase::get_object_monitor_usage(JavaThread* calling_thread, jobject objec
     address owner = NULL;
     {
       markWord mark = hobj()->mark();
+      assert(!mark.has_locker(), "no stack-locking");
 
-      if (!mark.has_monitor()) {
-        // this object has a lightweight monitor
-
-        if (mark.has_locker()) {
-          owner = (address)mark.locker(); // save the address of the Lock word
-        }
-        // implied else: no owner
-      } else {
+      if (mark.has_monitor()) {
         // this object has a heavyweight monitor
         mon = mark.monitor();
 
