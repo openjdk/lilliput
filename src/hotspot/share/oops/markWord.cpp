@@ -53,11 +53,7 @@ void markWord::set_displaced_mark_helper(markWord m) const {
     monitor->set_header(m);
     return;
   }
-  if (has_locker()) {  // has a stack lock
-    BasicLock* locker = this->locker();
-    locker->set_displaced_header(m);
-    return;
-  }
+  assert(!has_locker(), "no stack-locking");
   // This should never happen:
   fatal("bad header=" INTPTR_FORMAT, value());
 }

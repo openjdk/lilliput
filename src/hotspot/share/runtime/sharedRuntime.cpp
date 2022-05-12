@@ -2110,7 +2110,7 @@ JRT_LEAF(void, SharedRuntime::reguard_yellow_pages())
   (void) JavaThread::current()->stack_overflow_state()->reguard_stack();
 JRT_END
 
-void SharedRuntime::monitor_enter_helper(oopDesc* obj, BasicLock* lock, JavaThread* current) {
+void SharedRuntime::monitor_enter_helper(oopDesc* obj, JavaThread* current) {
   if (!SafepointSynchronize::is_synchronizing()) {
     // Only try quick_enter() if we're not trying to reach a safepoint
     // so that the calling thread reaches the safepoint more quickly.
@@ -2129,10 +2129,10 @@ void SharedRuntime::monitor_enter_helper(oopDesc* obj, BasicLock* lock, JavaThre
 
 // Handles the uncommon case in locking, i.e., contention or an inflated lock.
 JRT_BLOCK_ENTRY(void, SharedRuntime::complete_monitor_locking_C(oopDesc* obj, BasicLock* lock, JavaThread* current))
-  SharedRuntime::monitor_enter_helper(obj, lock, current);
+  SharedRuntime::monitor_enter_helper(obj, current);
 JRT_END
 
-void SharedRuntime::monitor_exit_helper(oopDesc* obj, BasicLock* lock, JavaThread* current) {
+void SharedRuntime::monitor_exit_helper(oopDesc* obj, JavaThread* current) {
   assert(JavaThread::current() == current, "invariant");
   // Exit must be non-blocking, and therefore no exceptions can be thrown.
   ExceptionMark em(current);
@@ -2149,7 +2149,7 @@ void SharedRuntime::monitor_exit_helper(oopDesc* obj, BasicLock* lock, JavaThrea
 
 // Handles the uncommon cases of monitor unlocking in compiled code
 JRT_LEAF(void, SharedRuntime::complete_monitor_unlocking_C(oopDesc* obj, BasicLock* lock, JavaThread* current))
-  SharedRuntime::monitor_exit_helper(obj, lock, current);
+  SharedRuntime::monitor_exit_helper(obj, current);
 JRT_END
 
 #ifndef PRODUCT
@@ -3219,21 +3219,10 @@ JRT_LEAF(intptr_t*, SharedRuntime::OSR_migration_begin( JavaThread *current) )
        kptr2 < fr.interpreter_frame_monitor_begin();
        kptr2 = fr.next_monitor_in_interpreter_frame(kptr2) ) {
     if (kptr2->obj() != NULL) {         // Avoid 'holes' in the monitor array
-      BasicLock *lock = kptr2->lock();
-      // Inflate so the object's header no longer refers to the BasicLock.
-      if (lock->displaced_header().is_unlocked()) {
-        // The object is locked and the resulting ObjectMonitor* will also be
-        // locked so it can't be async deflated until ownership is dropped.
-        // See the big comment in basicLock.cpp: BasicLock::move_to().
-        ObjectSynchronizer::inflate_helper(kptr2->obj());
-      }
-      // Now the displaced header is free to move because the
-      // object's header no longer refers to it.
-      buf[i++] = (intptr_t)lock->displaced_header().value();
       buf[i++] = cast_from_oop<intptr_t>(kptr2->obj());
     }
   }
-  assert(i - max_locals == active_monitor_count*2, "found the expected number of monitors");
+  assert(i - max_locals == active_monitor_count, "found the expected number of monitors");
 
   return buf;
 JRT_END

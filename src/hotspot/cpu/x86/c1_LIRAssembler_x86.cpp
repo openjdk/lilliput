@@ -314,20 +314,18 @@ void LIR_Assembler::osr_entry() {
     // the OSR buffer using 2 word entries: first the lock and then
     // the oop.
     for (int i = 0; i < number_of_locks; i++) {
-      int slot_offset = monitor_offset - ((i * 2) * BytesPerWord);
+      int slot_offset = monitor_offset - (i * BytesPerWord);
 #ifdef ASSERT
       // verify the interpreter's monitor has a non-null object
       {
         Label L;
-        __ cmpptr(Address(OSR_buf, slot_offset + 1*BytesPerWord), (int32_t)NULL_WORD);
+        __ cmpptr(Address(OSR_buf, slot_offset), (int32_t)NULL_WORD);
         __ jcc(Assembler::notZero, L);
         __ stop("locked object is NULL");
         __ bind(L);
       }
 #endif
-      __ movptr(rbx, Address(OSR_buf, slot_offset + 0));
-      __ movptr(frame_map()->address_for_monitor_lock(i), rbx);
-      __ movptr(rbx, Address(OSR_buf, slot_offset + 1*BytesPerWord));
+      __ movptr(rbx, Address(OSR_buf, slot_offset));
       __ movptr(frame_map()->address_for_monitor_object(i), rbx);
     }
   }
@@ -3775,7 +3773,7 @@ void LIR_Assembler::emit_delay(LIR_OpDelay*) {
 
 
 void LIR_Assembler::monitor_address(int monitor_no, LIR_Opr dst) {
-  __ lea(dst->as_register(), frame_map()->address_for_monitor_lock(monitor_no));
+  __ lea(dst->as_register(), frame_map()->address_for_monitor_object(monitor_no));
 }
 
 

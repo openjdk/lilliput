@@ -80,5 +80,4 @@ void BasicLock::move_to(oop obj, BasicLock* dest) {
     // store-before-CAS avoidance in fast_lock/compiler_lock_object
     // we can find any flavor mark in the displaced mark.
   }
-  dest->set_displaced_header(displaced_header());
 }

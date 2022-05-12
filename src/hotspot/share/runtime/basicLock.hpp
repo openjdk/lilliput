@@ -63,14 +63,12 @@ class BasicLock {
 class BasicObjectLock {
   friend class VMStructs;
  private:
-  BasicLock _lock;                                    // the lock, must be double word aligned
   oop       _obj;                                     // object holds the lock;
 
  public:
   // Manipulation
   oop      obj() const                                { return _obj;  }
   void set_obj(oop obj)                               { _obj = obj; }
-  BasicLock* lock()                                   { return &_lock; }
 
   // Note: Use frame::interpreter_frame_monitor_size() for the size of BasicObjectLocks
   //       in interpreter activation frames since it includes machine-specific padding.
@@ -80,7 +78,6 @@ class BasicObjectLock {
   void oops_do(OopClosure* f) { f->do_oop(&_obj); }
 
   static int obj_offset_in_bytes()                    { return offset_of(BasicObjectLock, _obj);  }
-  static int lock_offset_in_bytes()                   { return offset_of(BasicObjectLock, _lock); }
 };
 
 

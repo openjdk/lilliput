@@ -1489,13 +1489,11 @@ bool Deoptimization::relock_objects(JavaThread* thread, GrowableArray<MonitorInf
             ObjectMonitor* waiting_monitor = deoptee_thread->current_waiting_monitor();
             if (waiting_monitor != NULL && waiting_monitor->object() == obj()) {
               assert(fr.is_deoptimized_frame(), "frame must be scheduled for deoptimization");
-              mon_info->lock()->set_displaced_header(markWord::unused_mark());
               JvmtiDeferredUpdates::inc_relock_count_after_wait(deoptee_thread);
               continue;
             }
           }
         }
-        BasicLock* lock = mon_info->lock();
         ObjectSynchronizer::enter(obj, deoptee_thread);
         assert(mon_info->owner()->is_locked(), "object must be locked now");
       }

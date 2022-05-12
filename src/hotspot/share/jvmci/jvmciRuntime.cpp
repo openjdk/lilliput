@@ -392,13 +392,13 @@ address JVMCIRuntime::exception_handler_for_pc(JavaThread* current) {
 }
 
 JRT_BLOCK_ENTRY(void, JVMCIRuntime::monitorenter(JavaThread* current, oopDesc* obj, BasicLock* lock))
-  SharedRuntime::monitor_enter_helper(obj, lock, current);
+  SharedRuntime::monitor_enter_helper(obj, current);
 JRT_END
 
 JRT_LEAF(void, JVMCIRuntime::monitorexit(JavaThread* current, oopDesc* obj, BasicLock* lock))
   assert(current->last_Java_sp(), "last_Java_sp must be set");
   assert(oopDesc::is_oop(obj), "invalid lock object pointer dected");
-  SharedRuntime::monitor_exit_helper(obj, lock, current);
+  SharedRuntime::monitor_exit_helper(obj, current);
 JRT_END
 
 // Object.notify() fast path, caller does slow path

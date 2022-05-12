@@ -295,7 +295,7 @@ GrowableArray<MonitorInfo*>* interpretedVFrame::monitors() const {
   for (BasicObjectLock* current = (fr().previous_monitor_in_interpreter_frame(fr().interpreter_frame_monitor_begin()));
        current >= fr().interpreter_frame_monitor_end();
        current = fr().previous_monitor_in_interpreter_frame(current)) {
-    result->push(new MonitorInfo(current->obj(), current->lock(), false, false));
+    result->push(new MonitorInfo(current->obj(), false, false));
   }
   return result;
 }
@@ -465,7 +465,7 @@ void interpretedVFrame::set_locals(StackValueCollection* values) const {
 entryVFrame::entryVFrame(const frame* fr, const RegisterMap* reg_map, JavaThread* thread)
 : externalVFrame(fr, reg_map, thread) {}
 
-MonitorInfo::MonitorInfo(oop owner, BasicLock* lock, bool eliminated, bool owner_is_scalar_replaced) {
+MonitorInfo::MonitorInfo(oop owner, bool eliminated, bool owner_is_scalar_replaced) {
   Thread* thread = Thread::current();
   if (!owner_is_scalar_replaced) {
     _owner = Handle(thread, owner);
@@ -475,7 +475,6 @@ MonitorInfo::MonitorInfo(oop owner, BasicLock* lock, bool eliminated, bool owner
     _owner = Handle();
     _owner_klass = Handle(thread, owner);
   }
-  _lock = lock;
   _eliminated = eliminated;
   _owner_is_scalar_replaced = owner_is_scalar_replaced;
 }
@@ -674,9 +673,6 @@ void javaVFrame::print() {
         tty->print(" ( lock is eliminated, frame not compiled )");
       }
     }
-    tty->cr();
-    tty->print("\t  ");
-    monitor->lock()->print_on(tty, monitor->owner());
     tty->cr();
   }
 }

@@ -504,9 +504,6 @@ void frame::interpreter_frame_print_on(outputStream* st) const {
     st->print(" - obj    [");
     current->obj()->print_value_on(st);
     st->print_cr("]");
-    st->print(" - lock   [");
-    current->lock()->print_on(st, current->obj());
-    st->print_cr("]");
   }
   // monitor
   st->print_cr(" - monitor[" INTPTR_FORMAT "]", p2i(interpreter_frame_monitor_begin()));
