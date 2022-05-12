@@ -218,11 +218,6 @@ StackValue *compiledVFrame::create_stack_value(ScopeValue *sv) const {
   return StackValue::create_stack_value(&_fr, register_map(), sv);
 }
 
-BasicLock* compiledVFrame::resolve_monitor_lock(Location location) const {
-  return StackValue::resolve_monitor_lock(&_fr, location);
-}
-
-
 GrowableArray<MonitorInfo*>* compiledVFrame::monitors() const {
   // Natives has no scope
   if (scope() == NULL) {

@@ -2009,12 +2009,6 @@ int ObjectMonitor::TrySpin(JavaThread* current) {
 // tolerate this and consider the observed _thread_state value
 // as advisory.
 //
-// Beware too, that _owner is sometimes a BasicLock address and sometimes
-// a thread pointer.
-// Alternately, we might tag the type (thread pointer vs basiclock pointer)
-// with the LSB of _owner.  Another option would be to probabilistically probe
-// the putative _owner->TypeTag value.
-//
 // Checking _thread_state isn't perfect.  Even if the thread is
 // in_java it might be blocked on a page-fault or have been preempted
 // and sitting on a ready/dispatch queue.

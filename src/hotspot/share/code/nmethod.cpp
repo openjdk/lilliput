@@ -605,8 +605,7 @@ nmethod::nmethod(
   OopMapSet* oop_maps )
   : CompiledMethod(method, "native nmethod", type, nmethod_size, sizeof(nmethod), code_buffer, offsets->value(CodeOffsets::Frame_Complete), frame_size, oop_maps, false),
   _is_unloading_state(0),
-  _native_receiver_sp_offset(basic_lock_owner_sp_offset),
-  _native_basic_lock_sp_offset(basic_lock_sp_offset)
+  _native_receiver_sp_offset(basic_lock_owner_sp_offset)
 {
   {
     int scopes_data_offset   = 0;
@@ -737,8 +736,7 @@ nmethod::nmethod(
   )
   : CompiledMethod(method, "nmethod", type, nmethod_size, sizeof(nmethod), code_buffer, offsets->value(CodeOffsets::Frame_Complete), frame_size, oop_maps, false),
   _is_unloading_state(0),
-  _native_receiver_sp_offset(in_ByteSize(-1)),
-  _native_basic_lock_sp_offset(in_ByteSize(-1))
+  _native_receiver_sp_offset(in_ByteSize(-1))
 {
   assert(debug_info->oop_recorder() == code_buffer->oop_recorder(), "shared OR");
   {

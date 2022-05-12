@@ -1628,8 +1628,6 @@ run:
         BasicObjectLock* most_recent = (BasicObjectLock*) istate->stack_base();
         while (most_recent != limit ) {
           if ((most_recent)->obj() == lockee) {
-            BasicLock* lock = most_recent->lock();
-            markWord header = lock->displaced_header();
             most_recent->set_obj(NULL);
 
             // restore object for the slow case
@@ -3047,18 +3045,13 @@ run:
       while (end < base) {
         oop lockee = end->obj();
         if (lockee != NULL) {
-          BasicLock* lock = end->lock();
-          markWord header = lock->displaced_header();
           end->set_obj(NULL);
 
           // If it isn't recursive we either must swap old header or call the runtime
           if (header.to_pointer() != NULL) {
-            markWord old_header = markWord::encode(lock);
-            if (lockee->cas_set_mark(header, old_header) != old_header) {
-              // restore object for the slow case
-              end->set_obj(lockee);
-              InterpreterRuntime::monitorexit(end);
-            }
+            // restore object for the slow case
+            end->set_obj(lockee);
+            InterpreterRuntime::monitorexit(end);
           }
 
           // One error is plenty

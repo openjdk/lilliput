@@ -1900,8 +1900,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
 
   if (method->is_synchronized()) {
 
-    const int mark_word_offset = BasicLock::displaced_header_offset_in_bytes();
-
     // Get the handle (the 2nd argument)
     __ mov(oop_handle_reg, c_rarg1);
 
@@ -2097,8 +2095,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     save_args(masm, total_c_args, c_arg, out_regs);
 
     __ mov(c_rarg0, obj_reg);
-    __ mov(c_rarg1, lock_reg);
-    __ mov(c_rarg2, r15_thread);
+    __ mov(c_rarg1, r15_thread);
 
     // Not a leaf but we have last_Java_frame setup as we want
     __ call_VM_leaf(CAST_FROM_FN_PTR(address, SharedRuntime::complete_monitor_locking_C), 3);
@@ -2129,7 +2126,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     __ lea(c_rarg1, Address(rsp, lock_slot_offset * VMRegImpl::stack_slot_size));
 
     __ mov(c_rarg0, obj_reg);
-    __ mov(c_rarg2, r15_thread);
+    __ mov(c_rarg1, r15_thread);
     __ mov(r12, rsp); // remember sp
     __ subptr(rsp, frame::arg_reg_save_area_bytes); // windows
     __ andptr(rsp, -16); // align stack as required by ABI

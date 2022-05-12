@@ -82,43 +82,7 @@ markWord ShenandoahObjectUtils::stable_mark(oop obj) {
     }
 
     // CASE: stack-locked
-    if (mark.has_locker()) {
-      if (Thread::current()->is_lock_owned((address)mark.locker())) {
-        // This thread owns the lock. We can safely access it.
-        markWord dmw = mark.displaced_mark_helper();
-        assert(dmw.is_neutral(), "invariant: header=" INTPTR_FORMAT ", original mark: " INTPTR_FORMAT, dmw.value(), mark.value());
-        return dmw;
-      }
-
-      // Else we try to install INFLATING into the header. This will (temporarily) prevent other
-      // threads from stack-locking or evacuating the object.
-      markWord cmp = obj->cas_set_mark(markWord::INFLATING(), mark);
-      if (cmp != mark) {
-        continue;       // Interference -- just retry
-      }
-
-      // We've successfully installed INFLATING (0) into the mark-word.
-      // This is the only case where 0 will appear in a mark-word.
-      // Only the singular thread that successfully swings the mark-word
-      // to 0 can fetch the stack-lock and safely read the displaced header.
-
-      // fetch the displaced mark from the owner's stack.
-      // The owner can't die or unwind past the lock while our INFLATING
-      // object is in the mark.  Furthermore the owner can't complete
-      // an unlock on the object, either. No other thread can do evacuation, either.
-      markWord dmw = mark.displaced_mark_helper();
-      // Catch if the object's header is not neutral (not locked and
-      // not marked is what we care about here).
-      assert(dmw.is_neutral(), "invariant: header=" INTPTR_FORMAT, dmw.value());
-
-      // Must preserve store ordering. The monitor state must
-      // be stable at the time of publishing the monitor address.
-      guarantee(obj->mark() == markWord::INFLATING(), "invariant");
-      // Release semantics so that above set_object() is seen first.
-      obj->release_set_mark(mark);
-
-      return dmw;
-    }
+    assert(!mark.has_locker(), "no stack-locking");
   }
 }
 #endif

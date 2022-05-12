@@ -486,8 +486,8 @@ class SharedRuntime: AllStatic {
   static bool should_fixup_call_destination(address destination, address entry_point, address caller_pc, Method* moop, CodeBlob* cb);
 
   // Slow-path Locking and Unlocking
-  static void complete_monitor_locking_C(oopDesc* obj, BasicLock* lock, JavaThread* current);
-  static void complete_monitor_unlocking_C(oopDesc* obj, BasicLock* lock, JavaThread* current);
+  static void complete_monitor_locking_C(oopDesc* obj, JavaThread* current);
+  static void complete_monitor_unlocking_C(oopDesc* obj, JavaThread* current);
 
   // Resolving of calls
   static address resolve_static_call_C     (JavaThread* current);

@@ -2128,7 +2128,7 @@ void SharedRuntime::monitor_enter_helper(oopDesc* obj, JavaThread* current) {
 }
 
 // Handles the uncommon case in locking, i.e., contention or an inflated lock.
-JRT_BLOCK_ENTRY(void, SharedRuntime::complete_monitor_locking_C(oopDesc* obj, BasicLock* lock, JavaThread* current))
+JRT_BLOCK_ENTRY(void, SharedRuntime::complete_monitor_locking_C(oopDesc* obj, JavaThread* current))
   SharedRuntime::monitor_enter_helper(obj, current);
 JRT_END
 
@@ -2148,7 +2148,7 @@ void SharedRuntime::monitor_exit_helper(oopDesc* obj, JavaThread* current) {
 }
 
 // Handles the uncommon cases of monitor unlocking in compiled code
-JRT_LEAF(void, SharedRuntime::complete_monitor_unlocking_C(oopDesc* obj, BasicLock* lock, JavaThread* current))
+JRT_LEAF(void, SharedRuntime::complete_monitor_unlocking_C(oopDesc* obj, JavaThread* current))
   SharedRuntime::monitor_exit_helper(obj, current);
 JRT_END
 

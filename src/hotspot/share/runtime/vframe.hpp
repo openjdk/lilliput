@@ -50,8 +50,6 @@
 //   - externalVFrame
 //     - entryVFrame        ; special frame created when calling Java from C
 
-// - BasicLock
-
 class StackFrameStream;
 
 class vframe: public ResourceObj {

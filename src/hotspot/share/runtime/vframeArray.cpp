@@ -87,7 +87,7 @@ void vframeArrayElement::fill_in(compiledVFrame* vf, bool realloc_failures) {
       _monitors = new MonitorChunk(list->length());
       vf->thread()->add_monitor_chunk(_monitors);
 
-      // Migrate the BasicLocks from the stack to the monitor chunk
+      // Migrate the BasicObjectLocks from the stack to the monitor chunk
       for (index = 0; index < list->length(); index++) {
         MonitorInfo* monitor = list->at(index);
         assert(!monitor->owner_is_scalar_replaced() || realloc_failures, "object should be reallocated already");
