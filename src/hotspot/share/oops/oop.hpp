@@ -67,6 +67,8 @@ class oopDesc {
   // Must be trivial; see verifying static assert after the class.
   oopDesc() = default;
 
+  inline bool      supportsMark()  const;
+
   inline markWord  mark()          const;
   inline markWord  mark_acquire()  const;
   inline markWord* mark_addr() const;

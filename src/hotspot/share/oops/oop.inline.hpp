@@ -47,6 +47,10 @@
 // Implementation of all inlined member functions defined in oop.hpp
 // We need a separate file to avoid circular references
 
+bool oopDesc::supportsMark() const {
+  return true; // Placeholder
+}
+
 markWord oopDesc::mark() const {
   return Atomic::load(&_mark);
 }
