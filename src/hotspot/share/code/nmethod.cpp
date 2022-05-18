@@ -459,7 +459,6 @@ nmethod* nmethod::new_native_nmethod(const methodHandle& method,
   int frame_complete,
   int frame_size,
   ByteSize basic_lock_owner_sp_offset,
-  ByteSize basic_lock_sp_offset,
   OopMapSet* oop_maps) {
   code_buffer->finalize_oop_references(method);
   // create nmethod
@@ -476,7 +475,6 @@ nmethod* nmethod::new_native_nmethod(const methodHandle& method,
             compile_id, &offsets,
             code_buffer, frame_size,
             basic_lock_owner_sp_offset,
-            basic_lock_sp_offset,
             oop_maps);
     NOT_PRODUCT(if (nm != NULL)  native_nmethod_stats.note_native_nmethod(nm));
   }
@@ -601,7 +599,6 @@ nmethod::nmethod(
   CodeBuffer* code_buffer,
   int frame_size,
   ByteSize basic_lock_owner_sp_offset,
-  ByteSize basic_lock_sp_offset,
   OopMapSet* oop_maps )
   : CompiledMethod(method, "native nmethod", type, nmethod_size, sizeof(nmethod), code_buffer, offsets->value(CodeOffsets::Frame_Complete), frame_size, oop_maps, false),
   _is_unloading_state(0),

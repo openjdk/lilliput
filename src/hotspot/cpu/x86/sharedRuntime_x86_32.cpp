@@ -1357,7 +1357,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
                                        frame_complete,
                                        stack_slots / VMRegImpl::slots_per_word,
                                        in_ByteSize(-1),
-                                       in_ByteSize(-1),
                                        (OopMapSet*)NULL);
   }
   address native_func = method->native_function();
@@ -1412,7 +1411,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
 
   int klass_slot_offset = 0;
   int klass_offset = -1;
-  int lock_slot_offset = 0;
   bool is_static = false;
 
   if (method->is_static()) {
@@ -1425,7 +1423,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
   // Plus a lock if needed
 
   if (method->is_synchronized()) {
-    lock_slot_offset = stack_slots;
     stack_slots += VMRegImpl::slots_per_word;
   }
 
@@ -1440,8 +1437,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
   //      |---------------------|
   //      | 2 slots for moves   |
   //      |---------------------|
-  //      | lock box (if sync)  |
-  //      |---------------------| <- lock_slot_offset  (-lock_slot_rbp_offset)
   //      | klass (if static)   |
   //      |---------------------| <- klass_slot_offset
   //      | oopHandle area      |
@@ -1546,10 +1541,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     __ empty_FPU_stack();
   }
 #endif /* COMPILER2 */
-
-  // Compute the rbp, offset for any slots used after the jni call
-
-  int lock_slot_rbp_offset = (lock_slot_offset*VMRegImpl::stack_slot_size) - fp_adjustment;
 
   // We use rdi as a thread pointer because it is callee save and
   // if we load it once it is usable thru the entire wrapper
@@ -1685,7 +1676,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
   // These are register definitions we need for locking/unlocking
   const Register swap_reg = rax;  // Must use rax, for cmpxchg instruction
   const Register obj_reg  = rcx;  // Will contain the oop
-  const Register lock_reg = rdx;  // Address of compiler lock object (BasicLock)
 
   Label slow_path_lock;
   Label lock_done;
@@ -1693,14 +1683,8 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
   // Lock a synchronized method
   if (method->is_synchronized()) {
 
-    const int mark_word_offset = BasicLock::displaced_header_offset_in_bytes();
-
     // Get the handle (the 2nd argument)
     __ movptr(oop_handle_reg, Address(rsp, wordSize));
-
-    // Get address of the box
-
-    __ lea(lock_reg, Address(rbp, lock_slot_rbp_offset));
 
     // Load the oop from the handle
     __ movptr(obj_reg, Address(oop_handle_reg, 0));
@@ -1912,7 +1896,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     // has last_Java_frame setup. No exceptions so do vanilla call not call_VM
     // args are (oop obj, BasicLock* lock, JavaThread* thread)
     __ push(thread);
-    __ push(lock_reg);
     __ push(obj_reg);
     __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::complete_monitor_locking_C)));
     __ addptr(rsp, 3*wordSize);
@@ -1947,8 +1930,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     // +wordSize because of the push above
     // args are (oop obj, BasicLock* lock, JavaThread* thread)
     __ push(thread);
-    __ lea(rax, Address(rbp, lock_slot_rbp_offset));
-    __ push(rax);
 
     __ push(obj_reg);
     __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::complete_monitor_unlocking_C)));
@@ -2007,7 +1988,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
                                             frame_complete,
                                             stack_slots / VMRegImpl::slots_per_word,
                                             (is_static ? in_ByteSize(klass_offset) : in_ByteSize(receiver_offset)),
-                                            in_ByteSize(lock_slot_offset*VMRegImpl::stack_slot_size),
                                             oop_maps);
 
   return nm;

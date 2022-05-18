@@ -289,7 +289,6 @@ class nmethod : public CompiledMethod {
           CodeBuffer *code_buffer,
           int frame_size,
           ByteSize basic_lock_owner_sp_offset, /* synchronized natives only */
-          ByteSize basic_lock_sp_offset,       /* synchronized natives only */
           OopMapSet* oop_maps);
 
   // Creation support
@@ -382,7 +381,6 @@ class nmethod : public CompiledMethod {
                                      int frame_complete,
                                      int frame_size,
                                      ByteSize receiver_sp_offset,
-                                     ByteSize basic_lock_sp_offset,
                                      OopMapSet* oop_maps);
 
   // type info

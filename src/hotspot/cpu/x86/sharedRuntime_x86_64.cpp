@@ -1523,7 +1523,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
                                        frame_complete,
                                        stack_slots / VMRegImpl::slots_per_word,
                                        in_ByteSize(-1),
-                                       in_ByteSize(-1),
                                        (OopMapSet*)NULL);
   }
   address native_func = method->native_function();
@@ -1579,7 +1578,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
 
   int klass_slot_offset = 0;
   int klass_offset = -1;
-  int lock_slot_offset = 0;
   bool is_static = false;
 
   if (method->is_static()) {
@@ -1592,7 +1590,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
   // Plus a lock if needed
 
   if (method->is_synchronized()) {
-    lock_slot_offset = stack_slots;
     stack_slots += VMRegImpl::slots_per_word;
   }
 
@@ -1607,8 +1604,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
   //      |---------------------|
   //      | 2 slots for moves   |
   //      |---------------------|
-  //      | lock box (if sync)  |
-  //      |---------------------| <- lock_slot_offset
   //      | klass (if static)   |
   //      |---------------------| <- klass_slot_offset
   //      | oopHandle area      |
@@ -1892,7 +1887,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
 
   const Register swap_reg = rax;  // Must use rax for cmpxchg instruction
   const Register obj_reg  = rbx;  // Will contain the oop
-  const Register lock_reg = r13;  // Address of compiler lock object (BasicLock)
   const Register old_hdr  = r13;  // value of old header at unlock time
 
   Label slow_path_lock;
@@ -1902,10 +1896,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
 
     // Get the handle (the 2nd argument)
     __ mov(oop_handle_reg, c_rarg1);
-
-    // Get address of the box
-
-    __ lea(lock_reg, Address(rsp, lock_slot_offset * VMRegImpl::stack_slot_size));
 
     // Load the oop from the handle
     __ movptr(obj_reg, Address(oop_handle_reg, 0));
@@ -2123,8 +2113,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
       save_native_result(masm, ret_type, stack_slots);
     }
 
-    __ lea(c_rarg1, Address(rsp, lock_slot_offset * VMRegImpl::stack_slot_size));
-
     __ mov(c_rarg0, obj_reg);
     __ mov(c_rarg1, r15_thread);
     __ mov(r12, rsp); // remember sp
@@ -2187,7 +2175,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
                                             frame_complete,
                                             stack_slots / VMRegImpl::slots_per_word,
                                             (is_static ? in_ByteSize(klass_offset) : in_ByteSize(receiver_offset)),
-                                            in_ByteSize(lock_slot_offset*VMRegImpl::stack_slot_size),
                                             oop_maps);
 
   return nm;

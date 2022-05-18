@@ -457,7 +457,7 @@ void C2_MacroAssembler::fast_lock(Register objReg, Register boxReg, Register tmp
   // Invariant: tmpReg == 0.  tmpReg is EAX which is the implicit cmpxchg comparand.
   lock();
   cmpxchgptr(scrReg, Address(boxReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner)));
-  movptr(Address(scrReg, 0), 3);          // box->_displaced_header = 3
+  //movptr(Address(scrReg, 0), 3);          // box->_displaced_header = 3
   // If we weren't able to swing _owner from NULL to the BasicLock
   // then take the slow path.
   jccb  (Assembler::notZero, DONE_LABEL);
