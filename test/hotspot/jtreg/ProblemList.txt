@@ -159,6 +159,8 @@ serviceability/sa/TestSysProps.java 1234567 generic-all
 serviceability/sa/jmap-hprof/JMapHProfLargeHeapTest.java 1234567 generic-all
 serviceability/sa/sadebugd/DebugdConnectTest.java 1234567 generic-all
 serviceability/sa/sadebugd/DisableRegistryTest.java 1234567 generic-all
+runtime/Monitor/MonitorUsedDeflationThresholdTest.java 1234567 generic-all
+runtime/logging/MonitorInflationTest.java 1234567 generic-all
 
 #############################################################################
 

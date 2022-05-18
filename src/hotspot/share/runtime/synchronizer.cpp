@@ -1008,6 +1008,9 @@ static bool monitors_used_above_threshold(MonitorList* list) {
                                " to " SIZE_FORMAT, old_ceiling, new_ceiling);
     _no_progress_cnt = 0;
     ceiling = new_ceiling;
+  } else {
+    log_info(monitorinflation)("Deflations without progress: " UINTX_FORMAT
+                               "ceiling: " SIZE_FORMAT, _no_progress_cnt, old_ceiling);
   }
 
   // Check if our monitor usage is above the threshold:
