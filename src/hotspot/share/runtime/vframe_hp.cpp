@@ -218,11 +218,6 @@ StackValue *compiledVFrame::create_stack_value(ScopeValue *sv) const {
   return StackValue::create_stack_value(&_fr, register_map(), sv);
 }
 
-BasicLock* compiledVFrame::resolve_monitor_lock(Location location) const {
-  return StackValue::resolve_monitor_lock(&_fr, location);
-}
-
-
 GrowableArray<MonitorInfo*>* compiledVFrame::monitors() const {
   // Natives has no scope
   if (scope() == NULL) {
@@ -238,7 +233,7 @@ GrowableArray<MonitorInfo*>* compiledVFrame::monitors() const {
     // Casting away const
     frame& fr = (frame&) _fr;
     MonitorInfo* info = new MonitorInfo(
-        fr.get_native_receiver(), fr.get_native_monitor(), false, false);
+        fr.get_native_receiver(), false, false);
     monitors->push(info);
     return monitors;
   }
@@ -258,11 +253,9 @@ GrowableArray<MonitorInfo*>* compiledVFrame::monitors() const {
       assert(kv->is_constant_oop(), "klass should be oop constant for scalar replaced object");
       Handle k(Thread::current(), ((ConstantOopReadValue*)kv)->value()());
       assert(java_lang_Class::is_instance(k()), "must be");
-      result->push(new MonitorInfo(k(), resolve_monitor_lock(mv->basic_lock()),
-                                   mv->eliminated(), true));
+      result->push(new MonitorInfo(k(), mv->eliminated(), true));
     } else {
-      result->push(new MonitorInfo(owner_sv->get_obj()(), resolve_monitor_lock(mv->basic_lock()),
-                                   mv->eliminated(), false));
+      result->push(new MonitorInfo(owner_sv->get_obj()(), mv->eliminated(), false));
     }
   }
 
@@ -496,8 +489,7 @@ void jvmtiDeferredLocalVariableSet::update_monitors(GrowableArray<MonitorInfo*>*
       // Originally the owner may have been scalar replaced but as an update
       // exists it must have been deoptimized, i.e. reallocated to the heap, and
       // now it is considered not to be scalar replaced.
-      MonitorInfo* new_info = new MonitorInfo((oopDesc*)val->value().l, info->lock(),
-                                              info->eliminated(), false);
+      MonitorInfo* new_info = new MonitorInfo((oopDesc*)val->value().l, info->eliminated(), false);
       monitors->at_put(lock_index, new_info);
     }
   }

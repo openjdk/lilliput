@@ -239,7 +239,7 @@ void G1ParCopyClosure<barrier, should_mark>::do_oop_work(T* p) {
     } else {
       forwardee = _par_scan_state->copy_to_survivor_space(state, obj, m);
     }
-    assert(forwardee != NULL, "forwardee should not be NULL");
+    assert(forwardee != NULL, "forwardee should not be NULL: " INTPTR_FORMAT, m.value());
     RawAccess<IS_NOT_NULL>::oop_store(p, forwardee);
 
     if (barrier == G1BarrierCLD) {

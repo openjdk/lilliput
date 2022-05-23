@@ -50,11 +50,6 @@ public:
                      RTMLockingCounters* rtm_counters, Metadata* method_data, bool profile_rtm);
   void rtm_retry_lock_on_abort(Register retry_count, Register abort_status, Label& retryLabel);
   void rtm_retry_lock_on_busy(Register retry_count, Register box, Register tmp, Register scr, Label& retryLabel);
-  void rtm_stack_locking(Register obj, Register tmp, Register scr,
-                         Register retry_on_abort_count,
-                         RTMLockingCounters* stack_rtm_counters,
-                         Metadata* method_data, bool profile_rtm,
-                         Label& DONE_LABEL, Label& IsInflated);
   void rtm_inflated_locking(Register obj, Register box, Register tmp,
                             Register scr, Register retry_on_busy_count,
                             Register retry_on_abort_count,

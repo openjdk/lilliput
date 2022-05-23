@@ -61,7 +61,6 @@
 //    used when inflating an existing stack-lock into an ObjectMonitor.
 //    See below for is_being_inflated() and INFLATING().
 
-class BasicLock;
 class ObjectMonitor;
 class JavaThread;
 class outputStream;
@@ -184,10 +183,6 @@ class markWord {
   bool has_locker() const {
     return ((value() & lock_mask_in_place) == locked_value);
   }
-  BasicLock* locker() const {
-    assert(has_locker(), "check");
-    return (BasicLock*) value();
-  }
   bool has_monitor() const {
     return ((value() & lock_mask_in_place) == monitor_value);
   }
@@ -206,16 +201,7 @@ class markWord {
     tmp |= ((hash & hash_mask) << hash_shift);
     return markWord(tmp);
   }
-  // it is only used to be stored into BasicLock as the
-  // indicator that the lock is using heavyweight monitor
-  static markWord unused_mark() {
-    return markWord(marked_value);
-  }
-  // the following two functions create the markWord to be
-  // stored into object header, it encodes monitor info
-  static markWord encode(BasicLock* lock) {
-    return from_pointer(lock);
-  }
+  // create the markWord to be stored into object header, it encodes monitor info
   static markWord encode(ObjectMonitor* monitor) {
     uintptr_t tmp = (uintptr_t) monitor;
     return markWord(tmp | monitor_value);
