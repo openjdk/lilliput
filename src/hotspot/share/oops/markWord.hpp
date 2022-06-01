@@ -180,6 +180,12 @@ class markWord {
   markWord set_unlocked() const {
     return markWord(value() | unlocked_value);
   }
+  markWord set_anon_locked() const {
+    return markWord(value() & ~lock_mask_in_place);
+  }
+  bool is_anon_locked() const {
+    return ((value() & lock_mask_in_place) == locked_value);
+  }
   bool has_locker() const {
     return ((value() & lock_mask_in_place) == locked_value);
   }
@@ -192,7 +198,7 @@ class markWord {
     return (ObjectMonitor*) (value() ^ monitor_value);
   }
   bool has_displaced_mark_helper() const {
-    return ((value() & unlocked_value) == 0);
+    return has_monitor();
   }
   markWord displaced_mark_helper() const;
   void set_displaced_mark_helper(markWord m) const;

@@ -173,7 +173,7 @@ JRT_LEAF(narrowKlass, oopDesc::load_nklass_runtime(oopDesc* o))
   if (!header.is_neutral()) {
     header = ObjectSynchronizer::stable_mark(obj);
   }
-  assert(header.is_neutral(), "expect neutral header here");
+  assert(!header.has_monitor(), "expect stable header here");
   narrowKlass nklass = header.narrow_klass();
   return nklass;
 JRT_END

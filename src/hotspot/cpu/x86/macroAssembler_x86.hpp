@@ -863,6 +863,7 @@ public:
 
   void xorptr(Register dst, Register src) { LP64_ONLY(xorq(dst, src)) NOT_LP64(xorl(dst, src)); }
   void xorptr(Register dst, Address src) { LP64_ONLY(xorq(dst, src)) NOT_LP64(xorl(dst, src)); }
+  void xorptr(Register dst, int32_t src) { LP64_ONLY(xorq(dst, src)) NOT_LP64(xorl(dst, src)); }
 
   // Calls
 

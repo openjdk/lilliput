@@ -3507,7 +3507,20 @@ void LIR_Assembler::emit_lock(LIR_OpLock* op) {
   Register obj = op->obj_opr()->as_register();  // may not be an oop
   Register hdr = op->hdr_opr()->as_register();
   Register lock = op->lock_opr()->as_register();
-  __ jmp(*op->stub()->entry());
+  Register tmp = op->scratch_opr()->as_register();
+
+  if (op->code() == lir_lock) {
+    // add debug info for NullPointerException only if one is possible
+    int null_check_offset = __ lock_object(hdr, obj, lock, tmp, *op->stub()->entry());
+    if (op->info() != NULL) {
+      add_debug_info_for_null_check(null_check_offset, op->info());
+    }
+    // done
+  } else if (op->code() == lir_unlock) {
+    __ unlock_object(hdr, obj, lock, tmp, *op->stub()->entry());
+  } else {
+    Unimplemented();
+  }
   __ bind(*op->stub()->continuation());
 }
 

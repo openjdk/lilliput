@@ -109,7 +109,7 @@ inline void ObjectMonitor::set_owner_from(void* old_value, void* new_value) {
   assert(prev == old_value, "unexpected prev owner=" INTPTR_FORMAT
          ", expected=" INTPTR_FORMAT, p2i(prev), p2i(old_value));
 #endif
-  Atomic::store(&_owner, new_value);
+  Atomic::release_store_fence(&_owner, new_value);
   log_trace(monitorinflation, owner)("set_owner_from(): mid="
                                      INTPTR_FORMAT ", old_value=" INTPTR_FORMAT
                                      ", new_value=" INTPTR_FORMAT, p2i(this),

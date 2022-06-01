@@ -144,6 +144,8 @@ class ObjectMonitor : public CHeapObj<mtObjectMonitor> {
                         sizeof(WeakHandle));
   // Used by async deflation as a marker in the _owner field:
   #define DEFLATER_MARKER reinterpret_cast<void*>(-1)
+  #define ANONYMOUS_OWNER reinterpret_cast<void*>(-2)
+
   // TODO: Change type to Thread*
   void* volatile _owner;            // pointer to owning thread
   volatile uint64_t _previous_owner_tid;  // thread id of the previous owner of the monitor
@@ -259,6 +261,18 @@ class ObjectMonitor : public CHeapObj<mtObjectMonitor> {
   // old_value, using Atomic::cmpxchg(). Otherwise, does not change the
   // _owner field. Returns the prior value of the _owner field.
   void*     try_set_owner_from(void* old_value, void* new_value);
+
+  void set_owner_anonymous() {
+    set_owner_from(NULL, ANONYMOUS_OWNER);
+  }
+
+  bool is_owner_anonymous() const {
+    return _owner == ANONYMOUS_OWNER;
+  }
+
+  void set_owner_from_anonymous(Thread* owner) {
+    set_owner_from(ANONYMOUS_OWNER, owner);
+  }
 
   // Simply get _next_om field.
   ObjectMonitor* next_om() const;

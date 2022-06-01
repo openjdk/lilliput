@@ -384,7 +384,7 @@ void C2_MacroAssembler::fast_lock(Register objReg, Register boxReg, Register tmp
     assert_different_registers(objReg, boxReg, tmpReg, scrReg, cx1Reg, cx2Reg);
   } else {
     assert(cx2Reg == noreg, "");
-    assert_different_registers(objReg, boxReg, tmpReg, scrReg);
+    assert_different_registers(objReg, boxReg, tmpReg, scrReg, cx1Reg);
   }
 
   // Possible cases that we'll encounter in fast_lock
@@ -402,7 +402,7 @@ void C2_MacroAssembler::fast_lock(Register objReg, Register boxReg, Register tmp
   //    -- by other
   //
 
-  Label IsInflated, DONE_LABEL;
+  Label IsInflated, DONE_LABEL, slow_path;
 
   if (DiagnoseSyncOnValueBasedClasses != 0) {
     load_klass(tmpReg, objReg, cx1Reg);
@@ -415,6 +415,30 @@ void C2_MacroAssembler::fast_lock(Register objReg, Register boxReg, Register tmp
   testptr(tmpReg, markWord::monitor_value); // inflated vs stack-locked|neutral
   jccb(Assembler::notZero, IsInflated);
 
+  // Attempt fast-locking.
+  // First we need to check if the lock-stack has room for pushing the object reference.
+  movptr(scrReg, Address(r15_thread, Thread::lock_stack_current_offset()));
+  cmpptr(scrReg, Address(r15_thread, Thread::lock_stack_limit_offset()));
+  jcc(Assembler::zero, slow_path);
+
+  // Now we attempt to take the fast-lock.
+  // tmpReg lowest two bits are either 00 or 01 here. Make it 01.
+  orptr(tmpReg, markWord::unlocked_value);
+  movptr(cx1Reg, tmpReg);
+  // Clear lowest two bits: we have 01 (see above), now flip the lowest to get 00.
+  xorptr(cx1Reg, markWord::unlocked_value);
+  lock();
+  cmpxchgptr(cx1Reg, Address(objReg, oopDesc::mark_offset_in_bytes()));
+  jcc(Assembler::notZero, DONE_LABEL); // ZF = 0 indicates failure at DONE_LABEL
+
+  // Success: push object to lock-stack.
+  movptr(Address(scrReg, 0), objReg);
+  increment(scrReg, oopSize);
+  movptr(Address(r15_thread, Thread::lock_stack_current_offset()), scrReg);
+  xorq(rax, rax); // Set ZF = 1 (success)
+  jmp(DONE_LABEL);
+
+  bind(slow_path);
   // Clear ZF so that we take the slow path at the DONE label. objReg is known to be not 0.
   testptr(objReg, objReg);
   jmp(DONE_LABEL);
@@ -542,6 +566,8 @@ void C2_MacroAssembler::fast_unlock(Register objReg, Register boxReg, Register t
   Label DONE_LABEL, Stacked, CheckSucc;
 
   movptr(tmpReg, Address(objReg, oopDesc::mark_offset_in_bytes())); // Examine the object's markword
+  testptr(tmpReg, markWord::monitor_value);
+  jccb(Assembler::zero, Stacked);
 
   // It's inflated.
 #if INCLUDE_RTM_OPT
@@ -611,6 +637,7 @@ void C2_MacroAssembler::fast_unlock(Register objReg, Register boxReg, Register t
 #else // _LP64
   // It's inflated
   Label LNotRecursive, LSuccess, LGoSlowPath;
+  jmp(LGoSlowPath);
 
   cmpptr(Address(tmpReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(recursions)), 0);
   jccb(Assembler::equal, LNotRecursive);
@@ -684,6 +711,17 @@ void C2_MacroAssembler::fast_unlock(Register objReg, Register boxReg, Register t
   jmpb  (DONE_LABEL);
 
 #endif
+  bind(Stacked);
+  // Mark-word must be 00 now, try to swing it back to 01 (unlocked)
+  movptr(boxReg, tmpReg); // The expected old value
+  orptr(tmpReg, markWord::unlocked_value);
+  lock();
+  cmpxchgptr(tmpReg, Address(objReg, oopDesc::mark_offset_in_bytes()));
+  jcc(Assembler::notZero, DONE_LABEL);
+  // Pop the lock object from the lock-stack.
+  decrementq(Address(r15_thread, Thread::lock_stack_current_offset()), oopSize);
+  xorq(rax, rax); // Set ZF = 1 (success)
+
   bind(DONE_LABEL);
 }
 
