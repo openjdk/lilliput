@@ -38,52 +38,15 @@
 // code is supposed to observe from-space objects.
 #ifdef _LP64
 markWord ShenandoahObjectUtils::stable_mark(oop obj) {
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-  for (;;) {
-    assert(heap->is_in(obj), "object not in heap: " PTR_FORMAT, p2i(obj));
-    markWord mark = obj->mark_acquire();
-
-    // The mark can be in one of the following states:
-    // *  Inflated     - just return mark from inflated monitor
-    // *  Stack-locked - coerce it to inflating, and then return displaced mark
-    // *  INFLATING    - busy wait for conversion to complete
-    // *  Neutral      - return mark
-    // *  Marked       - object is forwarded, try again on forwardee
-
-    // Most common case first.
-    if (mark.is_neutral()) {
-      return mark;
-    }
-
-    // If object is already forwarded, then resolve it, and try again.
-    if (mark.is_marked()) {
-      if (heap->is_full_gc_move_in_progress()) {
-        // In these cases, we want to return the header as-is: the Klass* would not be overloaded.
-        return mark;
-      }
-      obj = cast_to_oop(mark.decode_pointer());
-      continue;
-    }
-
-    // CASE: inflated
-    if (mark.has_monitor()) {
-      // It is safe to access the object monitor because all Java and GC worker threads
-      // participate in the monitor deflation protocol (i.e, they react to handshakes and STS requests).
-      ObjectMonitor* inf = mark.monitor();
-      markWord dmw = inf->header();
-      assert(dmw.is_neutral(), "invariant: header=" INTPTR_FORMAT ", original mark: " INTPTR_FORMAT, dmw.value(), mark.value());
-      return dmw;
-    }
-
-    // CASE: inflating
-    if (mark.is_being_inflated()) {
-      // Interference, try again.
-      continue;
-    }
-
-    // CASE: stack-locked
-    assert(!mark.has_locker(), "no stack-locking");
+  markWord header = obj->mark_acquire();
+  if (header.is_marked()) {
+    obj = cast_to_oop(header.decode_pointer());
+    header = obj->mark_acquire();
   }
+  if (header.has_displaced_mark_helper()) {
+    header = header.displaced_mark_helper();
+  }
+  return header;
 }
 #endif
 
