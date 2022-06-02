@@ -436,7 +436,7 @@ void C2_MacroAssembler::fast_lock(Register objReg, Register boxReg, Register tmp
     movptr(Address(scrReg, 0), objReg);
     increment(scrReg, oopSize);
     movptr(Address(r15_thread, Thread::lock_stack_current_offset()), scrReg);
-    xorq(rax, rax); // Set ZF = 1 (success)
+    xorptr(rax, rax); // Set ZF = 1 (success)
     jmp(DONE_LABEL);
   }
   bind(slow_path);
@@ -722,8 +722,8 @@ void C2_MacroAssembler::fast_unlock(Register objReg, Register boxReg, Register t
     cmpxchgptr(tmpReg, Address(objReg, oopDesc::mark_offset_in_bytes()));
     jcc(Assembler::notZero, DONE_LABEL);
     // Pop the lock object from the lock-stack.
-    decrementq(Address(r15_thread, Thread::lock_stack_current_offset()), oopSize);
-    xorq(rax, rax); // Set ZF = 1 (success)
+    decrement(Address(r15_thread, Thread::lock_stack_current_offset()), oopSize);
+    xorptr(rax, rax); // Set ZF = 1 (success)
   }
 
   bind(DONE_LABEL);

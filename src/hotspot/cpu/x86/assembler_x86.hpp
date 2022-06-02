@@ -1009,6 +1009,7 @@ private:
   void vaesdec(XMMRegister dst, XMMRegister nds, XMMRegister src, int vector_len);
   void vaesdeclast(XMMRegister dst, XMMRegister nds, XMMRegister src, int vector_len);
 
+  void andb(Register dst, int imm8);
   void andw(Register dst, Register src);
   void andb(Address dst, Register src);
 

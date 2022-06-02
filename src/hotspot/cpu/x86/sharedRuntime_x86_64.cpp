@@ -1887,7 +1887,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
 
   const Register swap_reg = rax;  // Must use rax for cmpxchg instruction
   const Register obj_reg  = rbx;  // Will contain the oop
-  const Register old_hdr  = r13;  // value of old header at unlock time
+  const Register tmp = r13;  // value of old header at unlock time
 
   Label slow_path_lock;
   Label lock_done;
@@ -1900,7 +1900,33 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     // Load the oop from the handle
     __ movptr(obj_reg, Address(oop_handle_reg, 0));
 
-    __ jmp(slow_path_lock);
+    if (!UseHeavyMonitors) {
+      // Check if pushing to lock-stack would overflow.
+      __ movptr(swap_reg, Address(r15_thread, Thread::lock_stack_current_offset()));
+      __ cmpptr(swap_reg, Address(r15_thread, Thread::lock_stack_limit_offset()));
+      __ jcc(Assembler::zero, slow_path_lock);
+
+      // Load object header
+      __ movptr(swap_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
+
+      // and mark it as unlocked
+      __ orptr(swap_reg, markWord::unlocked_value);
+      __ movptr(tmp, swap_reg);
+      // Clear lowest two bits: we have 01 (see above), now flip the lowest to get 00.
+      __ xorptr(tmp, markWord::unlocked_value);
+      __ lock();
+      __ cmpxchgptr(tmp, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
+      // if the object header was note the same, we go slow
+      __ jcc(Assembler::notZero, slow_path_lock);
+
+      __ movptr(tmp, Address(r15_thread, Thread::lock_stack_current_offset()));
+      __ movptr(Address(tmp, 0), obj_reg);
+      __ increment(tmp, oopSize);
+      __ movptr(Address(r15_thread, Thread::lock_stack_current_offset()), tmp);
+
+    } else {
+      __ jmp(slow_path_lock);
+    }
 
     // Slow path will re-enter here
 
@@ -2013,8 +2039,18 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
       save_native_result(masm, ret_type, stack_slots);
     }
 
-    __ jmp(slow_path_unlock);
-
+    if (!UseHeavyMonitors) {
+      __ movptr(swap_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
+      __ andb(swap_reg, ~0x3); // Clear lowest two bits. 8-bit AND preserves upper bits.
+      __ movptr(tmp, swap_reg);
+      __ orptr(tmp, markWord::unlocked_value);
+      __ lock();
+      __ cmpxchgptr(tmp, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
+      __ jcc(Assembler::notEqual, slow_path_unlock);
+      __ decrement(Address(r15_thread, Thread::lock_stack_current_offset()), oopSize);
+    } else {
+      __ jmp(slow_path_unlock);
+    }
     // slow path re-enters here
     __ bind(unlock_done);
     if (ret_type != T_FLOAT && ret_type != T_DOUBLE && ret_type != T_VOID) {

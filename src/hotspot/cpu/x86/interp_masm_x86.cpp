@@ -1287,16 +1287,13 @@ void InterpreterMacroAssembler::unlock_object(Register lock_reg) {
     // Load oop into obj_reg(%c_rarg3)
     movptr(obj_reg, Address(lock_reg, BasicObjectLock::obj_offset_in_bytes()));
 
-    // Test if monitor-locked. If so, take slow-path.
-    movptr(header_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
-    testptr(header_reg, markWord::monitor_value);
-    jcc(Assembler::notZero, slow_case);
-
     // Free entry
     movptr(Address(lock_reg, BasicObjectLock::obj_offset_in_bytes()), (int32_t) NULL_WORD);
 
     // Try to swing header from locked to unlock.
-    movptr(swap_reg, header_reg);
+    movptr(swap_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
+    andb(swap_reg, ~0x3); // Clear lowest two bits. 8-bit AND preserves upper bits.
+    movptr(header_reg, swap_reg);
     orptr(header_reg, markWord::unlocked_value);
     lock(); // must be immediately before cmpxchg!
     cmpxchgptr(header_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
@@ -1305,7 +1302,7 @@ void InterpreterMacroAssembler::unlock_object(Register lock_reg) {
     jcc(Assembler::notEqual, slow_case);
 
     // Pop object reference from lock-stack.
-    decrementq(Address(r15_thread, Thread::lock_stack_current_offset()), oopSize);
+    decrement(Address(r15_thread, Thread::lock_stack_current_offset()), oopSize);
     jmp(done);
 
     bind(slow_case);

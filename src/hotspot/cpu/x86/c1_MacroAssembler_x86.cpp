@@ -94,12 +94,10 @@ void C1_MacroAssembler::unlock_object(Register hdr, Register obj, Register disp_
   movptr(obj, Address(disp_hdr, BasicObjectLock::obj_offset_in_bytes()));
   verify_oop(obj);
 
-  movptr(hdr, Address(obj, hdr_offset));
-  testptr(hdr, markWord::monitor_value);
-  jcc(Assembler::notZero, slow_case);
-
   movptr(tmp, disp_hdr);
-  movptr(disp_hdr, hdr);
+  movptr(disp_hdr, Address(obj, hdr_offset));
+  andb(disp_hdr, ~0x3); // Clear lowest two bits. 8-bit AND preserves upper bits.
+  movptr(hdr, disp_hdr);
   orptr(hdr, markWord::unlocked_value);
 
   MacroAssembler::lock(); // must be immediately before cmpxchg!
@@ -108,7 +106,7 @@ void C1_MacroAssembler::unlock_object(Register hdr, Register obj, Register disp_
   // if the object header was not pointing to the displaced header,
   // we do unlocking via runtime call
   jcc(Assembler::notEqual, slow_case);
-  decrementq(Address(r15_thread, Thread::lock_stack_current_offset()), oopSize);
+  decrement(Address(r15_thread, Thread::lock_stack_current_offset()), oopSize);
 }
 
 
