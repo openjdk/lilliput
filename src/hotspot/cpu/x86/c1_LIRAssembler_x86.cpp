@@ -459,7 +459,11 @@ int LIR_Assembler::emit_unwind_handler() {
   if (method()->is_synchronized()) {
     monitor_address(0, FrameMap::rax_opr);
     stub = new MonitorExitStub(FrameMap::rax_opr, true, 0);
-    __ jmp(*stub->entry());
+    if (UseHeavyMonitors) {
+      __ jmp(*stub->entry());
+    } else {
+      __ unlock_object(rdi, rsi, rax, c_rarg0, *stub->entry());
+    }
     __ bind(*stub->continuation());
   }
 
@@ -3508,8 +3512,9 @@ void LIR_Assembler::emit_lock(LIR_OpLock* op) {
   Register hdr = op->hdr_opr()->as_register();
   Register lock = op->lock_opr()->as_register();
   Register tmp = op->scratch_opr()->as_register();
-
-  if (op->code() == lir_lock) {
+  if (UseHeavyMonitors) {
+    __ jmp(*op->stub()->entry());
+  } else if (op->code() == lir_lock) {
     // add debug info for NullPointerException only if one is possible
     int null_check_offset = __ lock_object(hdr, obj, lock, tmp, *op->stub()->entry());
     if (op->info() != NULL) {
