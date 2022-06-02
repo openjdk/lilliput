@@ -972,15 +972,17 @@ JvmtiEnvBase::get_object_monitor_usage(JavaThread* calling_thread, jobject objec
     address owner = NULL;
     {
       markWord mark = hobj()->mark();
-      assert(!mark.has_locker(), "no stack-locking");
+      if (mark.is_anon_locked()) {
+        owner = cast_from_oop<address>(hobj());
+      }
 
       if (mark.has_monitor()) {
         // this object has a heavyweight monitor
         mon = mark.monitor();
 
         // The owner field of a heavyweight monitor may be NULL for no
-        // owner, a JavaThread * or it may still be the address of the
-        // Lock word in a JavaThread's stack. A monitor can be inflated
+        // owner, a JavaThread* or ANONYMOUS marker, in which case another thread holds
+        // the stack-lock. A monitor can be inflated
         // by a non-owning JavaThread, but only the owning JavaThread
         // can change the owner field from the Lock word to the
         // JavaThread * and it may not have done that yet.

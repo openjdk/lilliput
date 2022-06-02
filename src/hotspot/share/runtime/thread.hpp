@@ -632,6 +632,7 @@ private:
 
 public:
   LockStack& lock_stack() { return _lock_stack; }
+  const LockStack& lock_stack() const { return _lock_stack; }
 
   static ByteSize lock_stack_current_offset()    { return byte_offset_of(Thread, _lock_stack) + LockStack::current_offset(); }
   static ByteSize lock_stack_limit_offset()    { return byte_offset_of(Thread, _lock_stack) + LockStack::limit_offset(); }

@@ -675,8 +675,6 @@ void ObjectSynchronizer::wait_uninterruptibly(Handle obj, JavaThread* current) {
 void ObjectSynchronizer::notify(Handle obj, TRAPS) {
   JavaThread* current = THREAD;
 
-  assert(!obj->mark().has_locker(), "no stack-locking");
-
   // The ObjectMonitor* can't be async deflated until ownership is
   // dropped by the calling thread.
   ObjectMonitor* monitor = inflate(current, obj(), inflate_cause_notify);
@@ -984,7 +982,9 @@ JavaThread* ObjectSynchronizer::get_lock_owner(ThreadsList * t_list, Handle h_ob
 
   markWord mark = read_stable_mark(obj);
 
-  assert(!mark.has_locker(), "no stack-locking");
+  if (mark.is_anon_locked()) {
+    owner = cast_from_oop<address>(obj);
+  }
 
   // Contended case, header points to ObjectMonitor (tagged pointer)
   if (mark.has_monitor()) {
