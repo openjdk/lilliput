@@ -1410,8 +1410,6 @@ bool ObjectMonitor::check_owner(TRAPS) {
   if (cur == current) {
     return true;
   }
-  assert(false, "current owner: " PTR_FORMAT ", current thread: " PTR_FORMAT, p2i(cur), p2i(current));
-  assert(!current->is_lock_owned((address)cur), "no stack-locking");
   THROW_MSG_(vmSymbols::java_lang_IllegalMonitorStateException(),
              "current thread is not owner", false);
 }

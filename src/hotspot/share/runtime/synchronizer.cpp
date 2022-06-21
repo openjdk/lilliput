@@ -557,7 +557,6 @@ void ObjectSynchronizer::exit(oop object, JavaThread* current) {
 //  5) lock lock2
 // NOTE: must use heavy weight monitor to handle complete_exit/reenter()
 intx ObjectSynchronizer::complete_exit(Handle obj, JavaThread* current) {
-  Unimplemented();
   // The ObjectMonitor* can't be async deflated until ownership is
   // dropped inside exit() and the ObjectMonitor* must be !is_busy().
   tty->print_cr("complete_exit: " PTR_FORMAT, p2i(obj()));
@@ -568,7 +567,6 @@ intx ObjectSynchronizer::complete_exit(Handle obj, JavaThread* current) {
 
 // NOTE: must use heavy weight monitor to handle complete_exit/reenter()
 void ObjectSynchronizer::reenter(Handle obj, intx recursions, JavaThread* current) {
-  Unimplemented();
   // An async deflation can race after the inflate() call and before
   // reenter() -> enter() can make the ObjectMonitor busy. reenter() ->
   // enter() returns false if we have lost the race to async deflation
@@ -993,6 +991,9 @@ JavaThread* ObjectSynchronizer::get_lock_owner(ThreadsList * t_list, Handle h_ob
     ObjectMonitor* monitor = mark.monitor();
     assert(monitor != NULL, "monitor should be non-null");
     owner = (address) monitor->owner();
+    if (owner == ANONYMOUS_OWNER) {
+      owner = cast_from_oop<address>(obj);
+    }
   }
 
   if (owner != NULL) {
