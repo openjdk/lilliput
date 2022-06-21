@@ -84,19 +84,14 @@ TEST_VM(markWord, printing) {
   FlagSetting fs(WizardMode, true);
 
   HandleMark hm(THREAD);
-  {
-    Handle h_obj(THREAD, obj);
-
-    // Thread tries to lock it.
-    {
-      ObjectLocker ol(h_obj, THREAD);
-      assert_test_pattern(h_obj, "monitor");
-    }
-    assert_test_pattern(h_obj, "monitor");
-  }
-
-  obj = vmClasses::Byte_klass()->allocate_instance(THREAD);
   Handle h_obj(THREAD, obj);
+
+  // Thread tries to lock it.
+  {
+    ObjectLocker ol(h_obj, THREAD);
+    assert_test_pattern(h_obj, "locked");
+  }
+  assert_test_pattern(h_obj, "is_neutral no_hash");
 
   // Hash the object then print it.
   intx hash = h_obj->identity_hash();
