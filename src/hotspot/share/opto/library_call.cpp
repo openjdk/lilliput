@@ -3906,14 +3906,31 @@ bool LibraryCallKit::inline_native_hashcode(bool is_virtual, bool is_static) {
   Node* no_ctrl = NULL;
   Node* header = make_load(no_ctrl, header_addr, TypeX_X, TypeX_X->basic_type(), MemNode::unordered);
 
-  // Test the header to see if it is unlocked.
-  Node *lock_mask      = _gvn.MakeConX(markWord::lock_mask_in_place);
-  Node *lmasked_header = _gvn.transform(new AndXNode(header, lock_mask));
-  Node *unlocked_val   = _gvn.MakeConX(markWord::unlocked_value);
-  Node *chk_unlocked   = _gvn.transform(new CmpXNode( lmasked_header, unlocked_val));
-  Node *test_unlocked  = _gvn.transform(new BoolNode( chk_unlocked, BoolTest::ne));
+  // Test the header to see if it has a monitor. If so, try to pull the hashcode from there.
+  Node* monitor_val   = _gvn.MakeConX(markWord::monitor_value);
+  Node* xored_header  = _gvn.transform(new XorXNode(header, monitor_val));
+  Node* lock_mask      = _gvn.MakeConX(markWord::lock_mask_in_place);
+  Node* lmasked_header = _gvn.transform(new AndXNode(xored_header, lock_mask));
+  Node* chk_monitor   = _gvn.transform(new CmpXNode( lmasked_header, _gvn.MakeConX(0)));
+  Node* test_monitor  = _gvn.transform(new BoolNode( chk_monitor, BoolTest::eq));
 
-  generate_slow_guard(test_unlocked, slow_region);
+  RegionNode *r = new RegionNode(3);
+  Node *phi = new PhiNode(r, TypeX_X);
+
+  IfNode* iff = create_and_xform_if(control(), test_monitor, PROB_FAIR, COUNT_UNKNOWN);
+  Node* if_true = _gvn.transform(new IfTrueNode(iff));
+  Node* monitor_ptr = _gvn.transform(new CastX2PNode(xored_header));
+  header_addr = basic_plus_adr(monitor_ptr, ObjectMonitor::header_offset_in_bytes());
+  Node* displaced_header = make_load(if_true, header_addr, TypeX_X, TypeX_X->basic_type(), MemNode::unordered);
+  r->init_req(1, if_true);
+  phi->init_req(1, displaced_header);
+  Node* if_false = _gvn.transform(new IfFalseNode(iff));
+  r->init_req(2, if_false);
+  phi->init_req(2, xored_header);
+
+  set_control(_gvn.transform(r));
+  record_for_igvn(r);
+  header = _gvn.transform(phi);
 
   // Get the hash value and check to see that it has been properly assigned.
   // We depend on hash_mask being at most 32 bits and avoid the use of
