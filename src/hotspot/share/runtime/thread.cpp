@@ -206,7 +206,7 @@ void JavaThread::smr_delete() {
 DEBUG_ONLY(Thread* Thread::_starting_thread = NULL;)
 
 Thread::Thread():
-  _lock_stack() {
+  _lock_stack(this) {
 
   DEBUG_ONLY(_run_state = PRE_CALL_RUN;)
 
@@ -548,7 +548,9 @@ void Thread::oops_do_no_frames(OopClosure* f, CodeBlobClosure* cf) {
   // Do oop for ThreadShadow
   f->do_oop((oop*)&_pending_exception);
   handle_area()->oops_do(f);
-  lock_stack().oops_do(f);
+  if (!UseHeavyMonitors) {
+    lock_stack().oops_do(f);
+  }
 }
 
 // If the caller is a NamedThread, then remember, in the current scope,
@@ -1552,11 +1554,10 @@ JavaThread* JavaThread::active() {
 
 bool JavaThread::is_lock_owned(address adr) const {
   if (Thread::is_lock_owned(adr)) return true;
-
-  if (lock_stack().contains(cast_to_oop(adr))) {
+  assert(adr != ANONYMOUS_OWNER, "must convert to lock object");
+  if (!UseHeavyMonitors && lock_stack().contains(cast_to_oop(adr))) {
     return true;
   }
-  // TODO: Is this still needed, in absence of stack-locking?
   for (MonitorChunk* chunk = monitor_chunks(); chunk != NULL; chunk = chunk->next()) {
     if (chunk->contains(adr)) return true;
   }

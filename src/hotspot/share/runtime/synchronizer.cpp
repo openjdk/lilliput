@@ -436,6 +436,14 @@ void ObjectSynchronizer::handle_sync_on_value_based_class(Handle obj, JavaThread
   }
 }
 
+static bool useHeavyMonitors() {
+#if defined(X86) || defined(AARCH64) || defined(PPC64) || defined(RISCV64)
+  return UseHeavyMonitors;
+#else
+  return false;
+#endif
+}
+
 // -----------------------------------------------------------------------------
 // Monitor Enter/Exit
 // The interpreter and compiler assembly code tries to lock using the fast path
@@ -447,63 +455,71 @@ void ObjectSynchronizer::enter(Handle obj, JavaThread* current) {
     handle_sync_on_value_based_class(obj, current);
   }
 
-  LockStack& lock_stack = current->lock_stack();
+  if (!useHeavyMonitors()) {
+    LockStack& lock_stack = current->lock_stack();
 
-  markWord header = obj()->mark_acquire();
-  while (true) {
-    if (header.is_neutral()) {
-      // Try to swing into 'anon-locked' state without inflating.
-      markWord locked_header = header.set_anon_locked();
-      markWord witness = obj()->cas_set_mark(locked_header, header);
-      if (witness == header) {
-        log_trace(monitorinflation)("anon locked object: " PTR_FORMAT " ( thread: " PTR_FORMAT " )", p2i(obj()), p2i(current));
-        // Successfully anonymously locked, return.
-        lock_stack.push(obj());
-        return;
-      }
-      // Otherwise retry.
-      header = witness;
-    } else if (header.is_anon_locked()) {
-      bool own = lock_stack.contains(obj());
-      ObjectMonitor* monitor = new ObjectMonitor(obj());
-      // Pre-lock monitor to anon or current thread.
-      if (own) {
-        monitor->set_owner_from(NULL, current);
-      } else {
-        monitor->set_owner_anonymous();
-      }
-      monitor->set_header(header.set_unlocked());
-      markWord witness = obj()->cas_set_mark(markWord::encode(monitor), header);
-      if (witness == header) {
-        _in_use_list.add(monitor);
-
-        // Successfully inflated. Get in line for monitor enter
-        if (monitor->enter(current)) {
-          if (own) {
-            lock_stack.remove(obj());
-          }
+    markWord header = obj()->mark_acquire();
+    while (true) {
+      if (header.is_neutral()) {
+        assert(!lock_stack.contains(obj()), "thread must not already hold the lock");
+        // Try to swing into 'anon-locked' state without inflating.
+        markWord locked_header = header.set_anon_locked();
+        markWord witness = obj()->cas_set_mark(locked_header, header);
+        if (witness == header) {
+          log_trace(monitorinflation)("anon locked object: " PTR_FORMAT " ( thread: " PTR_FORMAT " )", p2i(obj()),
+                                      p2i(current));
+          // Successfully anonymously locked, return.
+          log_trace(monitorinflation)("push for enter: " PTR_FORMAT, p2i(obj()));
+          lock_stack.push(obj());
           return;
         }
-        // Else we have been beaten by concurrent monitor deflation and need to try again.
-        header = obj()->mark_acquire();
-        delete monitor;
-      } else {
-        // If we failed the installation of the monitor, we have been beaten by another thread and need to try again.
-        delete monitor;
+        // Otherwise retry.
         header = witness;
+      } else if (header.is_anon_locked()) {
+        bool own = lock_stack.contains(obj());
+        ObjectMonitor* monitor = new ObjectMonitor(obj());
+        // Pre-lock monitor to anon or current thread.
+        if (own) {
+          monitor->set_owner_from(NULL, current);
+        } else {
+          monitor->set_owner_anonymous();
+        }
+        monitor->set_header(header.set_unlocked());
+        markWord witness = obj()->cas_set_mark(markWord::encode(monitor), header);
+        if (witness == header) {
+          _in_use_list.add(monitor);
+
+          // Successfully inflated. Get in line for monitor enter
+          if (monitor->enter(current)) {
+            if (own) {
+              log_trace(monitorinflation)("remove for enter: " PTR_FORMAT, p2i(obj()));
+              lock_stack.remove(obj());
+            }
+            return;
+          }
+          // Else we have been beaten by concurrent monitor deflation and need to try again.
+          header = obj()->mark_acquire();
+          delete monitor;
+        } else {
+          // If we failed the installation of the monitor, we have been beaten by another thread and need to try again.
+          delete monitor;
+          header = witness;
+        }
+      } else {
+        break;
       }
-    } else {
-      // If we have a monitor, try to enter it.
-      assert(header.has_monitor(), "only possible state here");
-      ObjectMonitor* monitor = header.monitor();
-      if (monitor->is_owner_anonymous() && current->lock_stack().contains(obj())) {
-        monitor->set_owner_from_anonymous(current);
-      }
-      if (monitor->enter(current)) {
-        return;
-      }
-      // We lost to deflation, try again.
-      header = obj()->mark_acquire();
+    }
+  } else if (VerifyHeavyMonitors) {
+    guarantee(!obj->mark().has_locker(), "must not be stack-locked");
+  }
+
+  // An async deflation can race after the inflate() call and before
+  // enter() can make the ObjectMonitor busy. enter() returns false if
+  // we have lost the race to async deflation and we simply try again.
+  while (true) {
+    ObjectMonitor* monitor = inflate(current, obj(), inflate_cause_monitor_enter);
+    if (monitor->enter(current)) {
+      return;
     }
   }
 }
@@ -512,7 +528,7 @@ void ObjectSynchronizer::exit(oop object, JavaThread* current) {
   log_trace(monitorinflation)("exiting lock: " PTR_FORMAT, p2i(object));
 
   markWord header = object->mark_acquire();
-  if (header.is_anon_locked()) {
+  if (!useHeavyMonitors() && header.is_anon_locked()) {
     log_trace(monitorinflation)("anon unlocking object: " PTR_FORMAT, p2i(object));
     markWord unlocked_header = header.set_unlocked();
     markWord witness = object->cas_set_mark(unlocked_header, header);
@@ -527,21 +543,24 @@ void ObjectSynchronizer::exit(oop object, JavaThread* current) {
     }
     LockStack& lock_stack = current->lock_stack();
     oop top_lock = lock_stack.pop();
+    log_trace(monitorinflation)("pop for exit 1: " PTR_FORMAT, p2i(top_lock));
     assert(top_lock == object, "unbalanced monitorenter/exit: top_lock: " PTR_FORMAT ", object: " PTR_FORMAT, p2i(top_lock),
            p2i(object));
-  } else {
-    assert(header.has_monitor(), "must have monitor");
-    log_trace(monitorinflation)("monitor unlocking object: " PTR_FORMAT, p2i(object));
-    ObjectMonitor* monitor = header.monitor();
-    if (monitor->is_owner_anonymous()) {
-      // It must be us. Pop lock object from lock stack.
-      LockStack& lock_stack = current->lock_stack();
-      oop popped = lock_stack.pop();
-      assert(popped == object, "must be owned by this thread");
-      monitor->set_owner_from_anonymous(current);
-    }
-    monitor->exit(current);
+    return;
   }
+
+  assert(header.has_monitor(), "must have monitor");
+  log_trace(monitorinflation)("monitor unlocking object: " PTR_FORMAT, p2i(object));
+  ObjectMonitor* monitor = header.monitor();
+  if (!useHeavyMonitors() && monitor->is_owner_anonymous()) {
+    // It must be us. Pop lock object from lock stack.
+    LockStack& lock_stack = current->lock_stack();
+    oop popped = lock_stack.pop();
+    log_trace(monitorinflation)("pop for exit 2: " PTR_FORMAT, p2i(popped));
+    assert(popped == object, "must be owned by this thread");
+    monitor->set_owner_from_anonymous(current);
+  }
+  monitor->exit(current);
 }
 
 // -----------------------------------------------------------------------------
@@ -559,7 +578,6 @@ void ObjectSynchronizer::exit(oop object, JavaThread* current) {
 intx ObjectSynchronizer::complete_exit(Handle obj, JavaThread* current) {
   // The ObjectMonitor* can't be async deflated until ownership is
   // dropped inside exit() and the ObjectMonitor* must be !is_busy().
-  tty->print_cr("complete_exit: " PTR_FORMAT, p2i(obj()));
   ObjectMonitor* monitor = inflate(current, obj(), inflate_cause_vm_internal);
   intptr_t ret_code = monitor->complete_exit(current);
   return ret_code;
@@ -966,7 +984,11 @@ bool ObjectSynchronizer::current_thread_holds_lock(JavaThread* current,
     // The first stage of async deflation does not affect any field
     // used by this comparison so the ObjectMonitor* is usable here.
     ObjectMonitor* monitor = mark.monitor();
-    return monitor->is_entered(current) != 0;
+    if (monitor->is_owner_anonymous()) {
+      return current->lock_stack().contains(h_obj());
+    } else {
+      return monitor->is_entered(current) != 0;
+    }
   }
   // Unlocked case, header in place
   assert(mark.is_neutral(), "sanity check");
@@ -990,9 +1012,10 @@ JavaThread* ObjectSynchronizer::get_lock_owner(ThreadsList * t_list, Handle h_ob
     // used by this comparison so the ObjectMonitor* is usable here.
     ObjectMonitor* monitor = mark.monitor();
     assert(monitor != NULL, "monitor should be non-null");
-    owner = (address) monitor->owner();
-    if (owner == ANONYMOUS_OWNER) {
+    if (monitor->is_owner_anonymous()) {
       owner = cast_from_oop<address>(obj);
+    } else {
+      owner = (address) monitor->owner();
     }
   }
 
@@ -1209,6 +1232,7 @@ ObjectMonitor* ObjectSynchronizer::inflate(Thread* current, oop object,
       if (inf->is_owner_anonymous()) {
         if (current->lock_stack().contains(object)) {
           inf->set_owner_from_anonymous(current);
+          log_trace(monitorinflation)("remove for inflate 1: " PTR_FORMAT, p2i(object));
           current->lock_stack().remove(object);
         }
       }
@@ -1241,6 +1265,7 @@ ObjectMonitor* ObjectSynchronizer::inflate(Thread* current, oop object,
       if (witness == mark) {
         // Success! Return inflated monitor.
         if (own) {
+          log_trace(monitorinflation)("remove for inflate 2: " PTR_FORMAT, p2i(object));
           lock_stack.remove(object);
         }
         // Once the ObjectMonitor is configured and object is associated

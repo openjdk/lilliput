@@ -261,6 +261,7 @@ void javaVFrame::print_lock_info_on(outputStream* st, int frame_count) {
               ( // we have marked ourself as pending on this monitor
                 mark.monitor() == thread()->current_pending_monitor() ||
                 // we are not the owner of this monitor
+                // TODO: We might need to check ANONYMOUS owner, and act accordingly.
                 !mark.monitor()->is_entered(thread())
               )) {
             lock_state = "waiting to lock";

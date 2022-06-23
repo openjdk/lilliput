@@ -334,7 +334,7 @@ bool ObjectMonitor::enter(JavaThread* current) {
     return true;
   }
 
-  assert(!current->is_lock_owned((address)cur), "no stack-locking");
+  assert(cur == ANONYMOUS_OWNER || !current->is_lock_owned((address)cur), "no stack-locking");
 
   // We've encountered genuine contention.
   assert(current->_Stalled == 0, "invariant");
@@ -1162,7 +1162,7 @@ void ObjectMonitor::exit(JavaThread* current, bool not_suspended) {
                   " is exiting an ObjectMonitor it does not own.", p2i(current));
     lsh.print_cr("The imbalance is possibly caused by JNI locking.");
     print_debug_style_on(&lsh);
-    assert(false, "Non-balanced monitor enter/exit!");
+    assert(false, "Non-balanced monitor enter/exit! " PTR_FORMAT, p2i(object()));
 #endif
     return;
   }

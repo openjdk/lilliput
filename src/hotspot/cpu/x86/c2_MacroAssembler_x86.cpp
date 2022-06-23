@@ -641,6 +641,10 @@ void C2_MacroAssembler::fast_unlock(Register objReg, Register boxReg, Register t
   // It's inflated
   Label LNotRecursive, LSuccess, LGoSlowPath;
 
+  // If the owner is ANONYMOUS, we need to fix it - in the slow-path.
+  cmpptr(Address(tmpReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner)), (int32_t)(intptr_t)ANONYMOUS_OWNER);
+  jccb(Assembler::equal, LGoSlowPath);
+
   cmpptr(Address(tmpReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(recursions)), 0);
   jccb(Assembler::equal, LNotRecursive);
 
@@ -720,7 +724,7 @@ void C2_MacroAssembler::fast_unlock(Register objReg, Register boxReg, Register t
     orptr(tmpReg, markWord::unlocked_value);
     lock();
     cmpxchgptr(tmpReg, Address(objReg, oopDesc::mark_offset_in_bytes()));
-    jcc(Assembler::notZero, DONE_LABEL);
+    jcc(Assembler::notZero, DONE_LABEL); // ZF = 0 also indicates failure at DONE_LABEL
     // Pop the lock object from the lock-stack.
     decrement(Address(r15_thread, Thread::lock_stack_current_offset()), oopSize);
     xorptr(rax, rax); // Set ZF = 1 (success)

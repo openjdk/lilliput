@@ -144,7 +144,7 @@ class ObjectMonitor : public CHeapObj<mtObjectMonitor> {
                         sizeof(WeakHandle));
   // Used by async deflation as a marker in the _owner field:
   #define DEFLATER_MARKER reinterpret_cast<void*>(-1)
-  #define ANONYMOUS_OWNER reinterpret_cast<void*>(-2)
+  #define ANONYMOUS_OWNER reinterpret_cast<void*>(1)
 
   // TODO: Change type to Thread*
   void* volatile _owner;            // pointer to owning thread
