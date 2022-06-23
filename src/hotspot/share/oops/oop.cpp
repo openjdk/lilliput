@@ -170,8 +170,8 @@ JRT_LEAF(narrowKlass, oopDesc::load_nklass_runtime(oopDesc* o))
   oop obj = oop(o);
   assert(oopDesc::is_oop(obj), "need a valid oop here: " PTR_FORMAT, p2i(o));
   markWord header = obj->mark();
-  if (!header.is_neutral()) {
-    header = ObjectSynchronizer::stable_mark(obj);
+  if (header.has_displaced_mark_helper()) {
+    header = header.displaced_mark_helper();
   }
   assert(!header.has_monitor(), "expect stable header here");
   narrowKlass nklass = header.narrow_klass();

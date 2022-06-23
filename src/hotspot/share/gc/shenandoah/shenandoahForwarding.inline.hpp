@@ -77,7 +77,7 @@ inline bool ShenandoahForwarding::is_forwarded(oop obj) {
 
 inline oop ShenandoahForwarding::try_update_forwardee(oop obj, oop update) {
 
-  markWord old_mark = ObjectSynchronizer::read_stable_mark(obj);
+  markWord old_mark = obj->mark_acquire();
   assert(!old_mark.is_being_inflated(), "must not see INFLATING marker here");
 
   if (old_mark.is_marked()) {

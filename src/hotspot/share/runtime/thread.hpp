@@ -614,8 +614,7 @@ protected:
   JFR_ONLY(DEFINE_THREAD_LOCAL_OFFSET_JFR;)
 
  public:
-  ParkEvent * volatile _ParkEvent;            // for Object monitors, JVMTI raw monitors,
-                                              // and ObjectSynchronizer::read_stable_mark
+  ParkEvent * volatile _ParkEvent;            // for Object monitors and JVMTI raw monitors
 
   // Termination indicator used by the signal handler.
   // _ParkEvent is just a convenient field we can NULL out after setting the JavaThread termination state
