@@ -5233,7 +5233,7 @@ instruct loadKlass(rRegP dst, memory mem)
 instruct loadNKlass(rRegN dst, indOffset8 mem, rFlagsReg cr)
 %{
   match(Set dst (LoadNKlass mem));
-  effect(TEMP_DEF dst, KILL cr);
+  effect(KILL cr);
   ins_cost(125); // XXX
   format %{ "movl    $dst, $mem\t# compressed klass ptr" %}
   ins_encode %{
