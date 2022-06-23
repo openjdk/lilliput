@@ -53,13 +53,8 @@
 //    [header          | 01]  unlocked           regular object header
 //    [ptr             | 10]  monitor            inflated lock (header is wapped out)
 //    [ptr             | 11]  marked             used to mark an object
-//    [0 ............ 0| 00]  inflating          inflation in progress
 //
 //    We assume that stack/thread pointers have the lowest two bits cleared.
-//
-//  - INFLATING() is a distinguished markword value of all zeros that is
-//    used when inflating an existing stack-lock into an ObjectMonitor.
-//    See below for is_being_inflated() and INFLATING().
 
 class ObjectMonitor;
 class JavaThread;
@@ -156,18 +151,6 @@ class markWord {
   bool is_neutral()  const {
     return (mask_bits(value(), lock_mask_in_place) == unlocked_value);
   }
-
-  // Special temporary state of the markWord while being inflated.
-  // Code that looks at mark outside a lock need to take this into account.
-  bool is_being_inflated() const { return (value() == 0); }
-
-  // Distinguished markword value - used when inflating over
-  // an existing stack-lock.  0 indicates the markword is "BUSY".
-  // Lockword mutators that use a LD...CAS idiom should always
-  // check for and avoid overwriting a 0 value installed by some
-  // other thread.  (They should spin or block instead.  The 0 value
-  // is transient and *should* be short-lived).
-  static markWord INFLATING() { return zero(); }    // inflate-in-progress
 
   // Should this header be preserved during GC?
   bool must_be_preserved(const oopDesc* obj) const {

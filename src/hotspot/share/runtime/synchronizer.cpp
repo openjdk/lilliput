@@ -1148,8 +1148,6 @@ ObjectMonitor* ObjectSynchronizer::inflate(Thread* current, oop object,
       return inf;
     }
 
-    assert(mark != markWord::INFLATING(), "must not see obsolete INFLATING state");
-
     // CASE: anon-locked
     // Could be anon-locked either by this thread or by some other thread.
     LogStreamHandle(Trace, monitorinflation) lsh;
