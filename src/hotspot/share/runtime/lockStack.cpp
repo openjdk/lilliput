@@ -30,8 +30,7 @@
 #include "utilities/copy.hpp"
 #include "utilities/ostream.hpp"
 
-LockStack::LockStack(Thread* thread) :
-        _thread(thread),
+LockStack::LockStack() :
         _base(UseHeavyMonitors ? NULL : NEW_C_HEAP_ARRAY(oop, INITIAL_CAPACITY, mtSynchronizer)),
         _limit(_base + INITIAL_CAPACITY),
         _current(_base) {
@@ -46,7 +45,6 @@ LockStack::~LockStack() {
 #ifndef PRODUCT
 void LockStack::validate(const char* msg) const {
   assert(!UseHeavyMonitors, "never use lock-stack when fast-locking is disabled");
-  //assert(_thread == Thread::current() || SafepointSynchronize::is_at_safepoint(), "must be used only thread-local: %s", msg);
   for (oop* loc1 = _base; loc1 < _current - 1; loc1++) {
     for (oop* loc2 = loc1 + 1; loc2 < _current; loc2++) {
       assert(*loc1 != *loc2, "entries must be unique: %s", msg);

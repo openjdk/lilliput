@@ -38,15 +38,13 @@ private:
   oop* _limit;
   oop* _current;
 
-  Thread* const _thread;
-
   void validate(const char* msg) const PRODUCT_RETURN;
 public:
   static ByteSize current_offset()    { return byte_offset_of(LockStack, _current); }
   static ByteSize base_offset()       { return byte_offset_of(LockStack, _base); }
   static ByteSize limit_offset()      { return byte_offset_of(LockStack, _limit); }
 
-  LockStack(Thread* thread);
+  LockStack();
   ~LockStack();
 
   void push(oop o);

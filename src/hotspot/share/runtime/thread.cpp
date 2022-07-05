@@ -206,7 +206,7 @@ void JavaThread::smr_delete() {
 DEBUG_ONLY(Thread* Thread::_starting_thread = NULL;)
 
 Thread::Thread():
-  _lock_stack(this) {
+  _lock_stack() {
 
   DEBUG_ONLY(_run_state = PRE_CALL_RUN;)
 
