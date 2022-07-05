@@ -21,10 +21,10 @@
  * questions.
  *
  */
- 
+
 #ifndef SHARE_RUNTIME_LOCKSTACK_HPP
 #define SHARE_RUNTIME_LOCKSTACK_HPP
- 
+
 #include "oops/oopsHierarchy.hpp"
 #include "utilities/globalDefinitions.hpp"
 #include "utilities/sizes.hpp"
