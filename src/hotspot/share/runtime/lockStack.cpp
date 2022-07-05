@@ -22,6 +22,7 @@
  *
  */
 
+#include "precompiled.hpp"
 #include "memory/allocation.hpp"
 #include "memory/iterator.hpp"
 #include "runtime/lockStack.hpp"
