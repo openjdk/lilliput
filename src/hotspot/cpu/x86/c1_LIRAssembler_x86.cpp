@@ -462,7 +462,7 @@ int LIR_Assembler::emit_unwind_handler() {
     if (UseHeavyMonitors) {
       __ jmp(*stub->entry());
     } else {
-      __ unlock_object(rdi, rsi, rax, c_rarg0, *stub->entry());
+      __ unlock_object(rdi, rsi, rax, *stub->entry());
     }
     __ bind(*stub->continuation());
   }
@@ -3522,7 +3522,7 @@ void LIR_Assembler::emit_lock(LIR_OpLock* op) {
     }
     // done
   } else if (op->code() == lir_unlock) {
-    __ unlock_object(hdr, obj, lock, tmp, *op->stub()->entry());
+    __ unlock_object(hdr, obj, lock, *op->stub()->entry());
   } else {
     Unimplemented();
   }

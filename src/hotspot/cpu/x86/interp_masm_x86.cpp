@@ -1222,8 +1222,14 @@ void InterpreterMacroAssembler::lock_object(Register lock_reg) {
       jcc(Assembler::notZero, slow_case);
     }
 
-    movptr(tmp_reg, Address(r15_thread, Thread::lock_stack_current_offset()));
-    cmpptr(tmp_reg, Address(r15_thread, Thread::lock_stack_limit_offset()));
+#ifdef _LP64
+    const Register thread = r15_thread;
+#else
+    const Register thread = rax; // shared with swap_reg
+    get_thread(thread);
+#endif
+    movptr(tmp_reg, Address(thread, Thread::lock_stack_current_offset()));
+    cmpptr(tmp_reg, Address(thread, Thread::lock_stack_limit_offset()));
     jcc(Assembler::zero, slow_case);
 
     // Load object header, prepare for CAS from unlocked to locked.
@@ -1239,10 +1245,13 @@ void InterpreterMacroAssembler::lock_object(Register lock_reg) {
 
     // Success: push object reference to lock-stack
     // TODO: We could try to avoid reloading the current pointer.
-    movptr(swap_reg, Address(r15_thread, Thread::lock_stack_current_offset()));
-    movptr(Address(swap_reg, 0), obj_reg);
-    increment(swap_reg, oopSize);
-    movptr(Address(r15_thread, Thread::lock_stack_current_offset()), swap_reg);
+#ifndef _LP64
+    get_thread(thread);
+#endif
+    movptr(tmp_reg, Address(thread, Thread::lock_stack_current_offset()));
+    movptr(Address(tmp_reg, 0), obj_reg);
+    addptr(tmp_reg, oopSize);
+    movptr(Address(thread, Thread::lock_stack_current_offset()), tmp_reg);
     jmp(done);
 
     bind(slow_case);
@@ -1302,7 +1311,13 @@ void InterpreterMacroAssembler::unlock_object(Register lock_reg) {
     jcc(Assembler::notEqual, slow_case);
 
     // Pop object reference from lock-stack.
-    decrement(Address(r15_thread, Thread::lock_stack_current_offset()), oopSize);
+#ifdef _LP64
+    const Register thread = r15_thread;
+#else
+    const Register thread = rax; // shared with swap_reg
+    get_thread(thread);
+#endif
+    subptr(Address(thread, Thread::lock_stack_current_offset()), oopSize);
     jmp(done);
 
     bind(slow_case);

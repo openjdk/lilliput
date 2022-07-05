@@ -41,7 +41,7 @@ int C1_MacroAssembler::lock_object(Register hdr, Register obj, Register disp_hdr
   const Register rklass_decode_tmp = LP64_ONLY(rscratch1) NOT_LP64(noreg);
   const int hdr_offset = oopDesc::mark_offset_in_bytes();
   assert(hdr == rax, "hdr must be rax, for the cmpxchg instruction");
-  assert(hdr != obj && hdr != disp_hdr && obj != disp_hdr, "registers must be different");
+  assert_different_registers(hdr, obj, disp_hdr, tmp);
   int null_check_offset = -1;
 
   verify_oop(obj);
@@ -59,8 +59,14 @@ int C1_MacroAssembler::lock_object(Register hdr, Register obj, Register disp_hdr
   }
 
   // Check if pushing to lock-stack would overflow.
-  movptr(tmp, Address(r15_thread, Thread::lock_stack_current_offset()));
-  cmpptr(tmp, Address(r15_thread, Thread::lock_stack_limit_offset()));
+#ifdef _LP64
+  const Register thread = r15_thread;
+#else
+  const Register thread = rax; // shared with hdr, be careful
+  get_thread(thread);
+#endif
+  movptr(tmp, Address(thread, Thread::lock_stack_current_offset()));
+  cmpptr(tmp, Address(thread, Thread::lock_stack_limit_offset()));
   jcc(Assembler::zero, slow_case);
 
   // Load object header
@@ -73,19 +79,22 @@ int C1_MacroAssembler::lock_object(Register hdr, Register obj, Register disp_hdr
   xorptr(tmp, markWord::unlocked_value);
   MacroAssembler::lock();
   cmpxchgptr(tmp, Address(obj, oopDesc::mark_offset_in_bytes()));
-  // if the object header was note the same, we go slow
+  // if the object header was not the same, we go slow
   jcc(Assembler::notZero, slow_case);
 
-  movptr(tmp, Address(r15_thread, Thread::lock_stack_current_offset()));
+#ifndef _LP64
+  get_thread(thread);
+#endif
+  movptr(tmp, Address(thread, Thread::lock_stack_current_offset()));
   movptr(Address(tmp, 0), obj);
-  increment(tmp, oopSize);
-  movptr(Address(r15_thread, Thread::lock_stack_current_offset()), tmp);
+  addptr(tmp, oopSize);
+  movptr(Address(thread, Thread::lock_stack_current_offset()), tmp);
 
   return null_check_offset;
 }
 
 
-void C1_MacroAssembler::unlock_object(Register hdr, Register obj, Register disp_hdr, Register tmp, Label& slow_case) {
+void C1_MacroAssembler::unlock_object(Register hdr, Register obj, Register disp_hdr, Label& slow_case) {
   const int hdr_offset = oopDesc::mark_offset_in_bytes();
   assert(disp_hdr == rax, "disp_hdr must be rax, for the cmpxchg instruction");
   assert(hdr != obj && hdr != disp_hdr && obj != disp_hdr, "registers must be different");
@@ -94,7 +103,6 @@ void C1_MacroAssembler::unlock_object(Register hdr, Register obj, Register disp_
   movptr(obj, Address(disp_hdr, BasicObjectLock::obj_offset_in_bytes()));
   verify_oop(obj);
 
-  movptr(tmp, disp_hdr);
   movptr(disp_hdr, Address(obj, hdr_offset));
   andb(disp_hdr, ~0x3); // Clear lowest two bits. 8-bit AND preserves upper bits.
   movptr(hdr, disp_hdr);
@@ -102,11 +110,17 @@ void C1_MacroAssembler::unlock_object(Register hdr, Register obj, Register disp_
 
   MacroAssembler::lock(); // must be immediately before cmpxchg!
   cmpxchgptr(hdr, Address(obj, hdr_offset));
-  movptr(disp_hdr,tmp);
+
   // if the object header was not pointing to the displaced header,
   // we do unlocking via runtime call
   jcc(Assembler::notEqual, slow_case);
-  decrement(Address(r15_thread, Thread::lock_stack_current_offset()), oopSize);
+#ifdef _LP64
+  const Register thread = r15_thread;
+#else
+  const Register thread = rax;
+  get_thread(thread);
+#endif
+  subptr(Address(thread, Thread::lock_stack_current_offset()), oopSize);
 }
 
 

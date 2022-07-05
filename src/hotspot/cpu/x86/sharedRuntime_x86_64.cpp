@@ -1617,7 +1617,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
   //
   //
 
-
   // Now compute actual number of stack words we need rounding to make
   // stack properly aligned.
   stack_slots = align_up(stack_slots, StackAlignmentInSlots);

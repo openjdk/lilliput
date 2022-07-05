@@ -372,7 +372,7 @@ void C2_MacroAssembler::rtm_inflated_locking(Register objReg, Register boxReg, R
 // rax,: tmp -- KILLED
 // scr: tmp -- KILLED
 void C2_MacroAssembler::fast_lock(Register objReg, Register boxReg, Register tmpReg,
-                                 Register scrReg, Register cx1Reg, Register cx2Reg,
+                                 Register scrReg, Register cx1Reg, Register cx2Reg, Register thread,
                                  RTMLockingCounters* rtm_counters,
                                  RTMLockingCounters* stack_rtm_counters,
                                  Metadata* method_data,
@@ -418,8 +418,8 @@ void C2_MacroAssembler::fast_lock(Register objReg, Register boxReg, Register tmp
   if (!UseHeavyMonitors) {
     // Attempt fast-locking.
     // First we need to check if the lock-stack has room for pushing the object reference.
-    movptr(scrReg, Address(r15_thread, Thread::lock_stack_current_offset()));
-    cmpptr(scrReg, Address(r15_thread, Thread::lock_stack_limit_offset()));
+    movptr(scrReg, Address(thread, Thread::lock_stack_current_offset()));
+    cmpptr(scrReg, Address(thread, Thread::lock_stack_limit_offset()));
     jcc(Assembler::zero, slow_path);
 
     // Now we attempt to take the fast-lock.
@@ -435,7 +435,7 @@ void C2_MacroAssembler::fast_lock(Register objReg, Register boxReg, Register tmp
     // Success: push object to lock-stack.
     movptr(Address(scrReg, 0), objReg);
     increment(scrReg, oopSize);
-    movptr(Address(r15_thread, Thread::lock_stack_current_offset()), scrReg);
+    movptr(Address(thread, Thread::lock_stack_current_offset()), scrReg);
     xorptr(rax, rax); // Set ZF = 1 (success)
     jmp(DONE_LABEL);
   }
@@ -481,15 +481,7 @@ void C2_MacroAssembler::fast_lock(Register objReg, Register boxReg, Register tmp
   // (rsp or the address of the box) into  m->owner is harmless.
   // Invariant: tmpReg == 0.  tmpReg is EAX which is the implicit cmpxchg comparand.
   lock();
-  cmpxchgptr(scrReg, Address(boxReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner)));
-  //movptr(Address(scrReg, 0), 3);          // box->_displaced_header = 3
-  // If we weren't able to swing _owner from NULL to the BasicLock
-  // then take the slow path.
-  jccb  (Assembler::notZero, DONE_LABEL);
-  // update _owner from BasicLock to thread
-  get_thread (scrReg);                    // beware: clobbers ICCs
-  movptr(Address(boxReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner)), scrReg);
-  xorptr(boxReg, boxReg);                 // set icc.ZFlag = 1 to indicate success
+  cmpxchgptr(thread, Address(boxReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner)));
 
   // If the CAS fails we can either retry or pass control to the slow path.
   // We use the latter tactic.
@@ -503,11 +495,11 @@ void C2_MacroAssembler::fast_lock(Register objReg, Register boxReg, Register tmp
   movq(scrReg, tmpReg);
   xorq(tmpReg, tmpReg);
   lock();
-  cmpxchgptr(r15_thread, Address(scrReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner)));
+  cmpxchgptr(thread, Address(scrReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner)));
   // Propagate ICC.ZF from CAS above into DONE_LABEL.
   jcc(Assembler::equal, DONE_LABEL);           // CAS above succeeded; propagate ZF = 1 (success)
 
-  cmpptr(r15_thread, rax);                     // Check if we are already the owner (recursive lock)
+  cmpptr(thread, rax);                     // Check if we are already the owner (recursive lock)
   jcc(Assembler::notEqual, DONE_LABEL);        // If not recursive, ZF = 0 at this point (fail)
   incq(Address(scrReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(recursions)));
   xorq(rax, rax); // Set ZF = 1 (success) for recursive lock, denoting locking success
@@ -570,9 +562,16 @@ void C2_MacroAssembler::fast_unlock(Register objReg, Register boxReg, Register t
   if (!UseHeavyMonitors) {
     testptr(tmpReg, markWord::monitor_value);
     jccb(Assembler::zero, Stacked);
+
+    // If the owner is ANONYMOUS, we need to fix it - in the slow-path.
+    Label L;
+    cmpptr(Address(tmpReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner)), (int32_t) (intptr_t) ANONYMOUS_OWNER);
+    jccb(Assembler::notEqual, L);
+    testptr(objReg, objReg); // Clear ZF to indicate failure at DONE_LABEL.
+    jmp(DONE_LABEL);
+    bind(L);
   }
 
-  // It's inflated.
 #if INCLUDE_RTM_OPT
   if (use_rtm) {
     Label L_regular_inflated_unlock;
@@ -605,8 +604,6 @@ void C2_MacroAssembler::fast_unlock(Register objReg, Register boxReg, Register t
   // each other and there's no need for an explicit barrier (fence).
   // See also http://gee.cs.oswego.edu/dl/jmm/cookbook.html.
 #ifndef _LP64
-  get_thread (boxReg);
-
   // Note that we could employ various encoding schemes to reduce
   // the number of loads below (currently 4) to just 2 or 3.
   // Refer to the comments in synchronizer.cpp.
@@ -616,34 +613,12 @@ void C2_MacroAssembler::fast_unlock(Register objReg, Register boxReg, Register t
   jccb  (Assembler::notZero, DONE_LABEL);
   movptr(boxReg, Address(tmpReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(EntryList)));
   orptr(boxReg, Address(tmpReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(cxq)));
-  jccb  (Assembler::notZero, CheckSucc);
+  jccb  (Assembler::notZero, DONE_LABEL);
   movptr(Address(tmpReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner)), NULL_WORD);
   jmpb  (DONE_LABEL);
-
-  bind (Stacked);
-  // It's not inflated and it's not recursively stack-locked.
-  // It must be stack-locked.
-  // Try to reset the header to displaced header.
-  // The "box" value on the stack is stable, so we can reload
-  // and be assured we observe the same value as above.
-  movptr(tmpReg, Address(boxReg, 0));
-  lock();
-  cmpxchgptr(tmpReg, Address(objReg, oopDesc::mark_offset_in_bytes())); // Uses RAX which is box
-  // Intention fall-thru into DONE_LABEL
-
-  // DONE_LABEL is a hot target - we'd really like to place it at the
-  // start of cache line by padding with NOPs.
-  // See the AMD and Intel software optimization manuals for the
-  // most efficient "long" NOP encodings.
-  // Unfortunately none of our alignment mechanisms suffice.
-  bind (CheckSucc);
 #else // _LP64
   // It's inflated
   Label LNotRecursive, LSuccess, LGoSlowPath;
-
-  // If the owner is ANONYMOUS, we need to fix it - in the slow-path.
-  cmpptr(Address(tmpReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner)), (int32_t)(intptr_t)ANONYMOUS_OWNER);
-  jccb(Assembler::equal, LGoSlowPath);
 
   cmpptr(Address(tmpReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(recursions)), 0);
   jccb(Assembler::equal, LNotRecursive);
@@ -726,7 +701,13 @@ void C2_MacroAssembler::fast_unlock(Register objReg, Register boxReg, Register t
     cmpxchgptr(tmpReg, Address(objReg, oopDesc::mark_offset_in_bytes()));
     jcc(Assembler::notZero, DONE_LABEL); // ZF = 0 also indicates failure at DONE_LABEL
     // Pop the lock object from the lock-stack.
-    decrement(Address(r15_thread, Thread::lock_stack_current_offset()), oopSize);
+#ifdef _LP64
+    const Register thread = r15_thread;
+#else
+    const Register thread = rax;
+    get_thread(rax);
+#endif
+    subptr(Address(thread, Thread::lock_stack_current_offset()), oopSize);
     xorptr(rax, rax); // Set ZF = 1 (success)
   }
 
