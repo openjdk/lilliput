@@ -271,20 +271,18 @@ void LIR_Assembler::osr_entry() {
     // the OSR buffer using 2 word entries: first the lock and then
     // the oop.
     for (int i = 0; i < number_of_locks; i++) {
-      int slot_offset = monitor_offset - ((i * 2) * BytesPerWord);
+      int slot_offset = monitor_offset - (i * BytesPerWord);
 #ifdef ASSERT
       // verify the interpreter's monitor has a non-null object
       {
         Label L;
-        __ ldr(rscratch1, Address(OSR_buf, slot_offset + 1*BytesPerWord));
+        __ ldr(rscratch1, Address(OSR_buf, slot_offset));
         __ cbnz(rscratch1, L);
         __ stop("locked object is NULL");
         __ bind(L);
       }
 #endif
-      __ ldr(r19, Address(OSR_buf, slot_offset + 0));
-      __ str(r19, frame_map()->address_for_monitor_lock(i));
-      __ ldr(r19, Address(OSR_buf, slot_offset + 1*BytesPerWord));
+      __ ldr(r19, Address(OSR_buf, slot_offset));
       __ str(r19, frame_map()->address_for_monitor_object(i));
     }
   }
@@ -2551,7 +2549,6 @@ void LIR_Assembler::emit_lock(LIR_OpLock* op) {
   if (UseHeavyMonitors) {
     __ b(*op->stub()->entry());
   } else if (op->code() == lir_lock) {
-    assert(BasicLock::displaced_header_offset_in_bytes() == 0, "lock_reg must point to the displaced header");
     // add debug info for NullPointerException only if one is possible
     int null_check_offset = __ lock_object(hdr, obj, lock, *op->stub()->entry());
     if (op->info() != NULL) {
@@ -2559,7 +2556,6 @@ void LIR_Assembler::emit_lock(LIR_OpLock* op) {
     }
     // done
   } else if (op->code() == lir_unlock) {
-    assert(BasicLock::displaced_header_offset_in_bytes() == 0, "lock_reg must point to the displaced header");
     __ unlock_object(hdr, obj, lock, *op->stub()->entry());
   } else {
     Unimplemented();
@@ -2570,27 +2566,13 @@ void LIR_Assembler::emit_lock(LIR_OpLock* op) {
 void LIR_Assembler::emit_load_klass(LIR_OpLoadKlass* op) {
   Register obj = op->obj()->as_pointer_register();
   Register result = op->result_opr()->as_pointer_register();
-  Register tmp = rscratch1;
 
   CodeEmitInfo* info = op->info();
   if (info != NULL) {
     add_debug_info_for_null_check_here(info);
   }
 
-  assert(UseCompressedClassPointers, "expects UseCompressedClassPointers");
-
-  // Check if we can take the (common) fast path, if obj is unlocked.
-  __ ldr(tmp, Address(obj, oopDesc::mark_offset_in_bytes()));
-  __ eor(tmp, tmp, markWord::unlocked_value);
-  __ tst(tmp, markWord::lock_mask_in_place);
-  __ br(Assembler::NE, *op->stub()->entry());
-
-  // Fast-path: shift and decode Klass*.
-  __ mov(result, tmp);
-  __ lsr(result, result, markWord::klass_shift);
-
-  __ bind(*op->stub()->continuation());
-  __ decode_klass_not_null(result);
+  __ load_klass(result, obj);
 }
 
 void LIR_Assembler::emit_profile_call(LIR_OpProfileCall* op) {
@@ -2674,7 +2656,7 @@ void LIR_Assembler::emit_delay(LIR_OpDelay*) {
 
 
 void LIR_Assembler::monitor_address(int monitor_no, LIR_Opr dst) {
-  __ lea(dst->as_register(), frame_map()->address_for_monitor_lock(monitor_no));
+  __ lea(dst->as_register(), frame_map()->address_for_monitor_object(monitor_no));
 }
 
 void LIR_Assembler::emit_updatecrc32(LIR_OpUpdateCRC32* op) {

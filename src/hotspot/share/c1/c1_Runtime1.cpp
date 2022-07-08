@@ -736,10 +736,7 @@ JRT_BLOCK_ENTRY(void, Runtime1::monitorenter(JavaThread* current, oopDesc* obj, 
     _monitorenter_slowcase_cnt++;
   }
 #endif
-  if (UseHeavyMonitors) {
-    lock->set_obj(obj);
-  }
-  assert(obj == lock->obj(), "must match");
+  // TODO: eliminate passing BasicObjectLock here.
   SharedRuntime::monitor_enter_helper(obj, current);
 JRT_END
 
@@ -751,6 +748,7 @@ JRT_LEAF(void, Runtime1::monitorexit(JavaThread* current, BasicObjectLock* lock)
   }
 #endif
   assert(current->last_Java_sp(), "last_Java_sp must be set");
+  // TODO: eliminate passing BasicObjectLock here.
   oop obj = lock->obj();
   assert(oopDesc::is_oop(obj), "must be NULL or an object");
   SharedRuntime::monitor_exit_helper(obj, current);
