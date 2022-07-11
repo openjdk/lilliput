@@ -46,9 +46,6 @@ int C1_MacroAssembler::lock_object(Register hdr, Register obj, Register disp_hdr
 
   verify_oop(obj);
 
-  // save object being locked into the BasicObjectLock -- needed for unwind handler.
-  movptr(Address(disp_hdr, BasicObjectLock::obj_offset_in_bytes()), obj);
-
   null_check_offset = offset();
 
   if (DiagnoseSyncOnValueBasedClasses != 0) {
@@ -94,13 +91,11 @@ int C1_MacroAssembler::lock_object(Register hdr, Register obj, Register disp_hdr
 }
 
 
-void C1_MacroAssembler::unlock_object(Register hdr, Register obj, Register disp_hdr, Label& slow_case) {
+void C1_MacroAssembler::unlock_object(Register disp_hdr, Register obj, Register hdr, Label& slow_case) {
   const int hdr_offset = oopDesc::mark_offset_in_bytes();
   assert(disp_hdr == rax, "disp_hdr must be rax, for the cmpxchg instruction");
   assert(hdr != obj && hdr != disp_hdr && obj != disp_hdr, "registers must be different");
 
-  // load object
-  movptr(obj, Address(disp_hdr, BasicObjectLock::obj_offset_in_bytes()));
   verify_oop(obj);
 
   movptr(disp_hdr, Address(obj, hdr_offset));

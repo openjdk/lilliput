@@ -457,12 +457,13 @@ int LIR_Assembler::emit_unwind_handler() {
   // Perform needed unlocking
   MonitorExitStub* stub = NULL;
   if (method()->is_synchronized()) {
-    monitor_address(0, FrameMap::rax_opr);
-    stub = new MonitorExitStub(FrameMap::rax_opr, true, 0);
+    monitor_address(0, FrameMap::rdi_opr);
+    __ movptr(rsi, Address(rdi, BasicObjectLock::obj_offset_in_bytes()));
+    stub = new MonitorExitStub(FrameMap::rsi_oop_opr);
     if (UseHeavyMonitors) {
       __ jmp(*stub->entry());
     } else {
-      __ unlock_object(rdi, rsi, rax, *stub->entry());
+      __ unlock_object(rax, rsi, rdi, *stub->entry());
     }
     __ bind(*stub->continuation());
   }
@@ -3522,7 +3523,7 @@ void LIR_Assembler::emit_lock(LIR_OpLock* op) {
     }
     // done
   } else if (op->code() == lir_unlock) {
-    __ unlock_object(hdr, obj, lock, *op->stub()->entry());
+    __ unlock_object(hdr, obj, tmp, *op->stub()->entry());
   } else {
     Unimplemented();
   }

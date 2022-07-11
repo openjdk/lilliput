@@ -561,7 +561,7 @@ void C2_MacroAssembler::fast_unlock(Register objReg, Register boxReg, Register t
   movptr(tmpReg, Address(objReg, oopDesc::mark_offset_in_bytes())); // Examine the object's markword
   if (!UseHeavyMonitors) {
     testptr(tmpReg, markWord::monitor_value);
-    jccb(Assembler::zero, Stacked);
+    jcc(Assembler::zero, Stacked);
 
     // If the owner is ANONYMOUS, we need to fix it - in the slow-path.
     Label L;
