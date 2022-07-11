@@ -69,9 +69,6 @@ int C1_MacroAssembler::lock_object(Register hdr, Register obj, Register disp_hdr
 
   verify_oop(obj);
 
-  // save object being locked into the BasicObjectLock
-  str(obj, Address(disp_hdr, BasicObjectLock::obj_offset_in_bytes()));
-
   null_check_offset = offset();
 
   if (DiagnoseSyncOnValueBasedClasses != 0) {
@@ -92,8 +89,6 @@ void C1_MacroAssembler::unlock_object(Register hdr, Register obj, Register disp_
   const int hdr_offset = oopDesc::mark_offset_in_bytes();
   assert_different_registers(hdr, obj, disp_hdr);
 
-  // load object
-  ldr(obj, Address(disp_hdr, BasicObjectLock::obj_offset_in_bytes()));
   verify_oop(obj);
 
   ldr(hdr, Address(obj, oopDesc::mark_offset_in_bytes()));

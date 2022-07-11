@@ -435,7 +435,8 @@ int LIR_Assembler::emit_unwind_handler() {
   MonitorExitStub* stub = NULL;
   if (method()->is_synchronized()) {
     monitor_address(0, FrameMap::r0_opr);
-    stub = new MonitorExitStub(FrameMap::r0_opr, true, 0);
+    __ ldr(r4, Address(r0, BasicObjectLock::obj_offset_in_bytes()));
+    stub = new MonitorExitStub(FrameMap::r4_opr);
     if (UseHeavyMonitors) {
       __ b(*stub->entry());
     } else {
@@ -2547,6 +2548,7 @@ void LIR_Assembler::emit_lock(LIR_OpLock* op) {
   Register hdr = op->hdr_opr()->as_register();
   Register lock = op->lock_opr()->as_register();
   if (UseHeavyMonitors) {
+      // save object being locked into the BasicObjectLock
     __ b(*op->stub()->entry());
   } else if (op->code() == lir_lock) {
     // add debug info for NullPointerException only if one is possible
