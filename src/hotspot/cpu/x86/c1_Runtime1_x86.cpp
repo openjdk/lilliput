@@ -1393,7 +1393,7 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
     case monitorenter_id:
       {
         StubFrame f(sasm, "monitorenter", dont_gc_arguments);
-        OopMap* map = save_live_registers(sasm, 3, save_fpu_registers);
+        OopMap* map = save_live_registers(sasm, 2, save_fpu_registers);
 
         // Called with store_parameter and not C abi
 
