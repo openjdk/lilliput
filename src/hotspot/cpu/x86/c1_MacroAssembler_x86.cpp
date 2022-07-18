@@ -58,35 +58,14 @@ int C1_MacroAssembler::lock_object(Register hdr, Register obj, Register disp_hdr
   // Check if pushing to lock-stack would overflow.
 #ifdef _LP64
   const Register thread = r15_thread;
+  const Register tmp2 = disp_hdr;
 #else
-  const Register thread = rax; // shared with hdr, be careful
+  const Register thread = disp_hdr;
   get_thread(thread);
+  const Register tmp2 = noreg;
 #endif
-  movptr(tmp, Address(thread, Thread::lock_stack_current_offset()));
-  cmpptr(tmp, Address(thread, Thread::lock_stack_limit_offset()));
-  jcc(Assembler::zero, slow_case);
-
-  // Load object header
   movptr(hdr, Address(obj, hdr_offset));
-
-  // and mark it as unlocked
-  orptr(hdr, markWord::unlocked_value);
-  movptr(tmp, hdr);
-  // Clear lowest two bits: we have 01 (see above), now flip the lowest to get 00.
-  xorptr(tmp, markWord::unlocked_value);
-  MacroAssembler::lock();
-  cmpxchgptr(tmp, Address(obj, oopDesc::mark_offset_in_bytes()));
-  // if the object header was not the same, we go slow
-  jcc(Assembler::notZero, slow_case);
-
-#ifndef _LP64
-  get_thread(thread);
-#endif
-  movptr(tmp, Address(thread, Thread::lock_stack_current_offset()));
-  movptr(Address(tmp, 0), obj);
-  addptr(tmp, oopSize);
-  movptr(Address(thread, Thread::lock_stack_current_offset()), tmp);
-
+  fast_lock_impl(obj, hdr, thread, tmp, tmp2, slow_case);
   return null_check_offset;
 }
 
@@ -100,22 +79,7 @@ void C1_MacroAssembler::unlock_object(Register disp_hdr, Register obj, Register 
 
   movptr(disp_hdr, Address(obj, hdr_offset));
   andb(disp_hdr, ~0x3); // Clear lowest two bits. 8-bit AND preserves upper bits.
-  movptr(hdr, disp_hdr);
-  orptr(hdr, markWord::unlocked_value);
-
-  MacroAssembler::lock(); // must be immediately before cmpxchg!
-  cmpxchgptr(hdr, Address(obj, hdr_offset));
-
-  // if the object header was not pointing to the displaced header,
-  // we do unlocking via runtime call
-  jcc(Assembler::notEqual, slow_case);
-#ifdef _LP64
-  const Register thread = r15_thread;
-#else
-  const Register thread = rax;
-  get_thread(thread);
-#endif
-  subptr(Address(thread, Thread::lock_stack_current_offset()), oopSize);
+  fast_unlock_impl(obj, disp_hdr, hdr, slow_case);
 }
 
 

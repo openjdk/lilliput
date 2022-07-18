@@ -1196,24 +1196,22 @@ void InterpreterMacroAssembler::lock_object(Register lock_reg) {
   assert(lock_reg == LP64_ONLY(c_rarg1) NOT_LP64(rdx),
          "The argument is only for looks. It must be c_rarg1");
 
+  const int obj_offset = BasicObjectLock::obj_offset_in_bytes();
+  const Register obj_reg = LP64_ONLY(c_rarg3) NOT_LP64(rcx); // Will contain the oop
+  // Load object pointer into obj_reg
+  movptr(obj_reg, Address(lock_reg, obj_offset));
   if (UseHeavyMonitors) {
     call_VM(noreg,
             CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorenter),
-            lock_reg);
+            obj_reg);
   } else {
     Label done;
 
     const Register swap_reg = rax; // Must use rax for cmpxchg instruction
     const Register tmp_reg = rbx;
-    const Register obj_reg = LP64_ONLY(c_rarg3) NOT_LP64(rcx); // Will contain the oop
     const Register rklass_decode_tmp = LP64_ONLY(rscratch1) NOT_LP64(noreg);
 
-    const int obj_offset = BasicObjectLock::obj_offset_in_bytes();
-
     Label slow_case;
-
-    // Load object pointer into obj_reg
-    movptr(obj_reg, Address(lock_reg, obj_offset));
 
     if (DiagnoseSyncOnValueBasedClasses != 0) {
       load_klass(tmp_reg, obj_reg, rklass_decode_tmp);
@@ -1224,34 +1222,15 @@ void InterpreterMacroAssembler::lock_object(Register lock_reg) {
 
 #ifdef _LP64
     const Register thread = r15_thread;
+    const Register tmp2 = rscratch1;
 #else
-    const Register thread = rax; // shared with swap_reg
+    const Register thread = rdx;
     get_thread(thread);
+    const Register tmp2 = lock_reg;
 #endif
-    movptr(tmp_reg, Address(thread, Thread::lock_stack_current_offset()));
-    cmpptr(tmp_reg, Address(thread, Thread::lock_stack_limit_offset()));
-    jcc(Assembler::zero, slow_case);
-
     // Load object header, prepare for CAS from unlocked to locked.
     movptr(swap_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
-    orptr(swap_reg, markWord::unlocked_value);
-    movptr(tmp_reg, swap_reg);
-    xorptr(tmp_reg, markWord::unlocked_value);
-
-    // Try to swing object header to 'locked'.
-    lock();
-    cmpxchgptr(tmp_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
-    jcc(Assembler::notZero, slow_case);
-
-    // Success: push object reference to lock-stack
-    // TODO: We could try to avoid reloading the current pointer.
-#ifndef _LP64
-    get_thread(thread);
-#endif
-    movptr(tmp_reg, Address(thread, Thread::lock_stack_current_offset()));
-    movptr(Address(tmp_reg, 0), obj_reg);
-    addptr(tmp_reg, oopSize);
-    movptr(Address(thread, Thread::lock_stack_current_offset()), tmp_reg);
+    fast_lock_impl(obj_reg, swap_reg, thread, tmp_reg, tmp2, slow_case);
     jmp(done);
 
     bind(slow_case);
@@ -1259,7 +1238,7 @@ void InterpreterMacroAssembler::lock_object(Register lock_reg) {
     // Call the runtime routine for slow case
     call_VM(noreg,
             CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorenter),
-            lock_reg);
+            obj_reg);
 
     bind(done);
   }
@@ -1282,48 +1261,33 @@ void InterpreterMacroAssembler::unlock_object(Register lock_reg) {
   assert(lock_reg == LP64_ONLY(c_rarg1) NOT_LP64(rdx),
          "The argument is only for looks. It must be c_rarg1");
 
+  const Register obj_reg = LP64_ONLY(c_rarg3) NOT_LP64(rcx);  // Will contain the oop
+  // Load oop into obj_reg(%c_rarg3)
+  movptr(obj_reg, Address(lock_reg, BasicObjectLock::obj_offset_in_bytes()));
+
+  // Free entry
+  movptr(Address(lock_reg, BasicObjectLock::obj_offset_in_bytes()), (int32_t) NULL_WORD);
+
   if (UseHeavyMonitors) {
-    call_VM_leaf(CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorexit), lock_reg);
+    call_VM_leaf(CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorexit), obj_reg);
   } else {
     Label done, slow_case;
 
     const Register swap_reg = rax;  // Must use rax for cmpxchg instruction
     const Register header_reg = LP64_ONLY(c_rarg2) NOT_LP64(rbx);  // Will contain the old oopMark
-    const Register obj_reg = LP64_ONLY(c_rarg3) NOT_LP64(rcx);  // Will contain the oop
 
     save_bcp(); // Save in case of exception
-
-    // Load oop into obj_reg(%c_rarg3)
-    movptr(obj_reg, Address(lock_reg, BasicObjectLock::obj_offset_in_bytes()));
-
-    // Free entry
-    movptr(Address(lock_reg, BasicObjectLock::obj_offset_in_bytes()), (int32_t) NULL_WORD);
 
     // Try to swing header from locked to unlock.
     movptr(swap_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
     andb(swap_reg, ~0x3); // Clear lowest two bits. 8-bit AND preserves upper bits.
-    movptr(header_reg, swap_reg);
-    orptr(header_reg, markWord::unlocked_value);
-    lock(); // must be immediately before cmpxchg!
-    cmpxchgptr(header_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
-
-    // If not successfully unlocked, take slow-path.
-    jcc(Assembler::notEqual, slow_case);
-
-    // Pop object reference from lock-stack.
-#ifdef _LP64
-    const Register thread = r15_thread;
-#else
-    const Register thread = rax; // shared with swap_reg
-    get_thread(thread);
-#endif
-    subptr(Address(thread, Thread::lock_stack_current_offset()), oopSize);
+    fast_unlock_impl(obj_reg, swap_reg, header_reg, slow_case);
     jmp(done);
 
     bind(slow_case);
     // Call the runtime routine for slow case.
-    movptr(Address(lock_reg, BasicObjectLock::obj_offset_in_bytes()), obj_reg); // restore obj
-    call_VM_leaf(CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorexit), lock_reg);
+    //movptr(Address(lock_reg, BasicObjectLock::obj_offset_in_bytes()), obj_reg); // restore obj
+    call_VM_leaf(CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorexit), obj_reg);
 
     bind(done);
 

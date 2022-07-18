@@ -2063,6 +2063,9 @@ public:
 #endif // _LP64
 
   void vallones(XMMRegister dst, int vector_len);
+
+  void fast_lock_impl(Register obj, Register hdr, Register thread, Register tmp1, Register tmp2, Label& slow);
+  void fast_unlock_impl(Register obj, Register hdr, Register tmp, Label& slow);
 };
 
 /**

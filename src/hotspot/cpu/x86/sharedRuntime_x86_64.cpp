@@ -1900,29 +1900,9 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     __ movptr(obj_reg, Address(oop_handle_reg, 0));
 
     if (!UseHeavyMonitors) {
-      // Check if pushing to lock-stack would overflow.
-      __ movptr(swap_reg, Address(r15_thread, Thread::lock_stack_current_offset()));
-      __ cmpptr(swap_reg, Address(r15_thread, Thread::lock_stack_limit_offset()));
-      __ jcc(Assembler::zero, slow_path_lock);
-
       // Load object header
       __ movptr(swap_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
-
-      // and mark it as unlocked
-      __ orptr(swap_reg, markWord::unlocked_value);
-      __ movptr(tmp, swap_reg);
-      // Clear lowest two bits: we have 01 (see above), now flip the lowest to get 00.
-      __ xorptr(tmp, markWord::unlocked_value);
-      __ lock();
-      __ cmpxchgptr(tmp, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
-      // if the object header was note the same, we go slow
-      __ jcc(Assembler::notZero, slow_path_lock);
-
-      __ movptr(tmp, Address(r15_thread, Thread::lock_stack_current_offset()));
-      __ movptr(Address(tmp, 0), obj_reg);
-      __ increment(tmp, oopSize);
-      __ movptr(Address(r15_thread, Thread::lock_stack_current_offset()), tmp);
-
+      __ fast_lock_impl(obj_reg, swap_reg, r15_thread, tmp, rscratch1, slow_path_lock);
     } else {
       __ jmp(slow_path_lock);
     }
@@ -2041,12 +2021,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     if (!UseHeavyMonitors) {
       __ movptr(swap_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
       __ andb(swap_reg, ~0x3); // Clear lowest two bits. 8-bit AND preserves upper bits.
-      __ movptr(tmp, swap_reg);
-      __ orptr(tmp, markWord::unlocked_value);
-      __ lock();
-      __ cmpxchgptr(tmp, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
-      __ jcc(Assembler::notEqual, slow_path_unlock);
-      __ decrement(Address(r15_thread, Thread::lock_stack_current_offset()), oopSize);
+      __ fast_unlock_impl(obj_reg, swap_reg, tmp, slow_path_unlock);
     } else {
       __ jmp(slow_path_unlock);
     }

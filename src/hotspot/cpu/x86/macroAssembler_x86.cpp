@@ -9439,5 +9439,55 @@ void MacroAssembler::get_thread(Register thread) {
   }
 }
 
-
 #endif // !WIN32 || _LP64
+
+void MacroAssembler::fast_lock_impl(Register obj, Register hdr, Register thread, Register tmp1, Register tmp2, Label& slow) {
+  assert(hdr == rax, "header must be in rax for cmpxchg");
+  assert_different_registers(obj, hdr, thread, tmp1, tmp2);
+
+  // First we need to check if the lock-stack has room for pushing the object reference.
+  movptr(tmp1, Address(thread, Thread::lock_stack_current_offset()));
+  cmpptr(tmp1, Address(thread, Thread::lock_stack_limit_offset()));
+  jcc(Assembler::greaterEqual, slow);
+
+  Register locked_hdr = tmp2->is_valid() ? tmp2 : tmp1;
+  // Now we attempt to take the fast-lock.
+  // hdr lowest two bits are either 00 or 01 here. Make it 01.
+  orptr(hdr, markWord::unlocked_value);
+  movptr(locked_hdr, hdr);
+  // Clear lowest two bits: we have 01 (see above), now flip the lowest to get 00.
+  xorptr(locked_hdr, markWord::unlocked_value);
+  lock();
+  cmpxchgptr(locked_hdr, Address(obj, oopDesc::mark_offset_in_bytes()));
+  jcc(Assembler::notEqual, slow);
+
+  // Success: push object to lock-stack.
+  if (!tmp2->is_valid()) {
+    // If we did not have a valid tmp2, we used tmp1 instead, and we must re-load the current offset.
+    movptr(tmp1, Address(thread, Thread::lock_stack_current_offset()));
+  }
+  movptr(Address(tmp1, 0), obj);
+  increment(tmp1, oopSize);
+  movptr(Address(thread, Thread::lock_stack_current_offset()), tmp1);
+}
+
+void MacroAssembler::fast_unlock_impl(Register obj, Register hdr, Register tmp, Label& slow) {
+  assert(hdr == rax, "header must be in rax for cmpxchg");
+  assert_different_registers(obj, hdr, tmp);
+
+  // Mark-word must be 00 now, try to swing it back to 01 (unlocked)
+  movptr(tmp, hdr); // The expected old value
+  orptr(tmp, markWord::unlocked_value);
+  lock();
+  cmpxchgptr(tmp, Address(obj, oopDesc::mark_offset_in_bytes()));
+  jcc(Assembler::notZero, slow); // ZF = 0 also indicates failure at DONE_LABEL
+  // Pop the lock object from the lock-stack.
+#ifdef _LP64
+  const Register thread = r15_thread;
+#else
+  const Register thread = rax;
+  get_thread(rax);
+#endif
+  subptr(Address(thread, Thread::lock_stack_current_offset()), oopSize);
+}
+
