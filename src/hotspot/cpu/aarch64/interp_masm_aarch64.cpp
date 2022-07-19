@@ -725,23 +725,24 @@ void InterpreterMacroAssembler::remove_activation(
 void InterpreterMacroAssembler::lock_object(Register lock_reg)
 {
   assert(lock_reg == c_rarg1, "The argument is only for looks. It must be c_rarg1");
+
+  const Register obj_reg = c_rarg3; // Will contain the oop
+  const int obj_offset = BasicObjectLock::obj_offset_in_bytes();
+
+  // Load object pointer into obj_reg %c_rarg3
+  ldr(obj_reg, Address(lock_reg, obj_offset));
+
   if (UseHeavyMonitors) {
     call_VM(noreg,
             CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorenter),
-            lock_reg);
+            obj_reg);
   } else {
     Label done;
 
     const Register swap_reg = r0;
     const Register tmp = c_rarg2;
-    const Register obj_reg = c_rarg3; // Will contain the oop
-
-    const int obj_offset = BasicObjectLock::obj_offset_in_bytes();
 
     Label slow_case;
-
-    // Load object pointer into obj_reg %c_rarg3
-    ldr(obj_reg, Address(lock_reg, obj_offset));
 
     if (DiagnoseSyncOnValueBasedClasses != 0) {
       load_klass(tmp, obj_reg);
@@ -759,7 +760,7 @@ void InterpreterMacroAssembler::lock_object(Register lock_reg)
     // Call the runtime routine for slow case
     call_VM(noreg,
             CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorenter),
-            lock_reg);
+            obj_reg);
 
     bind(done);
   }
@@ -781,22 +782,23 @@ void InterpreterMacroAssembler::unlock_object(Register lock_reg)
 {
   assert(lock_reg == c_rarg1, "The argument is only for looks. It must be rarg1");
 
+  const Register obj_reg    = c_rarg3;  // Will contain the oop
+
+  // Load oop into obj_reg(%c_rarg3)
+  ldr(obj_reg, Address(lock_reg, BasicObjectLock::obj_offset_in_bytes()));
+
+  // Free entry
+  str(zr, Address(lock_reg, BasicObjectLock::obj_offset_in_bytes()));
+
   if (UseHeavyMonitors) {
-    call_VM_leaf(CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorexit), lock_reg);
+    call_VM_leaf(CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorexit), obj_reg);
   } else {
     Label done, slow_case;
 
     const Register swap_reg   = r0;
     const Register header_reg = c_rarg2;  // Will contain the old oopMark
-    const Register obj_reg    = c_rarg3;  // Will contain the oop
 
     save_bcp(); // Save in case of exception
-
-    // Load oop into obj_reg(%c_rarg3)
-    ldr(obj_reg, Address(lock_reg, BasicObjectLock::obj_offset_in_bytes()));
-
-    // Free entry
-    str(zr, Address(lock_reg, BasicObjectLock::obj_offset_in_bytes()));
 
     ldr(header_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
     fast_unlock(obj_reg, header_reg, swap_reg, rscratch1, slow_case);
@@ -804,8 +806,7 @@ void InterpreterMacroAssembler::unlock_object(Register lock_reg)
 
     // Call the runtime routine for slow case.
     bind(slow_case);
-    str(obj_reg, Address(lock_reg, BasicObjectLock::obj_offset_in_bytes())); // restore obj
-    call_VM_leaf(CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorexit), lock_reg);
+    call_VM_leaf(CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorexit), obj_reg);
 
     bind(done);
 
