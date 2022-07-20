@@ -78,11 +78,14 @@ public class Oop {
   // Accessors for declared fields
   public Mark  getMark()   { return new Mark(getHandle()); }
   public Klass getKlass() {
-    if (VM.getVM().isCompressedKlassPointersEnabled()) {
-      return (Klass)compressedKlass.getValue(getHandle());
-    } else {
-      return (Klass)klass.getValue(getHandle());
+    assert(VM.getVM().isCompressedKlassPointersEnabled());
+    Mark mark = getMark();
+    if (mark.hasMonitor()) {
+      ObjectMonitor mon = mark.monitor();
+      mark = mon.header();
     }
+    return mark.getKlass();
+    //return (Klass)compressedKlass.getValue(getHandle());
   }
 
   public boolean isA(Klass k) {

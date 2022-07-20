@@ -186,6 +186,11 @@ public class Mark extends VMObject {
     return hash() == noHash;
   }
 
+  public Klass getKlass() {
+    //Address klassAddr = addr.getAddressAt(markField.getOffset() + 4);
+    return (Klass)Metadata.instantiateWrapperFor(addr.getCompKlassAddressAt(4));
+  }
+
   // Debugging
   public void printOn(PrintStream tty) {
     if (isLocked()) {
