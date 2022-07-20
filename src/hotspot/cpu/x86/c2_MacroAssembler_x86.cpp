@@ -590,13 +590,13 @@ void C2_MacroAssembler::fast_unlock(Register objReg, Register boxReg, Register t
   // the number of loads below (currently 4) to just 2 or 3.
   // Refer to the comments in synchronizer.cpp.
   // In practice the chain of fetches doesn't seem to impact performance, however.
-  xorptr(boxReg, boxReg);
-  orptr(boxReg, Address(tmpReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(recursions)));
+  xorptr(tmpReg, tmpReg);
+  orptr(tmpReg, Address(boxReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(recursions)));
   jccb  (Assembler::notZero, DONE_LABEL);
-  movptr(boxReg, Address(tmpReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(EntryList)));
-  orptr(boxReg, Address(tmpReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(cxq)));
+  movptr(tmpReg, Address(boxReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(EntryList)));
+  orptr(tmpReg, Address(boxReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(cxq)));
   jccb  (Assembler::notZero, DONE_LABEL);
-  movptr(Address(tmpReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner)), NULL_WORD);
+  movptr(Address(boxReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner)), NULL_WORD);
   jmpb  (DONE_LABEL);
 #else // _LP64
   // It's inflated
