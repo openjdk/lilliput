@@ -1224,9 +1224,9 @@ void InterpreterMacroAssembler::lock_object(Register lock_reg) {
     const Register thread = r15_thread;
     const Register tmp2 = rscratch1;
 #else
-    const Register thread = rdx;
+    const Register thread = lock_reg;
     get_thread(thread);
-    const Register tmp2 = lock_reg;
+    const Register tmp2 = noreg;
 #endif
     // Load object header, prepare for CAS from unlocked to locked.
     movptr(swap_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
