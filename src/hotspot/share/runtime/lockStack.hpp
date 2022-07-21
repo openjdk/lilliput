@@ -32,6 +32,7 @@
 class Thread;
 
 class LockStack {
+  friend class VMStructs;
 private:
   static const size_t INITIAL_CAPACITY = 4;
   oop* _base;
