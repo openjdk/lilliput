@@ -623,9 +623,7 @@ void BytecodeInterpreter::run(interpreterState istate) {
         mon->set_obj(rcvr);
 
         // Traditional lightweight locking.
-        markWord displaced = rcvr->mark().set_unlocked();
-        mon->lock()->set_displaced_header(displaced);
-        CALL_VM(InterpreterRuntime::monitorenter(THREAD, mon), handle_exception);
+        CALL_VM(InterpreterRuntime::monitorenter(THREAD, rcvr), handle_exception);
       }
       THREAD->clr_do_not_unlock();
 
@@ -709,9 +707,7 @@ void BytecodeInterpreter::run(interpreterState istate) {
       entry->set_obj(lockee);
 
       // traditional lightweight locking
-      markWord displaced = lockee->mark().set_unlocked();
-      entry->lock()->set_displaced_header(displaced);
-      CALL_VM(InterpreterRuntime::monitorenter(THREAD, entry), handle_exception);
+      CALL_VM(InterpreterRuntime::monitorenter(THREAD, lockee), handle_exception);
       UPDATE_PC_AND_TOS(1, -1);
       goto run;
     }
@@ -1609,9 +1605,7 @@ run:
           entry->set_obj(lockee);
 
           // traditional lightweight locking
-          markWord displaced = lockee->mark().set_unlocked();
-          entry->lock()->set_displaced_header(displaced);
-          CALL_VM(InterpreterRuntime::monitorenter(THREAD, entry), handle_exception);
+          CALL_VM(InterpreterRuntime::monitorenter(THREAD, lockee), handle_exception);
           UPDATE_PC_AND_TOS_AND_CONTINUE(1, -1);
         } else {
           istate->set_msg(more_monitors);
@@ -1631,8 +1625,7 @@ run:
             most_recent->set_obj(NULL);
 
             // restore object for the slow case
-            most_recent->set_obj(lockee);
-            InterpreterRuntime::monitorexit(most_recent);
+            InterpreterRuntime::monitorexit(lockee);
             UPDATE_PC_AND_TOS_AND_CONTINUE(1, -1);
           }
           most_recent++;
@@ -3047,12 +3040,8 @@ run:
         if (lockee != NULL) {
           end->set_obj(NULL);
 
-          // If it isn't recursive we either must swap old header or call the runtime
-          if (header.to_pointer() != NULL) {
-            // restore object for the slow case
-            end->set_obj(lockee);
-            InterpreterRuntime::monitorexit(end);
-          }
+          // restore object for the slow case
+          InterpreterRuntime::monitorexit(lockee);
 
           // One error is plenty
           if (illegal_state_oop() == NULL && !suppress_error) {
@@ -3100,7 +3089,7 @@ run:
               THREAD->clear_pending_exception();
             }
           } else {
-            InterpreterRuntime::monitorexit(base);
+            InterpreterRuntime::monitorexit(rcvr);
             if (THREAD->has_pending_exception()) {
               if (!suppress_error) illegal_state_oop = Handle(THREAD, THREAD->pending_exception());
               THREAD->clear_pending_exception();
