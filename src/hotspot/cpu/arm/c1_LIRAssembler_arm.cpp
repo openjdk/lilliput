@@ -149,13 +149,11 @@ void LIR_Assembler::osr_entry() {
   Register OSR_buf = osrBufferPointer()->as_pointer_register();
 
   assert(frame::interpreter_frame_monitor_size() == BasicObjectLock::size(), "adjust code below");
-  int monitor_offset = (method()->max_locals() + 2 * (number_of_locks - 1)) * BytesPerWord;
+  int monitor_offset = (method()->max_locals() + (number_of_locks - 1)) * BytesPerWord;
   for (int i = 0; i < number_of_locks; i++) {
-    int slot_offset = monitor_offset - (i * 2 * BytesPerWord);
+    int slot_offset = monitor_offset - (i * BytesPerWord);
     __ ldr(R1, Address(OSR_buf, slot_offset + 0*BytesPerWord));
-    __ ldr(R2, Address(OSR_buf, slot_offset + 1*BytesPerWord));
-    __ str(R1, frame_map()->address_for_monitor_lock(i));
-    __ str(R2, frame_map()->address_for_monitor_object(i));
+    __ str(R1, frame_map()->address_for_monitor_object(i));
   }
 }
 
@@ -246,8 +244,9 @@ int LIR_Assembler::emit_unwind_handler() {
   MonitorExitStub* stub = NULL;
   if (method()->is_synchronized()) {
     monitor_address(0, FrameMap::R0_opr);
-    stub = new MonitorExitStub(FrameMap::R0_opr, true, 0);
-    __ unlock_object(R2, R1, R0, *stub->entry());
+    __ ldr(R1, Address(R0, BasicObjectLock::obj_offset_in_bytes()));
+    stub = new MonitorExitStub(FrameMap::R1_opr);
+    __ b(*stub->entry());
     __ bind(*stub->continuation());
   }
 
