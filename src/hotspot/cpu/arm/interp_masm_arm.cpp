@@ -863,9 +863,15 @@ void InterpreterMacroAssembler::set_do_not_unlock_if_synchronized(bool flag, Reg
 // Blows volatile registers R0-R3, Rtemp, LR. Calls VM.
 void InterpreterMacroAssembler::lock_object(Register Rlock) {
   assert(Rlock == R1, "the second argument");
+  const Register Robj = R2;
+  assert_different_registers(Robj, Rlock);
+  const int obj_offset = BasicObjectLock::obj_offset_in_bytes();
+
+  // Load object pointer
+  ldr(Robj, Address(Rlock, obj_offset));
 
   // TODO: Implement fast-locking.
-  call_VM(noreg, CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorenter), Rlock);
+  call_VM(noreg, CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorenter), Robj);
 }
 
 
@@ -876,9 +882,15 @@ void InterpreterMacroAssembler::lock_object(Register Rlock) {
 // Blows volatile registers R0-R3, Rtemp, LR. Calls VM.
 void InterpreterMacroAssembler::unlock_object(Register Rlock) {
   assert(Rlock == R0, "the first argument");
+  const Register Robj = R2;
+  assert_different_registers(Robj, Rlock);
+  const int obj_offset = BasicObjectLock::obj_offset_in_bytes();
+
+  // Load oop into Robj
+  ldr(Robj, Address(Rlock, obj_offset));
 
   // TODO: Implement fast-locking.
-  call_VM_leaf(CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorexit), Rlock);
+  call_VM_leaf(CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorexit), Robj);
 }
 
 
