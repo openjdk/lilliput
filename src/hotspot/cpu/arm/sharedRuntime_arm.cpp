@@ -769,7 +769,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
                                        frame_complete,
                                        stack_slots / VMRegImpl::slots_per_word,
                                        in_ByteSize(-1),
-                                       in_ByteSize(-1),
                                        (OopMapSet*)NULL);
   }
   // Arguments for JNI method include JNIEnv and Class if static
@@ -809,8 +808,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
   // Calculate the final stack size taking account of alignment
   stack_slots = align_up(stack_slots, StackAlignmentInBytes / VMRegImpl::stack_slot_size);
   int stack_size = stack_slots * VMRegImpl::stack_slot_size;
-  int lock_slot_fp_offset = stack_size - 2 * wordSize -
-    lock_slot_offset * VMRegImpl::stack_slot_size;
 
   // Unverified entry point
   address start = __ pc();
@@ -1287,7 +1284,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
                                      frame_complete,
                                      stack_slots / VMRegImpl::slots_per_word,
                                      in_ByteSize(method_is_static ? klass_offset : receiver_offset),
-                                     in_ByteSize(lock_slot_offset * VMRegImpl::stack_slot_size),
                                      oop_maps);
 }
 
