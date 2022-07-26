@@ -1286,7 +1286,6 @@ void InterpreterMacroAssembler::unlock_object(Register lock_reg) {
 
     bind(slow_case);
     // Call the runtime routine for slow case.
-    //movptr(Address(lock_reg, BasicObjectLock::obj_offset_in_bytes()), obj_reg); // restore obj
     call_VM_leaf(CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorexit), obj_reg);
 
     bind(done);

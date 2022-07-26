@@ -55,7 +55,6 @@ int C1_MacroAssembler::lock_object(Register hdr, Register obj, Register disp_hdr
     jcc(Assembler::notZero, slow_case);
   }
 
-  // Check if pushing to lock-stack would overflow.
 #ifdef _LP64
   const Register thread = r15_thread;
   const Register tmp2 = disp_hdr;

@@ -283,7 +283,6 @@ void MonitorEnterStub::emit_code(LIR_Assembler* ce) {
 
 void MonitorExitStub::emit_code(LIR_Assembler* ce) {
   __ bind(_entry);
-  // lock_reg was destroyed by fast unlocking attempt => recompute it
   ce->store_parameter(_obj_reg->as_register(), 0);
   // note: non-blocking leaf routine => no call info needed
   Runtime1::StubID exit_id;

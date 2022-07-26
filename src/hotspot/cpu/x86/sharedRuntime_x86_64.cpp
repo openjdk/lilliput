@@ -1886,7 +1886,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
 
   const Register swap_reg = rax;  // Must use rax for cmpxchg instruction
   const Register obj_reg  = rbx;  // Will contain the oop
-  const Register tmp = r13;  // value of old header at unlock time
+  const Register tmp = r13;       // value of old header at unlock time
 
   Label slow_path_lock;
   Label lock_done;
