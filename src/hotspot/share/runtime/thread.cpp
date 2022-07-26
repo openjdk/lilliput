@@ -1059,6 +1059,7 @@ JavaThread::JavaThread() :
   // JVMTI PopFrame support
   _popframe_condition(popframe_inactive),
   _frames_to_pop_failed_realloc(0),
+
   _handshake(this),
 
   _popframe_preserved_args(nullptr),
@@ -1555,6 +1556,7 @@ JavaThread* JavaThread::active() {
 
 bool JavaThread::is_lock_owned(address adr) const {
   if (Thread::is_lock_owned(adr)) return true;
+
   assert(adr != ANONYMOUS_OWNER, "must convert to lock object");
   if (!UseHeavyMonitors && lock_stack().contains(cast_to_oop(adr))) {
     return true;
