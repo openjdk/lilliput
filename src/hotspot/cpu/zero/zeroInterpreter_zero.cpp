@@ -331,7 +331,7 @@ int ZeroInterpreter::native_entry(Method* method, intptr_t UNUSED, TRAPS) {
   if (method->is_synchronized()) {
     monitor = (BasicObjectLock*) istate->stack_base();
     oop lockee = monitor->obj();
-    // Is it simple recursive case?
+
     CALL_VM_NOCHECK(InterpreterRuntime::monitorenter(thread, lockee));
     if (HAS_PENDING_EXCEPTION)
       goto unwind_and_return;
