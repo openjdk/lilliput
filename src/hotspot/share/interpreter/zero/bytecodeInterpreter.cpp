@@ -1623,12 +1623,10 @@ run:
         while (most_recent != limit ) {
           if ((most_recent)->obj() == lockee) {
             most_recent->set_obj(NULL);
-
-            // restore object for the slow case
             InterpreterRuntime::monitorexit(lockee);
             UPDATE_PC_AND_TOS_AND_CONTINUE(1, -1);
           }
-          most_recent++;
+          mozst_recent++;
         }
         // Need to throw illegal monitor state exception
         CALL_VM(InterpreterRuntime::throw_illegal_monitor_state_exception(THREAD), handle_exception);
@@ -3039,8 +3037,6 @@ run:
         oop lockee = end->obj();
         if (lockee != NULL) {
           end->set_obj(NULL);
-
-          // restore object for the slow case
           InterpreterRuntime::monitorexit(lockee);
 
           // One error is plenty
