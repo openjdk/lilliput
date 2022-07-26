@@ -152,7 +152,7 @@ void LIR_Assembler::osr_entry() {
   int monitor_offset = (method()->max_locals() + (number_of_locks - 1)) * BytesPerWord;
   for (int i = 0; i < number_of_locks; i++) {
     int slot_offset = monitor_offset - (i * BytesPerWord);
-    __ ldr(R1, Address(OSR_buf, slot_offset + 0*BytesPerWord));
+    __ ldr(R1, Address(OSR_buf, slot_offset));
     __ str(R1, frame_map()->address_for_monitor_object(i));
   }
 }
@@ -2430,6 +2430,7 @@ void LIR_Assembler::emit_lock(LIR_OpLock* op) {
   Register hdr = op->hdr_opr()->as_pointer_register();
   Register lock = op->lock_opr()->as_pointer_register();
 
+  // TODO: Implement fast-locking.
   __ b(*op->stub()->entry());
   __ bind(*op->stub()->continuation());
 }
