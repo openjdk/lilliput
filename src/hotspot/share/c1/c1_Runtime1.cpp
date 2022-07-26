@@ -747,7 +747,6 @@ JRT_LEAF(void, Runtime1::monitorexit(JavaThread* current, oopDesc* obj))
   }
 #endif
   assert(current->last_Java_sp(), "last_Java_sp must be set");
-  // TODO: eliminate passing BasicObjectLock here.
   assert(oopDesc::is_oop(oop(obj)), "must be NULL or an object: " PTR_FORMAT, p2i(obj));
   SharedRuntime::monitor_exit_helper(obj, current);
 JRT_END

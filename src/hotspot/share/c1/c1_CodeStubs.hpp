@@ -352,6 +352,7 @@ class MonitorExitStub: public MonitorAccessStub {
     : MonitorAccessStub(obj_reg) { }
   virtual void emit_code(LIR_Assembler* e);
   virtual void visit(LIR_OpVisitState* visitor) {
+    visitor->do_input(_obj_reg);
     visitor->do_temp(_obj_reg);
   }
 #ifndef PRODUCT
