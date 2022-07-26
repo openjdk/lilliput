@@ -30,6 +30,7 @@
 #include "utilities/sizes.hpp"
 
 class Thread;
+class OopClosure;
 
 class LockStack {
   friend class VMStructs;
@@ -39,6 +40,7 @@ private:
   oop* _limit;
   oop* _current;
 
+  void grow();
   void validate(const char* msg) const PRODUCT_RETURN;
 public:
   static ByteSize current_offset()    { return byte_offset_of(LockStack, _current); }
@@ -48,14 +50,14 @@ public:
   LockStack();
   ~LockStack();
 
-  void push(oop o);
-  oop pop();
-  void remove(oop o);
+  inline void push(oop o);
+  inline oop pop();
+  inline void remove(oop o);
 
-  bool contains(oop o) const;
+  inline bool contains(oop o) const;
 
   // GC support
-  void oops_do(OopClosure* cl);
+  inline void oops_do(OopClosure* cl);
 
 };
 
