@@ -2548,7 +2548,6 @@ void LIR_Assembler::emit_lock(LIR_OpLock* op) {
   Register hdr = op->hdr_opr()->as_register();
   Register lock = op->lock_opr()->as_register();
   if (UseHeavyMonitors) {
-      // save object being locked into the BasicObjectLock
     __ b(*op->stub()->entry());
   } else if (op->code() == lir_lock) {
     // add debug info for NullPointerException only if one is possible

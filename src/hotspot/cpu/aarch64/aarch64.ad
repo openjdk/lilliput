@@ -16590,7 +16590,7 @@ instruct branchLoopEndU(cmpOpU cmp, rFlagsRegU cr, label lbl)
 // ============================================================================
 // inlined locking and unlocking
 
-instruct cmpFastLock(rFlagsReg cr, iRegP object, iRegPNoSp box, iRegPNoSp tmp, iRegPNoSp tmp2)
+instruct cmpFastLock(rFlagsReg cr, iRegP object, iRegP box, iRegPNoSp tmp, iRegPNoSp tmp2)
 %{
   match(Set cr (FastLock object));
   effect(TEMP tmp, TEMP tmp2, TEMP box);

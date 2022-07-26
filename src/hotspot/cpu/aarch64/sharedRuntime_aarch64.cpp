@@ -1633,7 +1633,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     __ ldr(obj_reg, Address(oop_handle_reg, 0));
 
     if (!UseHeavyMonitors) {
-      // Load (object->mark() | 1) into old_hdr
       __ ldr(old_hdr, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
       __ fast_lock(obj_reg, old_hdr, swap_reg, tmp, rscratch1, slow_path_lock);
     } else {

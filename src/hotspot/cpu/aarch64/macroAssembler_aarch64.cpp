@@ -5451,40 +5451,39 @@ void MacroAssembler::check_return_address(Register return_reg) {
 //  - t1, t2, t3: temporary registers, will be destroyed
 void MacroAssembler::fast_lock(Register obj, Register hdr, Register t1, Register t2, Register t3, Label& slow) {
   // Check if we would have space on lock-stack for the object.
-  {
-    ldr(t1, Address(rthread, Thread::lock_stack_current_offset()));
-    ldr(t2, Address(rthread, Thread::lock_stack_limit_offset()));
-    cmp(t1, t2);
-    br(Assembler::GE, slow);
-  }
+  ldr(t1, Address(rthread, Thread::lock_stack_current_offset()));
+  ldr(t2, Address(rthread, Thread::lock_stack_limit_offset()));
+  cmp(t1, t2);
+  br(Assembler::GE, slow);
 
-  // Load (object->mark() | 1) into t2
+  // Load (object->mark() | 1) into hdr
   orr(hdr, hdr, markWord::unlocked_value);
-  // Clear lock-bits, into rscratch1
+  // Clear lock-bits, into t2
   eor(t2, hdr, markWord::unlocked_value);
-
+  // Try to swing header from unlocked to locked
   cmpxchg(/*addr*/ obj, /*expected*/ hdr, /*new*/ t2, Assembler::xword,
           /*acquire*/ true, /*release*/ true, /*weak*/ false, t3);
   br(Assembler::NE, slow);
 
-  // After successful lock, push object on lock-stack.
+  // After successful lock, push object on lock-stack
   str(obj, Address(t1, 0));
   add(t1, t1, oopSize);
   str(t1, Address(rthread, Thread::lock_stack_current_offset()));
 }
 
 void MacroAssembler::fast_unlock(Register obj, Register hdr, Register t1, Register t2, Label& slow) {
-  // Load the expected old header (lock-bits cleared to indicate 'locked') into header_reg
+  // Load the expected old header (lock-bits cleared to indicate 'locked') into hdr
   andr(hdr, hdr, ~markWord::lock_mask_in_place);
 
-  // Load the new header (unlocked) into swap_reg.
+  // Load the new header (unlocked) into t1
   orr(t1, hdr, markWord::unlocked_value);
 
-  // Atomic swap back the old header
+  // Try to swing header from locked to unlocked
   cmpxchg(obj, hdr, t1, Assembler::xword,
           /*acquire*/ true, /*release*/ true, /*weak*/ false, t2);
   br(Assembler::NE, slow);
 
+  // After successful unlock, pop object from lock-stack
   ldr(t1, Address(rthread, Thread::lock_stack_current_offset()));
   sub(t1, t1, oopSize);
   str(t1, Address(rthread, Thread::lock_stack_current_offset()));
