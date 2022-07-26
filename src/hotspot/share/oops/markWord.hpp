@@ -49,7 +49,7 @@
 //
 //  - the two lock bits are used to describe three states: locked/unlocked and monitor.
 //
-//    [ptr             | 00]  locked             ptr points to real header on stack
+//    [header          | 00]  locked             object is fast-locked
 //    [header          | 01]  unlocked           regular object header
 //    [ptr             | 10]  monitor            inflated lock (header is wapped out)
 //    [ptr             | 11]  marked             used to mark an object
