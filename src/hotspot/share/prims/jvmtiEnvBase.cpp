@@ -972,7 +972,7 @@ JvmtiEnvBase::get_object_monitor_usage(JavaThread* calling_thread, jobject objec
     address owner = NULL;
     {
       markWord mark = hobj()->mark();
-      if (mark.is_anon_locked()) {
+      if (mark.is_fast_locked()) {
         owner = cast_from_oop<address>(hobj());
       }
 

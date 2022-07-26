@@ -163,13 +163,10 @@ class markWord {
   markWord set_unlocked() const {
     return markWord(value() | unlocked_value);
   }
-  markWord set_anon_locked() const {
+  markWord set_fast_locked() const {
     return markWord(value() & ~lock_mask_in_place);
   }
-  bool is_anon_locked() const {
-    return ((value() & lock_mask_in_place) == locked_value);
-  }
-  bool has_locker() const {
+  bool is_fast_locked() const {
     return ((value() & lock_mask_in_place) == locked_value);
   }
   bool has_monitor() const {
