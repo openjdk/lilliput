@@ -233,11 +233,6 @@ void Parse::load_interpreter_state(Node* osr_buf) {
     // temp OSR buffer.  We only copy the locked objects out here.
     // Fetch the locked object from the OSR temp buffer and copy to our fastlock node.
     Node *lock_object = fetch_interpreter_state(index, T_OBJECT, monitors_addr, osr_buf);
-//    // Try and copy the displaced header to the BoxNode
-//    Node *displaced_hdr = fetch_interpreter_state((index*2) + 1, T_ADDRESS, monitors_addr, osr_buf);
-//
-//
-//    store_to_memory(control(), box, displaced_hdr, T_ADDRESS, Compile::AliasIdxRaw, MemNode::unordered);
 
     // Build a bogus FastLockNode (no code will be generated) and push the
     // monitor into our debug info.
