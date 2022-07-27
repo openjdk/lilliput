@@ -77,7 +77,7 @@ void C1_MacroAssembler::unlock_object(Register disp_hdr, Register obj, Register 
   verify_oop(obj);
 
   movptr(disp_hdr, Address(obj, hdr_offset));
-  andb(disp_hdr, ~0x3); // Clear lowest two bits. 8-bit AND preserves upper bits.
+  andptr(disp_hdr, ~(int32_t)markWord::lock_mask_in_place);
   fast_unlock_impl(obj, disp_hdr, hdr, slow_case);
 }
 

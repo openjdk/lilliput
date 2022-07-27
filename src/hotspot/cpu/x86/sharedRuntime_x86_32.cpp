@@ -1822,7 +1822,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
 
     if (!UseHeavyMonitors) {
       __ movptr(swap_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
-      __ andb(swap_reg, ~0x3); // Clear lowest two bits. 8-bit AND preserves upper bits.
+      __ andptr(swap_reg, ~(int32_t)markWord::lock_mask_in_place);
       __ fast_unlock_impl(obj_reg, swap_reg, tmp, slow_path_unlock);
     } else {
       __ jmp(slow_path_unlock);

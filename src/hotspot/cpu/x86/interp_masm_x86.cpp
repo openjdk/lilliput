@@ -1280,7 +1280,7 @@ void InterpreterMacroAssembler::unlock_object(Register lock_reg) {
 
     // Try to swing header from locked to unlock.
     movptr(swap_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
-    andb(swap_reg, ~0x3); // Clear lowest two bits. 8-bit AND preserves upper bits.
+    andptr(swap_reg, ~(int32_t)markWord::lock_mask_in_place);
     fast_unlock_impl(obj_reg, swap_reg, header_reg, slow_case);
     jmp(done);
 
