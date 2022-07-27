@@ -1495,6 +1495,17 @@ void Assembler::vaesenclast(XMMRegister dst, XMMRegister nds, XMMRegister src, i
   emit_int16((unsigned char)0xDD, (0xC0 | encode));
 }
 
+void Assembler::andb(Register dst, int imm8) {
+  NOT_LP64(assert(dst->has_byte_register(), "must have byte register"));
+  if (dst == rax) {
+    emit_int8((unsigned char)0x24);
+    emit_int8(imm8);
+  } else {
+    (void) prefix_and_encode(dst->encoding(), true);
+    emit_arith_b(0x80, 0xC0, dst, imm8);
+  }
+}
+
 void Assembler::andb(Address dst, Register src) {
   InstructionMark im(this);
   prefix(dst, src, true);

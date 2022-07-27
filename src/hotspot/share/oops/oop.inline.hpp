@@ -85,7 +85,10 @@ markWord oopDesc::cas_set_mark(markWord new_mark, markWord old_mark, atomic_memo
 
 void oopDesc::init_mark() {
 #ifdef _LP64
-  markWord header = ObjectSynchronizer::stable_mark(cast_to_oop(this));
+  markWord header = mark();
+  if (header.has_displaced_mark_helper()) {
+    header = header.displaced_mark_helper();
+  }
   assert(UseCompressedClassPointers, "expect compressed klass pointers");
   header = markWord((header.value() & markWord::klass_mask_in_place) | markWord::prototype().value());
 #else
@@ -98,8 +101,8 @@ Klass* oopDesc::klass() const {
 #ifdef _LP64
   assert(UseCompressedClassPointers, "only with compressed class pointers");
   markWord header = mark();
-  if (!header.is_neutral()) {
-    header = ObjectSynchronizer::stable_mark(cast_to_oop(this));
+  if (header.has_displaced_mark_helper()) {
+    header = header.displaced_mark_helper();
   }
   return header.klass();
 #else
@@ -111,8 +114,8 @@ Klass* oopDesc::klass_or_null() const {
 #ifdef _LP64
   assert(UseCompressedClassPointers, "only with compressed class pointers");
   markWord header = mark();
-  if (!header.is_neutral()) {
-    header = ObjectSynchronizer::stable_mark(cast_to_oop(this));
+  if (header.has_displaced_mark_helper()) {
+    header = header.displaced_mark_helper();
   }
   return header.klass_or_null();
 #else
@@ -124,8 +127,8 @@ Klass* oopDesc::klass_or_null_acquire() const {
 #ifdef _LP64
   assert(UseCompressedClassPointers, "only with compressed class pointers");
   markWord header = mark_acquire();
-  if (!header.is_neutral()) {
-    header = ObjectSynchronizer::stable_mark(cast_to_oop(this));
+  if (header.has_displaced_mark_helper()) {
+    header = header.displaced_mark_helper();
   }
   return header.klass_or_null();
 #else

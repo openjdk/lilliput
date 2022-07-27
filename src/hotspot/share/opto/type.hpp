@@ -1975,6 +1975,7 @@ inline bool Type::is_ptr_to_boxing_obj() const {
 #define MulXNode     MulLNode
 #define AndXNode     AndLNode
 #define OrXNode      OrLNode
+#define XorXNode     XorLNode
 #define CmpXNode     CmpLNode
 #define SubXNode     SubLNode
 #define LShiftXNode  LShiftLNode
@@ -2021,6 +2022,7 @@ inline bool Type::is_ptr_to_boxing_obj() const {
 #define MulXNode     MulINode
 #define AndXNode     AndINode
 #define OrXNode      OrINode
+#define XorXNode     XorINode
 #define CmpXNode     CmpINode
 #define SubXNode     SubINode
 #define LShiftXNode  LShiftINode

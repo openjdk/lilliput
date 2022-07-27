@@ -46,10 +46,9 @@ bool ShenandoahStringDedup::is_candidate(oop obj) {
   }
 
   if (StringDedup::is_below_threshold_age(obj->age())) {
-    const markWord mark = obj->mark();
-    // Having/had displaced header, too risk to deal with them, skip
-    if (mark == markWord::INFLATING() || mark.has_displaced_mark_helper()) {
-      return false;
+    markWord mark = obj->mark();
+    if (mark.has_displaced_mark_helper()) {
+      mark = mark.displaced_mark_helper();
     }
 
     // Increase string age and enqueue it when it rearches age threshold

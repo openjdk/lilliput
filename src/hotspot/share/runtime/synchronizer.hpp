@@ -146,8 +146,8 @@ class ObjectSynchronizer : AllStatic {
   // deoptimization at monitor exit. Hence, it does not take a Handle argument.
 
   // This is the "slow path" version of monitor enter and exit.
-  static void enter(Handle obj, BasicLock* lock, JavaThread* current);
-  static void exit(oop obj, BasicLock* lock, JavaThread* current);
+  static void enter(Handle obj, JavaThread* current);
+  static void exit(oop obj, JavaThread* current);
 
   // Used only to handle jni locks or other unmatched monitor enter/exit
   // Internally they will use heavy weight monitor.
@@ -160,7 +160,7 @@ class ObjectSynchronizer : AllStatic {
   static void notifyall(Handle obj, TRAPS);
 
   static bool quick_notify(oopDesc* obj, JavaThread* current, bool All);
-  static bool quick_enter(oop obj, JavaThread* current, BasicLock* Lock);
+  static bool quick_enter(oop obj, JavaThread* current);
 
   // Special internal-use-only method for use by JVM infrastructure
   // that needs to wait() on a java-level object but must not respond
@@ -183,11 +183,6 @@ class ObjectSynchronizer : AllStatic {
   // NOTE: It may cause monitor inflation
   static intptr_t identity_hash_value_for(Handle obj);
   static intptr_t FastHashCode(Thread* current, oop obj);
-
-  // Read mark-word and spin-wait as long as INFLATING is observed.
-  static markWord read_stable_mark(oop obj);
-
-  static markWord stable_mark(oop obj);
 
   // java.lang.Thread support
   static bool current_thread_holds_lock(JavaThread* current, Handle h_obj);
@@ -267,7 +262,6 @@ class ObjectLocker : public StackObj {
  private:
   JavaThread* _thread;
   Handle      _obj;
-  BasicLock   _lock;
  public:
   ObjectLocker(Handle obj, JavaThread* current);
   ~ObjectLocker();

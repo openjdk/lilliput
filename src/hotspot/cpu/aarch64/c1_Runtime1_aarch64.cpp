@@ -725,16 +725,6 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
 
       break;
 
-    case load_klass_id:
-      {
-        StubFrame f(sasm, "load_klass", dont_gc_arguments);
-        save_live_registers_no_oop_map(sasm, true);
-        f.load_argument(0, r0); // obj
-        __ call_VM_leaf(CAST_FROM_FN_PTR(address, oopDesc::load_nklass_runtime), r0);
-        restore_live_registers_except_r0(sasm, true);
-      }
-      break;
-
     case counter_overflow_id:
       {
         Register bci = r0, method = r1;
@@ -968,10 +958,9 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
 
         // Called with store_parameter and not C abi
 
-        f.load_argument(1, r0); // r0,: object
-        f.load_argument(0, r1); // r1,: lock address
+        f.load_argument(0, r0); // r0,: object
 
-        int call_offset = __ call_RT(noreg, noreg, CAST_FROM_FN_PTR(address, monitorenter), r0, r1);
+        int call_offset = __ call_RT(noreg, noreg, CAST_FROM_FN_PTR(address, monitorenter), r0);
 
         oop_maps = new OopMapSet();
         oop_maps->add_gc_map(call_offset, map);
@@ -989,7 +978,7 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
 
         // Called with store_parameter and not C abi
 
-        f.load_argument(0, r0); // r0,: lock address
+        f.load_argument(0, r0); // r0: object
 
         // note: really a leaf routine but must setup last java sp
         //       => use call_RT for now (speed can be improved by
