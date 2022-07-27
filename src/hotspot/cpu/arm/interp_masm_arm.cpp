@@ -871,7 +871,8 @@ void InterpreterMacroAssembler::lock_object(Register Rlock) {
   ldr(Robj, Address(Rlock, obj_offset));
 
   // TODO: Implement fast-locking.
-  call_VM(noreg, CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorenter), Robj);
+  mov(R0, Robj);
+  call_VM(noreg, CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorenter), R0);
 }
 
 
@@ -890,7 +891,8 @@ void InterpreterMacroAssembler::unlock_object(Register Rlock) {
   ldr(Robj, Address(Rlock, obj_offset));
 
   // TODO: Implement fast-locking.
-  call_VM_leaf(CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorexit), Robj);
+  mov(R0, Robj);
+  call_VM_leaf(CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorexit), R0);
 }
 
 
