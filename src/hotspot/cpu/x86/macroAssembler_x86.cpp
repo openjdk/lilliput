@@ -9452,11 +9452,11 @@ void MacroAssembler::fast_lock_impl(Register obj, Register hdr, Register thread,
 
   Register locked_hdr = tmp2->is_valid() ? tmp2 : tmp1;
   // Now we attempt to take the fast-lock.
-  // hdr lowest two bits are either 00 or 01 here. Make it 01.
-  orptr(hdr, markWord::unlocked_value);
+  // Clear lowest two header bits (locked state).
+  andptr(hdr, ~(int32_t )markWord::lock_mask_in_place);
   movptr(locked_hdr, hdr);
-  // Clear lowest two bits: we have 01 (see above), now flip the lowest to get 00.
-  xorptr(locked_hdr, markWord::unlocked_value);
+  // Set lowest bit (unlocked state).
+  orptr(hdr, markWord::unlocked_value);
   lock();
   cmpxchgptr(locked_hdr, Address(obj, oopDesc::mark_offset_in_bytes()));
   jcc(Assembler::notEqual, slow);
@@ -9480,7 +9480,7 @@ void MacroAssembler::fast_unlock_impl(Register obj, Register hdr, Register tmp, 
   orptr(tmp, markWord::unlocked_value);
   lock();
   cmpxchgptr(tmp, Address(obj, oopDesc::mark_offset_in_bytes()));
-  jcc(Assembler::notZero, slow); // ZF = 0 also indicates failure at DONE_LABEL
+  jcc(Assembler::notZero, slow);
   // Pop the lock object from the lock-stack.
 #ifdef _LP64
   const Register thread = r15_thread;
