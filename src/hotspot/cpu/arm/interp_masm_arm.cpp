@@ -868,7 +868,8 @@ void InterpreterMacroAssembler::lock_object(Register Rlock) {
   const int obj_offset = BasicObjectLock::obj_offset_in_bytes();
 
   // Load object pointer
-  ldr(Robj, Address(Rlock, obj_offset));
+  mov(R0, Robj);
+  call_VM(noreg, CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorenter), R0);
 
   // TODO: Implement fast-locking.
   call_VM(noreg, CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorenter), Robj);
@@ -890,7 +891,8 @@ void InterpreterMacroAssembler::unlock_object(Register Rlock) {
   ldr(Robj, Address(Rlock, obj_offset));
 
   // TODO: Implement fast-locking.
-  call_VM_leaf(CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorexit), Robj);
+  mov(R0, Robj);
+  call_VM_leaf(CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorexit), R0);}
 }
 
 
