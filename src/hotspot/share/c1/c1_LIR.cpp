@@ -795,7 +795,7 @@ void LIR_OpVisitState::visit(LIR_Op* op) {
       // (or if input is sufficient). This may have influence on the oop map!
       assert(opLock->_lock->is_valid(), "used");  do_temp(opLock->_lock);
       assert(opLock->_hdr->is_valid(),  "used");  do_temp(opLock->_hdr);
-      assert(opLock->_obj->is_valid(),  "used");  do_temp(opLock->_obj);
+      assert(opLock->_obj->is_valid(),  "used");  do_input(opLock->_obj); do_temp(opLock->_obj);
 
       if (opLock->_scratch->is_valid())           do_temp(opLock->_scratch);
       assert(opLock->_result->is_illegal(), "unused");
@@ -887,7 +887,6 @@ void LIR_OpVisitState::visit(LIR_Op* op) {
 
       do_input(opLoadKlass->_obj);
       do_output(opLoadKlass->_result);
-      do_stub(opLoadKlass->_stub);
       if (opLoadKlass->_info) do_info(opLoadKlass->_info);
       break;
     }
@@ -1068,7 +1067,6 @@ void LIR_OpLock::emit_code(LIR_Assembler* masm) {
 
 void LIR_OpLoadKlass::emit_code(LIR_Assembler* masm) {
   masm->emit_load_klass(this);
-  masm->append_code_stub(stub());
 }
 
 #ifdef ASSERT
@@ -2037,7 +2035,6 @@ void LIR_OpLock::print_instr(outputStream* out) const {
 void LIR_OpLoadKlass::print_instr(outputStream* out) const {
   obj()->print(out);        out->print(" ");
   result_opr()->print(out); out->print(" ");
-  out->print("[lbl:" INTPTR_FORMAT "]", p2i(stub()->entry()));
 }
 
 #ifdef ASSERT

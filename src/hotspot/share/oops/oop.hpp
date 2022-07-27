@@ -315,11 +315,6 @@ class oopDesc {
   static void* load_klass_raw(oop obj);
   static void* load_oop_raw(oop obj, int offset);
 
-  // Runtime entry
-#ifdef _LP64
-  static narrowKlass load_nklass_runtime(oopDesc* o);
-#endif
-
   // Avoid include gc_globals.hpp in oop.inline.hpp
   DEBUG_ONLY(bool get_UseParallelGC();)
   DEBUG_ONLY(bool get_UseG1GC();)

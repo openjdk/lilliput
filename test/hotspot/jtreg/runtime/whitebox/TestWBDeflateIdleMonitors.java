@@ -65,9 +65,10 @@ public class TestWBDeflateIdleMonitors {
             obj = new Object();
             synchronized (obj) {
                 // HotSpot implementation detail: asking for the hash code
-                // when the object is locked causes monitor inflation.
+                // when the object is locked does not cause monitor inflation
+                // (but used to before Lilliput)
                 if (obj.hashCode() == 0xBAD) System.out.println("!");
-                Asserts.assertEQ(wb.isMonitorInflated(obj), true,
+                Asserts.assertEQ(wb.isMonitorInflated(obj), false,
                                  "Monitor should be inflated.");
             }
             for (int cnt = 1; cnt <= N_TRIES; cnt++) {

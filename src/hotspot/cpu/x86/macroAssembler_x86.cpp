@@ -4745,54 +4745,32 @@ void MacroAssembler::load_method_holder(Register holder, Register method) {
 
 #ifdef _LP64
 void MacroAssembler::load_nklass(Register dst, Register src) {
-  assert_different_registers(src, dst);
   assert(UseCompressedClassPointers, "expect compressed class pointers");
 
-  Label slow, done;
+  Label fast;
   movq(dst, Address(src, oopDesc::mark_offset_in_bytes()));
   // NOTE: While it would seem nice to use xorb instead (for which we don't have an encoding in our assembler),
   // the encoding for xorq uses the signed version (0x81/6) of xor, which encodes as compact as xorb would,
   // and does't make a difference performance-wise.
-  xorq(dst, markWord::unlocked_value);
+  xorq(dst, markWord::monitor_value);
   testb(dst, markWord::lock_mask_in_place);
-  jccb(Assembler::notZero, slow);
+  jccb(Assembler::notZero, fast);
 
+  // Fetch displaced header
+  movq(dst, Address(dst, ObjectMonitor::header_offset_in_bytes()));
+
+  bind(fast);
   shrq(dst, markWord::klass_shift);
-  jmp(done);
-  bind(slow);
-
-  if (dst != rax) {
-    push(rax);
-  }
-  if (src != rax) {
-    mov(rax, src);
-  }
-  call(RuntimeAddress(StubRoutines::load_nklass()));
-  if (dst != rax) {
-    mov(dst, rax);
-    pop(rax);
-  }
-
-  bind(done);
 }
 #endif
 
 void MacroAssembler::load_klass(Register dst, Register src, Register tmp, bool null_check_src) {
-  assert_different_registers(src, tmp);
-  assert_different_registers(dst, tmp);
 #ifdef _LP64
   assert(UseCompressedClassPointers, "expect compressed class pointers");
-  Register d = dst;
-  if (src == dst) {
-    d = tmp;
-  }
   if (null_check_src) {
     null_check(src, oopDesc::mark_offset_in_bytes());
   }
-  load_nklass(d, src);
-  if (src == dst) {
-    mov(dst, d);
-  }
+  load_nklass(dst, src);
   decode_klass_not_null(dst, tmp);
 #else
   if (null_check_src) {
@@ -9461,5 +9439,55 @@ void MacroAssembler::get_thread(Register thread) {
   }
 }
 
-
 #endif // !WIN32 || _LP64
+
+void MacroAssembler::fast_lock_impl(Register obj, Register hdr, Register thread, Register tmp1, Register tmp2, Label& slow) {
+  assert(hdr == rax, "header must be in rax for cmpxchg");
+  assert_different_registers(obj, hdr, thread, tmp1, tmp2);
+
+  // First we need to check if the lock-stack has room for pushing the object reference.
+  movptr(tmp1, Address(thread, Thread::lock_stack_current_offset()));
+  cmpptr(tmp1, Address(thread, Thread::lock_stack_limit_offset()));
+  jcc(Assembler::greaterEqual, slow);
+
+  Register locked_hdr = tmp2->is_valid() ? tmp2 : tmp1;
+  // Now we attempt to take the fast-lock.
+  // hdr lowest two bits are either 00 or 01 here. Make it 01.
+  orptr(hdr, markWord::unlocked_value);
+  movptr(locked_hdr, hdr);
+  // Clear lowest two bits: we have 01 (see above), now flip the lowest to get 00.
+  xorptr(locked_hdr, markWord::unlocked_value);
+  lock();
+  cmpxchgptr(locked_hdr, Address(obj, oopDesc::mark_offset_in_bytes()));
+  jcc(Assembler::notEqual, slow);
+
+  // Success: push object to lock-stack.
+  if (!tmp2->is_valid()) {
+    // If we did not have a valid tmp2, we used tmp1 instead, and we must re-load the current offset.
+    movptr(tmp1, Address(thread, Thread::lock_stack_current_offset()));
+  }
+  movptr(Address(tmp1, 0), obj);
+  increment(tmp1, oopSize);
+  movptr(Address(thread, Thread::lock_stack_current_offset()), tmp1);
+}
+
+void MacroAssembler::fast_unlock_impl(Register obj, Register hdr, Register tmp, Label& slow) {
+  assert(hdr == rax, "header must be in rax for cmpxchg");
+  assert_different_registers(obj, hdr, tmp);
+
+  // Mark-word must be 00 now, try to swing it back to 01 (unlocked)
+  movptr(tmp, hdr); // The expected old value
+  orptr(tmp, markWord::unlocked_value);
+  lock();
+  cmpxchgptr(tmp, Address(obj, oopDesc::mark_offset_in_bytes()));
+  jcc(Assembler::notZero, slow); // ZF = 0 also indicates failure at DONE_LABEL
+  // Pop the lock object from the lock-stack.
+#ifdef _LP64
+  const Register thread = r15_thread;
+#else
+  const Register thread = rax;
+  get_thread(rax);
+#endif
+  subptr(Address(thread, Thread::lock_stack_current_offset()), oopSize);
+}
+

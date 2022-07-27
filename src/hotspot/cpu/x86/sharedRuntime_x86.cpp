@@ -24,6 +24,7 @@
 
 #include "precompiled.hpp"
 #include "asm/macroAssembler.hpp"
+#include "runtime/objectMonitor.hpp"
 #include "runtime/sharedRuntime.hpp"
 #include "vmreg_x86.inline.hpp"
 #ifdef COMPILER1
@@ -58,9 +59,14 @@ void SharedRuntime::inline_check_hashcode_from_object_header(MacroAssembler* mas
 
   __ movptr(result, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
 
-  // check if locked
-  __ testptr(result, markWord::unlocked_value);
-  __ jcc(Assembler::zero, slowCase);
+  // Check if monitor - in this case we can pull the hashcode out of the displaced header.
+  {
+    Label L;
+    __ testptr(result, markWord::monitor_value);
+    __ jcc(Assembler::zero, L);
+    __ movptr(result, Address(result, OM_OFFSET_NO_MONITOR_VALUE_TAG(header)));
+    __ bind(L);
+  }
 
   // get hash
 #ifdef _LP64

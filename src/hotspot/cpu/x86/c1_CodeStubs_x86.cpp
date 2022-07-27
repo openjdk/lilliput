@@ -257,8 +257,8 @@ void NewObjectArrayStub::emit_code(LIR_Assembler* ce) {
 
 // Implementation of MonitorAccessStubs
 
-MonitorEnterStub::MonitorEnterStub(LIR_Opr obj_reg, LIR_Opr lock_reg, CodeEmitInfo* info)
-: MonitorAccessStub(obj_reg, lock_reg)
+MonitorEnterStub::MonitorEnterStub(LIR_Opr obj_reg, CodeEmitInfo* info)
+: MonitorAccessStub(obj_reg)
 {
   _info = new CodeEmitInfo(info);
 }
@@ -267,8 +267,7 @@ MonitorEnterStub::MonitorEnterStub(LIR_Opr obj_reg, LIR_Opr lock_reg, CodeEmitIn
 void MonitorEnterStub::emit_code(LIR_Assembler* ce) {
   assert(__ rsp_offset() == 0, "frame size should be fixed");
   __ bind(_entry);
-  ce->store_parameter(_obj_reg->as_register(),  1);
-  ce->store_parameter(_lock_reg->as_register(), 0);
+  ce->store_parameter(_obj_reg->as_register(),  0);
   Runtime1::StubID enter_id;
   if (ce->compilation()->has_fpu_code()) {
     enter_id = Runtime1::monitorenter_id;
@@ -284,11 +283,7 @@ void MonitorEnterStub::emit_code(LIR_Assembler* ce) {
 
 void MonitorExitStub::emit_code(LIR_Assembler* ce) {
   __ bind(_entry);
-  if (_compute_lock) {
-    // lock_reg was destroyed by fast unlocking attempt => recompute it
-    ce->monitor_address(_monitor_ix, _lock_reg);
-  }
-  ce->store_parameter(_lock_reg->as_register(), 0);
+  ce->store_parameter(_obj_reg->as_register(), 0);
   // note: non-blocking leaf routine => no call info needed
   Runtime1::StubID exit_id;
   if (ce->compilation()->has_fpu_code()) {
@@ -298,27 +293,6 @@ void MonitorExitStub::emit_code(LIR_Assembler* ce) {
   }
   __ call(RuntimeAddress(Runtime1::entry_for(exit_id)));
   __ jmp(_continuation);
-}
-
-void LoadKlassStub::emit_code(LIR_Assembler* ce) {
-  __ bind(_entry);
-#ifdef _LP64
-  Register res = _result->as_register();
-  ce->store_parameter(_obj->as_register(), 0);
-  if (res != rax) {
-    // This preserves rax and allows it to be used as return-register,
-    // without messing with the stack.
-    __ xchgptr(rax, res);
-  }
-  __ call(RuntimeAddress(Runtime1::entry_for(Runtime1::load_klass_id)));
-  if (res != rax) {
-    // Swap back rax, and move result to correct register.
-    __ xchgptr(rax, res);
-  }
-  __ jmp(_continuation);
-#else
-  __ should_not_reach_here();
-#endif
 }
 
 // Implementation of patching:

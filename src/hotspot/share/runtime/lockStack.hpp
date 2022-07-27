@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,19 +22,43 @@
  *
  */
 
-#ifndef SHARE_GC_SHENANDOAH_SHENANDOAHOBJECTUTILS_HPP
-#define SHARE_GC_SHENANDOAH_SHENANDOAHOBJECTUTILS_HPP
+#ifndef SHARE_RUNTIME_LOCKSTACK_HPP
+#define SHARE_RUNTIME_LOCKSTACK_HPP
 
-#include "memory/allStatic.hpp"
-#include "oops/markWord.hpp"
 #include "oops/oopsHierarchy.hpp"
+#include "utilities/globalDefinitions.hpp"
+#include "utilities/sizes.hpp"
 
-class Klass;
+class Thread;
+class OopClosure;
 
-class ShenandoahObjectUtils : public AllStatic {
+class LockStack {
+  friend class VMStructs;
+private:
+  static const size_t INITIAL_CAPACITY = 4;
+  oop* _base;
+  oop* _limit;
+  oop* _current;
+
+  void grow();
+  void validate(const char* msg) const PRODUCT_RETURN;
 public:
-  static inline Klass* klass(oop obj);
-  static inline size_t size(oop obj);
+  static ByteSize current_offset()    { return byte_offset_of(LockStack, _current); }
+  static ByteSize base_offset()       { return byte_offset_of(LockStack, _base); }
+  static ByteSize limit_offset()      { return byte_offset_of(LockStack, _limit); }
+
+  LockStack();
+  ~LockStack();
+
+  inline void push(oop o);
+  inline oop pop();
+  inline void remove(oop o);
+
+  inline bool contains(oop o) const;
+
+  // GC support
+  inline void oops_do(OopClosure* cl);
+
 };
 
-#endif // SHARE_GC_SHENANDOAH_SHENANDOAHOBJECTUTILS_HPP
+#endif // SHARE_RUNTIME_LOCKSTACK_HPP

@@ -88,6 +88,7 @@
 #include "runtime/javaCalls.hpp"
 #include "runtime/jniHandles.inline.hpp"
 #include "runtime/jniPeriodicChecker.hpp"
+#include "runtime/lockStack.inline.hpp"
 #include "runtime/monitorDeflationThread.hpp"
 #include "runtime/mutexLocker.hpp"
 #include "runtime/nonJavaThread.hpp"
@@ -205,7 +206,8 @@ void JavaThread::smr_delete() {
 
 DEBUG_ONLY(Thread* Thread::_starting_thread = NULL;)
 
-Thread::Thread() {
+Thread::Thread():
+  _lock_stack() {
 
   DEBUG_ONLY(_run_state = PRE_CALL_RUN;)
 
@@ -547,6 +549,9 @@ void Thread::oops_do_no_frames(OopClosure* f, CodeBlobClosure* cf) {
   // Do oop for ThreadShadow
   f->do_oop((oop*)&_pending_exception);
   handle_area()->oops_do(f);
+  if (!UseHeavyMonitors) {
+    lock_stack().oops_do(f);
+  }
 }
 
 // If the caller is a NamedThread, then remember, in the current scope,
@@ -1552,6 +1557,10 @@ JavaThread* JavaThread::active() {
 bool JavaThread::is_lock_owned(address adr) const {
   if (Thread::is_lock_owned(adr)) return true;
 
+  assert(adr != ANONYMOUS_OWNER, "must convert to lock object");
+  if (!UseHeavyMonitors && lock_stack().contains(cast_to_oop(adr))) {
+    return true;
+  }
   for (MonitorChunk* chunk = monitor_chunks(); chunk != NULL; chunk = chunk->next()) {
     if (chunk->contains(adr)) return true;
   }
