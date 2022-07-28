@@ -729,6 +729,43 @@ struct SharedGlobals {
 
 static SharedGlobals GVars;
 
+static inline uint32_t rotl32(uint32_t x, int8_t r) {
+    return (x << r) | (x >> (32 - r));
+}
+
+static uint32_t mix32(uint32_t k, uint32_t h) {
+    const uint32_t c1 = 0xcc9e2d51;
+    const uint32_t c2 = 0x1b873593;
+    k *= c1;
+    k = rotl32(k, 15);
+    k *= c2;
+    h ^= k;
+    return rotl32(h, 13) * 5 + 0xe6546b64;
+}
+
+static uint32_t fmix32(uint32_t h) {
+    h ^= (h >> 16);
+    h *= 0x85ebca6b;
+    h ^= (h >> 13);
+    h *= 0xc2b2ae35;
+    h ^= (h >> 16);
+    return h;
+}
+
+#define DEFAULT_SEED 104729
+
+static inline uint32_t murmur3_32(uintptr_t r0) {
+    uint32_t h1 = DEFAULT_SEED;
+    h1 = mix32((uint32_t) r0, h1);
+#ifdef _LP64
+    h1 = mix32((uint32_t)(r0 >> 32), h1);
+#endif
+
+    h1 ^= sizeof(r0);
+    h1 = fmix32(h1);
+    return h1;
+}
+
 // hashCode() generation :
 //
 // Possibilities:
@@ -748,10 +785,18 @@ static SharedGlobals GVars;
 
 static inline intptr_t get_next_hash(Thread* current, oop obj) {
   intptr_t value = 0;
+  // NOTE: The hash-code produced here must be idempotent. Otherwise we may get a race
+  // when two threads try to generate and install a hash-code: One may install a hashCode
+  // into the object's header, while the other thread is inflating a monitor, which could
+  // then grab the not-yet-hashed header. Subsequent attempts to get a hash-code would
+  // generate a new hash-code, which would be incorrect if the hash-code is not idempotent
+  // between safepoints.
+  // TODO: Eliminate non-idempotent hashCodes, or the hashCode flag altogether.
   if (hashCode == 0) {
     // This form uses global Park-Miller RNG.
     // On MP system we'll have lots of RW access to a global, so the
     // mechanism induces lots of coherency traffic.
+    warning("hashCode=1 (RNG) may produce incorrect identity hashCode");
     value = os::random();
   } else if (hashCode == 1) {
     // This variation has the property of being stable (idempotent)
@@ -762,10 +807,12 @@ static inline intptr_t get_next_hash(Thread* current, oop obj) {
   } else if (hashCode == 2) {
     value = 1;            // for sensitivity testing
   } else if (hashCode == 3) {
+    warning("hashCode=3 (sequence) may produce incorrect identity hashCode");
     value = ++GVars.hc_sequence;
   } else if (hashCode == 4) {
     value = cast_from_oop<intptr_t>(obj);
-  } else {
+  } else if (hashCode == 5) {
+    warning("hashCode=5 (thread-local RNG) may produce incorrect identity hashCode");
     // Marsaglia's xor-shift scheme with thread-specific state
     // This is probably the best overall implementation -- we'll
     // likely make this the default in future releases.
@@ -778,6 +825,8 @@ static inline intptr_t get_next_hash(Thread* current, oop obj) {
     v = (v ^ (v >> 19)) ^ (t ^ (t >> 8));
     current->_hashStateW = v;
     value = v;
+  } else {
+    value = murmur3_32(cast_from_oop<uintptr_t>(obj));
   }
 
   value &= markWord::hash_mask;
