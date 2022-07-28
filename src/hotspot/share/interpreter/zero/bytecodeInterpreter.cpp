@@ -1626,7 +1626,7 @@ run:
             InterpreterRuntime::monitorexit(lockee);
             UPDATE_PC_AND_TOS_AND_CONTINUE(1, -1);
           }
-          mozst_recent++;
+          most_recent++;
         }
         // Need to throw illegal monitor state exception
         CALL_VM(InterpreterRuntime::throw_illegal_monitor_state_exception(THREAD), handle_exception);
