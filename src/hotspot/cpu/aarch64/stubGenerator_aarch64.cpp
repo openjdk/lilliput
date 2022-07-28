@@ -6476,29 +6476,6 @@ class StubGenerator: public StubCodeGenerator {
   }
 #endif // LINUX
 
-  // Pass object argument in r0 (which has to be preserved outside this stub)
-  // Pass back result in r0
-  // Clobbers rscratch1
-  address generate_load_nklass() {
-    __ align(CodeEntryAlignment);
-    StubCodeMark mark(this, "StubRoutines", "load_nklass");
-
-    address start = __ pc();
-
-    __ set_last_Java_frame(sp, rfp, lr, rscratch1);
-    __ enter();
-    __ push(RegSet::of(rscratch1, rscratch2), sp);
-    __ push_call_clobbered_registers_except(r0);
-    __ call_VM_leaf(CAST_FROM_FN_PTR(address, oopDesc::load_nklass_runtime), 1);
-    __ pop_call_clobbered_registers_except(r0);
-    __ pop(RegSet::of(rscratch1, rscratch2), sp);
-    __ leave();
-    __ reset_last_Java_frame(true);
-    __ ret(lr);
-
-    return start;
-  }
-
   // Continuation point for throwing of implicit exceptions that are
   // not handled in the current activation. Fabricates an exception
   // oop and initiates normal exception dispatching in this
@@ -7481,8 +7458,6 @@ class StubGenerator: public StubCodeGenerator {
     if (vmIntrinsics::is_intrinsic_available(vmIntrinsics::_dcos)) {
       StubRoutines::_dcos = generate_dsin_dcos(/* isCos = */ true);
     }
-
-    StubRoutines::_load_nklass = generate_load_nklass();
   }
 
   void generate_all() {

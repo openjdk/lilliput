@@ -148,12 +148,6 @@ public class Mark extends VMObject {
   public boolean hasLocker() {
     return ((value() & lockMaskInPlace) == lockedValue);
   }
-  public BasicLock locker() {
-    if (Assert.ASSERTS_ENABLED) {
-      Assert.that(hasLocker(), "check");
-    }
-    return new BasicLock(valueAsAddress());
-  }
   public boolean hasMonitor() {
     return ((value() & monitorValue) != 0);
   }
@@ -184,6 +178,11 @@ public class Mark extends VMObject {
 
   public boolean hasNoHash() {
     return hash() == noHash;
+  }
+
+  public Klass getKlass() {
+    //Address klassAddr = addr.getAddressAt(markField.getOffset() + 4);
+    return (Klass)Metadata.instantiateWrapperFor(addr.getCompKlassAddressAt(4));
   }
 
   // Debugging
