@@ -77,9 +77,7 @@ inline bool ShenandoahForwarding::is_forwarded(oop obj) {
 
 inline oop ShenandoahForwarding::try_update_forwardee(oop obj, oop update) {
 
-  markWord old_mark = ObjectSynchronizer::read_stable_mark(obj);
-  assert(!old_mark.is_being_inflated(), "must not see INFLATING marker here");
-
+  markWord old_mark = obj->mark_acquire();
   if (old_mark.is_marked()) {
     return cast_to_oop(old_mark.clear_lock_bits().to_pointer());
   }
@@ -89,18 +87,12 @@ inline oop ShenandoahForwarding::try_update_forwardee(oop obj, oop update) {
   update->set_mark(old_mark);
 
   markWord new_mark = markWord::encode_pointer_as_mark(update);
-  while (true) {
-    markWord prev_mark = obj->cas_set_mark(new_mark, old_mark, memory_order_conservative);
-    if (prev_mark == old_mark) {
-      return update;
-    } else if (prev_mark == markWord::INFLATING()) {
-      // This happens when we encounter a stack-locked object in from-space.
-      // Busy-wait for completion.
-      SpinPause();
-    } else {
-      assert(prev_mark.is_marked(), "must be forwarded");
-      return cast_to_oop(prev_mark.clear_lock_bits().to_pointer());
-    }
+  markWord prev_mark = obj->cas_set_mark(new_mark, old_mark, memory_order_conservative);
+  if (prev_mark == old_mark) {
+    return update;
+  } else {
+    assert(prev_mark.is_marked(), "must be forwarded");
+    return cast_to_oop(prev_mark.clear_lock_bits().to_pointer());
   }
 }
 
