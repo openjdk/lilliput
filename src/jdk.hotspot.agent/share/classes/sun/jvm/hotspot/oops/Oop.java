@@ -77,7 +77,7 @@ public class Oop {
       ObjectMonitor mon = mark.monitor();
       mark = mon.header();
     }
-    return mark.getKlass();	  
+    return mark.getKlass();
   }
 
   public Klass getKlass() {
