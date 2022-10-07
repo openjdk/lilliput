@@ -180,6 +180,10 @@ public class Mark extends VMObject {
     return hash() == noHash;
   }
 
+  public Klass getKlass() {
+    return (Klass)Metadata.instantiateWrapperFor(addr.getCompKlassAddressAt(4));
+  }
+
   // Debugging
   public void printOn(PrintStream tty) {
     if (isLocked()) {
