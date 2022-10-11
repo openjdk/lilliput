@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016, 2022, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2016, 2019 SAP SE. All rights reserved.
+ * Copyright (c) 2016, 2022 SAP SE. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -3159,9 +3159,6 @@ void MacroAssembler::compiler_fast_lock_object(Register oop, Register box, Regis
 
   // Load Compare Value application register.
 
-  // Initialize the box (must happen before we update the object mark).
-  z_stg(displacedHeader, BasicLock::displaced_header_offset_in_bytes(), box);
-
   // Memory Fence (in cmpxchgd)
   // Compare object markWord with mark and if equal exchange scratch1 with object markWord.
 
@@ -3179,7 +3176,6 @@ void MacroAssembler::compiler_fast_lock_object(Register oop, Register box, Regis
   z_ngr(currentHeader, temp);
   //   z_brne(done);
   //   z_release();
-  z_stg(currentHeader/*==0 or not 0*/, BasicLock::displaced_header_offset_in_bytes(), box);
 
   z_bru(done);
 
@@ -3193,8 +3189,6 @@ void MacroAssembler::compiler_fast_lock_object(Register oop, Register box, Regis
   z_lghi(zero, 0);
   // If m->owner is null, then csg succeeds and sets m->owner=THREAD and CR=EQ.
   z_csg(zero, Z_thread, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner), monitor_tagged);
-  // Store a non-null value into the box.
-  z_stg(box, BasicLock::displaced_header_offset_in_bytes(), box);
 #ifdef ASSERT
   z_brne(done);
   // We've acquired the monitor, check some invariants.
@@ -3220,11 +3214,6 @@ void MacroAssembler::compiler_fast_unlock_object(Register oop, Register box, Reg
   Label done, object_has_monitor;
 
   BLOCK_COMMENT("compiler_fast_unlock_object {");
-
-  // Find the lock address and load the displaced header from the stack.
-  // if the displaced header is zero, we have a recursive unlock.
-  load_and_test_long(displacedHeader, Address(box, BasicLock::displaced_header_offset_in_bytes()));
-  z_bre(done);
 
   // Handle existing monitor.
   // The object has an existing monitor iff (mark & monitor_value) != 0.
@@ -4485,7 +4474,7 @@ intptr_t MacroAssembler::get_const_from_toc(address pc) {
   if (is_load_const_from_toc_pcrelative(pc)) {
     dataLoc = pc + offset;
   } else {
-    CodeBlob* cb = CodeCache::find_blob_unsafe(pc);   // Else we get assertion if nmethod is zombie.
+    CodeBlob* cb = CodeCache::find_blob(pc);
     assert(cb && cb->is_nmethod(), "sanity");
     nmethod* nm = (nmethod*)cb;
     dataLoc = nm->ctable_begin() + offset;
@@ -4665,6 +4654,22 @@ void MacroAssembler::kmc(Register dstBuff, Register srcBuff) {
   Label retry;
   bind(retry);
   Assembler::z_kmc(dstBuff, srcBuff);
+  Assembler::z_brc(Assembler::bcondOverflow /* CC==3 (iterate) */, retry);
+}
+
+void MacroAssembler::kmctr(Register dstBuff, Register ctrBuff, Register srcBuff) {
+  // DstBuff and srcBuff are allowed to be the same register (encryption in-place).
+  // DstBuff and srcBuff storage must not overlap destructively, and neither must overlap the parameter block.
+  assert(srcBuff->encoding()     != 0, "src buffer address can't be in Z_R0");
+  assert(dstBuff->encoding()     != 0, "dst buffer address can't be in Z_R0");
+  assert(ctrBuff->encoding()     != 0, "ctr buffer address can't be in Z_R0");
+  assert(ctrBuff->encoding() % 2 == 0, "ctr buffer addr must be an even register");
+  assert(dstBuff->encoding() % 2 == 0, "dst buffer addr must be an even register");
+  assert(srcBuff->encoding() % 2 == 0, "src buffer addr/len must be an even/odd register pair");
+
+  Label retry;
+  bind(retry);
+  Assembler::z_kmctr(dstBuff, ctrBuff, srcBuff);
   Assembler::z_brc(Assembler::bcondOverflow /* CC==3 (iterate) */, retry);
 }
 

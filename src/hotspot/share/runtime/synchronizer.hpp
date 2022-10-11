@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1998, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,10 +29,9 @@
 #include "oops/markWord.hpp"
 #include "runtime/basicLock.hpp"
 #include "runtime/handles.hpp"
-#include "utilities/growableArray.hpp"
-#include "utilities/linkedlist.hpp"
 #include "utilities/resourceHash.hpp"
 
+template <typename T> class GrowableArray;
 class LogStream;
 class ObjectMonitor;
 class ThreadsList;
@@ -49,15 +48,13 @@ class ObjectMonitorsHashtable {
   }
 
  public:
-  typedef LinkedListImpl<ObjectMonitor*,
-                         ResourceObj::C_HEAP, mtThread,
-                         AllocFailStrategy::RETURN_NULL> PtrList;
+  class PtrList;
 
+ private:
   // ResourceHashtable SIZE is specified at compile time so we
   // use 1031 which is the first prime after 1024.
   typedef ResourceHashtable<void*, PtrList*, 1031, ResourceObj::C_HEAP, mtThread,
                             &ObjectMonitorsHashtable::ptr_hash> PtrTable;
- private:
   PtrTable* _ptrs;
   size_t _key_count;
   size_t _om_count;
@@ -66,7 +63,7 @@ class ObjectMonitorsHashtable {
   // ResourceHashtable is passed to various functions and populated in
   // different places so we allocate it using C_HEAP to make it immune
   // from any ResourceMarks that happen to be in the code paths.
-  ObjectMonitorsHashtable() : _ptrs(new (ResourceObj::C_HEAP, mtThread) PtrTable()), _key_count(0), _om_count(0) {}
+  ObjectMonitorsHashtable() : _ptrs(new (ResourceObj::C_HEAP, mtThread) PtrTable), _key_count(0), _om_count(0) {}
 
   ~ObjectMonitorsHashtable();
 
@@ -146,8 +143,8 @@ class ObjectSynchronizer : AllStatic {
   // deoptimization at monitor exit. Hence, it does not take a Handle argument.
 
   // This is the "slow path" version of monitor enter and exit.
-  static void enter(Handle obj, BasicLock* lock, JavaThread* current);
-  static void exit(oop obj, BasicLock* lock, JavaThread* current);
+  static void enter(Handle obj, JavaThread* current);
+  static void exit(oop obj, JavaThread* current);
 
   // Used only to handle jni locks or other unmatched monitor enter/exit
   // Internally they will use heavy weight monitor.
@@ -160,7 +157,7 @@ class ObjectSynchronizer : AllStatic {
   static void notifyall(Handle obj, TRAPS);
 
   static bool quick_notify(oopDesc* obj, JavaThread* current, bool All);
-  static bool quick_enter(oop obj, JavaThread* current, BasicLock* Lock);
+  static bool quick_enter(oop obj, JavaThread* current);
 
   // Special internal-use-only method for use by JVM infrastructure
   // that needs to wait() on a java-level object but must not respond
@@ -185,11 +182,6 @@ class ObjectSynchronizer : AllStatic {
   // NOTE: It may cause monitor inflation
   static intptr_t identity_hash_value_for(Handle obj);
   static intptr_t FastHashCode(Thread* current, oop obj);
-
-  // Read mark-word and spin-wait as long as INFLATING is observed.
-  static markWord read_stable_mark(oop obj);
-
-  static markWord stable_mark(oop obj);
 
   // java.lang.Thread support
   static bool current_thread_holds_lock(JavaThread* current, Handle h_obj);
@@ -269,7 +261,6 @@ class ObjectLocker : public StackObj {
  private:
   JavaThread* _thread;
   Handle      _obj;
-  BasicLock   _lock;
  public:
   ObjectLocker(Handle obj, JavaThread* current);
   ~ObjectLocker();

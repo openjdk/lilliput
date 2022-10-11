@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -87,7 +87,7 @@ void vframeArrayElement::fill_in(compiledVFrame* vf, bool realloc_failures) {
       _monitors = new MonitorChunk(list->length());
       vf->thread()->add_monitor_chunk(_monitors);
 
-      // Migrate the BasicLocks from the stack to the monitor chunk
+      // Migrate the BasicObjectLocks from the stack to the monitor chunk
       for (index = 0; index < list->length(); index++) {
         MonitorInfo* monitor = list->at(index);
         assert(!monitor->owner_is_scalar_replaced() || realloc_failures, "object should be reallocated already");
@@ -97,7 +97,6 @@ void vframeArrayElement::fill_in(compiledVFrame* vf, bool realloc_failures) {
         } else {
           assert(monitor->owner() == NULL || !monitor->owner()->is_unlocked(), "object must be null or locked");
           dest->set_obj(monitor->owner());
-          monitor->lock()->move_to(monitor->owner(), dest->lock());
         }
       }
     }
@@ -308,7 +307,6 @@ void vframeArrayElement::unpack_on_stack(int caller_actual_parameters,
     top = iframe()->previous_monitor_in_interpreter_frame(top);
     BasicObjectLock* src = _monitors->at(index);
     top->set_obj(src->obj());
-    src->lock()->move_to(src->obj(), top->lock());
   }
   if (ProfileInterpreter) {
     iframe()->interpreter_frame_set_mdp(0); // clear out the mdp.
@@ -452,7 +450,10 @@ void vframeArrayElement::unpack_on_stack(int caller_actual_parameters,
     ttyLocker ttyl;
     tty->print_cr("[%d. Interpreted Frame]", ++unpack_counter);
     iframe()->print_on(tty);
-    RegisterMap map(thread);
+    RegisterMap map(thread,
+                    RegisterMap::UpdateMap::include,
+                    RegisterMap::ProcessFrames::include,
+                    RegisterMap::WalkContinuation::skip);
     vframe* f = vframe::new_vframe(iframe(), &map, thread);
     f->print();
     if (WizardMode && Verbose) method()->print_codes();
@@ -486,6 +487,7 @@ int vframeArrayElement::on_stack_size(int callee_parameters,
 
 
 intptr_t* vframeArray::unextended_sp() const {
+  assert(owner_thread()->is_in_usable_stack((address) _original.unextended_sp()), INTPTR_FORMAT, p2i(_original.unextended_sp()));
   return _original.unextended_sp();
 }
 
@@ -533,14 +535,14 @@ void vframeArray::fill_in(JavaThread* thread,
       // in frame_amd64.cpp and the values of the phantom high half registers
       // in amd64.ad.
       //      if (VMReg::Name(i) < SharedInfo::stack0 && is_even(i)) {
-        intptr_t* src = (intptr_t*) reg_map->location(VMRegImpl::as_VMReg(i));
+        intptr_t* src = (intptr_t*) reg_map->location(VMRegImpl::as_VMReg(i), _caller.sp());
         _callee_registers[i] = src != NULL ? *src : NULL_WORD;
         //      } else {
         //      jint* src = (jint*) reg_map->location(VMReg::Name(i));
         //      _callee_registers[i] = src != NULL ? *src : NULL_WORD;
         //      }
 #else
-      jint* src = (jint*) reg_map->location(VMRegImpl::as_VMReg(i));
+      jint* src = (jint*) reg_map->location(VMRegImpl::as_VMReg(i), _caller.sp());
       _callee_registers[i] = src != NULL ? *src : NULL_WORD;
 #endif
       if (src == NULL) {
@@ -566,7 +568,10 @@ void vframeArray::unpack_to_stack(frame &unpack_frame, int exec_mode, int caller
   // Find the skeletal interpreter frames to unpack into
   JavaThread* current = JavaThread::current();
 
-  RegisterMap map(current, false);
+  RegisterMap map(current,
+                  RegisterMap::UpdateMap::skip,
+                  RegisterMap::ProcessFrames::include,
+                  RegisterMap::WalkContinuation::skip);
   // Get the youngest frame we will unpack (last to be unpacked)
   frame me = unpack_frame.sender(&map);
   int index;
@@ -585,7 +590,7 @@ void vframeArray::unpack_to_stack(frame &unpack_frame, int exec_mode, int caller
     st.print_cr("DEOPT UNPACKING thread=" INTPTR_FORMAT " vframeArray=" INTPTR_FORMAT " mode=%d",
                 p2i(current), p2i(this), exec_mode);
     st.print_cr("   Virtual frames (outermost/oldest first):");
-    tty->print_raw(st.as_string());
+    tty->print_raw(st.freeze());
   }
 
   // Do the unpacking of interpreter frames; the frame at index 0 represents the top activation, so it has no callee
@@ -623,7 +628,7 @@ void vframeArray::unpack_to_stack(frame &unpack_frame, int exec_mode, int caller
       st.print(" - %s", code_name);
       st.print(" @ bci=%d ", bci);
       st.print_cr("sp=" PTR_FORMAT, p2i(elem->iframe()->sp()));
-      tty->print_raw(st.as_string());
+      tty->print_raw(st.freeze());
     }
     elem->unpack_on_stack(caller_actual_parameters,
                           callee_parameters,

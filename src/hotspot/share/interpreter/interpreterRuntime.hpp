@@ -29,8 +29,8 @@
 #include "interpreter/linkResolver.hpp"
 #include "oops/method.hpp"
 #include "runtime/frame.hpp"
+#include "runtime/javaThread.hpp"
 #include "runtime/signature.hpp"
-#include "runtime/thread.hpp"
 #include "utilities/macros.hpp"
 
 class BufferBlob;
@@ -105,8 +105,8 @@ class InterpreterRuntime: AllStatic {
 
  public:
   // Synchronization
-  static void    monitorenter(JavaThread* current, BasicObjectLock* elem);
-  static void    monitorexit (BasicObjectLock* elem);
+  static void    monitorenter(JavaThread* current, oopDesc* obj);
+  static void    monitorexit (oopDesc* obj);
 
   static void    throw_illegal_monitor_state_exception(JavaThread* current);
   static void    new_illegal_monitor_state_exception(JavaThread* current);

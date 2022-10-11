@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -68,7 +68,6 @@ class oopDesc {
   oopDesc() = default;
 
   inline markWord  mark()          const;
-  inline markWord  safe_mark()     const;
   inline markWord  mark_acquire()  const;
   inline markWord* mark_addr() const;
 
@@ -79,6 +78,8 @@ class oopDesc {
   static inline void release_set_mark(HeapWord* mem, markWord m);
   inline markWord cas_set_mark(markWord new_mark, markWord old_mark);
   inline markWord cas_set_mark(markWord new_mark, markWord old_mark, atomic_memory_order order);
+
+  inline markWord resolve_mark() const;
 
   // Used only to re-initialize the mark word (e.g., of promoted
   // objects during a GC) -- requires a valid klass pointer
@@ -102,7 +103,7 @@ class oopDesc {
 
   inline size_t base_size_given_klass(const Klass* klass);
 
-  // Returns the actual oop size of the object
+  // Returns the actual oop size of the object in machine words
   inline size_t size();
   inline size_t size(markWord mrk);
   inline size_t copy_size(size_t size, markWord mrk) const;
@@ -114,6 +115,7 @@ class oopDesc {
   // type test operations (inlined in oop.inline.hpp)
   inline bool is_instance()    const;
   inline bool is_instanceRef() const;
+  inline bool is_stackChunk()  const;
   inline bool is_array()       const;
   inline bool is_objArray()    const;
   inline bool is_typeArray()   const;
@@ -121,6 +123,7 @@ class oopDesc {
   // type test operations that don't require inclusion of oop.inline.hpp.
   bool is_instance_noinline()    const;
   bool is_instanceRef_noinline() const;
+  bool is_stackChunk_noinline()  const;
   bool is_array_noinline()       const;
   bool is_objArray_noinline()    const;
   bool is_typeArray_noinline()   const;
@@ -150,12 +153,15 @@ class oopDesc {
   }
 
   // Access to fields in a instanceOop through these methods.
-  template <DecoratorSet decorator>
+  template<DecoratorSet decorators>
   oop obj_field_access(int offset) const;
   oop obj_field(int offset) const;
+
   void obj_field_put(int offset, oop value);
   void obj_field_put_raw(int offset, oop value);
   void obj_field_put_volatile(int offset, oop value);
+  template<DecoratorSet decorators>
+  void obj_field_put_access(int offset, oop value);
 
   Metadata* metadata_field(int offset) const;
   void metadata_field_put(int offset, Metadata* value);
@@ -324,14 +330,7 @@ public:
   static void* load_klass_raw(oop obj);
   static void* load_oop_raw(oop obj, int offset);
 
-  // Runtime entry
-#ifdef _LP64
-  static narrowKlass load_nklass_runtime(oopDesc* o);
-#endif
-
-  // Avoid include gc_globals.hpp in oop.inline.hpp
-  DEBUG_ONLY(bool get_UseParallelGC();)
-  DEBUG_ONLY(bool get_UseG1GC();)
+  DEBUG_ONLY(bool size_might_change();)
 };
 
 // An oopDesc is not initialized via a constructor.  Space is allocated in

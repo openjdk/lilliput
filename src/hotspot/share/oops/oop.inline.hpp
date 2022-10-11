@@ -33,6 +33,7 @@
 #include "oops/arrayOop.hpp"
 #include "oops/compressedKlass.inline.hpp"
 #include "oops/compressedOops.inline.hpp"
+#include "oops/instanceKlass.hpp"
 #include "oops/markWord.inline.hpp"
 #include "oops/oopsHierarchy.hpp"
 #include "runtime/atomic.hpp"
@@ -53,14 +54,6 @@ markWord oopDesc::mark() const {
 
 markWord oopDesc::mark_acquire() const {
   return Atomic::load_acquire(&_mark);
-}
-
-markWord oopDesc::safe_mark() const {
-  markWord header = mark();
-  if (!header.is_neutral()) {
-    header = ObjectSynchronizer::stable_mark(cast_to_oop(this));
-  }
-  return header;
 }
 
 markWord* oopDesc::mark_addr() const {
@@ -91,9 +84,17 @@ markWord oopDesc::cas_set_mark(markWord new_mark, markWord old_mark, atomic_memo
   return Atomic::cmpxchg(&_mark, old_mark, new_mark, order);
 }
 
+markWord oopDesc::resolve_mark() const {
+  markWord hdr = mark();
+  if (hdr.has_displaced_mark_helper()) {
+    hdr = hdr.displaced_mark_helper();
+  }
+  return hdr;
+}
+
 void oopDesc::init_mark() {
 #ifdef _LP64
-  markWord header = ObjectSynchronizer::stable_mark(cast_to_oop(this));
+  markWord header = resolve_mark();
   assert(UseCompressedClassPointers, "expect compressed klass pointers");
   header = markWord((header.value() & (markWord::klass_mask_in_place | markWord::hashctrl_mask_in_place)) | markWord::prototype().value());
 #else
@@ -110,10 +111,7 @@ void oopDesc::init_mark(markWord m) {
 Klass* oopDesc::klass() const {
 #ifdef _LP64
   assert(UseCompressedClassPointers, "only with compressed class pointers");
-  markWord header = mark();
-  if (!header.is_neutral()) {
-    header = ObjectSynchronizer::stable_mark(cast_to_oop(this));
-  }
+  markWord header = resolve_mark();
   return header.klass();
 #else
   return _klass;
@@ -123,10 +121,7 @@ Klass* oopDesc::klass() const {
 Klass* oopDesc::klass_or_null() const {
 #ifdef _LP64
   assert(UseCompressedClassPointers, "only with compressed class pointers");
-  markWord header = mark();
-  if (!header.is_neutral()) {
-    header = ObjectSynchronizer::stable_mark(cast_to_oop(this));
-  }
+  markWord header = resolve_mark();
   return header.klass_or_null();
 #else
   return _klass;
@@ -137,8 +132,8 @@ Klass* oopDesc::klass_or_null_acquire() const {
 #ifdef _LP64
   assert(UseCompressedClassPointers, "only with compressed class pointers");
   markWord header = mark_acquire();
-  if (!header.is_neutral()) {
-    header = ObjectSynchronizer::stable_mark(cast_to_oop(this));
+  if (header.has_displaced_mark_helper()) {
+    header = header.displaced_mark_helper();
   }
   return header.klass_or_null();
 #else
@@ -205,14 +200,7 @@ size_t oopDesc::base_size_given_klass(const Klass* kls)  {
       // skipping the intermediate round to HeapWordSize.
       s = align_up(size_in_bytes, MinObjAlignmentInBytes) / HeapWordSize;
 
-      // UseParallelGC and UseG1GC can change the length field
-      // of an "old copy" of an object array in the young gen so it indicates
-      // the grey portion of an already copied array. This will cause the first
-      // disjunct below to fail if the two comparands are computed across such
-      // a concurrent change.
-      assert((s == kls->oop_size(this)) ||
-             (Universe::is_gc_active() && is_objArray() && is_forwarded() && (get_UseParallelGC() || get_UseG1GC())),
-             "wrong array object size");
+      assert(s == kls->oop_size(this) || size_might_change(), "wrong array object size");
     } else {
       // Must be zero, so bite the bullet and take the virtual call.
       s = kls->oop_size(this);
@@ -247,18 +235,15 @@ size_t oopDesc::copy_size(size_t size, markWord mrk) const {
 }
 
 size_t oopDesc::size() {
-  markWord mrk = mark();
-  if (!mrk.is_neutral()) {
-    mrk = ObjectSynchronizer::stable_mark(cast_to_oop(this));
-  }
-  return size(mrk);
+  return size(resolve_mark());
 }
 
-bool oopDesc::is_instance()    const { return klass()->is_instance_klass();           }
-bool oopDesc::is_instanceRef() const { return klass()->is_reference_instance_klass(); }
-bool oopDesc::is_array()       const { return klass()->is_array_klass();              }
-bool oopDesc::is_objArray()    const { return klass()->is_objArray_klass();           }
-bool oopDesc::is_typeArray()   const { return klass()->is_typeArray_klass();          }
+bool oopDesc::is_instance()    const { return klass()->is_instance_klass();             }
+bool oopDesc::is_instanceRef() const { return klass()->is_reference_instance_klass();   }
+bool oopDesc::is_stackChunk()  const { return klass()->is_stack_chunk_instance_klass(); }
+bool oopDesc::is_array()       const { return klass()->is_array_klass();                }
+bool oopDesc::is_objArray()    const { return klass()->is_objArray_klass();             }
+bool oopDesc::is_typeArray()   const { return klass()->is_typeArray_klass();            }
 
 template<typename T>
 T*       oopDesc::field_addr(int offset)     const { return reinterpret_cast<T*>(cast_from_oop<intptr_t>(as_oop()) + offset); }
@@ -271,6 +256,8 @@ inline oop  oopDesc::obj_field_access(int offset) const             { return Hea
 inline oop  oopDesc::obj_field(int offset) const                    { return HeapAccess<>::oop_load_at(as_oop(), offset);  }
 
 inline void oopDesc::obj_field_put(int offset, oop value)           { HeapAccess<>::oop_store_at(as_oop(), offset, value); }
+template <DecoratorSet decorators>
+inline void oopDesc::obj_field_put_access(int offset, oop value)    { HeapAccess<decorators>::oop_store_at(as_oop(), offset, value); }
 
 inline jbyte oopDesc::byte_field(int offset) const                  { return *field_addr<jbyte>(offset);  }
 inline void  oopDesc::byte_field_put(int offset, jbyte value)       { *field_addr<jbyte>(offset) = value; }
@@ -428,7 +415,7 @@ void oopDesc::oop_iterate(OopClosureType* cl, MemRegion mr) {
 
 template <typename OopClosureType>
 size_t oopDesc::oop_iterate_size(OopClosureType* cl) {
-  markWord m = safe_mark();
+  markWord m = resolve_mark();
   Klass* k = m.klass();
   size_t sz = size_given_mark_and_klass(m, k);
   OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k);
@@ -437,7 +424,7 @@ size_t oopDesc::oop_iterate_size(OopClosureType* cl) {
 
 template <typename OopClosureType>
 size_t oopDesc::oop_iterate_size(OopClosureType* cl, MemRegion mr) {
-  markWord m = safe_mark();
+  markWord m = resolve_mark();
   Klass* k = m.klass();
   size_t sz = size_given_mark_and_klass(m, k);
   OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k, mr);
@@ -487,7 +474,7 @@ bool oopDesc::mark_must_be_preserved() const {
 }
 
 bool oopDesc::mark_must_be_preserved(markWord m) const {
-  return m.must_be_preserved(this);
+  return m.must_be_preserved();
 }
 
 #endif // SHARE_OOPS_OOP_INLINE_HPP

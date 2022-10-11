@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,7 +25,6 @@
 #include "precompiled.hpp"
 #include "classfile/vmClasses.hpp"
 #include "classfile/vmSymbols.hpp"
-#include "gc/shared/blockOffsetTable.inline.hpp"
 #include "gc/shared/collectedHeap.inline.hpp"
 #include "gc/shared/genCollectedHeap.hpp"
 #include "gc/shared/genOopClosures.inline.hpp"
@@ -45,6 +44,7 @@
 #include "utilities/globalDefinitions.hpp"
 #include "utilities/macros.hpp"
 #if INCLUDE_SERIALGC
+#include "gc/serial/serialBlockOffsetTable.inline.hpp"
 #include "gc/serial/defNewGeneration.hpp"
 #endif
 
@@ -290,6 +290,7 @@ bool ContiguousSpace::is_free_block(const HeapWord* p) const {
   return p >= _top;
 }
 
+#if INCLUDE_SERIALGC
 void OffsetTableContigSpace::clear(bool mangle_space) {
   ContiguousSpace::clear(mangle_space);
   _offsets.initialize_threshold();
@@ -306,6 +307,7 @@ void OffsetTableContigSpace::set_end(HeapWord* new_end) {
   _offsets.resize(pointer_delta(new_end, bottom()));
   Space::set_end(new_end);
 }
+#endif // INCLUDE_SERIALGC
 
 #ifndef PRODUCT
 
@@ -435,7 +437,7 @@ void ContiguousSpace::prepare_for_compaction(CompactPoint* cp) {
       // prefetch beyond cur_obj
       Prefetch::write(cur_obj, interval);
       oop obj = cast_to_oop(cur_obj);
-      markWord m = obj->safe_mark();
+      markWord m = obj->resolve_mark();
       size_t size = obj->size(m);
       size_t new_size = obj->copy_size(size, m);
       compact_top = cp->space->forward(cast_to_oop(cur_obj), size, new_size, cp, compact_top, forwarding);
@@ -455,7 +457,7 @@ void ContiguousSpace::prepare_for_compaction(CompactPoint* cp) {
       // we don't have to compact quite as often.
       if (cur_obj == compact_top && dead_spacer.insert_deadspace(cur_obj, end)) {
         oop obj = cast_to_oop(cur_obj);
-        markWord m = obj->safe_mark();
+        markWord m = obj->resolve_mark();
         size_t size = obj->size(m);
         compact_top = cp->space->forward(obj, size, size, cp, compact_top, forwarding);
         end_of_live = end;
@@ -517,13 +519,10 @@ void CompactibleSpace::adjust_pointers() {
       size_t size = MarkSweep::adjust_pointers(forwarding, cast_to_oop(cur_obj));
       debug_only(prev_obj = cur_obj);
       cur_obj += size;
-      tty->print_cr("Increase cur_obj to: " PTR_FORMAT, p2i(cur_obj));
       assert(cur_obj <= end_of_live, "must be in range: " PTR_FORMAT, p2i(cur_obj));
     } else {
       debug_only(prev_obj = cur_obj);
       // cur_obj is not a live object, instead it points at the next live object
-      tty->print_cr("Bump cur_obj to: " PTR_FORMAT ", cur_obj: " PTR_FORMAT ", first_dead: " PTR_FORMAT, p2i(*cur_obj),
-                    p2i(cur_obj), p2i(first_dead));
       cur_obj = *(HeapWord**)cur_obj;
       assert(cur_obj <= end_of_live, "must be in range: " PTR_FORMAT, p2i(cur_obj));
       assert(cur_obj > prev_obj, "we should be moving forward through memory, cur_obj: " PTR_FORMAT ", prev_obj: " PTR_FORMAT, p2i(cur_obj), p2i(prev_obj));
@@ -575,7 +574,7 @@ void CompactibleSpace::compact() {
 
       // size and destination
       oop obj = cast_to_oop(cur_obj);
-      markWord m = obj->safe_mark();
+      markWord m = obj->resolve_mark();
       size_t size = obj->size(m);
       HeapWord* compaction_top = cast_from_oop<HeapWord*>(forwarding->forwardee(cast_to_oop(cur_obj)));
 
@@ -585,10 +584,13 @@ void CompactibleSpace::compact() {
       // copy object and reinit its mark
       if (cur_obj != compaction_top) {
         Copy::aligned_conjoint_words(cur_obj, compaction_top, size);
-        oop dst = cast_to_oop(compaction_top);
-        m = dst->initialize_hash_if_necessary(obj, m);
-        dst->init_mark(m);
-        assert(dst->klass() != NULL, "should have a class");
+        oop new_obj = cast_to_oop(compaction_top);
+
+        ContinuationGCSupport::transform_stack_chunk(new_obj);
+
+        m = new_obj->initialize_hash_if_necessary(obj, m);
+        new_obj->init_mark(m);
+        assert(new_obj->klass() != NULL, "should have a class");
       } else {
         cast_to_oop(cur_obj)->init_mark(m);
         assert(cast_to_oop(cur_obj)->klass() != NULL, "should have a class");
@@ -614,22 +616,24 @@ void Space::print() const { print_on(tty); }
 
 void Space::print_on(outputStream* st) const {
   print_short_on(st);
-  st->print_cr(" [" INTPTR_FORMAT ", " INTPTR_FORMAT ")",
+  st->print_cr(" [" PTR_FORMAT ", " PTR_FORMAT ")",
                 p2i(bottom()), p2i(end()));
 }
 
 void ContiguousSpace::print_on(outputStream* st) const {
   print_short_on(st);
-  st->print_cr(" [" INTPTR_FORMAT ", " INTPTR_FORMAT ", " INTPTR_FORMAT ")",
+  st->print_cr(" [" PTR_FORMAT ", " PTR_FORMAT ", " PTR_FORMAT ")",
                 p2i(bottom()), p2i(top()), p2i(end()));
 }
 
+#if INCLUDE_SERIALGC
 void OffsetTableContigSpace::print_on(outputStream* st) const {
   print_short_on(st);
-  st->print_cr(" [" INTPTR_FORMAT ", " INTPTR_FORMAT ", "
-                INTPTR_FORMAT ", " INTPTR_FORMAT ")",
+  st->print_cr(" [" PTR_FORMAT ", " PTR_FORMAT ", "
+                PTR_FORMAT ", " PTR_FORMAT ")",
               p2i(bottom()), p2i(top()), p2i(_offsets.threshold()), p2i(end()));
 }
+#endif
 
 void ContiguousSpace::verify() const {
   HeapWord* p = bottom();
@@ -765,6 +769,7 @@ HeapWord* ContiguousSpace::par_allocate(size_t size) {
   return par_allocate_impl(size);
 }
 
+#if INCLUDE_SERIALGC
 void OffsetTableContigSpace::initialize_threshold() {
   _offsets.initialize_threshold();
 }
@@ -823,3 +828,4 @@ void OffsetTableContigSpace::verify() const {
 size_t TenuredSpace::allowed_dead_ratio() const {
   return MarkSweepDeadRatio;
 }
+#endif // INCLUDE_SERIALGC

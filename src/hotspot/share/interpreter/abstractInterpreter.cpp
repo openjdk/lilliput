@@ -41,7 +41,6 @@
 #include "oops/methodData.hpp"
 #include "oops/method.inline.hpp"
 #include "oops/oop.inline.hpp"
-#include "prims/forte.hpp"
 #include "prims/jvmtiExport.hpp"
 #include "prims/methodHandles.hpp"
 #include "runtime/handles.inline.hpp"
@@ -97,7 +96,7 @@ address    AbstractInterpreter::_native_abi_to_tosca    [AbstractInterpreter::nu
 //------------------------------------------------------------------------------------------------------------------------
 // Generation of complete interpreter
 
-AbstractInterpreterGenerator::AbstractInterpreterGenerator(StubQueue* _code) {
+AbstractInterpreterGenerator::AbstractInterpreterGenerator() {
   _masm                      = NULL;
 }
 
@@ -164,6 +163,10 @@ AbstractInterpreter::MethodKind AbstractInterpreter::method_kind(const methodHan
 
   // Native method?
   if (m->is_native()) {
+    if (m->is_continuation_native_intrinsic()) {
+      // This entry will never be called.  The real entry gets generated later, like for MH intrinsics.
+      return abstract;
+    }
     assert(!m->is_method_handle_intrinsic(), "overlapping bits here, watch out");
     return m->is_synchronized() ? native_synchronized : native;
   }

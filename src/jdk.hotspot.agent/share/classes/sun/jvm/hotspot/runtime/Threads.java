@@ -151,7 +151,6 @@ public class Threads {
         virtualConstructor.addMapping("JavaThread", JavaThread.class);
         if (!VM.getVM().isCore()) {
             virtualConstructor.addMapping("CompilerThread", CompilerThread.class);
-            virtualConstructor.addMapping("CodeCacheSweeperThread", CodeCacheSweeperThread.class);
         }
         virtualConstructor.addMapping("JvmtiAgentThread", JvmtiAgentThread.class);
         virtualConstructor.addMapping("ServiceThread", ServiceThread.class);
@@ -195,7 +194,7 @@ public class Threads {
             return thread;
         } catch (Exception e) {
             throw new RuntimeException("Unable to deduce type of thread from address " + threadAddr +
-            " (expected type JavaThread, CompilerThread, MonitorDeflationThread, ServiceThread, JvmtiAgentThread or CodeCacheSweeperThread)", e);
+            " (expected type JavaThread, CompilerThread, MonitorDeflationThread, ServiceThread or JvmtiAgentThread)", e);
         }
     }
 
@@ -210,7 +209,18 @@ public class Threads {
     }
 
     // refer to Threads::owning_thread_from_monitor_owner
-    public JavaThread owningThreadFromMonitor(Address o) {
+    public JavaThread owningThreadFromMonitor(ObjectMonitor monitor) {
+        if (monitor.isOwnedAnonymous()) {
+            OopHandle object = monitor.object();
+            for (int i = 0; i < getNumberOfThreads(); i++) {
+                JavaThread thread = getJavaThreadAt(i);
+                if (thread.isLockOwned(object)) {
+                    return thread;
+                }
+            }
+            throw new InternalError("We should have found a thread that owns the anonymous lock");
+        }
+        Address o = monitor.owner();
         if (o == null) return null;
         for (int i = 0; i < getNumberOfThreads(); i++) {
             JavaThread thread = getJavaThreadAt(i);
@@ -218,17 +228,7 @@ public class Threads {
                 return thread;
             }
         }
-
-        for (int i = 0; i < getNumberOfThreads(); i++) {
-            JavaThread thread = getJavaThreadAt(i);
-            if (thread.isLockOwned(o))
-                return thread;
-        }
         return null;
-    }
-
-    public JavaThread owningThreadFromMonitor(ObjectMonitor monitor) {
-        return owningThreadFromMonitor(monitor.owner());
     }
 
     // refer to Threads::get_pending_threads

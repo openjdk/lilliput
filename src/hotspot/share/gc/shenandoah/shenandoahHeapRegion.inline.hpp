@@ -36,6 +36,10 @@ HeapWord* ShenandoahHeapRegion::allocate(size_t size, ShenandoahAllocRequest::Ty
   assert(is_object_aligned(size), "alloc size breaks alignment: " SIZE_FORMAT, size);
 
   HeapWord* obj = top();
+  if (end() < obj) {
+    tty->print_cr("Weird region bounds");
+    print_on(tty);
+  }
   if (pointer_delta(end(), obj) >= size) {
     make_regular_allocation();
     adjust_alloc_metadata(type, size);

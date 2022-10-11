@@ -25,6 +25,7 @@
 #include "precompiled.hpp"
 
 #include "compiler/oopMap.hpp"
+#include "gc/shared/continuationGCSupport.hpp"
 #include "gc/shared/gcTraceTime.inline.hpp"
 #include "gc/shared/preservedMarks.inline.hpp"
 #include "gc/shared/slidingForwarding.inline.hpp"
@@ -55,8 +56,8 @@
 #include "memory/universe.hpp"
 #include "oops/compressedOops.inline.hpp"
 #include "oops/oop.inline.hpp"
+#include "runtime/javaThread.hpp"
 #include "runtime/orderAccess.hpp"
-#include "runtime/thread.hpp"
 #include "runtime/vmThread.hpp"
 #include "utilities/copy.hpp"
 #include "utilities/events.hpp"
@@ -338,8 +339,10 @@ public:
     assert(_heap->complete_marking_context()->is_marked(p), "must be marked");
     assert(!_heap->complete_marking_context()->allocated_after_mark_start(p), "must be truly marked");
 
-    size_t obj_size = p->size();
-    if (_compact_point + obj_size > _to_region->end()) {
+    markWord mark = p->resolve_mark();
+    size_t size = p->size(mark);
+    size_t copy_size = p->copy_size(size, mark);
+    if (_compact_point + copy_size > _to_region->end()) {
       finish_region();
 
       // Object doesn't fit. Pick next empty region and start compacting there.
@@ -359,11 +362,15 @@ public:
     }
 
     // Object fits into current region, record new location:
-    assert(_compact_point + obj_size <= _to_region->end(), "must fit");
+    assert(_compact_point + copy_size <= _to_region->end(), "must fit");
     shenandoah_assert_not_forwarded(NULL, p);
-    _preserved_marks->push_if_necessary(p, p->mark());
-    _forwarding->forward_to(p, cast_to_oop(_compact_point));
-    _compact_point += obj_size;
+    if (_compact_point != cast_from_oop<HeapWord*>(p)) {
+      _preserved_marks->push_if_necessary(p, p->mark());
+      _forwarding->forward_to(p, cast_to_oop(_compact_point));
+      _compact_point += copy_size;
+    } else {
+      _compact_point += size;
+    }
   }
 };
 
@@ -463,6 +470,19 @@ void ShenandoahFullGC::calculate_target_humongous_objects() {
     if (r->is_humongous_start() && r->is_stw_move_allowed()) {
       // From-region candidate: movable humongous region
       oop old_obj = cast_to_oop(r->bottom());
+      markWord mark = old_obj->resolve_mark();
+      if (mark.hash_is_hashed() && !mark.hash_is_copied()) {
+        // A hashed object that has never been copied would require to extend
+        // the object by one int field. This may overrun the last region of the
+        // humongous object. Keep the object where it is.
+        // TODO: We may want to check if we have enough room in the last region,
+        //       which should be common, and move the object anyway. In that case
+        //       we need to implement the necessary initialization of the hash
+        //       field in compact_humongous_regions(), too.
+        to_begin = r->index();
+        to_end = r->index();
+        continue;
+      }
       size_t words_size = old_obj->size();
       size_t num_regions = ShenandoahHeapRegion::required_regions(words_size * HeapWordSize);
 
@@ -747,6 +767,8 @@ public:
 
   void do_oop(oop* p)       { do_oop_work(p); }
   void do_oop(narrowOop* p) { do_oop_work(p); }
+  void do_method(Method* m) {}
+  void do_nmethod(nmethod* nm) {}
 };
 
 class ShenandoahAdjustPointersObjectClosure : public ObjectClosure {
@@ -843,14 +865,17 @@ public:
 
   void do_object(oop p) {
     assert(_heap->complete_marking_context()->is_marked(p), "must be marked");
-    size_t size = p->size();
+    markWord mark = p->resolve_mark();
+    size_t size = p->size(mark);
     if (p->is_forwarded()) {
       HeapWord* compact_from = cast_from_oop<HeapWord*>(p);
       HeapWord* compact_to = cast_from_oop<HeapWord*>(_forwarding->forwardee(p));
+      assert(compact_from != compact_to, "object needs to move");
       Copy::aligned_conjoint_words(compact_from, compact_to, size);
-      Unimplemented();
       oop new_obj = cast_to_oop(compact_to);
-      new_obj->init_mark();
+      mark = new_obj->initialize_hash_if_necessary(p, mark);
+      new_obj->init_mark(mark);
+      ContinuationGCSupport::relativize_stack_chunk(new_obj);
     }
   }
 };
@@ -878,6 +903,7 @@ public:
       if (r->has_live()) {
         _heap->marked_object_iterate(r, &cl);
       }
+      assert(r->new_top() <= r->end(), "sanity");
       r->set_top(r->new_top());
       r = slice.next();
     }
@@ -962,9 +988,8 @@ void ShenandoahFullGC::compact_humongous_objects() {
       assert(old_start != new_start, "must be real move");
       assert(r->is_stw_move_allowed(), "Region " SIZE_FORMAT " should be movable", r->index());
 
-      Copy::aligned_conjoint_words(heap->get_region(old_start)->bottom(),
-                                   heap->get_region(new_start)->bottom(),
-                                   words_size);
+      Copy::aligned_conjoint_words(r->bottom(), heap->get_region(new_start)->bottom(), words_size);
+      ContinuationGCSupport::relativize_stack_chunk(cast_to_oop<HeapWord*>(r->bottom()));
 
       oop new_obj = cast_to_oop(heap->get_region(new_start)->bottom());
       new_obj->init_mark();

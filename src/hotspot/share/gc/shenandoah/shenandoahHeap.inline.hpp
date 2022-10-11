@@ -30,6 +30,7 @@
 #include "classfile/javaClasses.inline.hpp"
 #include "gc/shared/markBitMap.inline.hpp"
 #include "gc/shared/threadLocalAllocBuffer.inline.hpp"
+#include "gc/shared/continuationGCSupport.inline.hpp"
 #include "gc/shared/suspendibleThreadSet.hpp"
 #include "gc/shared/tlab_globals.hpp"
 #include "gc/shenandoah/shenandoahAsserts.hpp"
@@ -46,8 +47,8 @@
 #include "oops/compressedOops.inline.hpp"
 #include "oops/oop.inline.hpp"
 #include "runtime/atomic.hpp"
+#include "runtime/javaThread.hpp"
 #include "runtime/prefetch.inline.hpp"
-#include "runtime/thread.hpp"
 #include "utilities/copy.hpp"
 #include "utilities/globalDefinitions.hpp"
 
@@ -297,9 +298,19 @@ inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
 
   assert(ShenandoahThreadLocalData::is_evac_allowed(thread), "must be enclosed in oom-evac scope");
 
-  size_t old_size = ShenandoahObjectUtils::size(p);
-  markWord mark = ShenandoahObjectUtils::stable_mark(p);
-  size_t size = p->copy_size(old_size, mark);
+  markWord mark = p->mark();
+  if (mark.is_marked()) {
+    // Object is already forwarded. Use the new copy.
+    return cast_to_oop(mark.decode_pointer());
+  }
+
+  markWord actual_mark = mark;
+  if (mark.has_monitor()) {
+    actual_mark = mark.monitor()->header();
+  }
+
+  size_t old_size = p->size(actual_mark);
+  size_t size = p->copy_size(old_size, actual_mark);
 
   assert(!heap_region_containing(p)->is_humongous(), "never evacuate humongous objects");
 
@@ -335,12 +346,28 @@ inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
   // Copy the object:
   Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(p), copy, old_size);
   oop copy_val = cast_to_oop(copy);
-  markWord new_mark = copy_val->initialize_hash_if_necessary(p, mark);
-  // TODO: Set mark in displaced header (safely), if necessary.
-  copy_val->set_mark(new_mark);
+
+  // Initialize hash-code field and update hash control bits in header, if necessary.
+  if (mark.has_monitor()) {
+    ObjectMonitor* mon = mark.monitor();
+    markWord new_mark = copy_val->initialize_hash_if_necessary(p, actual_mark);
+    if (new_mark != actual_mark) {
+      mon->set_header(new_mark);
+    }
+  } else {
+    markWord new_mark = copy_val->initialize_hash_if_necessary(p, mark);
+    copy_val->set_mark(new_mark);
+  }
 
   // Try to install the new forwarding pointer.
-  oop result = ShenandoahForwarding::try_update_forwardee(p, copy_val);
+  if (!copy_val->mark().is_marked()) {
+    // If we copied a mark-word that indicates 'forwarded' state, then
+    // another thread beat us, and this new copy will never be published.
+    // ContinuationGCSupport would get a corrupt Klass* in that case,
+    // so don't even attempt it.
+    ContinuationGCSupport::relativize_stack_chunk(copy_val);
+  }
+  oop result = ShenandoahForwarding::try_update_forwardee(p, copy_val, mark);
   if (result == copy_val) {
     // Successfully evacuated. Our copy is now the public one!
     shenandoah_assert_correct(NULL, copy_val);
@@ -519,7 +546,6 @@ inline void ShenandoahHeap::marked_object_iterate(ShenandoahHeapRegion* region, 
     oop obj = cast_to_oop(cs);
     assert(oopDesc::is_oop(obj), "sanity");
     assert(ctx->is_marked(obj), "object expected to be marked");
-    tty->print_cr("iterate object: " PTR_FORMAT, p2i(obj));
     size_t size = ShenandoahObjectUtils::size(obj);
     cl->do_object(obj);
     cs += size;

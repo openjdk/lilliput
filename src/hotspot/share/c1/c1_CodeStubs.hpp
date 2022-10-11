@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -57,6 +57,7 @@ class CodeStub: public CompilationResourceObj {
   virtual CodeEmitInfo* info() const             { return NULL; }
   virtual bool is_exception_throw_stub() const   { return false; }
   virtual bool is_simple_exception_stub() const  { return false; }
+  virtual int nr_immediate_oops_patched() const  { return 0; }
 #ifndef PRODUCT
   virtual void print_name(outputStream* out) const = 0;
 #endif
@@ -315,12 +316,10 @@ class NewObjectArrayStub: public CodeStub {
 class MonitorAccessStub: public CodeStub {
  protected:
   LIR_Opr _obj_reg;
-  LIR_Opr _lock_reg;
 
  public:
-  MonitorAccessStub(LIR_Opr obj_reg, LIR_Opr lock_reg) {
+  MonitorAccessStub(LIR_Opr obj_reg) {
     _obj_reg  = obj_reg;
-    _lock_reg  = lock_reg;
   }
 
 #ifndef PRODUCT
@@ -334,13 +333,13 @@ class MonitorEnterStub: public MonitorAccessStub {
   CodeEmitInfo* _info;
 
  public:
-  MonitorEnterStub(LIR_Opr obj_reg, LIR_Opr lock_reg, CodeEmitInfo* info);
+  MonitorEnterStub(LIR_Opr obj_reg, CodeEmitInfo* info);
 
   virtual void emit_code(LIR_Assembler* e);
   virtual CodeEmitInfo* info() const             { return _info; }
   virtual void visit(LIR_OpVisitState* visitor) {
     visitor->do_input(_obj_reg);
-    visitor->do_input(_lock_reg);
+    visitor->do_temp(_obj_reg);
     visitor->do_slow_case(_info);
   }
 #ifndef PRODUCT
@@ -350,22 +349,13 @@ class MonitorEnterStub: public MonitorAccessStub {
 
 
 class MonitorExitStub: public MonitorAccessStub {
- private:
-  bool _compute_lock;
-  int  _monitor_ix;
-
  public:
-  MonitorExitStub(LIR_Opr lock_reg, bool compute_lock, int monitor_ix)
-    : MonitorAccessStub(LIR_OprFact::illegalOpr, lock_reg),
-      _compute_lock(compute_lock), _monitor_ix(monitor_ix) { }
+  MonitorExitStub(LIR_Opr obj_reg)
+    : MonitorAccessStub(obj_reg) { }
   virtual void emit_code(LIR_Assembler* e);
   virtual void visit(LIR_OpVisitState* visitor) {
-    assert(_obj_reg->is_illegal(), "unused");
-    if (_compute_lock) {
-      visitor->do_temp(_lock_reg);
-    } else {
-      visitor->do_input(_lock_reg);
-    }
+    visitor->do_input(_obj_reg);
+    visitor->do_temp(_obj_reg);
   }
 #ifndef PRODUCT
   virtual void print_name(outputStream* out) const { out->print("MonitorExitStub"); }
@@ -410,6 +400,13 @@ class PatchingStub: public CodeStub {
     align_patch_site(masm);
     _pc_start = masm->pc();
     masm->bind(_patch_site_entry);
+  }
+
+  virtual int nr_immediate_oops_patched() const  {
+    if (_id == load_mirror_id || _id == load_appendix_id) {
+      return 1;
+    }
+    return 0;
   }
 
   void install(MacroAssembler* masm, LIR_PatchCode patch_code, Register obj, CodeEmitInfo* info) {
@@ -543,25 +540,6 @@ class ArrayCopyStub: public CodeStub {
   }
 #ifndef PRODUCT
   virtual void print_name(outputStream* out) const { out->print("ArrayCopyStub"); }
-#endif // PRODUCT
-};
-
-class LoadKlassStub: public CodeStub {
-private:
-  LIR_Opr          _obj;
-  LIR_Opr          _result;
-
-public:
-  LoadKlassStub(LIR_Opr obj, LIR_Opr result) :
-    CodeStub(), _obj(obj), _result(result) {};
-
-  virtual void emit_code(LIR_Assembler* e);
-  virtual void visit(LIR_OpVisitState* visitor) {
-    visitor->do_input(_obj);
-    visitor->do_output(_result);
-  }
-#ifndef PRODUCT
-virtual void print_name(outputStream* out) const { out->print("LoadKlassStub"); }
 #endif // PRODUCT
 };
 

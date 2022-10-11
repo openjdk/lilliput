@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -50,27 +50,28 @@
 //   - externalVFrame
 //     - entryVFrame        ; special frame created when calling Java from C
 
-// - BasicLock
-
 class StackFrameStream;
+class ContinuationEntry;
 
 class vframe: public ResourceObj {
  protected:
   frame        _fr;      // Raw frame behind the virtual frame.
   RegisterMap  _reg_map; // Register map for the raw frame (used to handle callee-saved registers).
   JavaThread*  _thread;  // The thread owning the raw frame.
+  stackChunkHandle _chunk;
 
   vframe(const frame* fr, const RegisterMap* reg_map, JavaThread* thread);
   vframe(const frame* fr, JavaThread* thread);
+
  public:
   // Factory methods for creating vframes
   static vframe* new_vframe(const frame* f, const RegisterMap *reg_map, JavaThread* thread);
   static vframe* new_vframe(StackFrameStream& fst, JavaThread* thread);
 
   // Accessors
-  frame              fr()           const { return _fr;       }
-  CodeBlob*          cb()         const { return _fr.cb();  }
-  CompiledMethod*   nm()         const {
+  frame             fr() const { return _fr;       }
+  CodeBlob*         cb() const { return _fr.cb();  }
+  CompiledMethod*   nm() const {
       assert( cb() != NULL && cb()->is_compiled(), "usage");
       return (CompiledMethod*) cb();
   }
@@ -79,12 +80,16 @@ class vframe: public ResourceObj {
   frame*             frame_pointer() { return &_fr;       }
   const RegisterMap* register_map() const { return &_reg_map; }
   JavaThread*        thread()       const { return _thread;   }
+  stackChunkOop      stack_chunk()  const { return _chunk(); /*_reg_map.stack_chunk();*/ }
 
   // Returns the sender vframe
   virtual vframe* sender() const;
 
   // Returns the next javaVFrame on the stack (skipping all other kinds of frame)
   javaVFrame *java_sender() const;
+
+  // Is the current frame the entry to a virtual thread's stack
+  bool is_vthread_entry() const;
 
   // Answers if the this is the top vframe in the frame, i.e., if the sender vframe
   // is in the caller frame
@@ -106,6 +111,7 @@ class vframe: public ResourceObj {
 #endif
 };
 
+class MonitorInfo;
 
 class javaVFrame: public vframe {
  public:
@@ -241,19 +247,18 @@ class entryVFrame: public externalVFrame {
 };
 
 
-// A MonitorInfo is a ResourceObject that describes a the pair:
+// A MonitorInfo is a ResourceObject that describes the pair:
 // 1) the owner of the monitor
 // 2) the monitor lock
 class MonitorInfo : public ResourceObj {
  private:
   Handle     _owner; // the object owning the monitor
-  BasicLock* _lock;
   Handle     _owner_klass; // klass (mirror) if owner was scalar replaced
   bool       _eliminated;
   bool       _owner_is_scalar_replaced;
  public:
   // Constructor
-  MonitorInfo(oop owner, BasicLock* lock, bool eliminated, bool owner_is_scalar_replaced);
+  MonitorInfo(oop owner, bool eliminated, bool owner_is_scalar_replaced);
   // Accessors
   oop owner() const {
     assert(!_owner_is_scalar_replaced, "should not be called for scalar replaced object");
@@ -263,7 +268,6 @@ class MonitorInfo : public ResourceObj {
     assert(_owner_is_scalar_replaced, "should not be called for not scalar replaced object");
     return _owner_klass();
   }
-  BasicLock* lock()  const { return _lock;  }
   bool eliminated()  const { return _eliminated; }
   bool owner_is_scalar_replaced()  const { return _owner_is_scalar_replaced; }
 };
@@ -271,7 +275,6 @@ class MonitorInfo : public ResourceObj {
 class vframeStreamCommon : StackObj {
  protected:
   // common
-  frame        _prev_frame;
   frame        _frame;
   JavaThread*  _thread;
   RegisterMap  _reg_map;
@@ -285,9 +288,11 @@ class vframeStreamCommon : StackObj {
   // Cached information
   Method* _method;
   int       _bci;
+  ContinuationEntry* _cont_entry;
 
   // Should VM activations be ignored or not
   bool _stop_at_java_call_stub;
+  Handle _continuation_scope; // stop at bottom of continuation with this scope
 
   bool fill_in_compiled_inlined_sender();
   void fill_from_compiled_frame(int decode_offset);
@@ -303,7 +308,7 @@ class vframeStreamCommon : StackObj {
 
  public:
   // Constructor
-  inline vframeStreamCommon(JavaThread* thread, bool process_frames);
+  inline vframeStreamCommon(RegisterMap reg_map);
 
   // Accessors
   Method* method() const { return _method; }
@@ -312,12 +317,16 @@ class vframeStreamCommon : StackObj {
   address frame_pc() const { return _frame.pc(); }
   inline int vframe_id() const;
   inline int decode_offset() const;
+  inline oop continuation() const;
 
-  CodeBlob*          cb()         const { return _frame.cb();  }
+  CodeBlob*         cb()         const { return _frame.cb();  }
   CompiledMethod*   nm()         const {
       assert( cb() != NULL && cb()->is_compiled(), "usage");
       return (CompiledMethod*) cb();
   }
+
+  const RegisterMap* reg_map() { return &_reg_map; }
+  void dont_walk_cont() { _reg_map.set_walk_cont(false); }
 
   javaVFrame* asJavaVFrame();
 
@@ -339,10 +348,14 @@ class vframeStreamCommon : StackObj {
 class vframeStream : public vframeStreamCommon {
  public:
   // Constructors
-  vframeStream(JavaThread* thread, bool stop_at_java_call_stub = false, bool process_frames = true);
+  vframeStream(JavaThread* thread, bool stop_at_java_call_stub = false, bool process_frames = true, bool vthread_carrier = false);
+
+  vframeStream(JavaThread* thread, Handle continuation_scope, bool stop_at_java_call_stub = false);
 
   // top_frame may not be at safepoint, start with sender
   vframeStream(JavaThread* thread, frame top_frame, bool stop_at_java_call_stub = false);
+
+  vframeStream(oop continuation, Handle continuation_scope = Handle());
 };
 
 #endif // SHARE_RUNTIME_VFRAME_HPP

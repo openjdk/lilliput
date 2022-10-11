@@ -266,25 +266,23 @@ void LIR_Assembler::osr_entry() {
   Register OSR_buf = osrBufferPointer()->as_pointer_register();
   { assert(frame::interpreter_frame_monitor_size() == BasicObjectLock::size(), "adjust code below");
     int monitor_offset = BytesPerWord * method()->max_locals() +
-      (2 * BytesPerWord) * (number_of_locks - 1);
+      BytesPerWord * (number_of_locks - 1);
     // SharedRuntime::OSR_migration_begin() packs BasicObjectLocks in
     // the OSR buffer using 2 word entries: first the lock and then
     // the oop.
     for (int i = 0; i < number_of_locks; i++) {
-      int slot_offset = monitor_offset - ((i * 2) * BytesPerWord);
+      int slot_offset = monitor_offset - (i * BytesPerWord);
 #ifdef ASSERT
       // verify the interpreter's monitor has a non-null object
       {
         Label L;
-        __ ldr(rscratch1, Address(OSR_buf, slot_offset + 1*BytesPerWord));
+        __ ldr(rscratch1, Address(OSR_buf, slot_offset));
         __ cbnz(rscratch1, L);
         __ stop("locked object is NULL");
         __ bind(L);
       }
 #endif
-      __ ldr(r19, Address(OSR_buf, slot_offset + 0));
-      __ str(r19, frame_map()->address_for_monitor_lock(i));
-      __ ldr(r19, Address(OSR_buf, slot_offset + 1*BytesPerWord));
+      __ ldr(r19, Address(OSR_buf, slot_offset));
       __ str(r19, frame_map()->address_for_monitor_object(i));
     }
   }
@@ -332,7 +330,7 @@ void LIR_Assembler::jobject2reg(jobject o, Register reg) {
   if (o == NULL) {
     __ mov(reg, zr);
   } else {
-    __ movoop(reg, o, /*immediate*/true);
+    __ movoop(reg, o);
   }
 }
 
@@ -378,13 +376,6 @@ int LIR_Assembler::initial_frame_size_in_bytes() const {
 
 
 int LIR_Assembler::emit_exception_handler() {
-  // if the last instruction is a call (typically to do a throw which
-  // is coming at the end after block reordering) the return address
-  // must still point into the code area in order to avoid assertion
-  // failures when searching for the corresponding bci => add a nop
-  // (was bug 5/14/1999 - gri)
-  __ nop();
-
   // generate code for exception handler
   address handler_base = __ start_a_stub(exception_handler_size());
   if (handler_base == NULL) {
@@ -403,7 +394,8 @@ int LIR_Assembler::emit_exception_handler() {
   __ verify_not_null_oop(r0);
 
   // search an exception handler (r0: exception oop, r3: throwing pc)
-  __ far_call(RuntimeAddress(Runtime1::entry_for(Runtime1::handle_exception_from_callee_id)));  __ should_not_reach_here();
+  __ far_call(RuntimeAddress(Runtime1::entry_for(Runtime1::handle_exception_from_callee_id)));
+  __ should_not_reach_here();
   guarantee(code_offset() - offset <= exception_handler_size(), "overflow");
   __ end_a_stub();
 
@@ -437,7 +429,8 @@ int LIR_Assembler::emit_unwind_handler() {
   MonitorExitStub* stub = NULL;
   if (method()->is_synchronized()) {
     monitor_address(0, FrameMap::r0_opr);
-    stub = new MonitorExitStub(FrameMap::r0_opr, true, 0);
+    __ ldr(r4, Address(r0, BasicObjectLock::obj_offset_in_bytes()));
+    stub = new MonitorExitStub(FrameMap::r4_opr);
     if (UseHeavyMonitors) {
       __ b(*stub->entry());
     } else {
@@ -471,13 +464,6 @@ int LIR_Assembler::emit_unwind_handler() {
 
 
 int LIR_Assembler::emit_deopt_handler() {
-  // if the last instruction is a call (typically to do a throw which
-  // is coming at the end after block reordering) the return address
-  // must still point into the code area in order to avoid assertion
-  // failures when searching for the corresponding bci => add a nop
-  // (was bug 5/14/1999 - gri)
-  __ nop();
-
   // generate code for exception handler
   address handler_base = __ start_a_stub(deopt_handler_size());
   if (handler_base == NULL) {
@@ -977,7 +963,7 @@ void LIR_Assembler::mem2reg(LIR_Opr src, LIR_Opr dest, BasicType type, LIR_Patch
       if (UseCompressedOops && !wide) {
         __ ldrw(dest->as_register(), as_Address(from_addr));
       } else {
-         __ ldr(dest->as_register(), as_Address(from_addr));
+        __ ldr(dest->as_register(), as_Address(from_addr));
       }
       break;
     case T_METADATA:
@@ -2050,6 +2036,7 @@ void LIR_Assembler::call(LIR_OpJavaCall* op, relocInfo::relocType rtype) {
     return;
   }
   add_call_info(code_offset(), op->info());
+  __ post_call_nop();
 }
 
 
@@ -2060,6 +2047,7 @@ void LIR_Assembler::ic_call(LIR_OpJavaCall* op) {
     return;
   }
   add_call_info(code_offset(), op->info());
+  __ post_call_nop();
 }
 
 void LIR_Assembler::emit_static_call_stub() {
@@ -2549,9 +2537,12 @@ void LIR_Assembler::emit_lock(LIR_OpLock* op) {
   Register hdr = op->hdr_opr()->as_register();
   Register lock = op->lock_opr()->as_register();
   if (UseHeavyMonitors) {
+    if (op->info() != NULL) {
+      add_debug_info_for_null_check_here(op->info());
+      __ null_check(obj, -1);
+    }
     __ b(*op->stub()->entry());
   } else if (op->code() == lir_lock) {
-    assert(BasicLock::displaced_header_offset_in_bytes() == 0, "lock_reg must point to the displaced header");
     // add debug info for NullPointerException only if one is possible
     int null_check_offset = __ lock_object(hdr, obj, lock, *op->stub()->entry());
     if (op->info() != NULL) {
@@ -2559,7 +2550,6 @@ void LIR_Assembler::emit_lock(LIR_OpLock* op) {
     }
     // done
   } else if (op->code() == lir_unlock) {
-    assert(BasicLock::displaced_header_offset_in_bytes() == 0, "lock_reg must point to the displaced header");
     __ unlock_object(hdr, obj, lock, *op->stub()->entry());
   } else {
     Unimplemented();
@@ -2570,7 +2560,6 @@ void LIR_Assembler::emit_lock(LIR_OpLock* op) {
 void LIR_Assembler::emit_load_klass(LIR_OpLoadKlass* op) {
   Register obj = op->obj()->as_pointer_register();
   Register result = op->result_opr()->as_pointer_register();
-  Register tmp = rscratch1;
 
   CodeEmitInfo* info = op->info();
   if (info != NULL) {
@@ -2579,18 +2568,7 @@ void LIR_Assembler::emit_load_klass(LIR_OpLoadKlass* op) {
 
   assert(UseCompressedClassPointers, "expects UseCompressedClassPointers");
 
-  // Check if we can take the (common) fast path, if obj is unlocked.
-  __ ldr(tmp, Address(obj, oopDesc::mark_offset_in_bytes()));
-  __ eor(tmp, tmp, markWord::unlocked_value);
-  __ tst(tmp, markWord::lock_mask_in_place);
-  __ br(Assembler::NE, *op->stub()->entry());
-
-  // Fast-path: shift and decode Klass*.
-  __ mov(result, tmp);
-  __ lsr(result, result, markWord::klass_shift);
-
-  __ bind(*op->stub()->continuation());
-  __ decode_klass_not_null(result);
+  __ load_klass(result, obj);
 }
 
 void LIR_Assembler::emit_profile_call(LIR_OpProfileCall* op) {
@@ -2674,7 +2652,7 @@ void LIR_Assembler::emit_delay(LIR_OpDelay*) {
 
 
 void LIR_Assembler::monitor_address(int monitor_no, LIR_Opr dst) {
-  __ lea(dst->as_register(), frame_map()->address_for_monitor_lock(monitor_no));
+  __ lea(dst->as_register(), frame_map()->address_for_monitor_object(monitor_no));
 }
 
 void LIR_Assembler::emit_updatecrc32(LIR_OpUpdateCRC32* op) {
@@ -2688,7 +2666,7 @@ void LIR_Assembler::emit_updatecrc32(LIR_OpUpdateCRC32* op) {
   assert_different_registers(val, crc, res);
   uint64_t offset;
   __ adrp(res, ExternalAddress(StubRoutines::crc_table_addr()), offset);
-  if (offset) __ add(res, res, offset);
+  __ add(res, res, offset);
 
   __ mvnw(crc, crc); // ~crc
   __ update_byte_crc32(crc, val, res);
@@ -2904,6 +2882,7 @@ void LIR_Assembler::rt_call(LIR_Opr result, address dest, const LIR_OprList* arg
   if (info != NULL) {
     add_call_info_here(info);
   }
+  __ post_call_nop();
 }
 
 void LIR_Assembler::volatile_move_op(LIR_Opr src, LIR_Opr dest, BasicType type, CodeEmitInfo* info) {

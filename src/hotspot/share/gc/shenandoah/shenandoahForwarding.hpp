@@ -60,7 +60,7 @@ public:
    * Returns the new object 'update' upon success, or
    * the new forwardee that a competing thread installed.
    */
-  static inline oop try_update_forwardee(oop obj, oop update);
+  static inline oop try_update_forwardee(oop obj, oop update, markWord old_mark);
 
 };
 

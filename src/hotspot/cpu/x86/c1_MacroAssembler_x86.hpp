@@ -50,7 +50,7 @@
   // obj     : must point to the object to lock, contents preserved
   // disp_hdr: must point to the displaced header location, contents preserved
   // returns code offset at which to add null check debug information
-  int lock_object  (Register swap, Register obj, Register disp_hdr, Label& slow_case);
+  int lock_object  (Register swap, Register obj, Register disp_hdr, Register tmp, Label& slow_case);
 
   // unlocking
   // hdr     : contents destroyed
@@ -98,11 +98,12 @@
   //       This helps us to track the rsp changes compared to the entry rsp (->_rsp_offset)
 
   void push_jint (jint i)     { _rsp_offset++; push(i); }
-  void push_oop  (jobject o)  { _rsp_offset++; pushoop(o); }
   // Seems to always be in wordSize
   void push_addr (Address a)  { _rsp_offset++; pushptr(a); }
   void push_reg  (Register r) { _rsp_offset++; push(r); }
   void pop_reg   (Register r) { _rsp_offset--; pop(r); assert(_rsp_offset >= 0, "stack offset underflow"); }
+
+  void push_oop  (jobject o, Register rscratch) { _rsp_offset++; pushoop(o, rscratch); }
 
   void dec_stack (int nof_words) {
     _rsp_offset -= nof_words;

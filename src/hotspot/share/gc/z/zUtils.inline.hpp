@@ -58,7 +58,7 @@ inline void ZUtils::object_copy_conjoint(uintptr_t from, uintptr_t to, size_t si
 
 inline size_t ZUtils::object_copy_size(uintptr_t addr, size_t size) {
   oop obj = ZOop::from_address(addr);
-  markWord mrk = obj->safe_mark();
+  markWord mrk = obj->resolve_mark();
   return obj->copy_size(size, mrk);
 }
 

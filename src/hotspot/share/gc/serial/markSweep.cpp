@@ -150,10 +150,13 @@ void PreservedMark::adjust_pointer(const SlidingForwarding* const forwarding) {
 }
 
 void PreservedMark::restore() {
-  assert(_mark.has_displaced_mark_helper(), "only displaced headers here");
-  markWord m = _mark.displaced_mark_helper();
-  _mark.set_displaced_mark_helper(m.hash_copy_hashctrl_from(_obj->mark()));
-  _obj->set_mark(_mark);
+  if (_mark.has_displaced_mark_helper()) {
+    markWord m = _mark.displaced_mark_helper();
+    _mark.set_displaced_mark_helper(m.hash_copy_hashctrl_from(_obj->mark()));
+    _obj->set_mark(_mark);
+  } else {
+    _obj->set_mark(_mark.hash_copy_hashctrl_from(_obj->mark()));
+  }
 }
 
 // We preserve the mark which should be replaced at the end and the location
