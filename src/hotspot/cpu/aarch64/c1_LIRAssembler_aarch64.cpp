@@ -2560,7 +2560,6 @@ void LIR_Assembler::emit_lock(LIR_OpLock* op) {
 void LIR_Assembler::emit_load_klass(LIR_OpLoadKlass* op) {
   Register obj = op->obj()->as_pointer_register();
   Register result = op->result_opr()->as_pointer_register();
-  Register tmp = rscratch1;
 
   CodeEmitInfo* info = op->info();
   if (info != NULL) {
@@ -2569,18 +2568,7 @@ void LIR_Assembler::emit_load_klass(LIR_OpLoadKlass* op) {
 
   assert(UseCompressedClassPointers, "expects UseCompressedClassPointers");
 
-  // Check if we can take the (common) fast path, if obj is unlocked.
-  __ ldr(tmp, Address(obj, oopDesc::mark_offset_in_bytes()));
-  __ eor(tmp, tmp, markWord::unlocked_value);
-  __ tst(tmp, markWord::lock_mask_in_place);
-  __ br(Assembler::NE, *op->stub()->entry());
-
-  // Fast-path: shift and decode Klass*.
-  __ mov(result, tmp);
-  __ lsr(result, result, markWord::klass_shift);
-
-  __ bind(*op->stub()->continuation());
-  __ decode_klass_not_null(result);
+  __ load_klass(result, obj);
 }
 
 void LIR_Assembler::emit_profile_call(LIR_OpProfileCall* op) {
