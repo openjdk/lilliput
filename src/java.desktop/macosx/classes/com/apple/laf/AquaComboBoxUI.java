@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -252,9 +252,8 @@ public class AquaComboBoxUI extends BasicComboBoxUI implements Sizeable {
                         if (editor instanceof AquaCustomComboTextField) {
                             ((AquaCustomComboTextField)editor).selectAll();
                         }
-                    } else {
-                        action.actionPerformed(e);
                     }
+                    action.actionPerformed(e);
                 }
             });
         }
@@ -454,6 +453,31 @@ public class AquaComboBoxUI extends BasicComboBoxUI implements Sizeable {
     }
 
     class AquaComboBoxLayoutManager extends BasicComboBoxUI.ComboBoxLayoutManager {
+        protected Rectangle rectangleForCurrentValue() {
+            int width = comboBox.getWidth();
+            int height = 22;
+            Insets insets = getInsets();
+            int buttonSize = height - (insets.top + insets.bottom);
+            if ( arrowButton != null )  {
+                buttonSize = arrowButton.getWidth();
+            }
+            int midHeight = (comboBox.getHeight() - height - (insets.top + insets.bottom)) / 2 - 1;
+            if (midHeight < 0) {
+                midHeight = 0;
+            }
+
+            if (comboBox.getComponentOrientation().isLeftToRight()) {
+                return new Rectangle(insets.left, insets.top + midHeight,
+                        width - (insets.left + insets.right + buttonSize) + 4,
+                        height - (insets.top + insets.bottom));
+            }
+            else {
+                return new Rectangle(insets.left + buttonSize, insets.top + midHeight,
+                        width - (insets.left + insets.right + buttonSize) + 4,
+                        height - (insets.top + insets.bottom));
+            }
+        }
+
         public void layoutContainer(final Container parent) {
             if (arrowButton != null && !comboBox.isEditable()) {
                 final Insets insets = comboBox.getInsets();
@@ -477,8 +501,6 @@ public class AquaComboBoxUI extends BasicComboBoxUI implements Sizeable {
 
             if (editor != null) {
                 final Rectangle editorRect = rectangleForCurrentValue();
-                editorRect.width += 4;
-                editorRect.height += 1;
                 editor.setBounds(editorRect);
             }
         }
@@ -617,13 +639,6 @@ public class AquaComboBoxUI extends BasicComboBoxUI implements Sizeable {
             size.height += margin.top + margin.bottom;
         } else {
             size = super.getMinimumSize(c);
-        }
-
-        final Border border = c.getBorder();
-        if (border != null) {
-            final Insets insets = border.getBorderInsets(c);
-            size.height += insets.top + insets.bottom;
-            size.width += insets.left + insets.right;
         }
 
         cachedMinimumSize.setSize(size.width, size.height);

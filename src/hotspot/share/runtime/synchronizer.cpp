@@ -35,9 +35,12 @@
 #include "oops/markWord.hpp"
 #include "oops/oop.inline.hpp"
 #include "runtime/atomic.hpp"
+#include "runtime/frame.inline.hpp"
 #include "runtime/handles.inline.hpp"
 #include "runtime/handshake.hpp"
 #include "runtime/interfaceSupport.inline.hpp"
+#include "runtime/javaThread.hpp"
+#include "runtime/lockStack.inline.hpp"
 #include "runtime/mutexLocker.hpp"
 #include "runtime/objectMonitor.hpp"
 #include "runtime/objectMonitor.inline.hpp"
@@ -49,14 +52,20 @@
 #include "runtime/sharedRuntime.hpp"
 #include "runtime/stubRoutines.hpp"
 #include "runtime/synchronizer.hpp"
-#include "runtime/thread.inline.hpp"
+#include "runtime/threads.hpp"
 #include "runtime/timer.hpp"
 #include "runtime/vframe.hpp"
 #include "runtime/vmThread.hpp"
 #include "utilities/align.hpp"
 #include "utilities/dtrace.hpp"
 #include "utilities/events.hpp"
+#include "utilities/linkedlist.hpp"
 #include "utilities/preserveException.hpp"
+
+class ObjectMonitorsHashtable::PtrList :
+  public LinkedListImpl<ObjectMonitor*,
+                        ResourceObj::C_HEAP, mtThread,
+                        AllocFailStrategy::RETURN_NULL> {};
 
 class CleanupObjectMonitorsHashtable: StackObj {
  public:
@@ -77,7 +86,7 @@ void ObjectMonitorsHashtable::add_entry(void* key, ObjectMonitor* om) {
   ObjectMonitorsHashtable::PtrList* list = get_entry(key);
   if (list == nullptr) {
     // Create new list and add it to the hash table:
-    list = new (ResourceObj::C_HEAP, mtThread) ObjectMonitorsHashtable::PtrList();
+    list = new (ResourceObj::C_HEAP, mtThread) ObjectMonitorsHashtable::PtrList;
     add_entry(key, list);
   }
   list->add(om);  // Add the ObjectMonitor to the list.
@@ -239,11 +248,11 @@ int dtrace_waited_probe(ObjectMonitor* monitor, Handle obj, Thread* thr) {
 }
 
 static const int NINFLATIONLOCKS = 256;
-static os::PlatformMutex* gInflationLocks[NINFLATIONLOCKS];
+static PlatformMutex* gInflationLocks[NINFLATIONLOCKS];
 
 void ObjectSynchronizer::initialize() {
   for (int i = 0; i < NINFLATIONLOCKS; i++) {
-    gInflationLocks[i] = new os::PlatformMutex();
+    gInflationLocks[i] = new PlatformMutex();
   }
   // Start the ceiling with the estimate for one thread.
   set_in_use_list_ceiling(AvgMonitorsPerThreadEstimate);
@@ -304,7 +313,7 @@ bool ObjectSynchronizer::quick_notify(oopDesc* obj, JavaThread* current, bool al
   if (obj == NULL) return false;  // slow-path for invalid obj
   const markWord mark = obj->mark();
 
-  if (mark.has_locker() && current->is_lock_owned((address)mark.locker())) {
+  if (mark.is_fast_locked() && current->lock_stack().contains(oop(obj))) {
     // Degenerate notify
     // stack-locked by caller so by definition the implied waitset is empty.
     return true;
@@ -345,8 +354,7 @@ bool ObjectSynchronizer::quick_notify(oopDesc* obj, JavaThread* current, bool al
 // Note that we can't safely call AsyncPrintJavaStack() from within
 // quick_enter() as our thread state remains _in_Java.
 
-bool ObjectSynchronizer::quick_enter(oop obj, JavaThread* current,
-                                     BasicLock * lock) {
+bool ObjectSynchronizer::quick_enter(oop obj, JavaThread* current) {
   assert(current->thread_state() == _thread_in_Java, "invariant");
   NoSafepointVerifier nsv;
   if (obj == NULL) return false;       // Need to throw NPE
@@ -374,22 +382,13 @@ bool ObjectSynchronizer::quick_enter(oop obj, JavaThread* current,
 
     if (owner == current) {
       m->_recursions++;
+      current->inc_held_monitor_count();
       return true;
     }
 
-    // This Java Monitor is inflated so obj's header will never be
-    // displaced to this thread's BasicLock. Make the displaced header
-    // non-NULL so this BasicLock is not seen as recursive nor as
-    // being locked. We do this unconditionally so that this thread's
-    // BasicLock cannot be mis-interpreted by any stack walkers. For
-    // performance reasons, stack walkers generally first check for
-    // stack-locking in the object's header, the second check is for
-    // recursive stack-locking in the displaced header in the BasicLock,
-    // and last are the inflated Java Monitor (ObjectMonitor) checks.
-    lock->set_displaced_header(markWord::unused_mark());
-
     if (owner == NULL && m->try_set_owner_from(NULL, current) == NULL) {
       assert(m->_recursions == 0, "invariant");
+      current->inc_held_monitor_count();
       return true;
     }
   }
@@ -466,36 +465,37 @@ static bool useHeavyMonitors() {
 // of this algorithm. Make sure to update that code if the following function is
 // changed. The implementation is extremely sensitive to race condition. Be careful.
 
-void ObjectSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* current) {
+void ObjectSynchronizer::enter(Handle obj, JavaThread* current) {
   if (obj->klass()->is_value_based()) {
     handle_sync_on_value_based_class(obj, current);
   }
 
-  if (!useHeavyMonitors()) {
-    markWord mark = obj->mark();
-    if (mark.is_neutral()) {
-      // Anticipate successful CAS -- the ST of the displaced mark must
-      // be visible <= the ST performed by the CAS.
-      lock->set_displaced_header(mark);
-      if (mark == obj()->cas_set_mark(markWord::from_pointer(lock), mark)) {
-        return;
-      }
-      // Fall through to inflate() ...
-    } else if (mark.has_locker() &&
-               current->is_lock_owned((address)mark.locker())) {
-      assert(lock != mark.locker(), "must not re-lock the same lock");
-      assert(lock != (BasicLock*)obj->mark().value(), "don't relock with same BasicLock");
-      lock->set_displaced_header(markWord::from_pointer(NULL));
-      return;
-    }
+  current->inc_held_monitor_count();
 
-    // The object header will never be displaced to this lock,
-    // so it does not matter what the value is, except that it
-    // must be non-zero to avoid looking like a re-entrant lock,
-    // and must not look locked either.
-    lock->set_displaced_header(markWord::unused_mark());
+  if (!useHeavyMonitors()) {
+    LockStack& lock_stack = current->lock_stack();
+
+    markWord header = obj()->mark_acquire();
+    while (true) {
+      if (header.is_neutral()) {
+        assert(!lock_stack.contains(obj()), "thread must not already hold the lock");
+        // Try to swing into 'fast-locked' state without inflating.
+        markWord locked_header = header.set_fast_locked();
+        markWord witness = obj()->cas_set_mark(locked_header, header);
+        if (witness == header) {
+          // Successfully fast-locked, push object to lock-stack and return.
+          lock_stack.push(obj());
+          return;
+        }
+        // Otherwise retry.
+        header = witness;
+      } else {
+        // Fall-through to inflate-enter.
+        break;
+      }
+    }
   } else if (VerifyHeavyMonitors) {
-    guarantee(!obj->mark().has_locker(), "must not be stack-locked");
+    guarantee(!obj->mark().is_fast_locked(), "must not be stack-locked");
   }
 
   // An async deflation can race after the inflate() call and before
@@ -509,56 +509,36 @@ void ObjectSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* current)
   }
 }
 
-void ObjectSynchronizer::exit(oop object, BasicLock* lock, JavaThread* current) {
-  if (!useHeavyMonitors()) {
-    markWord mark = object->mark();
-
-    markWord dhw = lock->displaced_header();
-    if (dhw.value() == 0) {
-      // If the displaced header is NULL, then this exit matches up with
-      // a recursive enter. No real work to do here except for diagnostics.
-#ifndef PRODUCT
-      if (mark != markWord::INFLATING()) {
-        // Only do diagnostics if we are not racing an inflation. Simply
-        // exiting a recursive enter of a Java Monitor that is being
-        // inflated is safe; see the has_monitor() comment below.
-        assert(!mark.is_neutral(), "invariant");
-        assert(!mark.has_locker() ||
-        current->is_lock_owned((address)mark.locker()), "invariant");
-        if (mark.has_monitor()) {
-          // The BasicLock's displaced_header is marked as a recursive
-          // enter and we have an inflated Java Monitor (ObjectMonitor).
-          // This is a special case where the Java Monitor was inflated
-          // after this thread entered the stack-lock recursively. When a
-          // Java Monitor is inflated, we cannot safely walk the Java
-          // Monitor owner's stack and update the BasicLocks because a
-          // Java Monitor can be asynchronously inflated by a thread that
-          // does not own the Java Monitor.
-          ObjectMonitor* m = mark.monitor();
-          assert(m->object()->mark() == mark, "invariant");
-          assert(m->is_entered(current), "invariant");
-        }
-      }
-#endif
-      return;
+void ObjectSynchronizer::exit(oop object, JavaThread* current) {
+  current->dec_held_monitor_count();
+  markWord header = object->mark_acquire();
+  if (!useHeavyMonitors() && header.is_fast_locked()) {
+    markWord unlocked_header = header.set_unlocked();
+    markWord witness = object->cas_set_mark(unlocked_header, header);
+    if (witness != header) {
+      // Another thread beat us, it can only have installed an anonymously locked monitor at this point.
+      // Fetch that monitor, set owner correctly to this thread, and exit it (allowing waiting threads to enter).
+      assert(witness.has_monitor(), "must have monitor");
+      ObjectMonitor* monitor = witness.monitor();
+      assert(monitor->is_owner_anonymous(), "must be anonymous owner");
+      monitor->set_owner_from_anonymous(current);
+      monitor->exit(current);
     }
-
-    if (mark == markWord::from_pointer(lock)) {
-      // If the object is stack-locked by the current thread, try to
-      // swing the displaced header from the BasicLock back to the mark.
-      assert(dhw.is_neutral(), "invariant");
-      if (object->cas_set_mark(dhw, mark) == mark) {
-        return;
-      }
-    }
-  } else if (VerifyHeavyMonitors) {
-    guarantee(!object->mark().has_locker(), "must not be stack-locked");
+    LockStack& lock_stack = current->lock_stack();
+    lock_stack.remove(object);
+    return;
   }
 
-  // We have to take the slow-path of possible inflation and then exit.
-  // The ObjectMonitor* can't be async deflated until ownership is
-  // dropped inside exit() and the ObjectMonitor* must be !is_busy().
-  ObjectMonitor* monitor = inflate(current, object, inflate_cause_vm_internal);
+  assert(header.has_monitor(), "must have monitor");
+  log_trace(monitorinflation)("monitor unlocking object: " PTR_FORMAT, p2i(object));
+  ObjectMonitor* monitor = header.monitor();
+  if (!useHeavyMonitors() && monitor->is_owner_anonymous()) {
+    // It must be us. Pop lock object from lock stack.
+    LockStack& lock_stack = current->lock_stack();
+    oop popped = lock_stack.pop();
+    assert(popped == object, "must be owned by this thread");
+    monitor->set_owner_from_anonymous(current);
+  }
   monitor->exit(current);
 }
 
@@ -578,8 +558,9 @@ intx ObjectSynchronizer::complete_exit(Handle obj, JavaThread* current) {
   // The ObjectMonitor* can't be async deflated until ownership is
   // dropped inside exit() and the ObjectMonitor* must be !is_busy().
   ObjectMonitor* monitor = inflate(current, obj(), inflate_cause_vm_internal);
-  intptr_t ret_code = monitor->complete_exit(current);
-  return ret_code;
+  intx recur_count = monitor->complete_exit(current);
+  current->dec_held_monitor_count(recur_count + 1);
+  return recur_count;
 }
 
 // NOTE: must use heavy weight monitor to handle complete_exit/reenter()
@@ -591,6 +572,7 @@ void ObjectSynchronizer::reenter(Handle obj, intx recursions, JavaThread* curren
   while (true) {
     ObjectMonitor* monitor = inflate(current, obj(), inflate_cause_vm_internal);
     if (monitor->reenter(recursions, current)) {
+      current->inc_held_monitor_count(recursions + 1);
       return;
     }
   }
@@ -612,6 +594,7 @@ void ObjectSynchronizer::jni_enter(Handle obj, JavaThread* current) {
   while (true) {
     ObjectMonitor* monitor = inflate(current, obj(), inflate_cause_jni_enter);
     if (monitor->enter(current)) {
+      current->inc_held_monitor_count(1, true);
       break;
     }
   }
@@ -630,6 +613,7 @@ void ObjectSynchronizer::jni_exit(oop obj, TRAPS) {
   // monitor even if an exception was already pending.
   if (monitor->check_owner(THREAD)) {
     monitor->exit(current);
+    current->dec_held_monitor_count(1, true);
   }
 }
 
@@ -642,13 +626,13 @@ ObjectLocker::ObjectLocker(Handle obj, JavaThread* thread) {
   _obj = obj;
 
   if (_obj() != NULL) {
-    ObjectSynchronizer::enter(_obj, &_lock, _thread);
+    ObjectSynchronizer::enter(_obj, _thread);
   }
 }
 
 ObjectLocker::~ObjectLocker() {
   if (_obj() != NULL) {
-    ObjectSynchronizer::exit(_obj(), &_lock, _thread);
+    ObjectSynchronizer::exit(_obj(), _thread);
   }
 }
 
@@ -691,7 +675,7 @@ void ObjectSynchronizer::notify(Handle obj, TRAPS) {
   JavaThread* current = THREAD;
 
   markWord mark = obj->mark();
-  if (mark.has_locker() && current->is_lock_owned((address)mark.locker())) {
+  if (mark.is_fast_locked() && current->lock_stack().contains(obj())) {
     // Not inflated so there can't be any waiters to notify.
     return;
   }
@@ -706,7 +690,7 @@ void ObjectSynchronizer::notifyall(Handle obj, TRAPS) {
   JavaThread* current = THREAD;
 
   markWord mark = obj->mark();
-  if (mark.has_locker() && current->is_lock_owned((address)mark.locker())) {
+  if (mark.is_fast_locked() && current->lock_stack().contains(obj())) {
     // Not inflated so there can't be any waiters to notify.
     return;
   }
@@ -731,133 +715,6 @@ struct SharedGlobals {
 };
 
 static SharedGlobals GVars;
-
-markWord ObjectSynchronizer::read_stable_mark(oop obj) {
-  markWord mark = obj->mark_acquire();
-  if (!mark.is_being_inflated()) {
-    return mark;       // normal fast-path return
-  }
-
-  int its = 0;
-  for (;;) {
-    markWord mark = obj->mark_acquire();
-    if (!mark.is_being_inflated()) {
-      return mark;    // normal fast-path return
-    }
-
-    // The object is being inflated by some other thread.
-    // The caller of read_stable_mark() must wait for inflation to complete.
-    // Avoid live-lock.
-
-    ++its;
-    if (its > 10000 || !os::is_MP()) {
-      if (its & 1) {
-        os::naked_yield();
-      } else {
-        // Note that the following code attenuates the livelock problem but is not
-        // a complete remedy.  A more complete solution would require that the inflating
-        // thread hold the associated inflation lock.  The following code simply restricts
-        // the number of spinners to at most one.  We'll have N-2 threads blocked
-        // on the inflationlock, 1 thread holding the inflation lock and using
-        // a yield/park strategy, and 1 thread in the midst of inflation.
-        // A more refined approach would be to change the encoding of INFLATING
-        // to allow encapsulation of a native thread pointer.  Threads waiting for
-        // inflation to complete would use CAS to push themselves onto a singly linked
-        // list rooted at the markword.  Once enqueued, they'd loop, checking a per-thread flag
-        // and calling park().  When inflation was complete the thread that accomplished inflation
-        // would detach the list and set the markword to inflated with a single CAS and
-        // then for each thread on the list, set the flag and unpark() the thread.
-
-        // Index into the lock array based on the current object address.
-        static_assert(is_power_of_2(NINFLATIONLOCKS), "must be");
-        int ix = (cast_from_oop<intptr_t>(obj) >> 5) & (NINFLATIONLOCKS-1);
-        int YieldThenBlock = 0;
-        assert(ix >= 0 && ix < NINFLATIONLOCKS, "invariant");
-        gInflationLocks[ix]->lock();
-        while (obj->mark_acquire() == markWord::INFLATING()) {
-          // Beware: naked_yield() is advisory and has almost no effect on some platforms
-          // so we periodically call current->_ParkEvent->park(1).
-          // We use a mixed spin/yield/block mechanism.
-          if ((YieldThenBlock++) >= 16) {
-            Thread::current()->_ParkEvent->park(1);
-          } else {
-            os::naked_yield();
-          }
-        }
-        gInflationLocks[ix]->unlock();
-      }
-    } else {
-      SpinPause();       // SMP-polite spinning
-    }
-  }
-}
-
-// Safely load a mark word from an object, even with racing stack-locking or monitor inflation.
-// The protocol is a partial inflation-protocol: it installs INFLATING into the object's mark
-// word in order to prevent an stack-locks or inflations from interferring (or detect such
-// interference and retry), but then, instead of creating and installing a monitor, simply
-// read and return the real mark word.
-markWord ObjectSynchronizer::stable_mark(oop object) {
-  for (;;) {
-    const markWord mark = read_stable_mark(object);
-    assert(!mark.is_being_inflated(), "read_stable_mark must prevent inflating mark");
-
-    // The mark can be in one of the following states:
-    // *  Inflated     - just return mark from inflated monitor
-    // *  Stack-locked - coerce it to inflating, and then return displaced mark
-    // *  Neutral      - return mark
-    // *  Marked       - return mark
-
-    // CASE: inflated
-    if (mark.has_monitor()) {
-      ObjectMonitor* inf = mark.monitor();
-      markWord dmw = inf->header();
-      assert(dmw.is_neutral(), "invariant: header=" INTPTR_FORMAT, dmw.value());
-      return dmw;
-    }
-
-    // CASE: stack-locked
-    // Could be stack-locked either by this thread or by some other thread.
-    if (mark.has_locker()) {
-      BasicLock* lock = mark.locker();
-      if (Thread::current()->is_lock_owned((address)lock)) {
-        // If locked by this thread, it is safe to access the displaced header.
-        markWord dmw = lock->displaced_header();
-        assert(dmw.is_neutral(), "invariant: header=" INTPTR_FORMAT, dmw.value());
-        return dmw;
-      }
-
-      // Otherwise, attempt to temporarily install INFLATING into the mark-word,
-      // to prevent inflation or unlocking by competing thread.
-      markWord cmp = object->cas_set_mark(markWord::INFLATING(), mark);
-      if (cmp != mark) {
-        continue;       // Interference -- just retry
-      }
-
-      // fetch the displaced mark from the owner's stack.
-      // The owner can't die or unwind past the lock while our INFLATING
-      // object is in the mark.  Furthermore the owner can't complete
-      // an unlock on the object, either.
-      markWord dmw = mark.displaced_mark_helper();
-      // Catch if the object's header is not neutral (not locked and
-      // not marked is what we care about here).
-      assert(dmw.is_neutral(), "invariant: header=" INTPTR_FORMAT, dmw.value());
-
-      // Must preserve store ordering. The monitor state must
-      // be stable at the time of publishing the monitor address.
-      assert(object->mark() == markWord::INFLATING(), "invariant");
-      // Release semantics so that above set_object() is seen first.
-      object->release_set_mark(mark);
-
-      return dmw;
-    }
-
-    // CASE: neutral or marked (for GC)
-    // Catch if the object's header is not neutral or marked (it must not be locked).
-    assert(mark.is_neutral() || mark.is_marked(), "invariant: header=" INTPTR_FORMAT, mark.value());
-    return mark;
-  }
-}
 
 static inline uint32_t rotl32(uint32_t x, int8_t r) {
   return (x << r) | (x >> (32 - r));
@@ -935,7 +792,7 @@ uint32_t ObjectSynchronizer::generate_hash(oop obj) {
 }
 
 static uint32_t get_hash(markWord mark, oop obj) {
-  assert(mark.is_neutral(), "only from neutral mark");
+  assert(mark.is_neutral() | mark.is_fast_locked(), "only from neutral or fast-locked mark");
   assert(mark.hash_is_hashed_or_copied(), "only from hashed or copied object");
   if (mark.hash_is_copied()) {
     Klass* klass = mark.klass();
@@ -953,10 +810,10 @@ intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {
     ObjectMonitor* monitor = NULL;
     markWord temp, test;
     intptr_t hash;
-    markWord mark = read_stable_mark(obj);
+    markWord mark = obj->mark_acquire();
     if (VerifyHeavyMonitors) {
       assert(UseHeavyMonitors, "+VerifyHeavyMonitors requires +UseHeavyMonitors");
-      guarantee(!mark.has_locker(), "must not be stack locked");
+      guarantee(!mark.is_fast_locked(), "must not be fast-locked");
     }
     if (mark.is_neutral()) {               // if this is a normal header
       if (mark.hash_is_hashed_or_copied()) {
@@ -981,22 +838,13 @@ intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {
       }
       // Fall thru so we only have one place that installs the hash in
       // the ObjectMonitor.
-    } else if (current->is_lock_owned((address)mark.locker())) {
-      // This is a stack lock owned by the calling thread so fetch the
-      // displaced markWord from the BasicLock on the stack.
-      temp = mark.displaced_mark_helper();
-      assert(temp.is_neutral(), "invariant: header=" INTPTR_FORMAT, temp.value());
-      if (temp.hash_is_hashed_or_copied()) {
-        return get_hash(temp, obj);
+    } else if (current->lock_stack().contains(obj)) {
+      // This is a fast lock owned by the calling thread so use the
+      // markWord from the object.
+      assert(mark.is_fast_locked(), "invariant: header=" INTPTR_FORMAT, temp.value());
+      if (mark.hash_is_hashed_or_copied()) {
+        return get_hash(mark, obj);
       }
-      // WARNING:
-      // The displaced header in the BasicLock on a thread's stack
-      // is strictly immutable. It CANNOT be changed in ANY cases.
-      // So we have to inflate the stack lock into an ObjectMonitor
-      // even if the current thread owns the lock. The BasicLock on
-      // a thread's stack can be asynchronously read by other threads
-      // during an inflate() call so any change to that stack memory
-      // may not propagate to other threads correctly.
     }
 
     // Inflate the monitor to update the mark.
@@ -1051,18 +899,21 @@ bool ObjectSynchronizer::current_thread_holds_lock(JavaThread* current,
   assert(current == JavaThread::current(), "Can only be called on current thread");
   oop obj = h_obj();
 
-  markWord mark = read_stable_mark(obj);
+  markWord mark = obj->mark_acquire();
 
-  // Uncontended case, header points to stack
-  if (mark.has_locker()) {
-    return current->is_lock_owned((address)mark.locker());
+  if (mark.is_fast_locked()) {
+    return current->lock_stack().contains(h_obj());
   }
   // Contended case, header points to ObjectMonitor (tagged pointer)
   if (mark.has_monitor()) {
     // The first stage of async deflation does not affect any field
     // used by this comparison so the ObjectMonitor* is usable here.
     ObjectMonitor* monitor = mark.monitor();
-    return monitor->is_entered(current) != 0;
+    if (monitor->is_owner_anonymous()) {
+      return current->lock_stack().contains(h_obj());
+    } else {
+      return monitor->is_entered(current) != 0;
+    }
   }
   // Unlocked case, header in place
   assert(mark.is_neutral(), "sanity check");
@@ -1072,35 +923,8 @@ bool ObjectSynchronizer::current_thread_holds_lock(JavaThread* current,
 // FIXME: jvmti should call this
 JavaThread* ObjectSynchronizer::get_lock_owner(ThreadsList * t_list, Handle h_obj) {
   oop obj = h_obj();
-  address owner = NULL;
-
-  markWord mark = read_stable_mark(obj);
-
-  // Uncontended case, header points to stack
-  if (mark.has_locker()) {
-    owner = (address) mark.locker();
-  }
-
-  // Contended case, header points to ObjectMonitor (tagged pointer)
-  else if (mark.has_monitor()) {
-    // The first stage of async deflation does not affect any field
-    // used by this comparison so the ObjectMonitor* is usable here.
-    ObjectMonitor* monitor = mark.monitor();
-    assert(monitor != NULL, "monitor should be non-null");
-    owner = (address) monitor->owner();
-  }
-
-  if (owner != NULL) {
-    // owning_thread_from_monitor_owner() may also return NULL here
-    return Threads::owning_thread_from_monitor_owner(t_list, owner);
-  }
-
-  // Unlocked case, header in place
-  // Cannot have assertion since this object may have been
-  // locked by another thread when reaching here.
-  // assert(mark.is_neutral(), "sanity check");
-
-  return NULL;
+  ObjectMonitor* monitor_dummy;
+  return Threads::owning_thread_from_object(t_list, obj, &monitor_dummy);
 }
 
 // Visitors ...
@@ -1288,9 +1112,8 @@ ObjectMonitor* ObjectSynchronizer::inflate(Thread* current, oop object,
     const markWord mark = object->mark_acquire();
 
     // The mark can be in one of the following states:
-    // *  Inflated     - just return
-    // *  Stack-locked - coerce it to inflated
-    // *  INFLATING    - busy wait for conversion to complete
+    // *  Inflated     - just return, maybe fix anon owner
+    // *  Fast-locked  - coerce it to inflated
     // *  Neutral      - aggressively inflate the object.
 
     // CASE: inflated
@@ -1298,113 +1121,59 @@ ObjectMonitor* ObjectSynchronizer::inflate(Thread* current, oop object,
       ObjectMonitor* inf = mark.monitor();
       markWord dmw = inf->header();
       assert(dmw.is_neutral(), "invariant: header=" INTPTR_FORMAT, dmw.value());
+      if (inf->is_owner_anonymous()) {
+        if (current->lock_stack().contains(object)) {
+          inf->set_owner_from_anonymous(current);
+          current->lock_stack().remove(object);
+        }
+      }
       return inf;
     }
 
-    // CASE: inflation in progress - inflating over a stack-lock.
-    // Some other thread is converting from stack-locked to inflated.
-    // Only that thread can complete inflation -- other threads must wait.
-    // The INFLATING value is transient.
-    // Currently, we spin/yield/park and poll the markword, waiting for inflation to finish.
-    // We could always eliminate polling by parking the thread on some auxiliary list.
-    if (mark == markWord::INFLATING()) {
-      read_stable_mark(object);
-      continue;
-    }
-
-    // CASE: stack-locked
-    // Could be stack-locked either by this thread or by some other thread.
-    //
-    // Note that we allocate the ObjectMonitor speculatively, _before_ attempting
-    // to install INFLATING into the mark word.  We originally installed INFLATING,
-    // allocated the ObjectMonitor, and then finally STed the address of the
-    // ObjectMonitor into the mark.  This was correct, but artificially lengthened
-    // the interval in which INFLATING appeared in the mark, thus increasing
-    // the odds of inflation contention.
-
+    // CASE: fast-locked
+    // Could be fast-locked either by this thread or by some other thread.
     LogStreamHandle(Trace, monitorinflation) lsh;
 
-    if (mark.has_locker()) {
-      ObjectMonitor* m = new ObjectMonitor(object);
-      // Optimistically prepare the ObjectMonitor - anticipate successful CAS
-      // We do this before the CAS in order to minimize the length of time
-      // in which INFLATING appears in the mark.
-
-      markWord cmp = object->cas_set_mark(markWord::INFLATING(), mark);
-      if (cmp != mark) {
-        delete m;
-        continue;       // Interference -- just retry
+    if (mark.is_fast_locked()) {
+      ObjectMonitor* monitor = new ObjectMonitor(object);
+      monitor->set_header(mark.set_unlocked());
+      LockStack& lock_stack = current->lock_stack();
+      bool own = lock_stack.contains(object);
+      if (own) {
+        // Owned by us.
+        monitor->set_owner_from(NULL, current);
+      } else {
+        // Owned by somebody else.
+        monitor->set_owner_anonymous();
       }
+      markWord monitor_mark = markWord::encode(monitor);
+      markWord witness = object->cas_set_mark(monitor_mark, mark);
+      if (witness == mark) {
+        // Success! Return inflated monitor.
+        if (own) {
+          lock_stack.remove(object);
+        }
+        // Once the ObjectMonitor is configured and object is associated
+        // with the ObjectMonitor, it is safe to allow async deflation:
+        _in_use_list.add(monitor);
 
-      // We've successfully installed INFLATING (0) into the mark-word.
-      // This is the only case where 0 will appear in a mark-word.
-      // Only the singular thread that successfully swings the mark-word
-      // to 0 can perform (or more precisely, complete) inflation.
-      //
-      // Why do we CAS a 0 into the mark-word instead of just CASing the
-      // mark-word from the stack-locked value directly to the new inflated state?
-      // Consider what happens when a thread unlocks a stack-locked object.
-      // It attempts to use CAS to swing the displaced header value from the
-      // on-stack BasicLock back into the object header.  Recall also that the
-      // header value (hash code, etc) can reside in (a) the object header, or
-      // (b) a displaced header associated with the stack-lock, or (c) a displaced
-      // header in an ObjectMonitor.  The inflate() routine must copy the header
-      // value from the BasicLock on the owner's stack to the ObjectMonitor, all
-      // the while preserving the hashCode stability invariants.  If the owner
-      // decides to release the lock while the value is 0, the unlock will fail
-      // and control will eventually pass from slow_exit() to inflate.  The owner
-      // will then spin, waiting for the 0 value to disappear.   Put another way,
-      // the 0 causes the owner to stall if the owner happens to try to
-      // drop the lock (restoring the header from the BasicLock to the object)
-      // while inflation is in-progress.  This protocol avoids races that might
-      // would otherwise permit hashCode values to change or "flicker" for an object.
-      // Critically, while object->mark is 0 mark.displaced_mark_helper() is stable.
-      // 0 serves as a "BUSY" inflate-in-progress indicator.
-
-
-      // fetch the displaced mark from the owner's stack.
-      // The owner can't die or unwind past the lock while our INFLATING
-      // object is in the mark.  Furthermore the owner can't complete
-      // an unlock on the object, either.
-      markWord dmw = mark.displaced_mark_helper();
-      // Catch if the object's header is not neutral (not locked and
-      // not marked is what we care about here).
-      assert(dmw.is_neutral(), "invariant: header=" INTPTR_FORMAT, dmw.value());
-
-      // Setup monitor fields to proper values -- prepare the monitor
-      m->set_header(dmw);
-
-      // Optimization: if the mark.locker stack address is associated
-      // with this thread we could simply set m->_owner = current.
-      // Note that a thread can inflate an object
-      // that it has stack-locked -- as might happen in wait() -- directly
-      // with CAS.  That is, we can avoid the xchg-NULL .... ST idiom.
-      m->set_owner_from(NULL, mark.locker());
-      // TODO-FIXME: assert BasicLock->dhw != 0.
-
-      // Must preserve store ordering. The monitor state must
-      // be stable at the time of publishing the monitor address.
-      guarantee(object->mark() == markWord::INFLATING(), "invariant");
-      // Release semantics so that above set_object() is seen first.
-      object->release_set_mark(markWord::encode(m));
-
-      // Once ObjectMonitor is configured and the object is associated
-      // with the ObjectMonitor, it is safe to allow async deflation:
-      _in_use_list.add(m);
-
-      // Hopefully the performance counters are allocated on distinct cache lines
-      // to avoid false sharing on MP systems ...
-      OM_PERFDATA_OP(Inflations, inc());
-      if (log_is_enabled(Trace, monitorinflation)) {
-        ResourceMark rm(current);
-        lsh.print_cr("inflate(has_locker): object=" INTPTR_FORMAT ", mark="
-                     INTPTR_FORMAT ", type='%s'", p2i(object),
-                     object->mark().value(), object->klass()->external_name());
+        // Hopefully the performance counters are allocated on distinct
+        // cache lines to avoid false sharing on MP systems ...
+        OM_PERFDATA_OP(Inflations, inc());
+        if (log_is_enabled(Trace, monitorinflation)) {
+          ResourceMark rm(current);
+          lsh.print_cr("inflate(locked): object=" INTPTR_FORMAT ", mark="
+                       INTPTR_FORMAT ", type='%s'", p2i(object),
+                       object->mark().value(), object->klass()->external_name());
+        }
+        if (event.should_commit()) {
+          post_monitor_inflate_event(&event, object, cause);
+        }
+        return monitor;
       }
-      if (event.should_commit()) {
-        post_monitor_inflate_event(&event, object, cause);
-      }
-      return m;
+      // Otherwise, discard the monitor and retry.
+      delete monitor;
+      continue;
     }
 
     // CASE: neutral
@@ -1669,7 +1438,8 @@ class ReleaseJavaMonitorsClosure: public MonitorClosure {
  public:
   ReleaseJavaMonitorsClosure(JavaThread* thread) : _thread(thread) {}
   void do_monitor(ObjectMonitor* mid) {
-    (void)mid->complete_exit(_thread);
+    intx rec = mid->complete_exit(_thread);
+    _thread->dec_held_monitor_count(rec + 1);
   }
 };
 
@@ -1695,6 +1465,9 @@ void ObjectSynchronizer::release_monitors_owned_by_thread(JavaThread* current) {
   ObjectSynchronizer::monitors_iterate(&rjmc, current);
   assert(!current->has_pending_exception(), "Should not be possible");
   current->clear_pending_exception();
+  assert(current->held_monitor_count() == 0, "Should not be possible");
+  // All monitors (including entered via JNI) have been unlocked above, so we need to clear jni count.
+  current->clear_jni_monitor_count();
 }
 
 const char* ObjectSynchronizer::inflate_cause_name(const InflateCause cause) {
@@ -1749,7 +1522,7 @@ void ObjectSynchronizer::do_final_audit_and_print_stats() {
       ; // empty
     }
     // The other audit_and_print_stats() call is done at the Debug
-    // level at a safepoint in ObjectSynchronizer::do_safepoint_work().
+    // level at a safepoint in SafepointSynchronize::do_cleanup_tasks.
     ObjectSynchronizer::audit_and_print_stats(true /* on_exit */);
   }
 }

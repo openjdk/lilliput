@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -36,17 +36,23 @@
 #include "oops/verifyOopClosure.hpp"
 #include "runtime/handles.inline.hpp"
 #include "runtime/interfaceSupport.inline.hpp"
-#include "runtime/thread.inline.hpp"
-#include "utilities/copy.hpp"
+#include "runtime/javaThread.hpp"
+#include "runtime/synchronizer.hpp"
 #include "utilities/macros.hpp"
 #include "logging/log.hpp"
 
 void oopDesc::print_on(outputStream* st) const {
-  klass()->oop_print_on(const_cast<oopDesc*>(this), st);
+  if (*((juint*)this) == badHeapWordVal) {
+    st->print("BAD WORD");
+  } else if (*((juint*)this) == badMetaWordVal) {
+    st->print("BAD META WORD");
+  } else {
+    klass()->oop_print_on(cast_to_oop(this), st);
+  }
 }
 
 void oopDesc::print_address_on(outputStream* st) const {
-  st->print("{" INTPTR_FORMAT "}", p2i(this));
+  st->print("{" PTR_FORMAT "}", p2i(this));
 
 }
 
@@ -120,21 +126,7 @@ markWord oopDesc::initialize_hash_if_necessary(oop obj, markWord m) {
 
 // used only for asserts and guarantees
 bool oopDesc::is_oop(oop obj, bool ignore_mark_word) {
-  if (!Universe::heap()->is_oop(obj)) {
-    return false;
-  }
-
-  // Header verification: the mark is typically non-zero. If we're
-  // at a safepoint, it must not be zero.
-  // Outside of a safepoint, the header could be changing (for example,
-  // another thread could be inflating a lock on this object).
-  if (ignore_mark_word) {
-    return true;
-  }
-  if (obj->mark().value() != 0) {
-    return true;
-  }
-  return !SafepointSynchronize::is_at_safepoint();
+  return Universe::heap()->is_oop(obj);
 }
 
 // used only for asserts and guarantees
@@ -146,7 +138,7 @@ VerifyOopClosure VerifyOopClosure::verify_oop;
 
 template <class T> void VerifyOopClosure::do_oop_work(T* p) {
   oop obj = RawAccess<>::oop_load(p);
-  guarantee(oopDesc::is_oop_or_null(obj), "invalid oop: " INTPTR_FORMAT, p2i((oopDesc*) obj));
+  guarantee(oopDesc::is_oop_or_null(obj), "invalid oop: " PTR_FORMAT, p2i(obj));
 }
 
 void VerifyOopClosure::do_oop(oop* p)       { VerifyOopClosure::do_oop_work(p); }
@@ -155,6 +147,7 @@ void VerifyOopClosure::do_oop(narrowOop* p) { VerifyOopClosure::do_oop_work(p); 
 // type test operations that doesn't require inclusion of oop.inline.hpp.
 bool oopDesc::is_instance_noinline()    const { return is_instance();    }
 bool oopDesc::is_instanceRef_noinline() const { return is_instanceRef(); }
+bool oopDesc::is_stackChunk_noinline()  const { return is_stackChunk();  }
 bool oopDesc::is_array_noinline()       const { return is_array();       }
 bool oopDesc::is_objArray_noinline()    const { return is_objArray();    }
 bool oopDesc::is_typeArray_noinline()   const { return is_typeArray();   }
@@ -180,21 +173,6 @@ void* oopDesc::load_oop_raw(oop obj, int offset) {
     return *(void**)addr;
   }
 }
-
-#ifdef _LP64
-JRT_LEAF(narrowKlass, oopDesc::load_nklass_runtime(oopDesc* o))
-  assert(o != NULL, "null-check");
-  oop obj = oop(o);
-  assert(oopDesc::is_oop(obj), "need a valid oop here: " PTR_FORMAT, p2i(o));
-  markWord header = obj->mark();
-  if (!header.is_neutral()) {
-    header = ObjectSynchronizer::stable_mark(obj);
-  }
-  assert(header.is_neutral(), "expect neutral header here");
-  narrowKlass nklass = header.narrow_klass();
-  return nklass;
-JRT_END
-#endif
 
 oop oopDesc::obj_field_acquire(int offset) const                      { return HeapAccess<MO_ACQUIRE>::oop_load_at(as_oop(), offset); }
 
@@ -246,6 +224,12 @@ void oopDesc::verify_forwardee(oop forwardee) {
 #endif
 }
 
-bool oopDesc::get_UseParallelGC() { return UseParallelGC; }
-bool oopDesc::get_UseG1GC()       { return UseG1GC;       }
+bool oopDesc::size_might_change() {
+  // UseParallelGC and UseG1GC can change the length field
+  // of an "old copy" of an object array in the young gen so it indicates
+  // the grey portion of an already copied array. This will cause the first
+  // disjunct below to fail if the two comparands are computed across such
+  // a concurrent change.
+  return Universe::heap()->is_gc_active() && is_objArray() && is_forwarded() && (UseParallelGC || UseG1GC);
+}
 #endif

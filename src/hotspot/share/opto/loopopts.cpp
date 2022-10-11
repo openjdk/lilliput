@@ -333,9 +333,11 @@ Node *PhaseIdealLoop::has_local_phi_input( Node *n ) {
       // We allow the special case of AddP's with no local inputs.
       // This allows us to split-up address expressions.
       if (m->is_AddP() &&
-          get_ctrl(m->in(2)) != n_ctrl &&
-          get_ctrl(m->in(3)) != n_ctrl) {
-        // Move the AddP up to dominating point
+          get_ctrl(m->in(AddPNode::Base)) != n_ctrl &&
+          get_ctrl(m->in(AddPNode::Address)) != n_ctrl &&
+          get_ctrl(m->in(AddPNode::Offset)) != n_ctrl) {
+        // Move the AddP up to the dominating point. That's fine because control of m's inputs
+        // must dominate get_ctrl(m) == n_ctrl and we just checked that the input controls are != n_ctrl.
         Node* c = find_non_split_ctrl(idom(n_ctrl));
         if (c->is_OuterStripMinedLoop()) {
           c->as_Loop()->verify_strip_mined(1);
@@ -1075,6 +1077,11 @@ Node *PhaseIdealLoop::split_if_with_blocks_pre( Node *n ) {
       (n_blk->is_LongCountedLoop() && n->Opcode() == Op_AddL)) {
     return n;
   }
+  // Pushing a shift through the iv Phi can get in the way of addressing optimizations or range check elimination
+  if (n_blk->is_BaseCountedLoop() && n->Opcode() == Op_LShift(n_blk->as_BaseCountedLoop()->bt()) &&
+      n->in(1) == n_blk->as_BaseCountedLoop()->phi()) {
+    return n;
+  }
 
   // Check for having no control input; not pinned.  Allow
   // dominating control.
@@ -1703,6 +1710,8 @@ void PhaseIdealLoop::try_sink_out_of_loop(Node* n) {
   }
 }
 
+// Compute the early control of a node by following its inputs until we reach
+// nodes that are pinned. Then compute the LCA of the control of all pinned nodes.
 Node* PhaseIdealLoop::compute_early_ctrl(Node* n, Node* n_ctrl) {
   Node* early_ctrl = NULL;
   ResourceMark rm;
@@ -1718,17 +1727,14 @@ Node* PhaseIdealLoop::compute_early_ctrl(Node* n, Node* n_ctrl) {
     } else {
       for (uint j = 0; j < m->req(); j++) {
         Node* in = m->in(j);
-        if (in == NULL) {
-          continue;
+        if (in != NULL) {
+          wq.push(in);
         }
-        wq.push(in);
       }
     }
     if (c != NULL) {
-      assert(is_dominator(c, n_ctrl), "");
-      if (early_ctrl == NULL) {
-        early_ctrl = c;
-      } else if (is_dominator(early_ctrl, c)) {
+      assert(is_dominator(c, n_ctrl), "control input must dominate current control");
+      if (early_ctrl == NULL || is_dominator(early_ctrl, c)) {
         early_ctrl = c;
       }
     }
@@ -2154,11 +2160,18 @@ static void clone_outer_loop_helper(Node* n, const IdealLoopTree *loop, const Id
       Node* c = phase->get_ctrl(u);
       IdealLoopTree* u_loop = phase->get_loop(c);
       assert(!loop->is_member(u_loop), "can be in outer loop or out of both loops only");
-      if (outer_loop->is_member(u_loop) ||
-          // nodes pinned with control in the outer loop but not referenced from the safepoint must be moved out of
-          // the outer loop too
-          (u->in(0) != NULL && outer_loop->is_member(phase->get_loop(u->in(0))))) {
+      if (outer_loop->is_member(u_loop)) {
         wq.push(u);
+      } else {
+        // nodes pinned with control in the outer loop but not referenced from the safepoint must be moved out of
+        // the outer loop too
+        Node* u_c = u->in(0);
+        if (u_c != NULL) {
+          IdealLoopTree* u_c_loop = phase->get_loop(u_c);
+          if (outer_loop->is_member(u_c_loop) && !loop->is_member(u_c_loop)) {
+            wq.push(u);
+          }
+        }
       }
     }
   }
@@ -3907,7 +3920,8 @@ bool PhaseIdealLoop::duplicate_loop_backedge(IdealLoopTree *loop, Node_List &old
     }
 
     // With an extra phi for the candidate iv?
-    if (!incr->is_Phi()) {
+    // Or the region node is the loop head
+    if (!incr->is_Phi() || incr->in(0) == head) {
       return false;
     }
 
@@ -4087,7 +4101,20 @@ bool PhaseIdealLoop::duplicate_loop_backedge(IdealLoopTree *loop, Node_List &old
 // Reorganize offset computations to lower register pressure.  Mostly
 // prevent loop-fallout uses of the pre-incremented trip counter (which are
 // then alive with the post-incremented trip counter forcing an extra
-// register move)
+// register move):
+//
+//     iv Phi            iv Phi
+//       |                 |
+//       |                AddI (+stride)
+//       |                 |
+//       |              Opaque2  # Blocks IGVN from folding these nodes until loop opts are over.
+//       |     ====>       |
+//       |                AddI (-stride)
+//       |                 |
+//       |               CastII  # Preserve type of iv Phi
+//       |                 |
+//   Outside Use       Outside Use
+//
 void PhaseIdealLoop::reorg_offsets(IdealLoopTree *loop) {
   // Perform it only for canonical counted loops.
   // Loop's shape could be messed up by iteration_split_impl.

@@ -124,7 +124,7 @@ void DivByZeroStub::emit_code(LIR_Assembler* ce) {
     ce->compilation()->implicit_exception_table()->append(_offset, __ offset());
   }
   __ bind(_entry);
-  __ far_call(Address(Runtime1::entry_for(Runtime1::throw_div0_exception_id), relocInfo::runtime_call_type));
+  __ far_call(RuntimeAddress(Runtime1::entry_for(Runtime1::throw_div0_exception_id)));
   ce->add_call_info_here(_info);
   ce->verify_oop_map(_info);
 #ifdef ASSERT
@@ -210,8 +210,8 @@ void NewObjectArrayStub::emit_code(LIR_Assembler* ce) {
 }
 // Implementation of MonitorAccessStubs
 
-MonitorEnterStub::MonitorEnterStub(LIR_Opr obj_reg, LIR_Opr lock_reg, CodeEmitInfo* info)
-: MonitorAccessStub(obj_reg, lock_reg)
+MonitorEnterStub::MonitorEnterStub(LIR_Opr obj_reg, CodeEmitInfo* info)
+: MonitorAccessStub(obj_reg)
 {
   _info = new CodeEmitInfo(info);
 }
@@ -220,8 +220,7 @@ MonitorEnterStub::MonitorEnterStub(LIR_Opr obj_reg, LIR_Opr lock_reg, CodeEmitIn
 void MonitorEnterStub::emit_code(LIR_Assembler* ce) {
   assert(__ rsp_offset() == 0, "frame size should be fixed");
   __ bind(_entry);
-  ce->store_parameter(_obj_reg->as_register(),  1);
-  ce->store_parameter(_lock_reg->as_register(), 0);
+  ce->store_parameter(_obj_reg->as_register(),  0);
   Runtime1::StubID enter_id;
   if (ce->compilation()->has_fpu_code()) {
     enter_id = Runtime1::monitorenter_id;
@@ -237,11 +236,7 @@ void MonitorEnterStub::emit_code(LIR_Assembler* ce) {
 
 void MonitorExitStub::emit_code(LIR_Assembler* ce) {
   __ bind(_entry);
-  if (_compute_lock) {
-    // lock_reg was destroyed by fast unlocking attempt => recompute it
-    ce->monitor_address(_monitor_ix, _lock_reg);
-  }
-  ce->store_parameter(_lock_reg->as_register(), 0);
+  ce->store_parameter(_obj_reg->as_register(), 0);
   // note: non-blocking leaf routine => no call info needed
   Runtime1::StubID exit_id;
   if (ce->compilation()->has_fpu_code()) {
@@ -251,32 +246,6 @@ void MonitorExitStub::emit_code(LIR_Assembler* ce) {
   }
   __ adr(lr, _continuation);
   __ far_jump(RuntimeAddress(Runtime1::entry_for(exit_id)));
-}
-
-void LoadKlassStub::emit_code(LIR_Assembler* ce) {
-  __ bind(_entry);
-  Register res = _result->as_register();
-  ce->store_parameter(_obj->as_register(), 0);
-  if (res != r0) {
-    // Note: we cannot push/pop r0 around the call, because that
-    // would mess with the stack pointer sp, and we need that to
-    // remain intact for store_paramater/load_argument to work correctly.
-    // We swap r0 and res instead, which preserves current r0 in res.
-    // The preserved value is later saved and restored around the
-    // call in Runtime1::load_klass_id.
-    __ mov(rscratch1, r0);
-    __ mov(r0, res);
-    __ mov(res, rscratch1);
-  }
-  __ far_call(RuntimeAddress(Runtime1::entry_for(Runtime1::load_klass_id)));
-  if (res != r0) {
-    // Swap back r0 and res. This brings the call return value
-    // from r0 into res, and the preserved value in res back into r0.
-    __ mov(rscratch1, r0);
-    __ mov(r0, res);
-    __ mov(res, rscratch1);
-  }
-  __ b(_continuation);
 }
 
 // Implementation of patching:
@@ -333,7 +302,7 @@ void SimpleExceptionStub::emit_code(LIR_Assembler* ce) {
   if (_obj->is_cpu_register()) {
     __ mov(rscratch1, _obj->as_register());
   }
-  __ far_call(RuntimeAddress(Runtime1::entry_for(_stub)), NULL, rscratch2);
+  __ far_call(RuntimeAddress(Runtime1::entry_for(_stub)), rscratch2);
   ce->add_call_info_here(_info);
   debug_only(__ should_not_reach_here());
 }

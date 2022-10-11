@@ -55,6 +55,7 @@
 #include "prims/methodHandles.hpp"
 #include "prims/nativeLookup.hpp"
 #include "runtime/atomic.hpp"
+#include "runtime/continuation.hpp"
 #include "runtime/deoptimization.hpp"
 #include "runtime/fieldDescriptor.inline.hpp"
 #include "runtime/frame.inline.hpp"
@@ -316,7 +317,7 @@ void InterpreterRuntime::note_trap_inner(JavaThread* current, int reason,
     if (trap_mdo == NULL) {
       ExceptionMark em(current);
       JavaThread* THREAD = current; // For exception macros.
-      Method::build_interpreter_method_data(trap_method, THREAD);
+      Method::build_profiling_method_data(trap_method, THREAD);
       if (HAS_PENDING_EXCEPTION) {
         // Only metaspace OOM is expected. No Java code executed.
         assert((PENDING_EXCEPTION->is_a(vmClasses::OutOfMemoryError_klass())),
@@ -726,24 +727,18 @@ void InterpreterRuntime::resolve_get_put(JavaThread* current, Bytecodes::Code by
 //%note synchronization_3
 
 //%note monitor_1
-JRT_ENTRY_NO_ASYNC(void, InterpreterRuntime::monitorenter(JavaThread* current, BasicObjectLock* elem))
-#ifdef ASSERT
-  current->last_frame().interpreter_frame_verify_monitor(elem);
-#endif
-  Handle h_obj(current, elem->obj());
+JRT_ENTRY_NO_ASYNC(void, InterpreterRuntime::monitorenter(JavaThread* current, oopDesc* obj))
+  Handle h_obj(current, obj);
   assert(Universe::heap()->is_in_or_null(h_obj()),
          "must be NULL or an object");
-  ObjectSynchronizer::enter(h_obj, elem->lock(), current);
-  assert(Universe::heap()->is_in_or_null(elem->obj()),
+  ObjectSynchronizer::enter(h_obj, current);
+  assert(Universe::heap()->is_in_or_null(h_obj()),
          "must be NULL or an object");
-#ifdef ASSERT
-  current->last_frame().interpreter_frame_verify_monitor(elem);
-#endif
 JRT_END
 
 
-JRT_LEAF(void, InterpreterRuntime::monitorexit(BasicObjectLock* elem))
-  oop obj = elem->obj();
+JRT_LEAF(void, InterpreterRuntime::monitorexit(oopDesc* o))
+  oop obj = oop(o);
   assert(Universe::heap()->is_in(obj), "must be an object");
   // The object could become unlocked through a JNI call, which we have no other checks for.
   // Give a fatal message if CheckJNICalls. Otherwise we ignore it.
@@ -753,10 +748,7 @@ JRT_LEAF(void, InterpreterRuntime::monitorexit(BasicObjectLock* elem))
     }
     return;
   }
-  ObjectSynchronizer::exit(obj, elem->lock(), JavaThread::current());
-  // Free entry. If it is not cleared, the exception handling code will try to unlock the monitor
-  // again at method exit or in the case of an exception.
-  elem->set_obj(NULL);
+  ObjectSynchronizer::exit(obj, JavaThread::current());
 JRT_END
 
 
@@ -775,11 +767,7 @@ JRT_ENTRY(void, InterpreterRuntime::new_illegal_monitor_state_exception(JavaThre
   Handle exception(current, current->vm_result());
   assert(exception() != NULL, "vm result should be set");
   current->set_vm_result(NULL); // clear vm result before continuing (may cause memory leaks and assert failures)
-  if (!exception->is_a(vmClasses::ThreadDeath_klass())) {
-    exception = get_preinitialized_exception(
-                       vmClasses::IllegalMonitorStateException_klass(),
-                       CATCH);
-  }
+  exception = get_preinitialized_exception(vmClasses::IllegalMonitorStateException_klass(), CATCH);
   current->set_vm_result(exception());
 JRT_END
 
@@ -1118,6 +1106,10 @@ JRT_ENTRY(void, InterpreterRuntime::at_safepoint(JavaThread* current))
   // JRT_END does an implicit safepoint check, hence we are guaranteed to block
   // if this is called during a safepoint
 
+  if (java_lang_VirtualThread::notify_jvmti_events()) {
+    JvmtiExport::check_vthread_and_suspend_at_safepoint(current);
+  }
+
   if (JvmtiExport::should_post_single_step()) {
     // This function is called by the interpreter when single stepping. Such single
     // stepping could unwind a frame. Then, it is important that we process any frames
@@ -1239,7 +1231,7 @@ JRT_END
 
 JRT_LEAF(int, InterpreterRuntime::interpreter_contains(address pc))
 {
-  return (Interpreter::contains(pc) ? 1 : 0);
+  return (Interpreter::contains(Continuation::get_top_return_pc_post_barrier(JavaThread::current(), pc)) ? 1 : 0);
 }
 JRT_END
 

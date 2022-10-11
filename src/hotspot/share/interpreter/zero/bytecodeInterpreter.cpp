@@ -48,6 +48,7 @@
 #include "oops/typeArrayOop.inline.hpp"
 #include "prims/jvmtiExport.hpp"
 #include "prims/jvmtiThreadState.hpp"
+#include "runtime/arguments.hpp"
 #include "runtime/atomic.hpp"
 #include "runtime/frame.inline.hpp"
 #include "runtime/handles.inline.hpp"
@@ -588,8 +589,8 @@ void BytecodeInterpreter::run(interpreterState istate) {
 /* 0xE0 */ &&opc_fast_iload,    &&opc_fast_iload2,      &&opc_fast_icaload,   &&opc_fast_invokevfinal,
 /* 0xE4 */ &&opc_default,       &&opc_default,          &&opc_fast_aldc,      &&opc_fast_aldc_w,
 /* 0xE8 */ &&opc_return_register_finalizer,
-                                &&opc_invokehandle,     &&opc_default,        &&opc_default,
-/* 0xEC */ &&opc_default,       &&opc_default,          &&opc_default,        &&opc_default,
+                                &&opc_invokehandle,     &&opc_nofast_getfield,&&opc_nofast_putfield,
+/* 0xEC */ &&opc_nofast_aload_0,&&opc_nofast_iload,     &&opc_default,        &&opc_default,
 
 /* 0xF0 */ &&opc_default,       &&opc_default,          &&opc_default,        &&opc_default,
 /* 0xF4 */ &&opc_default,       &&opc_default,          &&opc_default,        &&opc_default,
@@ -623,17 +624,7 @@ void BytecodeInterpreter::run(interpreterState istate) {
         mon->set_obj(rcvr);
 
         // Traditional lightweight locking.
-        markWord displaced = rcvr->mark().set_unlocked();
-        mon->lock()->set_displaced_header(displaced);
-        bool call_vm = UseHeavyMonitors;
-        if (call_vm || rcvr->cas_set_mark(markWord::from_pointer(mon), displaced) != displaced) {
-          // Is it simple recursive case?
-          if (!call_vm && THREAD->is_lock_owned((address) displaced.clear_lock_bits().to_pointer())) {
-            mon->lock()->set_displaced_header(markWord::from_pointer(NULL));
-          } else {
-            CALL_VM(InterpreterRuntime::monitorenter(THREAD, mon), handle_exception);
-          }
-        }
+        CALL_VM(InterpreterRuntime::monitorenter(THREAD, rcvr), handle_exception);
       }
       THREAD->clr_do_not_unlock();
 
@@ -717,17 +708,7 @@ void BytecodeInterpreter::run(interpreterState istate) {
       entry->set_obj(lockee);
 
       // traditional lightweight locking
-      markWord displaced = lockee->mark().set_unlocked();
-      entry->lock()->set_displaced_header(displaced);
-      bool call_vm = UseHeavyMonitors;
-      if (call_vm || lockee->cas_set_mark(markWord::from_pointer(entry), displaced) != displaced) {
-        // Is it simple recursive case?
-        if (!call_vm && THREAD->is_lock_owned((address) displaced.clear_lock_bits().to_pointer())) {
-          entry->lock()->set_displaced_header(markWord::from_pointer(NULL));
-        } else {
-          CALL_VM(InterpreterRuntime::monitorenter(THREAD, entry), handle_exception);
-        }
-      }
+      CALL_VM(InterpreterRuntime::monitorenter(THREAD, lockee), handle_exception);
       UPDATE_PC_AND_TOS(1, -1);
       goto run;
     }
@@ -852,6 +833,13 @@ run:
         UPDATE_PC_AND_TOS_AND_CONTINUE(2, 1);
       }
 
+      CASE(_nofast_iload):
+      {
+        // Normal, non-rewritable iload handling.
+        SET_STACK_SLOT(LOCALS_SLOT(pc[1]), 0);
+        UPDATE_PC_AND_TOS_AND_CONTINUE(2, 1);
+      }
+
       CASE(_fast_iload):
       CASE(_fload):
           SET_STACK_SLOT(LOCALS_SLOT(pc[1]), 0);
@@ -912,8 +900,9 @@ run:
             case Bytecodes::_fast_igetfield:
               REWRITE_AT_PC(Bytecodes::_fast_iaccess_0);
               break;
-            case Bytecodes::_getfield: {
-              /* Otherwise, do nothing here, wait until it gets rewritten to _fast_Xgetfield.
+            case Bytecodes::_getfield:
+            case Bytecodes::_nofast_getfield: {
+              /* Otherwise, do nothing here, wait until/if it gets rewritten to _fast_Xgetfield.
                * Unfortunately, this punishes volatile field access, because it never gets
                * rewritten. */
               break;
@@ -923,6 +912,15 @@ run:
               break;
           }
         }
+        // Normal aload_0 handling.
+        VERIFY_OOP(LOCALS_OBJECT(0));
+        SET_STACK_OBJECT(LOCALS_OBJECT(0), 0);
+        UPDATE_PC_AND_TOS_AND_CONTINUE(1, 1);
+      }
+
+      CASE(_nofast_aload_0):
+      {
+        // Normal, non-rewritable aload_0 handling.
         VERIFY_OOP(LOCALS_OBJECT(0));
         SET_STACK_OBJECT(LOCALS_OBJECT(0), 0);
         UPDATE_PC_AND_TOS_AND_CONTINUE(1, 1);
@@ -1625,17 +1623,7 @@ run:
           entry->set_obj(lockee);
 
           // traditional lightweight locking
-          markWord displaced = lockee->mark().set_unlocked();
-          entry->lock()->set_displaced_header(displaced);
-          bool call_vm = UseHeavyMonitors;
-          if (call_vm || lockee->cas_set_mark(markWord::from_pointer(entry), displaced) != displaced) {
-            // Is it simple recursive case?
-            if (!call_vm && THREAD->is_lock_owned((address) displaced.clear_lock_bits().to_pointer())) {
-              entry->lock()->set_displaced_header(markWord::from_pointer(NULL));
-            } else {
-              CALL_VM(InterpreterRuntime::monitorenter(THREAD, entry), handle_exception);
-            }
-          }
+          CALL_VM(InterpreterRuntime::monitorenter(THREAD, lockee), handle_exception);
           UPDATE_PC_AND_TOS_AND_CONTINUE(1, -1);
         } else {
           istate->set_msg(more_monitors);
@@ -1652,20 +1640,8 @@ run:
         BasicObjectLock* most_recent = (BasicObjectLock*) istate->stack_base();
         while (most_recent != limit ) {
           if ((most_recent)->obj() == lockee) {
-            BasicLock* lock = most_recent->lock();
-            markWord header = lock->displaced_header();
             most_recent->set_obj(NULL);
-
-            // If it isn't recursive we either must swap old header or call the runtime
-            bool call_vm = UseHeavyMonitors;
-            if (header.to_pointer() != NULL || call_vm) {
-              markWord old_header = markWord::encode(lock);
-              if (call_vm || lockee->cas_set_mark(header, old_header) != old_header) {
-                // restore object for the slow case
-                most_recent->set_obj(lockee);
-                InterpreterRuntime::monitorexit(most_recent);
-              }
-            }
+            InterpreterRuntime::monitorexit(lockee);
             UPDATE_PC_AND_TOS_AND_CONTINUE(1, -1);
           }
           most_recent++;
@@ -1681,6 +1657,7 @@ run:
        *  constant pool index in the instruction.
        */
       CASE(_getfield):
+      CASE(_nofast_getfield):
       CASE(_getstatic):
         {
           u2 index;
@@ -1691,9 +1668,16 @@ run:
           // split all the bytecode cases out so c++ compiler has a chance
           // for constant prop to fold everything possible away.
 
+          // Interpreter runtime does not expect "nofast" opcodes,
+          // prepare the vanilla opcode for it.
+          Bytecodes::Code code = (Bytecodes::Code)opcode;
+          if (code == Bytecodes::_nofast_getfield) {
+            code = Bytecodes::_getfield;
+          }
+
           cache = cp->entry_at(index);
-          if (!cache->is_resolved((Bytecodes::Code)opcode)) {
-            CALL_VM(InterpreterRuntime::resolve_from_cache(THREAD, (Bytecodes::Code)opcode),
+          if (!cache->is_resolved(code)) {
+            CALL_VM(InterpreterRuntime::resolve_from_cache(THREAD, code),
                     handle_exception);
             cache = cp->entry_at(index);
           }
@@ -1707,7 +1691,8 @@ run:
             obj = STACK_OBJECT(-1);
             CHECK_NULL(obj);
             // Check if we can rewrite non-volatile _getfield to one of the _fast_Xgetfield.
-            if (REWRITE_BYTECODES && !cache->is_volatile()) {
+            if (REWRITE_BYTECODES && !cache->is_volatile() &&
+                  ((Bytecodes::Code)opcode != Bytecodes::_nofast_getfield)) {
               // Rewrite current BC to _fast_Xgetfield.
               REWRITE_AT_PC(fast_get_type(cache->flag_state()));
             }
@@ -1799,12 +1784,21 @@ run:
          }
 
       CASE(_putfield):
+      CASE(_nofast_putfield):
       CASE(_putstatic):
         {
           u2 index = Bytes::get_native_u2(pc+1);
           ConstantPoolCacheEntry* cache = cp->entry_at(index);
-          if (!cache->is_resolved((Bytecodes::Code)opcode)) {
-            CALL_VM(InterpreterRuntime::resolve_from_cache(THREAD, (Bytecodes::Code)opcode),
+
+          // Interpreter runtime does not expect "nofast" opcodes,
+          // prepare the vanilla opcode for it.
+          Bytecodes::Code code = (Bytecodes::Code)opcode;
+          if (code == Bytecodes::_nofast_putfield) {
+            code = Bytecodes::_putfield;
+          }
+
+          if (!cache->is_resolved(code)) {
+            CALL_VM(InterpreterRuntime::resolve_from_cache(THREAD, code),
                     handle_exception);
             cache = cp->entry_at(index);
           }
@@ -1829,7 +1823,8 @@ run:
             CHECK_NULL(obj);
 
             // Check if we can rewrite non-volatile _putfield to one of the _fast_Xputfield.
-            if (REWRITE_BYTECODES && !cache->is_volatile()) {
+            if (REWRITE_BYTECODES && !cache->is_volatile() &&
+                  ((Bytecodes::Code)opcode != Bytecodes::_nofast_putfield)) {
               // Rewrite current BC to _fast_Xputfield.
               REWRITE_AT_PC(fast_put_type(cache->flag_state()));
             }
@@ -2397,7 +2392,7 @@ run:
             CHECK_NULL(STACK_OBJECT(-(cache->parameter_size())));
             if (cache->is_vfinal()) {
               callee = cache->f2_as_vfinal_method();
-              if (REWRITE_BYTECODES) {
+              if (REWRITE_BYTECODES && !UseSharedSpaces && !Arguments::is_dumping_archive()) {
                 // Rewrite to _fast_invokevfinal.
                 REWRITE_AT_PC(Bytecodes::_fast_invokevfinal);
               }
@@ -3078,19 +3073,8 @@ run:
       while (end < base) {
         oop lockee = end->obj();
         if (lockee != NULL) {
-          BasicLock* lock = end->lock();
-          markWord header = lock->displaced_header();
           end->set_obj(NULL);
-
-          // If it isn't recursive we either must swap old header or call the runtime
-          if (header.to_pointer() != NULL) {
-            markWord old_header = markWord::encode(lock);
-            if (lockee->cas_set_mark(header, old_header) != old_header) {
-              // restore object for the slow case
-              end->set_obj(lockee);
-              InterpreterRuntime::monitorexit(end);
-            }
-          }
+          InterpreterRuntime::monitorexit(lockee);
 
           // One error is plenty
           if (illegal_state_oop() == NULL && !suppress_error) {
@@ -3137,29 +3121,11 @@ run:
               illegal_state_oop = Handle(THREAD, THREAD->pending_exception());
               THREAD->clear_pending_exception();
             }
-          } else if (UseHeavyMonitors) {
-            InterpreterRuntime::monitorexit(base);
+          } else {
+            InterpreterRuntime::monitorexit(rcvr);
             if (THREAD->has_pending_exception()) {
               if (!suppress_error) illegal_state_oop = Handle(THREAD, THREAD->pending_exception());
               THREAD->clear_pending_exception();
-            }
-          } else {
-            BasicLock* lock = base->lock();
-            markWord header = lock->displaced_header();
-            base->set_obj(NULL);
-
-            // If it isn't recursive we either must swap old header or call the runtime
-            if (header.to_pointer() != NULL) {
-              markWord old_header = markWord::encode(lock);
-              if (rcvr->cas_set_mark(header, old_header) != old_header) {
-                // restore object for the slow case
-                base->set_obj(rcvr);
-                InterpreterRuntime::monitorexit(base);
-                if (THREAD->has_pending_exception()) {
-                  if (!suppress_error) illegal_state_oop = Handle(THREAD, THREAD->pending_exception());
-                  THREAD->clear_pending_exception();
-                }
-              }
             }
           }
         }
@@ -3178,7 +3144,7 @@ run:
     // If we notify it again JVMDI will be all confused about how many frames
     // are still on the stack (4340444).
     //
-    // NOTE Further! It turns out the the JVMTI spec in fact expects to see
+    // NOTE Further! It turns out the JVMTI spec in fact expects to see
     // method_exit events whenever we leave an activation unless it was done
     // for popframe. This is nothing like jvmdi. However we are passing the
     // tests at the moment (apparently because they are jvmdi based) so rather

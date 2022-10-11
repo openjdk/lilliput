@@ -920,8 +920,11 @@ static void gen_special_dispatch(MacroAssembler *masm,
     member_arg_pos = total_args_passed - 1;  // trailing MemberName argument
     member_reg = Z_R9;                       // Known to be free at this point.
     has_receiver = MethodHandles::ref_kind_has_receiver(ref_kind);
+  } else if (special_dispatch == vmIntrinsics::_linkToNative) {
+    member_arg_pos = total_args_passed - 1;  // trailing NativeEntryPoint argument
+    member_reg = Z_R9;  // known to be free at this point
   } else {
-    guarantee(special_dispatch == vmIntrinsics::_invokeBasic || special_dispatch == vmIntrinsics::_linkToNative,
+    guarantee(special_dispatch == vmIntrinsics::_invokeBasic,
               "special_dispatch=%d", vmIntrinsics::as_int(special_dispatch));
     has_receiver = true;
   }
@@ -1319,7 +1322,6 @@ nmethod *SharedRuntime::generate_native_wrapper(MacroAssembler *masm,
                                        frame_complete,
                                        stack_slots / VMRegImpl::slots_per_word,
                                        in_ByteSize(-1),
-                                       in_ByteSize(-1),
                                        (OopMapSet *) NULL);
   }
 
@@ -1426,8 +1428,6 @@ nmethod *SharedRuntime::generate_native_wrapper(MacroAssembler *masm,
   //      | work space          |
   //     6| 2 slots = 8 bytes   |
   //      |---------------------|
-  //     5| lock box (if sync)  |
-  //      |---------------------| <- lock_slot_offset
   //     4| klass (if static)   |
   //      |---------------------| <- klass_slot_offset
   //     3| oopHandle area      |
@@ -1467,14 +1467,6 @@ nmethod *SharedRuntime::generate_native_wrapper(MacroAssembler *masm,
   if (method_is_static) {                                                 // 4)
     klass_slot_offset  = stack_slots;
     klass_offset       = klass_slot_offset * VMRegImpl::stack_slot_size;
-    stack_slots       += VMRegImpl::slots_per_word;
-  }
-
-  int lock_slot_offset = 0;
-  int lock_offset      = -1;
-  if (method->is_synchronized()) {                                        // 5)
-    lock_slot_offset   = stack_slots;
-    lock_offset        = lock_slot_offset * VMRegImpl::stack_slot_size;
     stack_slots       += VMRegImpl::slots_per_word;
   }
 
@@ -1706,10 +1698,6 @@ nmethod *SharedRuntime::generate_native_wrapper(MacroAssembler *masm,
     // class mirror (if the method is static).
     __ z_lg(r_oop, 0, Z_ARG2);
 
-    lock_offset = (lock_slot_offset * VMRegImpl::stack_slot_size);
-    // Get the lock box slot's address.
-    __ add2reg(r_box, lock_offset, Z_SP);
-
     // Try fastpath for locking.
     // Fast_lock kills r_temp_1, r_temp_2. (Don't use R1 as temp, won't work!)
     __ compiler_fast_lock_object(r_oop, r_box, r_tmp1, r_tmp2);
@@ -1729,7 +1717,6 @@ nmethod *SharedRuntime::generate_native_wrapper(MacroAssembler *masm,
 
     // Prepare arguments for call.
     __ z_lg(Z_ARG1, 0, Z_ARG2); // Ynboxed class mirror or unboxed object.
-    __ add2reg(Z_ARG2, lock_offset, oldSP);
     __ z_lgr(Z_ARG3, Z_thread);
 
     __ set_last_Java_frame(oldSP, Z_R10 /* gc map pc */);
@@ -1904,9 +1891,6 @@ nmethod *SharedRuntime::generate_native_wrapper(MacroAssembler *masm,
     assert(offset != -1, "");
     __ z_lg(r_oop, offset, Z_SP);
 
-    // ... and address of lock object box.
-    __ add2reg(r_box, lock_offset, Z_SP);
-
     // Try fastpath for unlocking.
     __ compiler_fast_unlock_object(r_oop, r_box, r_tmp1, r_tmp2); // Don't use R1 as temp.
     __ z_bre(done);
@@ -1930,8 +1914,7 @@ nmethod *SharedRuntime::generate_native_wrapper(MacroAssembler *masm,
 
     // Get locked oop from the handle we passed to jni.
     __ z_lg(Z_ARG1, offset, Z_SP);
-    __ add2reg(Z_ARG2, lock_offset, Z_SP);
-    __ z_lgr(Z_ARG3, Z_thread);
+    __ z_lgr(Z_ARG2, Z_thread);
 
     __ load_const_optimized(Z_R1_scratch, CAST_FROM_FN_PTR(address, SharedRuntime::complete_monitor_unlocking_C));
 
@@ -2038,7 +2021,6 @@ nmethod *SharedRuntime::generate_native_wrapper(MacroAssembler *masm,
                                             (int)(wrapper_FrameDone-wrapper_CodeStart),
                                             stack_slots / VMRegImpl::slots_per_word,
                                             (method_is_static ? in_ByteSize(klass_offset) : in_ByteSize(receiver_offset)),
-                                            in_ByteSize(lock_offset),
                                             oop_maps);
 
   return nm;
@@ -2998,7 +2980,7 @@ RuntimeStub* SharedRuntime::generate_resolve_blob(address destination, const cha
   // get the returned method
   __ get_vm_result_2(Z_method);
 
-  // We are back the the original state on entry and ready to go.
+  // We are back to the original state on entry and ready to go.
   __ z_br(Z_R1_scratch);
 
   // Pending exception after the safepoint
@@ -3278,13 +3260,3 @@ extern "C"
 int SpinPause() {
   return 0;
 }
-
-#ifdef COMPILER2
-RuntimeStub* SharedRuntime::make_native_invoker(address call_target,
-                                                int shadow_space_bytes,
-                                                const GrowableArray<VMReg>& input_registers,
-                                                const GrowableArray<VMReg>& output_registers) {
-  Unimplemented();
-  return nullptr;
-}
-#endif

@@ -30,7 +30,6 @@
 // return true for calls to must_be_preserved().
 class FakeOop {
   oopDesc _oop;
-  BasicLock _lock;
 public:
   FakeOop() : _oop() { _oop.set_mark(originalMark()); }
 

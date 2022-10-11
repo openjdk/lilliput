@@ -38,6 +38,7 @@
 #include "oops/klass.inline.hpp"
 #include "prims/methodHandles.hpp"
 #include "runtime/jniHandles.hpp"
+#include "runtime/os.inline.hpp"
 #include "runtime/safepointMechanism.hpp"
 #include "runtime/sharedRuntime.hpp"
 #include "runtime/signature.hpp"
@@ -1572,8 +1573,11 @@ static void gen_special_dispatch(MacroAssembler* masm,
     member_arg_pos = method->size_of_parameters() - 1;  // trailing MemberName argument
     member_reg = R19_method;  // known to be free at this point
     has_receiver = MethodHandles::ref_kind_has_receiver(ref_kind);
-  } else if (iid == vmIntrinsics::_invokeBasic || iid == vmIntrinsics::_linkToNative) {
+  } else if (iid == vmIntrinsics::_invokeBasic) {
     has_receiver = true;
+  } else if (iid == vmIntrinsics::_linkToNative) {
+    member_arg_pos = method->size_of_parameters() - 1;  // trailing NativeEntryPoint argument
+    member_reg = R19_method;  // known to be free at this point
   } else {
     fatal("unexpected intrinsic id %d", vmIntrinsics::as_int(iid));
   }
@@ -1653,7 +1657,6 @@ nmethod *SharedRuntime::generate_native_wrapper(MacroAssembler *masm,
                                        vep_offset,
                                        frame_complete,
                                        stack_slots / VMRegImpl::slots_per_word,
-                                       in_ByteSize(-1),
                                        in_ByteSize(-1),
                                        (OopMapSet*)NULL);
   }
@@ -1748,14 +1751,6 @@ nmethod *SharedRuntime::generate_native_wrapper(MacroAssembler *masm,
   if (method_is_static) {                                                         // 4)
     klass_slot_offset  = stack_slots;
     klass_offset       = klass_slot_offset * VMRegImpl::stack_slot_size;
-    stack_slots       += VMRegImpl::slots_per_word;
-  }
-
-  int lock_slot_offset = 0;
-  int lock_offset      = -1;
-  if (method->is_synchronized()) {                                                // 5)
-    lock_slot_offset   = stack_slots;
-    lock_offset        = lock_slot_offset * VMRegImpl::stack_slot_size;
     stack_slots       += VMRegImpl::slots_per_word;
   }
 
@@ -2010,9 +2005,6 @@ nmethod *SharedRuntime::generate_native_wrapper(MacroAssembler *masm,
     // class mirror (if the method is static).
     __ ld(r_oop, 0, r_carg2_classorobject);
 
-    // Get the lock box slot's address.
-    __ addi(r_box, R1_SP, lock_offset);
-
     // Try fastpath for locking.
     // fast_lock kills r_temp_1, r_temp_2, r_temp_3.
     __ compiler_fast_lock_object(r_flag, r_oop, r_box, r_temp_1, r_temp_2, r_temp_3);
@@ -2143,7 +2135,9 @@ nmethod *SharedRuntime::generate_native_wrapper(MacroAssembler *masm,
     Label no_block, sync;
 
     // Force this write out before the read below.
-    __ fence();
+    if (!UseSystemMemoryBarrier) {
+      __ fence();
+    }
 
     Register sync_state_addr = r_temp_4;
     Register sync_state      = r_temp_5;
@@ -2222,7 +2216,6 @@ nmethod *SharedRuntime::generate_native_wrapper(MacroAssembler *masm,
       assert(receiver_offset != -1, "");
       __ ld(r_oop, receiver_offset, R1_SP);
     }
-    __ addi(r_box, R1_SP, lock_offset);
 
     // Try fastpath for unlocking.
     __ compiler_fast_unlock_object(r_flag, r_oop, r_box, r_temp_1, r_temp_2, r_temp_3);
@@ -2336,7 +2329,6 @@ nmethod *SharedRuntime::generate_native_wrapper(MacroAssembler *masm,
                                             frame_done_pc-start_pc,
                                             stack_slots / VMRegImpl::slots_per_word,
                                             (method_is_static ? in_ByteSize(klass_offset) : in_ByteSize(receiver_offset)),
-                                            in_ByteSize(lock_offset),
                                             oop_maps);
 
   return nm;
@@ -2588,7 +2580,6 @@ void SharedRuntime::generate_deopt_blob() {
   // --------------------------------------------------------------------------
   __ BIND(exec_mode_initialized);
 
-  {
   const Register unroll_block_reg = R22_tmp2;
 
   // We need to set `last_Java_frame' because `fetch_unroll_info' will
@@ -2645,7 +2636,6 @@ void SharedRuntime::generate_deopt_blob() {
 
   // stack: (skeletal interpreter frame, ..., optional skeletal
   // interpreter frame, optional c2i, caller of deoptee, ...).
-  }
 
   // push an `unpack_frame' taking care of float / int return values.
   __ push_frame(frame_size_in_bytes, R0/*tmp*/);
@@ -2660,7 +2650,7 @@ void SharedRuntime::generate_deopt_blob() {
 
   // Let the unpacker layout information in the skeletal frames just
   // allocated.
-  __ get_PC_trash_LR(R3_RET);
+  __ calculate_address_from_global_toc(R3_RET, calls_return_pc, true, true, true, true);
   __ set_last_Java_frame(/*sp*/R1_SP, /*pc*/R3_RET);
   // This is a call to a LEAF method, so no oop map is required.
   __ call_VM_leaf(CAST_FROM_FN_PTR(address, Deoptimization::unpack_frames),
@@ -2712,6 +2702,7 @@ void SharedRuntime::generate_uncommon_trap_blob() {
   Register unroll_block_reg = R21_tmp1;
   Register klass_index_reg  = R22_tmp2;
   Register unc_trap_reg     = R23_tmp3;
+  Register r_return_pc      = R27_tmp7;
 
   OopMapSet* oop_maps = new OopMapSet();
   int frame_size_in_bytes = frame::abi_reg_args_size;
@@ -2736,9 +2727,9 @@ void SharedRuntime::generate_uncommon_trap_blob() {
   // sender frame as the deoptee frame.
   // Remember the offset of the instruction whose address will be
   // moved to R11_scratch1.
-  address gc_map_pc = __ get_PC_trash_LR(R11_scratch1);
-
-  __ set_last_Java_frame(/*sp*/R1_SP, /*pc*/R11_scratch1);
+  address gc_map_pc = __ pc();
+  __ calculate_address_from_global_toc(r_return_pc, gc_map_pc, true, true, true, true);
+  __ set_last_Java_frame(/*sp*/R1_SP, r_return_pc);
 
   __ mr(klass_index_reg, R3);
   __ li(R5_ARG3, Deoptimization::Unpack_uncommon_trap);
@@ -2794,8 +2785,7 @@ void SharedRuntime::generate_uncommon_trap_blob() {
   // ...).
 
   // Set the "unpack_frame" as last_Java_frame.
-  __ get_PC_trash_LR(R11_scratch1);
-  __ set_last_Java_frame(/*sp*/R1_SP, /*pc*/R11_scratch1);
+  __ set_last_Java_frame(/*sp*/R1_SP, r_return_pc);
 
   // Indicate it is the uncommon trap case.
   __ li(unc_trap_reg, Deoptimization::Unpack_uncommon_trap);
@@ -3270,13 +3260,3 @@ void SharedRuntime::montgomery_square(jint *a_ints, jint *n_ints,
 
   reverse_words(m, (unsigned long *)m_ints, longwords);
 }
-
-#ifdef COMPILER2
-RuntimeStub* SharedRuntime::make_native_invoker(address call_target,
-                                                int shadow_space_bytes,
-                                                const GrowableArray<VMReg>& input_registers,
-                                                const GrowableArray<VMReg>& output_registers) {
-  Unimplemented();
-  return nullptr;
-}
-#endif
