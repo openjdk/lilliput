@@ -164,11 +164,6 @@ void G1RemoveSelfForwardsTask::process_chunk(uint worker_id,
       // Process marked object.
       assert(obj->is_forwarded() && obj->forwardee() == obj, "must be self-forwarded");
       obj->init_mark();
-      //markWord m = obj->forwardee()->resolve_mark();
-      //if (m.hash_is_hashed() && m.hash_is_copied()) {
-      //  m = m.hash_clear_copied();
-      //}
-      //obj->set_mark(m.klass()->prototype_header().copy_set_hashctrl(m));
       hr->update_bot_for_block(obj_addr, obj_end_addr);
 
       // Statistics
