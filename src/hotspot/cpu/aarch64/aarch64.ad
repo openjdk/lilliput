@@ -7161,7 +7161,10 @@ instruct loadNKlass(iRegNNoSp dst, memory4 mem, rFlagsReg cr)
     Register obj = $mem$$base$$Register;
     C2LoadNKlassStub* stub = Compile::current()->output()->load_nklass_table()->add_load_nklass(dst);
     __ ldr(dst, Address(obj, oopDesc::mark_offset_in_bytes()));
-    __ tbnz(dst, exact_log2(markWord::monitor_value), stub->slow_path());
+    // NOTE: We can't use tbnz here, because the target is sometimes too far away
+    // and cannot be encoded.
+    __ tst(dst, markWord::monitor_value);
+    __ br(Assembler::NE, stub->slow_path());
     __ bind(stub->continuation());
     __ lsr(dst, dst, markWord::klass_shift);
   %}
