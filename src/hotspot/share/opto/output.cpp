@@ -322,6 +322,35 @@ int C2EntryBarrierStubTable::estimate_stub_size() const {
   return C2_MacroAssembler::entry_barrier_stub_size();
 }
 
+C2LoadNKlassStub* C2LoadNKlassStubTable::add_load_nklass(Register dst) {
+  C2LoadNKlassStub* stub = new (Compile::current()->comp_arena()) C2LoadNKlassStub(dst);
+  _stubs.append(stub);
+  return stub;
+}
+
+int C2LoadNKlassStubTable::estimate_stub_size() const {
+  return C2_MacroAssembler::load_nklass_stub_size() * _stubs.length();
+}
+
+void C2LoadNKlassStubTable::emit(CodeBuffer& cb) {
+  C2_MacroAssembler masm(&cb);
+  for (int i = 0; i < _stubs.length(); i++) {
+    // Make sure there is enough space in the code buffer
+    if (cb.insts()->maybe_expand_to_ensure_remaining(PhaseOutput::MAX_inst_size) && cb.blob() == NULL) {
+      ciEnv::current()->record_failure("CodeCache is full");
+      return;
+    }
+
+    C2LoadNKlassStub* stub = _stubs.at(i);
+    intptr_t before = masm.offset();
+    masm.emit_load_nklass_stub(stub);
+    intptr_t after = masm.offset();
+    int actual_size = (int)(after - before);
+    int expected_size = masm.load_nklass_stub_size();
+    assert(actual_size == expected_size, "Estimated size is wrong, expected %d, was %d", expected_size, actual_size);
+  }
+}
+
 PhaseOutput::PhaseOutput()
   : Phase(Phase::Output),
     _code_buffer("Compile::Fill_buffer"),
@@ -330,6 +359,7 @@ PhaseOutput::PhaseOutput()
     _inc_table(),
     _safepoint_poll_table(),
     _entry_barrier_table(),
+    _load_nklass_table(),
     _oop_map_set(NULL),
     _scratch_buffer_blob(NULL),
     _scratch_locs_memory(NULL),
@@ -1351,6 +1381,7 @@ CodeBuffer* PhaseOutput::init_buffer() {
   stub_req += bs->estimate_stub_size();
   stub_req += safepoint_poll_table()->estimate_stub_size();
   stub_req += entry_barrier_table()->estimate_stub_size();
+  stub_req += load_nklass_table()->estimate_stub_size();
 
   // nmethod and CodeBuffer count stubs & constants as part of method's code.
   // class HandlerImpl is platform-specific and defined in the *.ad files.
@@ -1864,6 +1895,9 @@ void PhaseOutput::fill_buffer(CodeBuffer* cb, uint* blk_starts) {
   // Fill in stubs for calling the runtime from nmethod entries.
   entry_barrier_table()->emit(*cb);
   if (C->failing())  return;
+
+  load_nklass_table()->emit(*cb);
+  if (C->failing()) return;
 
 #ifndef PRODUCT
   // Information on the size of the method, without the extraneous code

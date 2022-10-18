@@ -60,6 +60,17 @@ int C2_MacroAssembler::entry_barrier_stub_size() {
   return 4 * 6;
 }
 
+int C2_MacroAssembler::load_nklass_stub_size() {
+  return 8;
+}
+
+void C2_MacroAssembler::emit_load_nklass_stub(C2LoadNKlassStub* stub) {
+  bind(stub->slow_path());
+  Register dst = stub->dst();
+  ldr(dst, Address(dst, OM_OFFSET_NO_MONITOR_VALUE_TAG(header)));
+  b(stub->continuation());
+}
+
 // Search for str1 in str2 and return index or -1
 void C2_MacroAssembler::string_indexof(Register str2, Register str1,
                                        Register cnt2, Register cnt1,

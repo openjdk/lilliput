@@ -142,6 +142,28 @@ public:
   void emit(CodeBuffer& cb);
 };
 
+class C2LoadNKlassStub : public ResourceObj {
+private:
+  Register _dst;
+  Label _slow_path;
+  Label _continuation;
+public:
+  C2LoadNKlassStub(Register dst) : _dst(dst), _slow_path(), _continuation() {}
+  Register dst() { return _dst; }
+  Label& slow_path() { return _slow_path; }
+  Label& continuation() { return _continuation; }
+};
+
+class C2LoadNKlassStubTable {
+private:
+  GrowableArray<C2LoadNKlassStub*> _stubs;
+
+public:
+  C2LoadNKlassStub* add_load_nklass(Register dst);
+  int estimate_stub_size() const;
+  void emit(CodeBuffer& cb);
+};
+
 class PhaseOutput : public Phase {
 private:
   // Instruction bits passed off to the VM
@@ -152,6 +174,7 @@ private:
   ImplicitExceptionTable _inc_table;             // Table of implicit null checks in native code
   C2SafepointPollStubTable _safepoint_poll_table;// Table for safepoint polls
   C2EntryBarrierStubTable _entry_barrier_table;  // Table for entry barrier stubs
+  C2LoadNKlassStubTable  _load_nklass_table;     // Table for load-nklass stubs
   OopMapSet*             _oop_map_set;           // Table of oop maps (one for each safepoint location)
   BufferBlob*            _scratch_buffer_blob;   // For temporary code buffers.
   relocInfo*             _scratch_locs_memory;   // For temporary code buffers.
@@ -204,6 +227,9 @@ public:
 
   // Entry barrier table
   C2EntryBarrierStubTable* entry_barrier_table() { return &_entry_barrier_table; }
+
+  // Load-nklass table
+  C2LoadNKlassStubTable* load_nklass_table() { return &_load_nklass_table; }
 
   // Code emission iterator
   Block* block()   { return _block; }

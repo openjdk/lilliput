@@ -30,6 +30,7 @@
 #include "utilities/macros.hpp"
 
 class C2EntryBarrierStub;
+class C2LoadNKlassStub;
 
 class C2_MacroAssembler: public MacroAssembler {
  public:
