@@ -5088,15 +5088,11 @@ void MacroAssembler::load_nklass(Register dst, Register src) {
 
   Label fast;
   movq(dst, Address(src, oopDesc::mark_offset_in_bytes()));
-  // NOTE: While it would seem nice to use xorb instead (for which we don't have an encoding in our assembler),
-  // the encoding for xorq uses the signed version (0x81/6) of xor, which encodes as compact as xorb would,
-  // and does't make a difference performance-wise.
-  xorq(dst, markWord::monitor_value);
-  testb(dst, markWord::lock_mask_in_place);
-  jccb(Assembler::notZero, fast);
+  testb(dst, markWord::monitor_value);
+  jccb(Assembler::zero, fast);
 
   // Fetch displaced header
-  movq(dst, Address(dst, ObjectMonitor::header_offset_in_bytes()));
+  movq(dst, Address(dst, OM_OFFSET_NO_MONITOR_VALUE_TAG(header)));
 
   bind(fast);
   shrq(dst, markWord::klass_shift);

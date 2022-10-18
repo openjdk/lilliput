@@ -34,6 +34,9 @@ public:
   void emit_entry_barrier_stub(C2EntryBarrierStub* stub);
   static int entry_barrier_stub_size();
 
+  void emit_load_nklass_stub(C2LoadNKlassStub* stub);
+  static int load_nklass_stub_size();
+
   Assembler::AvxVectorLen vector_length_encoding(int vlen_in_bytes);
 
   // Code used by cmpFastLock and cmpFastUnlock mach instructions in .ad file.

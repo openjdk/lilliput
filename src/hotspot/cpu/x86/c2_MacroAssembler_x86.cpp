@@ -161,6 +161,17 @@ int C2_MacroAssembler::entry_barrier_stub_size() {
   return 10;
 }
 
+void C2_MacroAssembler::emit_load_nklass_stub(C2LoadNKlassStub* stub) {
+  bind(stub->slow_path());
+  Register dst = stub->dst();
+  movq(dst, Address(dst, OM_OFFSET_NO_MONITOR_VALUE_TAG(header)));
+  jmp(stub->continuation());
+}
+
+int C2_MacroAssembler::load_nklass_stub_size() {
+  return 9;
+}
+
 inline Assembler::AvxVectorLen C2_MacroAssembler::vector_length_encoding(int vlen_in_bytes) {
   switch (vlen_in_bytes) {
     case  4: // fall-through
