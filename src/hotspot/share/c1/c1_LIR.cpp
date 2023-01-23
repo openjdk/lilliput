@@ -888,7 +888,7 @@ void LIR_OpVisitState::visit(LIR_Op* op) {
 
       do_input(opLoadKlass->_obj);
       do_output(opLoadKlass->_result);
-      do_stub(opLoadKlass->_stub);
+      do_stub(opLoadKlass->stub());
       if (opLoadKlass->_info) do_info(opLoadKlass->_info);
       break;
     }
