@@ -7245,7 +7245,7 @@ instruct loadNKlass(iRegNNoSp dst, memory4 mem, rFlagsReg cr)
     // NOTE: We can't use tbnz here, because the target is sometimes too far away
     // and cannot be encoded.
     __ tst(dst, markWord::monitor_value);
-    __ br(Assembler::NE, stub->slow_path());
+    __ br(Assembler::NE, stub->entry());
     __ bind(stub->continuation());
     __ lsr(dst, dst, markWord::klass_shift);
   %}
