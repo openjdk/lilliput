@@ -398,7 +398,7 @@ public abstract class DebuggerBase implements Debugger {
     throws UnmappedAddressException, UnalignedAddressException {
     // On 64 bit systems, the compressed Klass* is currently read from the mark
     // word. We need to load the whole mark, and shift the upper parts.
-    long value = readCInteger(address, getJLongSize(), true);
+    long value = readCInteger(address, machDesc.getAddressSize(), true);
     value = value >>> Mark.getKlassShift();
 
     // Todo: Lilliput: this is a hack. The real problem is the assumption that size
