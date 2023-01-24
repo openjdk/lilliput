@@ -32,6 +32,7 @@
 #include "c1/c1_Runtime1.hpp"
 #include "classfile/javaClasses.hpp"
 #include "nativeInst_aarch64.hpp"
+#include "runtime/objectMonitor.hpp"
 #include "runtime/sharedRuntime.hpp"
 #include "vmreg_aarch64.inline.hpp"
 
