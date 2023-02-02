@@ -35,18 +35,7 @@ class instanceOopDesc : public oopDesc {
  public:
   // If compressed, the offset of the fields of the instance may not be aligned.
   static int base_offset_in_bytes() {
-#ifdef _LP64
-    if (UseCompactObjectHeaders) {
-      tty->print_cr("instance base offset: " SIZE_FORMAT, sizeof(markWord));
-      // With compact headers, the Klass* field is not used for the Klass*
-      // and is used for the object fields instead.
-      assert(sizeof(markWord) == 8, "sanity");
-      return sizeof(markWord);
-    } else if (UseCompressedClassPointers) {
-      return klass_gap_offset_in_bytes();
-    } else
-#endif
-    return sizeof(instanceOopDesc);
+    return oopDesc::base_offset_in_bytes();
   }
 };
 

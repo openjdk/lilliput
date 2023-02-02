@@ -4155,11 +4155,13 @@ void MacroAssembler::zero_memory(Register address, Register length_in_bytes, int
   // note: for the remaining code to work, index must be a multiple of BytesPerWord
 #ifdef ASSERT
   {
+    /*
     Label L;
     testptr(length_in_bytes, BytesPerWord - 1);
     jcc(Assembler::zero, L);
     stop("length must be a multiple of BytesPerWord");
     bind(L);
+    */
   }
 #endif
   Register index = length_in_bytes;

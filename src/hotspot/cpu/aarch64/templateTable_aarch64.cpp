@@ -3516,12 +3516,12 @@ void TemplateTable::_new() {
 
     // The object is initialized before the header.  If the object size is
     // zero, go directly to the header initialization.
-    __ sub(r3, r3, sizeof(oopDesc));
+    __ sub(r3, r3, oopDesc::base_offset_in_bytes());
     __ cbz(r3, initialize_header);
 
     // Initialize object fields
     {
-      __ add(r2, r0, sizeof(oopDesc));
+      __ add(r2, r0, oopDesc::base_offset_in_bytes());
       Label loop;
       __ bind(loop);
       __ str(zr, Address(__ post(r2, BytesPerLong)));

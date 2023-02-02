@@ -337,6 +337,20 @@ class oopDesc {
     return offset_of(oopDesc, _metadata._klass);
   }
 
+  static int base_offset_in_bytes() {
+#ifdef _LP64
+    if (UseCompactObjectHeaders) {
+      // With compact headers, the Klass* field is not used for the Klass*
+      // and is used for the object fields instead.
+      assert(sizeof(markWord) == 8, "sanity");
+      return sizeof(markWord);
+    } else if (UseCompressedClassPointers) {
+      return klass_gap_offset_in_bytes();
+    } else
+#endif
+    return sizeof(oopDesc);
+  }
+
   // for error reporting
   static void* load_klass_raw(oop obj);
   static void* load_oop_raw(oop obj, int offset);
