@@ -55,9 +55,10 @@ class oopDesc {
   friend class JVMCIVMStructs;
  private:
   volatile markWord _mark;
-#ifndef _LP64
-  Klass*            _klass;
-#endif
+  union _metadata {
+    Klass*      _klass;
+    narrowKlass _compressed_klass;
+  } _metadata;
 
   // There may be ordering constraints on the initialization of fields that
   // make use of the C++ copy/assign incorrect.
@@ -89,13 +90,21 @@ class oopDesc {
   inline Klass* klass_or_null() const;
   inline Klass* klass_or_null_acquire() const;
 
-#ifndef _LP64
   inline void set_klass(Klass* k);
   static inline void release_set_klass(HeapWord* mem, Klass* k);
-#endif
+
+  // For klass field compression
+  static inline void set_klass_gap(HeapWord* mem, int z);
 
   // size of object header, aligned to platform wordSize
-  static constexpr int header_size() { return sizeof(oopDesc)/HeapWordSize; }
+  static int header_size() {
+#ifdef _LP64
+    if (UseCompactObjectHeaders) {
+      return sizeof(markWord) / HeapWordSize;
+    } else
+#endif
+    return sizeof(oopDesc)/HeapWordSize;
+  }
 
   // Returns whether this is an instance of k or an instance of a subclass of k
   inline bool is_a(Klass* k) const;
@@ -308,15 +317,24 @@ class oopDesc {
   inline bool mark_must_be_preserved() const;
   inline bool mark_must_be_preserved(markWord m) const;
 
+  static bool has_klass_gap();
+
   // for code generation
   static int mark_offset_in_bytes()      { return offset_of(oopDesc, _mark); }
+  static int klass_gap_offset_in_bytes() {
+    assert(has_klass_gap(), "only applicable to compressed klass pointers");
+    assert(!UseCompactObjectHeaders, "don't use klass_offset_in_bytes() with compact headers");
+    return klass_offset_in_bytes() + sizeof(narrowKlass);
+  }
+
   static int klass_offset_in_bytes()     {
 #ifdef _LP64
-    STATIC_ASSERT(markWord::klass_shift % 8 == 0);
-    return mark_offset_in_bytes() + markWord::klass_shift / 8;
-#else
-    return offset_of(oopDesc, _klass);
+    if (UseCompactObjectHeaders) {
+      STATIC_ASSERT(markWord::klass_shift % 8 == 0);
+      return mark_offset_in_bytes() + markWord::klass_shift / 8;
+    } else 
 #endif
+    return offset_of(oopDesc, _metadata._klass);
   }
 
   // for error reporting
