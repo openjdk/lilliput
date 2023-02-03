@@ -164,12 +164,22 @@ void C1_MacroAssembler::try_allocate(Register obj, Register var_size_in_bytes, i
 
 void C1_MacroAssembler::initialize_header(Register obj, Register klass, Register len, Register t1, Register t2) {
   assert_different_registers(obj, klass, len, t1, t2);
-  movptr(t1, Address(klass, Klass::prototype_header_offset()));
-  movptr(Address(obj, oopDesc::mark_offset_in_bytes()), t1);
-#ifndef _LP64
-  movptr(Address(obj, oopDesc::klass_offset_in_bytes()), klass);
+  if (UseCompactObjectHeaders) {
+    movptr(t1, Address(klass, Klass::prototype_header_offset()));
+    movptr(Address(obj, oopDesc::mark_offset_in_bytes()), t1);
+  } else {
+    movptr(Address(obj, oopDesc::mark_offset_in_bytes()), checked_cast<int32_t>(markWord::prototype().value()));
+#ifdef _LP64
+    if (UseCompressedClassPointers) { // Take care not to kill klass
+      movptr(t1, klass);
+      encode_klass_not_null(t1, rscratch1);
+      movl(Address(obj, oopDesc::klass_offset_in_bytes()), t1);
+    } else
 #endif
-
+    {
+      movptr(Address(obj, oopDesc::klass_offset_in_bytes()), klass);
+    }
+  }
   if (len->is_valid()) {
     movl(Address(obj, arrayOopDesc::length_offset_in_bytes()), len);
   }

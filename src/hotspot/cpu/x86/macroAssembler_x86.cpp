@@ -5116,26 +5116,75 @@ void MacroAssembler::load_nklass(Register dst, Register src) {
 void MacroAssembler::load_klass(Register dst, Register src, Register tmp, bool null_check_src) {
   assert_different_registers(src, tmp);
   assert_different_registers(dst, tmp);
+  if (null_check_src) {
+    if (UseCompactObjectHeaders) {
+      null_check(src, oopDesc::mark_offset_in_bytes());
+    } else {
+      null_check(src, oopDesc::klass_offset_in_bytes());
+    }
+  }
 #ifdef _LP64
-  assert(UseCompressedClassPointers, "expect compressed class pointers");
-  if (null_check_src) {
-    null_check(src, oopDesc::mark_offset_in_bytes());
-  }
-  load_nklass(dst, src);
-  decode_klass_not_null(dst, tmp);
-#else
-  if (null_check_src) {
-    null_check(src, oopDesc::klass_offset_in_bytes());
-  }
-  movptr(dst, Address(src, oopDesc::klass_offset_in_bytes()));
+  if (UseCompactObjectHeaders) {
+    load_nklass(dst, src);
+    decode_klass_not_null(dst, tmp);
+  } else if (UseCompressedClassPointers) {
+    movl(dst, Address(src, oopDesc::klass_offset_in_bytes()));
+    decode_klass_not_null(dst, tmp);
+  } else
 #endif
+    movptr(dst, Address(src, oopDesc::klass_offset_in_bytes()));
 }
 
-#ifndef _LP64
-void MacroAssembler::store_klass(Register dst, Register src) {
-  movptr(Address(dst, oopDesc::klass_offset_in_bytes()), src);
-}
+void MacroAssembler::store_klass(Register dst, Register src, Register tmp) {
+  assert_different_registers(src, tmp);
+  assert_different_registers(dst, tmp);
+#ifdef _LP64
+  if (UseCompressedClassPointers) {
+    encode_klass_not_null(src, tmp);
+    movl(Address(dst, oopDesc::klass_offset_in_bytes()), src);
+  } else
 #endif
+   movptr(Address(dst, oopDesc::klass_offset_in_bytes()), src);
+}
+
+void MacroAssembler::cmp_klass(Register klass, Register obj, Register tmp) {
+#ifdef _LP64
+  if (UseCompactObjectHeaders) {
+    // NOTE: We need to deal with possible ObjectMonitor in object header.
+    // Eventually we might be able to do simple movl & cmpl like in
+    // the CCP path below.
+    load_nklass(tmp, obj);
+    cmpl(klass, tmp);
+  } else if (UseCompressedClassPointers) {
+    cmpl(klass, Address(obj, oopDesc::klass_offset_in_bytes()));
+  } else
+#endif
+  {
+    cmpptr(klass, Address(obj, oopDesc::klass_offset_in_bytes()));
+  }
+}
+
+void MacroAssembler::cmp_klass(Register src, Register dst, Register tmp1, Register tmp2) {
+#ifdef _LP64
+  if (UseCompactObjectHeaders) {
+    // NOTE: We need to deal with possible ObjectMonitor in object header.
+    // Eventually we might be able to do simple movl & cmpl like in
+    // the CCP path below.
+    assert(tmp2 != noreg, "need tmp2");
+    assert_different_registers(src, dst, tmp1, tmp2);
+    load_nklass(tmp1, src);
+    load_nklass(tmp2, dst);
+    cmpl(tmp1, tmp2);
+  } else if (UseCompressedClassPointers) {
+    movl(tmp1, Address(src, oopDesc::klass_offset_in_bytes()));
+    cmpl(tmp1, Address(dst, oopDesc::klass_offset_in_bytes()));
+  } else
+#endif
+  {
+    movptr(tmp1, Address(src, oopDesc::klass_offset_in_bytes()));
+    cmpptr(tmp1, Address(dst, oopDesc::klass_offset_in_bytes()));
+  }
+}
 
 void MacroAssembler::access_load_at(BasicType type, DecoratorSet decorators, Register dst, Address src,
                                     Register tmp1, Register thread_tmp) {
@@ -5183,6 +5232,13 @@ void MacroAssembler::store_heap_oop_null(Address dst) {
 }
 
 #ifdef _LP64
+void MacroAssembler::store_klass_gap(Register dst, Register src) {
+  if (UseCompressedClassPointers) {
+    // Store to klass gap in destination
+    movl(Address(dst, oopDesc::klass_gap_offset_in_bytes()), src);
+  }
+}
+
 #ifdef ASSERT
 void MacroAssembler::verify_heapbase(const char* msg) {
   assert (UseCompressedOops, "should be compressed");
