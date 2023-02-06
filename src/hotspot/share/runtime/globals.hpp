@@ -129,6 +129,9 @@ const size_t minimumSymbolTableSize = 1024;
           "Use 32-bit class pointers in 64-bit VM. "                        \
           "lp64_product means flag is always constant in 32 bit VM")        \
                                                                             \
+  product(bool, UseCompactObjectHeaders, true, EXPERIMENTAL,                \
+                "Use 64-bit object headers instead of 96-bit headers")      \
+                                                                            \
   product(int, ObjectAlignmentInBytes, 8,                                   \
           "Default object alignment in bytes, 8 is minimum")                \
           range(8, 256)                                                     \
@@ -146,6 +149,7 @@ const size_t minimumSymbolTableSize = 1024;
                            constraint)
 const bool UseCompressedOops = false;
 const bool UseCompressedClassPointers = false;
+const bool UseCompactObjectHeaders = false;
 const int ObjectAlignmentInBytes = 8;
 
 #endif // _LP64
@@ -1991,9 +1995,6 @@ const int ObjectAlignmentInBytes = 8;
                                                                             \
   product(bool, UseFastLocking, false, EXPERIMENTAL,                        \
                 "Use fast-locking instead of stack-locking")                \
-                                                                            \
-  product(bool, UseCompactObjectHeaders, true, EXPERIMENTAL,                \
-                "Use 64-bit object headers instead of 96-bit headers")      \
 
 // end of RUNTIME_FLAGS
 

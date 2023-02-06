@@ -1510,12 +1510,14 @@ void Arguments::set_use_compressed_oops() {
 // set_use_compressed_oops().
 void Arguments::set_use_compressed_klass_ptrs() {
 #ifdef _LP64
-  if (UseCompactObjectHeaders && !UseCompressedClassPointers) {
-    // Lilliput requires compressed class pointers.
-    if (FLAG_IS_CMDLINE(UseCompressedClassPointers)) {
-      // If user specifies -UseCompressedClassPointers, it should be reverted with
-      // a warning.
-      warning("Lilliput reqires compressed class pointers.");
+  if (UseCompactObjectHeaders) {
+    if (!UseCompressedClassPointers) {
+      // Lilliput requires compressed class pointers.
+      if (FLAG_IS_CMDLINE(UseCompressedClassPointers)) {
+        // If user specifies -UseCompressedClassPointers, it should be reverted with
+        // a warning.
+        warning("Lilliput reqires compressed class pointers.");
+      }
     }
     FLAG_SET_DEFAULT(UseCompressedClassPointers, true);
   }
@@ -1525,7 +1527,7 @@ void Arguments::set_use_compressed_klass_ptrs() {
   assert(CompressedClassSpaceSize <= Metaspace::max_class_space_size(),
          "CompressedClassSpaceSize " SIZE_FORMAT " too large (max: " SIZE_FORMAT ")",
          CompressedClassSpaceSize, Metaspace::max_class_space_size());
-#endif // _LP64
+#endif
 }
 
 void Arguments::set_conservative_max_heap_alignment() {

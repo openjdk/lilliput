@@ -159,7 +159,7 @@ void* oopDesc::load_klass_raw(oop obj) {
 #ifdef _LP64
   return obj->klass();
 #else
-  return obj->_klass;
+  return obj->_metadata._klass;
 #endif
 }
 
