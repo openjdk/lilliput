@@ -49,7 +49,12 @@ public class Oop {
     if (!VM.getVM().isLP64()) {
       klass      = new MetadataField(type.getAddressField("_klass"), 0);
     }
-    headerSize = type.getSize();
+    if (VM.getVM().getCommandLineBooleanFlag("UseCompactObjectHeaders")) {
+      Type markType = db.lookupType("markWord");
+      headerSize = markType.getSize();
+    } else {
+      headerSize = type.getSize();
+    }
   }
 
   private OopHandle  handle;
