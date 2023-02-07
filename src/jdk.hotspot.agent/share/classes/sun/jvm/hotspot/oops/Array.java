@@ -69,7 +69,7 @@ public class Array extends Oop {
     if (lengthOffsetInBytes != 0) {
       return lengthOffsetInBytes;
     }
-    lengthOffsetInBytes = typeSize;
+    lengthOffsetInBytes = Oop.getHeaderSize();
     return lengthOffsetInBytes;
   }
 

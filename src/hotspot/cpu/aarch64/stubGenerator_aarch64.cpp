@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003, 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2003, 2023, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, 2022, Red Hat Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -589,18 +589,8 @@ class StubGenerator: public StubCodeGenerator {
     __ cbnz(c_rarg2, error);
 
     // make sure klass is 'reasonable', which is not zero.
-    // NOTE: We used to load the Klass* here, and compare that to zero.
-    // However, with current Lilliput implementation, that would require
-    // checking the locking bits and calling into the runtime, which
-    // clobbers the condition flags, which may be live around this call.
-    // OTOH, this is a simple NULL-check, and we can simply load the upper
-    // 32bit of the header as narrowKlass, and compare that to 0. The
-    // worst that can happen (rarely) is that the object is locked and
-    // we have lock pointer bits in the upper 32bits. We can't get a false
-    // negative.
-    assert(oopDesc::klass_offset_in_bytes() % 4 == 0, "must be 4 byte aligned");
-    __ ldrw(r0, Address(r0, oopDesc::klass_offset_in_bytes()));  // get klass
-    __ cbzw(r0, error);      // if klass is NULL it is broken
+    __ load_klass(r0, r0);  // get klass
+    __ cbz(r0, error);      // if klass is NULL it is broken
 
     // return if everything seems ok
     __ bind(exit);
@@ -2371,7 +2361,10 @@ class StubGenerator: public StubCodeGenerator {
       __ cbnz(value, non_block_zeroing);
       __ mov(bz_base, to);
       __ add(to, to, cnt_words, Assembler::LSL, LogBytesPerWord);
-      __ zero_words(bz_base, cnt_words);
+      address tpc = __ zero_words(bz_base, cnt_words);
+      if (tpc == nullptr) {
+        fatal("CodeCache is full at generate_fill");
+      }
       __ b(rest);
       __ bind(non_block_zeroing);
       __ fill_words(to, cnt_words, value);
@@ -5341,7 +5334,7 @@ class StubGenerator: public StubCodeGenerator {
       BarrierSetNMethod* bs_nm = BarrierSet::barrier_set()->barrier_set_nmethod();
       // We can get here despite the nmethod being good, if we have not
       // yet applied our cross modification fence (or data fence).
-      Address thread_epoch_addr(rthread, in_bytes(bs_nm->thread_disarmed_offset()) + 4);
+      Address thread_epoch_addr(rthread, in_bytes(bs_nm->thread_disarmed_guard_value_offset()) + 4);
       __ lea(rscratch2, ExternalAddress(bs_asm->patching_epoch_addr()));
       __ ldrw(rscratch2, rscratch2);
       __ strw(rscratch2, thread_epoch_addr);
@@ -6953,12 +6946,7 @@ class StubGenerator: public StubCodeGenerator {
   // The handle is dereferenced through a load barrier.
   static void jfr_epilogue(MacroAssembler* _masm) {
     __ reset_last_Java_frame(true);
-    Label null_jobject;
-    __ cbz(r0, null_jobject);
-    DecoratorSet decorators = ACCESS_READ | IN_NATIVE;
-    BarrierSetAssembler* bs = BarrierSet::barrier_set()->barrier_set_assembler();
-    bs->load_at(_masm, decorators, T_OBJECT, r0, Address(r0, 0), rscratch1, rscratch2);
-    __ bind(null_jobject);
+    __ resolve_global_jobject(r0, rscratch1, rscratch2);
   }
 
   // For c2: c_rarg0 is junk, call to runtime to write a checkpoint.
@@ -6973,7 +6961,7 @@ class StubGenerator: public StubCodeGenerator {
       framesize // inclusive of return address
     };
 
-    int insts_size = 512;
+    int insts_size = 1024;
     int locs_size = 64;
     CodeBuffer code("jfr_write_checkpoint", insts_size, locs_size);
     OopMapSet* oop_maps = new OopMapSet();

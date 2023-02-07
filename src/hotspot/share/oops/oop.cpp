@@ -42,9 +42,9 @@
 
 void oopDesc::print_on(outputStream* st) const {
   if (*((juint*)this) == badHeapWordVal) {
-    st->print("BAD WORD");
+    st->print_cr("BAD WORD");
   } else if (*((juint*)this) == badMetaWordVal) {
-    st->print("BAD META WORD");
+    st->print_cr("BAD META WORD");
   } else {
     klass()->oop_print_on(cast_to_oop(this), st);
   }
@@ -152,6 +152,15 @@ bool oopDesc::has_klass_gap() {
   return UseCompressedClassPointers && !UseCompactObjectHeaders;
 }
 
+#if INCLUDE_CDS_JAVA_HEAP
+void oopDesc::set_narrow_klass(narrowKlass nk) {
+  assert(DumpSharedSpaces, "Used by CDS only. Do not abuse!");
+  assert(UseCompressedClassPointers, "must be");
+  assert(!UseCompactObjectHeaders, "not with compact headers");
+  _metadata._compressed_klass = nk;
+}
+#endif
+
 void* oopDesc::load_klass_raw(oop obj) {
   // TODO: Remove method altogether and replace with calls to obj->klass() ?
   // OTOH, we may eventually get rid of locking in header, and then no
@@ -159,7 +168,7 @@ void* oopDesc::load_klass_raw(oop obj) {
 #ifdef _LP64
   return obj->klass();
 #else
-  return obj->_klass;
+  return obj->_metadata._klass;
 #endif
 }
 

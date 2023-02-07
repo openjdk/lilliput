@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -129,6 +129,9 @@ const size_t minimumSymbolTableSize = 1024;
           "Use 32-bit class pointers in 64-bit VM. "                        \
           "lp64_product means flag is always constant in 32 bit VM")        \
                                                                             \
+  product(bool, UseCompactObjectHeaders, false, EXPERIMENTAL,               \
+                "Use 64-bit object headers instead of 96-bit headers")      \
+                                                                            \
   product(int, ObjectAlignmentInBytes, 8,                                   \
           "Default object alignment in bytes, 8 is minimum")                \
           range(8, 256)                                                     \
@@ -146,6 +149,7 @@ const size_t minimumSymbolTableSize = 1024;
                            constraint)
 const bool UseCompressedOops = false;
 const bool UseCompressedClassPointers = false;
+const bool UseCompactObjectHeaders = false;
 const int ObjectAlignmentInBytes = 8;
 
 #endif // _LP64
@@ -357,6 +361,9 @@ const int ObjectAlignmentInBytes = 8;
   product(bool, UseVectorizedMismatchIntrinsic, false, DIAGNOSTIC,          \
           "Enables intrinsification of ArraysSupport.vectorizedMismatch()") \
                                                                             \
+  product(bool, UseVectorizedHashCodeIntrinsic, false, DIAGNOSTIC,           \
+          "Enables intrinsification of ArraysSupport.vectorizedHashCode()") \
+                                                                            \
   product(bool, UseCopySignIntrinsic, false, DIAGNOSTIC,                    \
           "Enables intrinsification of Math.copySign")                      \
                                                                             \
@@ -541,7 +548,7 @@ const int ObjectAlignmentInBytes = 8;
           "Dump heap to file when java.lang.OutOfMemoryError is thrown "    \
           "from JVM")                                                       \
                                                                             \
-  product(ccstr, HeapDumpPath, NULL, MANAGEABLE,                            \
+  product(ccstr, HeapDumpPath, nullptr, MANAGEABLE,                            \
           "When HeapDumpOnOutOfMemoryError is on, the path (filename or "   \
           "directory) of the dump file (defaults to java_pid<pid>.hprof "   \
           "in the working directory)")                                      \
@@ -595,7 +602,7 @@ const int ObjectAlignmentInBytes = 8;
   product(bool, PrintAssembly, false, DIAGNOSTIC,                           \
           "Print assembly code (using external disassembler.so)")           \
                                                                             \
-  product(ccstr, PrintAssemblyOptions, NULL, DIAGNOSTIC,                    \
+  product(ccstr, PrintAssemblyOptions, nullptr, DIAGNOSTIC,                    \
           "Print options string passed to disassembler.so")                 \
                                                                             \
   notproduct(bool, PrintNMethodStatistics, false,                           \
@@ -623,7 +630,7 @@ const int ObjectAlignmentInBytes = 8;
           "Exercise compiled exception handlers")                           \
                                                                             \
   develop(bool, InterceptOSException, false,                                \
-          "Start debugger when an implicit OS (e.g. NULL) "                 \
+          "Start debugger when an implicit OS (e.g. nullptr) "                 \
           "exception happens")                                              \
                                                                             \
   product(bool, PrintCodeCache, false,                                      \
@@ -829,7 +836,7 @@ const int ObjectAlignmentInBytes = 8;
   develop(bool, StressRewriter, false,                                      \
           "Stress linktime bytecode rewriting")                             \
                                                                             \
-  product(ccstr, TraceJVMTI, NULL,                                          \
+  product(ccstr, TraceJVMTI, nullptr,                                          \
           "Trace flags for JVMTI functions and events")                     \
                                                                             \
   product(bool, StressLdcRewrite, false, DIAGNOSTIC,                        \
@@ -941,9 +948,6 @@ const int ObjectAlignmentInBytes = 8;
           "generate locking/unlocking code for synchronized methods and "   \
           "monitors")                                                       \
                                                                             \
-  develop(bool, GenerateRangeChecks, true,                                  \
-          "Generate range checks for array accesses")                       \
-                                                                            \
   product_pd(bool, ImplicitNullChecks, DIAGNOSTIC,                          \
           "Generate code for implicit null checks")                         \
                                                                             \
@@ -1032,11 +1036,11 @@ const int ObjectAlignmentInBytes = 8;
   product(bool, LogVMOutput, false, DIAGNOSTIC,                             \
           "Save VM output to LogFile")                                      \
                                                                             \
-  product(ccstr, LogFile, NULL, DIAGNOSTIC,                                 \
+  product(ccstr, LogFile, nullptr, DIAGNOSTIC,                                 \
           "If LogVMOutput or LogCompilation is on, save VM output to "      \
           "this file [default: ./hotspot_pid%p.log] (%p replaced with pid)")\
                                                                             \
-  product(ccstr, ErrorFile, NULL,                                           \
+  product(ccstr, ErrorFile, nullptr,                                           \
           "If an error occurs, save the error data to this file "           \
           "[default: ./hs_err_pid%p.log] (%p replaced with pid)")           \
                                                                             \
@@ -1073,11 +1077,11 @@ const int ObjectAlignmentInBytes = 8;
   notproduct(bool, PrintSymbolTableSizeHistogram, false,                    \
           "print histogram of the symbol table")                            \
                                                                             \
-  product(ccstr, AbortVMOnException, NULL, DIAGNOSTIC,                      \
+  product(ccstr, AbortVMOnException, nullptr, DIAGNOSTIC,                      \
           "Call fatal if this exception is thrown.  Example: "              \
           "java -XX:AbortVMOnException=java.lang.NullPointerException Foo") \
                                                                             \
-  product(ccstr, AbortVMOnExceptionMessage, NULL, DIAGNOSTIC,               \
+  product(ccstr, AbortVMOnExceptionMessage, nullptr, DIAGNOSTIC,               \
           "Call fatal if the exception pointed by AbortVMOnException "      \
           "has this message")                                               \
                                                                             \
@@ -1741,7 +1745,7 @@ const int ObjectAlignmentInBytes = 8;
   product(bool, PerfDataSaveToFile, false,                                  \
           "Save PerfData memory to hsperfdata_<pid> file on exit")          \
                                                                             \
-  product(ccstr, PerfDataSaveFile, NULL,                                    \
+  product(ccstr, PerfDataSaveFile, nullptr,                                    \
           "Save PerfData memory to the specified absolute pathname. "       \
           "The string %p in the file name (if present) "                    \
           "will be replaced by pid")                                        \
@@ -1821,7 +1825,7 @@ const int ObjectAlignmentInBytes = 8;
           "Causes the VM to pause at startup time and wait for the pause "  \
           "file to be removed (default: ./vm.paused.<pid>)")                \
                                                                             \
-  product(ccstr, PauseAtStartupFile, NULL, DIAGNOSTIC,                      \
+  product(ccstr, PauseAtStartupFile, nullptr, DIAGNOSTIC,                      \
           "The file to create and for whose removal to await when pausing " \
           "at startup. (default: ./vm.paused.<pid>)")                       \
                                                                             \
@@ -1928,7 +1932,7 @@ const int ObjectAlignmentInBytes = 8;
           range(0, max_intx)                                                \
           constraint(InitArrayShortSizeConstraintFunc, AfterErgo)           \
                                                                             \
-  product(ccstr, AllocateHeapAt, NULL,                                      \
+  product(ccstr, AllocateHeapAt, nullptr,                                      \
           "Path to the directory where a temporary file will be created "   \
           "to use as the backing store for Java Heap.")                     \
                                                                             \
@@ -1963,10 +1967,10 @@ const int ObjectAlignmentInBytes = 8;
   JFR_ONLY(product(bool, FlightRecorder, false,                             \
           "(Deprecated) Enable Flight Recorder"))                           \
                                                                             \
-  JFR_ONLY(product(ccstr, FlightRecorderOptions, NULL,                      \
+  JFR_ONLY(product(ccstr, FlightRecorderOptions, nullptr,                      \
           "Flight Recorder options"))                                       \
                                                                             \
-  JFR_ONLY(product(ccstr, StartFlightRecording, NULL,                       \
+  JFR_ONLY(product(ccstr, StartFlightRecording, nullptr,                       \
           "Start flight recording with options"))                           \
                                                                             \
   product(bool, UseFastUnorderedTimeStamps, false, EXPERIMENTAL,            \
@@ -1991,9 +1995,6 @@ const int ObjectAlignmentInBytes = 8;
                                                                             \
   product(bool, UseFastLocking, false, EXPERIMENTAL,                        \
                 "Use fast-locking instead of stack-locking")                \
-                                                                            \
-  product(bool, UseCompactObjectHeaders, true, EXPERIMENTAL,                \
-                "Use 64-bit object headers instead of 96-bit headers")      \
 
 // end of RUNTIME_FLAGS
 

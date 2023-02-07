@@ -455,11 +455,12 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
   }
   // Get the klass once.  We'll need it again later, and this avoids
   // re-decoding when it's compressed.
-#ifdef _LP64
-  Klass* klass = old_mark.safe_klass();
-#else
-  Klass* klass = old->klass();
-#endif
+  Klass* klass;
+  if (UseCompactObjectHeaders) {
+    klass = old_mark.safe_klass();
+  } else {
+    klass = old->klass();
+  }
   const size_t word_sz = old->size_given_klass(klass);
 
   uint age = 0;

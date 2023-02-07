@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2023, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, 2021, Red Hat Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -1102,6 +1102,7 @@ void MacroAssembler::post_call_nop() {
   }
   InstructionMark im(this);
   relocate(post_call_nop_Relocation::spec());
+  InlineSkippedInstructionsCounter skipCounter(this);
   nop();
   movk(zr, 0);
   movk(zr, 0);
@@ -2458,22 +2459,56 @@ void MacroAssembler::verify_heapbase(const char* msg) {
 #endif
 
 void MacroAssembler::resolve_jobject(Register value, Register tmp1, Register tmp2) {
-  Label done, not_weak;
+  assert_different_registers(value, tmp1, tmp2);
+  Label done, tagged, weak_tagged;
+
   cbz(value, done);           // Use NULL as-is.
+  tst(value, JNIHandles::tag_mask); // Test for tag.
+  br(Assembler::NE, tagged);
 
-  STATIC_ASSERT(JNIHandles::weak_tag_mask == 1u);
-  tbz(value, 0, not_weak);    // Test for jweak tag.
-
-  // Resolve jweak.
-  access_load_at(T_OBJECT, IN_NATIVE | ON_PHANTOM_OOP_REF, value,
-                 Address(value, -JNIHandles::weak_tag_value), tmp1, tmp2);
+  // Resolve local handle
+  access_load_at(T_OBJECT, IN_NATIVE | AS_RAW, value, Address(value, 0), tmp1, tmp2);
   verify_oop(value);
   b(done);
 
-  bind(not_weak);
-  // Resolve (untagged) jobject.
-  access_load_at(T_OBJECT, IN_NATIVE, value, Address(value, 0), tmp1, tmp2);
+  bind(tagged);
+  STATIC_ASSERT(JNIHandles::TypeTag::weak_global == 0b1);
+  tbnz(value, 0, weak_tagged);    // Test for weak tag.
+
+  // Resolve global handle
+  access_load_at(T_OBJECT, IN_NATIVE, value, Address(value, -JNIHandles::TypeTag::global), tmp1, tmp2);
   verify_oop(value);
+  b(done);
+
+  bind(weak_tagged);
+  // Resolve jweak.
+  access_load_at(T_OBJECT, IN_NATIVE | ON_PHANTOM_OOP_REF,
+                 value, Address(value, -JNIHandles::TypeTag::weak_global), tmp1, tmp2);
+  verify_oop(value);
+
+  bind(done);
+}
+
+void MacroAssembler::resolve_global_jobject(Register value, Register tmp1, Register tmp2) {
+  assert_different_registers(value, tmp1, tmp2);
+  Label done;
+
+  cbz(value, done);           // Use NULL as-is.
+
+#ifdef ASSERT
+  {
+    STATIC_ASSERT(JNIHandles::TypeTag::global == 0b10);
+    Label valid_global_tag;
+    tbnz(value, 1, valid_global_tag); // Test for global tag
+    stop("non global jobject using resolve_global_jobject");
+    bind(valid_global_tag);
+  }
+#endif
+
+  // Resolve global handle
+  access_load_at(T_OBJECT, IN_NATIVE, value, Address(value, -JNIHandles::TypeTag::global), tmp1, tmp2);
+  verify_oop(value);
+
   bind(done);
 }
 
@@ -4034,6 +4069,11 @@ void MacroAssembler::load_method_holder(Register holder, Register method) {
 void MacroAssembler::load_nklass(Register dst, Register src) {
   assert(UseCompressedClassPointers, "expects UseCompressedClassPointers");
 
+  if (!UseCompactObjectHeaders) {
+    ldrw(dst, Address(src, oopDesc::klass_offset_in_bytes()));
+    return;
+  }
+
   Label fast;
 
   // Check if we can take the (common) fast path, if obj is unlocked.
@@ -4049,9 +4089,25 @@ void MacroAssembler::load_nklass(Register dst, Register src) {
   lsr(dst, dst, markWord::klass_shift);
 }
 
-void MacroAssembler::load_klass(Register dst, Register src) {
-  load_nklass(dst, src);
-  decode_klass_not_null(dst);
+void MacroAssembler::load_klass(Register dst, Register src, bool null_check_src) {
+  if (null_check_src) {
+    if (UseCompactObjectHeaders) {
+      null_check(src, oopDesc::mark_offset_in_bytes());
+    } else {
+      null_check(src, oopDesc::klass_offset_in_bytes());
+    }
+  }
+
+  if (UseCompressedClassPointers) {
+    if (UseCompactObjectHeaders) {
+      load_nklass(dst, src);
+    } else {
+      ldrw(dst, Address(src, oopDesc::klass_offset_in_bytes()));
+    }
+    decode_klass_not_null(dst);
+  } else {
+    ldr(dst, Address(src, oopDesc::klass_offset_in_bytes()));
+  }
 }
 
 // ((OopHandle)result).resolve();
@@ -4085,19 +4141,45 @@ void MacroAssembler::load_mirror(Register dst, Register method, Register tmp1, R
 }
 
 void MacroAssembler::cmp_klass(Register oop, Register trial_klass, Register tmp) {
-  assert(UseCompressedClassPointers, "Lilliput");
-  load_nklass(tmp, oop);
-  if (CompressedKlassPointers::base() == NULL) {
-    cmp(trial_klass, tmp, LSL, CompressedKlassPointers::shift());
-    return;
-  } else if (((uint64_t)CompressedKlassPointers::base() & 0xffffffff) == 0
-             && CompressedKlassPointers::shift() == 0) {
-    // Only the bottom 32 bits matter
-    cmpw(trial_klass, tmp);
-    return;
+  assert_different_registers(oop, trial_klass, tmp);
+  if (UseCompressedClassPointers) {
+    if (UseCompactObjectHeaders) {
+      load_nklass(tmp, oop);
+    } else {
+      ldrw(tmp, Address(oop, oopDesc::klass_offset_in_bytes()));
+    }
+    if (CompressedKlassPointers::base() == NULL) {
+      cmp(trial_klass, tmp, LSL, CompressedKlassPointers::shift());
+      return;
+    } else if (((uint64_t)CompressedKlassPointers::base() & 0xffffffff) == 0
+               && CompressedKlassPointers::shift() == 0) {
+      // Only the bottom 32 bits matter
+      cmpw(trial_klass, tmp);
+      return;
+    }
+    decode_klass_not_null(tmp);
+  } else {
+    ldr(tmp, Address(oop, oopDesc::klass_offset_in_bytes()));
   }
-  decode_klass_not_null(tmp);
   cmp(trial_klass, tmp);
+}
+
+void MacroAssembler::store_klass(Register dst, Register src) {
+  // FIXME: Should this be a store release?  concurrent gcs assumes
+  // klass length is valid if klass field is not null.
+  if (UseCompressedClassPointers) {
+    encode_klass_not_null(src);
+    strw(src, Address(dst, oopDesc::klass_offset_in_bytes()));
+  } else {
+    str(src, Address(dst, oopDesc::klass_offset_in_bytes()));
+  }
+}
+
+void MacroAssembler::store_klass_gap(Register dst, Register src) {
+  if (UseCompressedClassPointers) {
+    // Store to klass gap in destination
+    strw(src, Address(dst, oopDesc::klass_gap_offset_in_bytes()));
+  }
 }
 
 // Algorithm must match CompressedOops::encode.

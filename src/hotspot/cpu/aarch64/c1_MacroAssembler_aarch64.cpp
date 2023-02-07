@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2023, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, 2021, Red Hat Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -176,11 +176,26 @@ void C1_MacroAssembler::try_allocate(Register obj, Register var_size_in_bytes, i
 
 void C1_MacroAssembler::initialize_header(Register obj, Register klass, Register len, Register t1, Register t2) {
   assert_different_registers(obj, klass, len);
-  ldr(t1, Address(klass, Klass::prototype_header_offset()));
-  str(t1, Address(obj, oopDesc::mark_offset_in_bytes()));
+  if (UseCompactObjectHeaders) {
+    ldr(t1, Address(klass, Klass::prototype_header_offset()));
+    str(t1, Address(obj, oopDesc::mark_offset_in_bytes()));
+  } else {
+    // This assumes that all prototype bits fit in an int32_t
+    mov(t1, (int32_t)(intptr_t)markWord::prototype().value());
+    str(t1, Address(obj, oopDesc::mark_offset_in_bytes()));
+
+    if (UseCompressedClassPointers) { // Take care not to kill klass
+      encode_klass_not_null(t1, klass);
+      strw(t1, Address(obj, oopDesc::klass_offset_in_bytes()));
+    } else {
+      str(klass, Address(obj, oopDesc::klass_offset_in_bytes()));
+    }
+  }
 
   if (len->is_valid()) {
     strw(len, Address(obj, arrayOopDesc::length_offset_in_bytes()));
+  } else if (UseCompressedClassPointers) {
+    store_klass_gap(obj, zr);
   }
 }
 
@@ -208,9 +223,12 @@ void C1_MacroAssembler::initialize_body(Register obj, Register len_in_bytes, int
   mov(rscratch1, len_in_bytes);
   lea(t1, Address(obj, hdr_size_in_bytes));
   lsr(t2, rscratch1, LogBytesPerWord);
-  zero_words(t1, t2);
+  address tpc = zero_words(t1, t2);
 
   bind(done);
+  if (tpc == nullptr) {
+    Compilation::current()->bailout("no space for trampoline stub");
+  }
 }
 
 
@@ -237,10 +255,17 @@ void C1_MacroAssembler::initialize_object(Register obj, Register klass, Register
      if (var_size_in_bytes != noreg) {
        mov(index, var_size_in_bytes);
        initialize_body(obj, index, hdr_size_in_bytes, t1, t2);
+       if (Compilation::current()->bailed_out()) {
+         return;
+       }
      } else if (con_size_in_bytes > hdr_size_in_bytes) {
        con_size_in_bytes -= hdr_size_in_bytes;
        lea(t1, Address(obj, hdr_size_in_bytes));
-       zero_words(t1, con_size_in_bytes / BytesPerWord);
+       address tpc = zero_words(t1, con_size_in_bytes / BytesPerWord);
+       if (tpc == nullptr) {
+         Compilation::current()->bailout("no space for trampoline stub");
+         return;
+       }
      }
   }
 
@@ -276,6 +301,9 @@ void C1_MacroAssembler::allocate_array(Register obj, Register len, Register t1, 
 
   // clear rest of allocated space
   initialize_body(obj, arr_size, base_offset_in_bytes, t1, t2);
+  if (Compilation::current()->bailed_out()) {
+    return;
+  }
 
   membar(StoreStore);
 
@@ -292,7 +320,11 @@ void C1_MacroAssembler::inline_cache_check(Register receiver, Register iCache) {
   verify_oop(receiver);
   // explicit NULL check not needed since load from [klass_offset] causes a trap
   // check against inline cache
-  assert(!MacroAssembler::needs_explicit_null_check(oopDesc::mark_offset_in_bytes()), "must add explicit null check");
+  if (UseCompactObjectHeaders) {
+    assert(!MacroAssembler::needs_explicit_null_check(oopDesc::mark_offset_in_bytes()), "must add explicit null check");
+  } else {
+    assert(!MacroAssembler::needs_explicit_null_check(oopDesc::klass_offset_in_bytes()), "must add explicit null check");
+  }
 
   cmp_klass(receiver, iCache, rscratch1);
 }
