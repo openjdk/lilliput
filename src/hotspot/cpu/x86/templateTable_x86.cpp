@@ -3963,7 +3963,8 @@ void TemplateTable::_new() {
 
     // The object is initialized before the header.  If the object size is
     // zero, go directly to the header initialization.
-    __ decrement(rdx, oopDesc::base_offset_in_bytes());
+    int header_size = align_up(oopDesc::base_offset_in_bytes(), BytesPerLong);
+    __ decrement(rdx, header_size);
     __ jcc(Assembler::zero, initialize_header);
 
     // Initialize topmost object field, divide rdx by 8, check if odd and
@@ -3985,8 +3986,8 @@ void TemplateTable::_new() {
     // initialize remaining object fields: rdx was a multiple of 8
     { Label loop;
     __ bind(loop);
-    __ movptr(Address(rax, rdx, Address::times_8, oopDesc::base_offset_in_bytes() - 1*oopSize), rcx);
-    NOT_LP64(__ movptr(Address(rax, rdx, Address::times_8, oopDesc::base_offset_in_bytes() - 2*oopSize), rcx));
+    __ movptr(Address(rax, rdx, Address::times_8, header_size - 1*oopSize), rcx);
+    NOT_LP64(__ movptr(Address(rax, rdx, Address::times_8, header_size - 2*oopSize), rcx));
     __ decrement(rdx);
     __ jcc(Assembler::notZero, loop);
     }

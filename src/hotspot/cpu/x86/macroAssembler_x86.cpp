@@ -4194,13 +4194,11 @@ void MacroAssembler::zero_memory(Register address, Register length_in_bytes, int
   // note: for the remaining code to work, index must be a multiple of BytesPerWord
 #ifdef ASSERT
   {
-    /*
     Label L;
     testptr(length_in_bytes, BytesPerWord - 1);
     jcc(Assembler::zero, L);
     stop("length must be a multiple of BytesPerWord");
     bind(L);
-    */
   }
 #endif
   Register index = length_in_bytes;
@@ -5139,6 +5137,11 @@ void MacroAssembler::load_method_holder(Register holder, Register method) {
 void MacroAssembler::load_nklass(Register dst, Register src) {
   assert(UseCompressedClassPointers, "expect compressed class pointers");
 
+  if (!UseCompactObjectHeaders) {
+    movl(dst, Address(src, oopDesc::klass_offset_in_bytes()));
+    return;
+  }
+
   Label fast;
   movq(dst, Address(src, oopDesc::mark_offset_in_bytes()));
   testb(dst, markWord::monitor_value);
@@ -5163,11 +5166,8 @@ void MacroAssembler::load_klass(Register dst, Register src, Register tmp, bool n
     }
   }
 #ifdef _LP64
-  if (UseCompactObjectHeaders) {
+  if (UseCompressedClassPointers) {
     load_nklass(dst, src);
-    decode_klass_not_null(dst, tmp);
-  } else if (UseCompressedClassPointers) {
-    movl(dst, Address(src, oopDesc::klass_offset_in_bytes()));
     decode_klass_not_null(dst, tmp);
   } else
 #endif
@@ -5175,6 +5175,7 @@ void MacroAssembler::load_klass(Register dst, Register src, Register tmp, bool n
 }
 
 void MacroAssembler::store_klass(Register dst, Register src, Register tmp) {
+  assert(!UseCompactObjectHeaders, "not with compact headers");
   assert_different_registers(src, tmp);
   assert_different_registers(dst, tmp);
 #ifdef _LP64
