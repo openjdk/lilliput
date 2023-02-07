@@ -40,7 +40,7 @@
 //  encoding.
 
 
-///// x64 ///////////////////////////////////////////////////////////////
+// x64
 
 /*
  * @test id=x64-area-beyond-encoding-range-use-xor
@@ -92,7 +92,7 @@
  * @run driver CompressedClassPointerEncoding x64-area-far-out-with-low-bits-use-add
  */
 
-///// aarch64 ///////////////////////////////////////////////////////////////
+// aarch64
 
 /*
  * @test id=aarch64-xor
@@ -150,7 +150,7 @@ public class CompressedClassPointerEncoding {
 
     final static int narrowKlassBitSize = 22;
     final static int narrowKlassShift = 9;
-    final static long narrowKlassValueSpan = (long)1 << narrowKlassBitSize;
+    final static long narrowKlassValueSpan = 1L << narrowKlassBitSize;
     final static long encodingRangeSpan = narrowKlassValueSpan << narrowKlassShift;
 
     final static long defaultCCSSize = 128 * M;
@@ -165,8 +165,7 @@ public class CompressedClassPointerEncoding {
         public final long expectedEncodingBase;
         public final String expectedEncodingMode;
         // The test relies on -XX:CompressedClassSpaceBaseAddress to force the CCS base address to a certain value.
-        // That can fail due to ASLR. This switch, if true, tolerates those failures. Lets keep it to false for now. The
-        // danger of setting it true is that we may not notice if all tests start to fail due to other reasons.
+        // That can fail due to ASLR. If tolerateCCSMappingError is true, we tolerate this.
         public final boolean tolerateCCSMappingError;
 
         public TestDetails(String name, long ccsBaseAddress,
@@ -186,15 +185,13 @@ public class CompressedClassPointerEncoding {
         // 1) we enforce a CCS base address with -XX:CompressedClassSpaceBaseAddress. This bypasses the automatic
         //    CCS placement we do in Metaspace/CDS initialization; CCS begins at that address.
         // 2) We set CCS size to 128M.
-        // 3) We expect the zero-based encoding range to be [0...8G)
-        // 4) Depending on how CCS base address looks like, we expect different encoding mechanisms from the platforms.
-        //    These are somewhat platform dependent.
-        //    a) If CCS range fits completely into the zero-based encoding range, we expect zero-based encoding to be used
-        //    b) If CCs range lies partly or completely outside the zero-based encoding range, zero-base encoding cannot work.
-        //    c) for (b), depending on the platform and how the CCS base address looks like, different mechanisms
-        //       should be chosen to decode the Klass*. Typically, if CCS base address does not intersect with
-        //       the narrow Klass pointer bit range 0..24, CCS base address and narrow Klass pointer can be appended
-        //       (e.g. xor), otherwise we would expect some form of shift+add
+        // 3) We expect the zero-based encoding range to be [0...<max encoding span>)
+        // 4) Depending on where CCS is located wrt the zero-based encoding range, we expect different encoding
+        //    platform dependent mechanisms. For example,
+        //    a) If CCS range fits completely into the zero-based encoding range, we expect zero-based encoding
+        //    b) If CCs range lies partly or completely outside the zero-based encoding range, zero-base encoding
+        //       cannot work. Typically, if CCS base address and Klass* offset range can be appended, something like
+        //       xor would be used, otherwise some for of add+shift
 
         String expectedMode;
         long ccsBaseAddress;
@@ -208,7 +205,7 @@ public class CompressedClassPointerEncoding {
             case "x64-area-beyond-encoding-range-use-xor":
                 // CCS base starts just (beyond) zero-based encoding range.
                 // - Encoding cannot be zero-based
-                // - We should be able to use xor mode since CCS base address does not intersect with max left-shifted narrow Klass pointer
+                // - We should be able to use xor mode since CCS base address and Klass* offset range don't intersect
                 ccsBaseAddress = encodingRangeSpan;
                 expectedEncodingRangeStart = ccsBaseAddress;
                 expectedMode = "xor";
@@ -233,7 +230,7 @@ public class CompressedClassPointerEncoding {
                 // - Encoding cannot be zero-based
                 // - We should be able to use xor mode since CCS base address does not intersect with
                 //   max left-shifted narrow Klass pointer
-                ccsBaseAddress = encodingRangeSpan * 4; // 32G
+                ccsBaseAddress = encodingRangeSpan * 4;
                 expectedEncodingRangeStart = ccsBaseAddress;
                 expectedMode = "xor";
                 break;
@@ -242,7 +239,7 @@ public class CompressedClassPointerEncoding {
                 // - Encoding cannot be zero-based
                 // - We cannot use xor since CCS base address has lower bits set that intersect with
                 //   max left-shifted narrow Klass pointer
-                ccsBaseAddress = (encodingRangeSpan * 4) + ccsGranularity; // 32G + a bit
+                ccsBaseAddress = (encodingRangeSpan * 4) + ccsGranularity;
                 expectedEncodingRangeStart = ccsBaseAddress;
                 expectedMode = "add";
                 break;
