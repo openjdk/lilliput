@@ -55,12 +55,14 @@ protected:
   ciKlass(Klass* k, ciSymbol* name);
   ciKlass(ciSymbol* name, BasicType bt);
 
+public:
   Klass* get_Klass() const {
     Klass* k = (Klass*)_metadata;
     assert(k != nullptr, "illegal use of unloaded klass");
     return k;
   }
 
+protected:
   // Certain subklasses have an associated class loader.
   virtual oop loader()             { return nullptr; }
   virtual jobject loader_handle()  { return nullptr; }

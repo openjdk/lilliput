@@ -1501,15 +1501,45 @@ void Arguments::set_use_compressed_oops() {
     if (UseCompressedOops && !FLAG_IS_DEFAULT(UseCompressedOops)) {
       warning("Max heap size too large for Compressed Oops");
       FLAG_SET_DEFAULT(UseCompressedOops, false);
+      if (COMPRESSED_CLASS_POINTERS_DEPENDS_ON_COMPRESSED_OOPS) {
+        FLAG_SET_DEFAULT(UseCompressedClassPointers, false);
+      }
     }
   }
 #endif // _LP64
 }
 
+
 // NOTE: set_use_compressed_klass_ptrs() must be called after calling
 // set_use_compressed_oops().
 void Arguments::set_use_compressed_klass_ptrs() {
 #ifdef _LP64
+  // On some architectures, the use of UseCompressedClassPointers implies the use of
+  // UseCompressedOops. The reason is that the rheap_base register of said platforms
+  // is reused to perform some optimized spilling, in order to use rheap_base as a
+  // temp register. But by treating it as any other temp register, spilling can typically
+  // be completely avoided instead. So it is better not to perform this trick. And by
+  // not having that reliance, large heaps, or heaps not supporting compressed oops,
+  // can still use compressed class pointers.
+  if (COMPRESSED_CLASS_POINTERS_DEPENDS_ON_COMPRESSED_OOPS && !UseCompressedOops) {
+    if (UseCompressedClassPointers) {
+      warning("UseCompressedClassPointers requires UseCompressedOops");
+    }
+    FLAG_SET_DEFAULT(UseCompressedClassPointers, false);
+  } else {
+    // Turn on UseCompressedClassPointers too
+    if (FLAG_IS_DEFAULT(UseCompressedClassPointers)) {
+      FLAG_SET_ERGO(UseCompressedClassPointers, true);
+    }
+    // Check the CompressedClassSpaceSize to make sure we use compressed klass ptrs.
+    if (UseCompressedClassPointers) {
+      if (CompressedClassSpaceSize > KlassEncodingMetaspaceMax) {
+        warning("CompressedClassSpaceSize is too large for UseCompressedClassPointers");
+        FLAG_SET_DEFAULT(UseCompressedClassPointers, false);
+      }
+    }
+  }
+
   if (UseCompactObjectHeaders) {
     if (!UseCompressedClassPointers) {
       // Lilliput requires compressed class pointers.
@@ -1521,6 +1551,10 @@ void Arguments::set_use_compressed_klass_ptrs() {
     }
     FLAG_SET_DEFAULT(UseCompressedClassPointers, true);
   }
+  if (UseCompactObjectHeaders) {
+    FLAG_SET_DEFAULT(UseSharedSpaces, false);
+  }
+
   // Assert validity of compressed class space size. User arg should have been checked at this point
   // (see CompressedClassSpaceSizeConstraintFunc()), so no need to be nice about it, this fires in
   // case the default is wrong.
@@ -1689,6 +1723,9 @@ void Arguments::set_heap_size() {
             "Please check the setting of MaxRAMPercentage %5.2f."
             ,(size_t)reasonable_max, (size_t)max_coop_heap, MaxRAMPercentage);
           FLAG_SET_ERGO(UseCompressedOops, false);
+          if (COMPRESSED_CLASS_POINTERS_DEPENDS_ON_COMPRESSED_OOPS) {
+            FLAG_SET_ERGO(UseCompressedClassPointers, false);
+          }
         } else {
           reasonable_max = MIN2(reasonable_max, max_coop_heap);
         }
@@ -4086,7 +4123,6 @@ jint Arguments::apply_ergo() {
       LogConfiguration::configure_stdout(LogLevel::Info, true, LOG_TAGS(valuebasedclasses));
     }
   }
-
   return JNI_OK;
 }
 
