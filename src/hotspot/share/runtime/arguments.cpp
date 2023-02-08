@@ -1514,6 +1514,21 @@ void Arguments::set_use_compressed_oops() {
 // set_use_compressed_oops().
 void Arguments::set_use_compressed_klass_ptrs() {
 #ifdef _LP64
+
+  if (UseCompactObjectHeaders) {
+    // 512 byte alignment, 22-bit values (Lilliput)
+    LogKlassAlignmentInBytes = 9;
+    MaxNarrowKlassPointerBits = 22;
+  } else {
+    // Traditional: 8 byte alignment, 32-bit values
+    LogKlassAlignmentInBytes = 3;
+    MaxNarrowKlassPointerBits = 32;
+  }
+
+  KlassAlignmentInBytes = 1 << LogKlassAlignmentInBytes;
+  NarrowKlassPointerBitMask = ((((uint64_t)1) << MaxNarrowKlassPointerBits) - 1);
+  KlassEncodingMetaspaceMax = UCONST64(1) << (MaxNarrowKlassPointerBits + LogKlassAlignmentInBytes);
+
   // On some architectures, the use of UseCompressedClassPointers implies the use of
   // UseCompressedOops. The reason is that the rheap_base register of said platforms
   // is reused to perform some optimized spilling, in order to use rheap_base as a

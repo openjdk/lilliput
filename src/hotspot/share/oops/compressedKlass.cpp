@@ -33,6 +33,14 @@
 address CompressedKlassPointers::_base = NULL;
 int CompressedKlassPointers::_shift_copy = 0;
 
+#ifdef _LP64
+int LogKlassAlignmentInBytes = -1;
+int KlassAlignmentInBytes    = -1;
+int MaxNarrowKlassPointerBits = -1;
+uint64_t  NarrowKlassPointerBitMask = 0;
+uint64_t KlassEncodingMetaspaceMax = 0;
+#endif
+
 // Given an address range [addr, addr+len) which the encoding is supposed to
 //  cover, choose base, shift and range.
 //  The address range is the expected range of uncompressed Klass pointers we
@@ -84,6 +92,17 @@ void CompressedKlassPointers::initialize(address addr, size_t len) {
 #else
   ShouldNotReachHere(); // 64-bit only
 #endif
+}
+
+void CompressedKlassPointers::print_mode(outputStream* st) {
+  st->print_cr("UseCompressedClassPointers: %d", UseCompressedClassPointers);
+  st->print_cr("UseCompactObjectHeaders: %d", UseCompactObjectHeaders);
+  st->print_cr("LogKlassAlignmentInBytes: %d", LogKlassAlignmentInBytes);
+  st->print_cr("KlassAlignmentInBytes: %d", KlassAlignmentInBytes);
+  st->print_cr("MaxNarrowKlassPointerBits: %d", MaxNarrowKlassPointerBits);
+  st->print_cr("NarrowKlassPointerBitMask: " PTR_FORMAT, NarrowKlassPointerBitMask);
+  st->print_cr("KlassEncodingMetaspaceMax: " SIZE_FORMAT " (" SIZE_FORMAT_X ")", KlassEncodingMetaspaceMax, KlassEncodingMetaspaceMax);
+  print_mode_pd(st);
 }
 
 // 64-bit platforms define these functions on a per-platform base. They are not needed for
