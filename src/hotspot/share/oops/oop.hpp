@@ -333,7 +333,7 @@ class oopDesc {
     if (UseCompactObjectHeaders) {
       STATIC_ASSERT(markWord::klass_shift % 8 == 0);
       return mark_offset_in_bytes() + markWord::klass_shift / 8;
-    } else 
+    } else
 #endif
     return offset_of(oopDesc, _metadata._klass);
   }
