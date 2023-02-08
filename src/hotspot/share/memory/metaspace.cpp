@@ -871,6 +871,7 @@ size_t Metaspace::max_allocation_word_size() {
 #ifdef _LP64
 // The largest allowed size for class space
 size_t Metaspace::max_class_space_size() {
+  assert(KlassEncodingMetaspaceMax > 0, "too early.");
   // This is a bit fuzzy. Max value of class space size depends on narrow klass pointer
   // encoding range size and CDS, since class space shares encoding range with CDS. CDS
   // archives are usually pretty small though, so to keep matters simple, for now we

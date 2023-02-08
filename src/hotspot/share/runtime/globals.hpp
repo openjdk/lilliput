@@ -1421,7 +1421,7 @@ const int ObjectAlignmentInBytes = 8;
   product(size_t, CompressedClassSpaceSize, 1*G,                            \
           "Maximum size of class area in Metaspace when compressed "        \
           "class pointers are used")                                        \
-          constraint(CompressedClassSpaceSizeConstraintFunc,AtParse)        \
+          constraint(CompressedClassSpaceSizeConstraintFunc, AfterErgo)     \
                                                                             \
   product(size_t, CompressedClassSpaceBaseAddress, 0, DIAGNOSTIC,           \
           "Force the class space to be allocated at this address or "       \
