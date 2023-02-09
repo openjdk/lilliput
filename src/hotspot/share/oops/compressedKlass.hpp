@@ -49,8 +49,12 @@ extern uint64_t NarrowKlassPointerBitMask;
 extern uint64_t KlassEncodingMetaspaceMax;
 
 #else
+// Why is this even needed in 32-bit? Todo: fix.
 const int LogKlassAlignmentInBytes = 3; // traditional 64-bit alignment
 const int KlassAlignmentInBytes    = 1 << LogKlassAlignmentInBytes;
+const int MaxNarrowKlassPointerBits = 22; // should never be used.
+const uint64_t  NarrowKlassPointerBitMask = ((((uint64_t)1) << MaxNarrowKlassPointerBits) - 1);
+const uint64_t KlassEncodingMetaspaceMax = (uint64_t(max_juint) + 1) << LogKlassAlignmentInBytes;
 #endif
 
 // If compressed klass pointers then use narrowKlass.
