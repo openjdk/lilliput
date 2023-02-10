@@ -173,3 +173,4 @@ vmTestbase/nsk/monitoring/ThreadMXBean/ThreadInfo/Multi/Multi005/TestDescription
 
 Lilliput temporary:
 compiler/c2/irTests/TestVectorizationNotRun.java 8301785 generic-all
+runtime/CompressedOops/CompressedClassPointerEncoding.java 8302094 windows-all,macosx-all
