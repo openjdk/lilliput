@@ -95,6 +95,19 @@ public:
 };
 
 #ifdef _LP64
+class C2FixAnonOMOwnerStub : public C2CodeStub {
+private:
+  Register _monitor;
+  Register _tmp;
+public:
+  C2FixAnonOMOwnerStub(Register monitor, Register tmp = noreg) : C2CodeStub(),
+    _monitor(monitor), _tmp(tmp) {}
+  Register monitor() { return _monitor; }
+  Register tmp() { return _tmp; }
+  int max_size() const;
+  void emit(C2_MacroAssembler& masm);
+};
+
 class C2LoadNKlassStub : public C2CodeStub {
 private:
   Register _dst;
