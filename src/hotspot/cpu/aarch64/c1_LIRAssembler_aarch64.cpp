@@ -2567,8 +2567,6 @@ void LIR_Assembler::emit_load_klass(LIR_OpLoadKlass* op) {
     add_debug_info_for_null_check_here(info);
   }
 
-  assert(UseCompressedClassPointers, "expects UseCompressedClassPointers");
-
   if (UseCompressedClassPointers) {
     if (UseCompactObjectHeaders) {
       // Check if we can take the (common) fast path, if obj is unlocked.
