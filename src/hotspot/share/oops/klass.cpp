@@ -201,9 +201,11 @@ void* Klass::operator new(size_t size, ClassLoaderData* loader_data, size_t word
 
 static markWord make_prototype(Klass* kls) {
   markWord prototype = markWord::prototype();
+#ifdef _LP64
   if (UseCompactObjectHeaders) {
     prototype = prototype.set_klass(kls);
   }
+#endif
   return prototype;
 }
 
