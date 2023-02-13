@@ -273,8 +273,8 @@ static OopMap* generate_oop_map(StubAssembler* sasm, bool save_fpu_registers) {
   return oop_map;
 }
 
- static OopMap* save_live_registers(StubAssembler* sasm,
-                                    bool save_fpu_registers = true) {
+static OopMap* save_live_registers(StubAssembler* sasm,
+                                   bool save_fpu_registers = true) {
   __ block_comment("save_live_registers");
 
   __ push(RegSet::range(r0, r29), sp);         // integer registers except lr & sp
@@ -288,7 +288,6 @@ static OopMap* generate_oop_map(StubAssembler* sasm, bool save_fpu_registers) {
   } else {
     __ add(sp, sp, -32 * wordSize);
   }
-
   return generate_oop_map(sasm, save_fpu_registers);
 }
 
