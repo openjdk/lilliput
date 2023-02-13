@@ -4159,7 +4159,7 @@ void TemplateTable::instanceof() {
   __ pop_ptr(rdx); // restore receiver
   __ verify_oop(rdx);
   __ load_klass(rdx, rdx, rscratch1);
-  __ jmp(resolved);
+  __ jmpb(resolved);
 
   // Get superklass in rax and subklass in rdx
   __ bind(quicked);
