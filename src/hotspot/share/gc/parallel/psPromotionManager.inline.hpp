@@ -164,9 +164,12 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
   oop new_obj = nullptr;
   bool new_obj_is_tenured = false;
   Klass* klass;
+#ifdef _LP64
   if (UseCompactObjectHeaders) {
     klass = test_mark.safe_klass();
-  } else {
+  } else
+#endif
+  {
     klass = o->klass();
   }
   size_t new_obj_size = o->size_given_klass(klass);

@@ -100,9 +100,11 @@ void CompressedKlassPointers::print_mode(outputStream* st) {
   st->print_cr("LogKlassAlignmentInBytes: %d", LogKlassAlignmentInBytes);
   st->print_cr("KlassAlignmentInBytes: %d", KlassAlignmentInBytes);
   st->print_cr("MaxNarrowKlassPointerBits: %d", MaxNarrowKlassPointerBits);
+#ifdef _LP64
   st->print_cr("NarrowKlassPointerBitMask: " PTR_FORMAT, NarrowKlassPointerBitMask);
   st->print_cr("KlassEncodingMetaspaceMax: " SIZE_FORMAT " (" SIZE_FORMAT_X ")", KlassEncodingMetaspaceMax, KlassEncodingMetaspaceMax);
   print_mode_pd(st);
+#endif
 }
 
 // 64-bit platforms define these functions on a per-platform base. They are not needed for
@@ -114,9 +116,6 @@ void CompressedKlassPointers::print_mode(outputStream* st) {
 bool CompressedKlassPointers::is_valid_base(address p) {
   ShouldNotReachHere(); // 64-bit only
   return false;
-}
-
-void CompressedKlassPointers::print_mode(outputStream* st) {
 }
 #endif
 
