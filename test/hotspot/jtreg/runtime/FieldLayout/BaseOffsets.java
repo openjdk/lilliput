@@ -63,20 +63,21 @@ public class BaseOffsets {
     static final int  INT_ARRAY_OFFSET;
     static final int  LONG_ARRAY_OFFSET;
     static {
-      if (WB.getBooleanVMFlag("UseCompactObjectHeaders")) {
-        INT_OFFSET = 8;
-        INT_ARRAY_OFFSET = 12;
-        LONG_ARRAY_OFFSET = 12;
-      } else if (WB.getBooleanVMFlag("UseCompressedClassPointers")) {
-        INT_OFFSET = 12;
-        INT_ARRAY_OFFSET = 16;
-        LONG_ARRAY_OFFSET = 16;
-      } else {
-        INT_OFFSET = 16;
-        INT_ARRAY_OFFSET = 20;
-        LONG_ARRAY_OFFSET = 24;
-      }
+        if (WB.getBooleanVMFlag("UseCompactObjectHeaders")) {
+            INT_OFFSET = 8;
+            INT_ARRAY_OFFSET = 12;
+            LONG_ARRAY_OFFSET = 12;
+        } else if (WB.getBooleanVMFlag("UseCompressedClassPointers")) {
+            INT_OFFSET = 12;
+            INT_ARRAY_OFFSET = 16;
+            LONG_ARRAY_OFFSET = 16;
+        } else {
+            INT_OFFSET = 16;
+            INT_ARRAY_OFFSET = 20;
+            LONG_ARRAY_OFFSET = 24;
+        }
     }
+
     static public void main(String[] args) {
         Unsafe unsafe = Unsafe.getUnsafe();
         Class c = LIClass.class;
