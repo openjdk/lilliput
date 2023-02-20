@@ -1566,7 +1566,7 @@ void Arguments::set_use_compressed_klass_ptrs() {
     }
     FLAG_SET_DEFAULT(UseCompressedClassPointers, true);
   }
-  if (UseCompactObjectHeaders) {
+  if (!UseCompactObjectHeaders) {
     FLAG_SET_DEFAULT(UseSharedSpaces, false);
   }
 
