@@ -165,10 +165,12 @@ public class Oop {
   void iterateFields(OopVisitor visitor, boolean doVMFields) {
     if (doVMFields) {
       visitor.doCInt(mark, true);
-      if (VM.getVM().isCompressedKlassPointersEnabled()) {
-        visitor.doMetadata(compressedKlass, true);
-      } else {
-        visitor.doMetadata(klass, true);
+      if (!VM.getVM().isCompactObjectHeadersEnabled()) {
+        if (VM.getVM().isCompressedKlassPointersEnabled()) {
+          visitor.doMetadata(compressedKlass, true);
+        } else {
+          visitor.doMetadata(klass, true);
+        }
       }
     }
   }
