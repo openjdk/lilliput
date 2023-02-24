@@ -101,8 +101,8 @@ void CompressedKlassPointers::print_mode(outputStream* st) {
   st->print_cr("KlassAlignmentInBytes: %d", KlassAlignmentInBytes);
   st->print_cr("MaxNarrowKlassPointerBits: %d", MaxNarrowKlassPointerBits);
 #ifdef _LP64
-  st->print_cr("NarrowKlassPointerBitMask: " PTR_FORMAT, NarrowKlassPointerBitMask);
-  st->print_cr("KlassEncodingMetaspaceMax: " SIZE_FORMAT " (" SIZE_FORMAT_X ")", KlassEncodingMetaspaceMax, KlassEncodingMetaspaceMax);
+  st->print_cr("NarrowKlassPointerBitMask: " UINT64_FORMAT, NarrowKlassPointerBitMask);
+  st->print_cr("KlassEncodingMetaspaceMax: " UINT64_FORMAT " (" UINT64_FORMAT_X ")", KlassEncodingMetaspaceMax, KlassEncodingMetaspaceMax);
   print_mode_pd(st);
 #endif
 }
