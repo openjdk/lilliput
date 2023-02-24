@@ -4078,8 +4078,7 @@ void MacroAssembler::load_nklass(Register dst, Register src) {
 
   // Check if we can take the (common) fast path, if obj is unlocked.
   ldr(dst, Address(src, oopDesc::mark_offset_in_bytes()));
-  tst(dst, markWord::monitor_value);
-  br(Assembler::EQ, fast);
+  tbz(dst, exact_log2(markWord::monitor_value), fast);
 
   // Fetch displaced header
   ldr(dst, Address(dst, OM_OFFSET_NO_MONITOR_VALUE_TAG(header)));
