@@ -63,7 +63,7 @@ public class BaseOffsets {
     static final int  INT_ARRAY_OFFSET;
     static final int  LONG_ARRAY_OFFSET;
     static {
-        if (WB.getBooleanVMFlag("UseCompactObjectHeaders")) {
+        if (!Platform.is64bit() || WB.getBooleanVMFlag("UseCompactObjectHeaders")) {
             INT_OFFSET = 8;
             INT_ARRAY_OFFSET = 12;
             LONG_ARRAY_OFFSET = 16;
