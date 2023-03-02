@@ -1555,21 +1555,6 @@ void Arguments::set_use_compressed_klass_ptrs() {
     }
   }
 
-  if (UseCompactObjectHeaders) {
-    if (!UseCompressedClassPointers) {
-      // Lilliput requires compressed class pointers.
-      if (FLAG_IS_CMDLINE(UseCompressedClassPointers)) {
-        // If user specifies -UseCompressedClassPointers, it should be reverted with
-        // a warning.
-        warning("Lilliput reqires compressed class pointers.");
-      }
-    }
-    FLAG_SET_DEFAULT(UseCompressedClassPointers, true);
-  }
-  if (!UseCompactObjectHeaders) {
-    FLAG_SET_DEFAULT(UseSharedSpaces, false);
-  }
-
   // Assert validity of compressed class space size. User arg should have been checked at this point
   // (see CompressedClassSpaceSizeConstraintFunc()), so no need to be nice about it, this fires in
   // case the default is wrong.
@@ -3161,13 +3146,21 @@ jint Arguments::finalize_vm_init_args(bool patch_mod_javabase) {
   UNSUPPORTED_OPTION(ShowRegistersOnAssert);
 #endif // CAN_SHOW_REGISTERS_ON_ASSERT
 
+#ifdef _LP64
+  if (UseCompactObjectHeaders && FLAG_IS_CMDLINE(UseCompressedClassPointers) && !UseCompressedClassPointers) {
+    // If user specifies -UseCompressedClassPointers, disable compact headers with a warning.
+    warning("Compact object headers require compressed class pointers. Disabling compact object headers.");
+    FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
+  }
+
   if (UseCompactObjectHeaders && !UseFastLocking) {
-    // Lilliput requires fast-locking.
-    if (FLAG_IS_CMDLINE(UseFastLocking)) {
-      warning("Lilliput requires fast-locking.");
-    }
     FLAG_SET_DEFAULT(UseFastLocking, true);
   }
+
+  if (!UseCompactObjectHeaders) {
+    FLAG_SET_DEFAULT(UseSharedSpaces, false);
+  }
+#endif
 
   return JNI_OK;
 }
