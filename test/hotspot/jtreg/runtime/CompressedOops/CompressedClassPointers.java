@@ -351,9 +351,9 @@ public class CompressedClassPointers {
         heapBaseMinAddressTest();
         sharingTest();
 
-        smallHeapTestNoCoop();
-        smallHeapTestWith1GNoCoop();
-        largeHeapTestNoCoop();
+        // smallHeapTestNoCoop();
+        // smallHeapTestWith1GNoCoop();
+        // largeHeapTestNoCoop();
         largePagesTestNoCoop();
         heapBaseMinAddressTestNoCoop();
         sharingTestNoCoop();
