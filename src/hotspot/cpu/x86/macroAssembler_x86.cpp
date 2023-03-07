@@ -5158,13 +5158,6 @@ void MacroAssembler::load_nklass(Register dst, Register src) {
 void MacroAssembler::load_klass(Register dst, Register src, Register tmp) {
   assert_different_registers(src, tmp);
   assert_different_registers(dst, tmp);
-  if (null_check_src) {
-    if (UseCompactObjectHeaders) {
-      null_check(src, oopDesc::mark_offset_in_bytes());
-    } else {
-      null_check(src, oopDesc::klass_offset_in_bytes());
-    }
-  }
 #ifdef _LP64
   if (UseCompressedClassPointers) {
     load_nklass(dst, src);
