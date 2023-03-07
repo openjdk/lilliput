@@ -370,10 +370,11 @@ class MacroAssembler: public Assembler {
   void load_method_holder(Register holder, Register method);
 
   // oop manipulations
-  void load_klass(Register dst, Register src, Register tmp, bool null_check_src = false);
 #ifdef _LP64
   void load_nklass(Register dst, Register src);
 #endif
+  void load_klass(Register dst, Register src, Register tmp);
+  void load_klass_check_null(Register dst, Register src, Register tmp);
   void store_klass(Register dst, Register src, Register tmp);
 
   // Compares the Klass pointer of an object to a given Klass (which might be narrow,

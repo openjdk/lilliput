@@ -150,6 +150,10 @@ Klass* oopDesc::klass_or_null_acquire() const {
   return Atomic::load_acquire(&_metadata._klass);
 }
 
+Klass* oopDesc::klass_raw() const {
+  return klass();
+}
+
 void oopDesc::set_klass(Klass* k) {
   assert(Universe::is_bootstrapping() || (k != NULL && k->is_klass()), "incorrect Klass");
   assert(!UseCompactObjectHeaders, "don't set Klass* with compact headers");
@@ -333,7 +337,7 @@ oop oopDesc::forward_to_atomic(oop p, markWord compare, atomic_memory_order orde
   assert(forwardee(m) == p, "encoding must be reversable");
   markWord old_mark = cas_set_mark(m, compare, order);
   if (old_mark == compare) {
-    return NULL;
+    return nullptr;
   } else {
     return forwardee(old_mark);
   }
@@ -438,7 +442,7 @@ void oopDesc::oop_iterate_backwards(OopClosureType* cl, Klass* k) {
 }
 
 bool oopDesc::is_instanceof_or_null(oop obj, Klass* klass) {
-  return obj == NULL || obj->klass()->is_subtype_of(klass);
+  return obj == nullptr || obj->klass()->is_subtype_of(klass);
 }
 
 intptr_t oopDesc::identity_hash() {
