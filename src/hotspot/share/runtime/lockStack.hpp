@@ -35,7 +35,7 @@ class OopClosure;
 class LockStack {
   friend class VMStructs;
 private:
-  static const size_t INITIAL_CAPACITY = 2;
+  static const size_t INITIAL_CAPACITY = 4;
   oop* _base;
   oop* _limit;
   oop* _current;
