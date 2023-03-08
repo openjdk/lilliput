@@ -85,15 +85,16 @@ void C2CheckLockStackStub::emit(C2_MacroAssembler& masm) {
 }
 
 #ifdef _LP64
-int C2FixAnonOMOwnerStub::max_size() const {
+int C2HandleAnonOMOwnerStub::max_size() const {
   return 17;
 }
 
-void C2FixAnonOMOwnerStub::emit(C2_MacroAssembler& masm) {
+void C2HandleAnonOMOwnerStub::emit(C2_MacroAssembler& masm) {
   __ bind(entry());
   Register mon = monitor();
-  __ movptr(Address(mon, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner)), r15_thread);
-  __ subptr(Address(r15_thread, JavaThread::lock_stack_current_offset()), oopSize);
+  Register thr = thread();
+  __ movptr(Address(mon, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner)), thr);
+  __ subptr(Address(thr, JavaThread::lock_stack_current_offset()), oopSize);
   __ jmp(continuation());
 }
 
