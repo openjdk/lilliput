@@ -82,17 +82,16 @@ int C2HandleAnonOMOwnerStub::max_size() const {
 void C2HandleAnonOMOwnerStub::emit(C2_MacroAssembler& masm) {
   __ bind(entry());
   Register mon = monitor();
-  Register thr = thread();
   Register t = tmp();
   assert(t != noreg, "need tmp register");
 
   // Fix owner to be the current thread.
-  __ str(thr, Address(mon, ObjectMonitor::owner_offset_in_bytes()));
+  __ str(rthread, Address(mon, ObjectMonitor::owner_offset_in_bytes()));
 
   // Pop owner object from lock-stack.
-  __ ldr(t, Address(thr, JavaThread::lock_stack_current_offset()));
+  __ ldr(t, Address(rthread, JavaThread::lock_stack_current_offset()));
   __ sub(t, t, oopSize);
-  __ str(t, Address(thr, JavaThread::lock_stack_current_offset()));
+  __ str(t, Address(rthread, JavaThread::lock_stack_current_offset()));
 
   __ b(continuation());
 }

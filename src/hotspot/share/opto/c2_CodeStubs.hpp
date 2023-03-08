@@ -98,13 +98,11 @@ public:
 class C2HandleAnonOMOwnerStub : public C2CodeStub {
 private:
   Register _monitor;
-  Register _thread;
   Register _tmp;
 public:
-  C2HandleAnonOMOwnerStub(Register monitor, Register thread, Register tmp = noreg) : C2CodeStub(),
-    _monitor(monitor), _thread(thread), _tmp(tmp) {}
+  C2HandleAnonOMOwnerStub(Register monitor, Register tmp = noreg) : C2CodeStub(),
+    _monitor(monitor), _tmp(tmp) {}
   Register monitor() { return _monitor; }
-  Register thread()  { return _thread; }
   Register tmp()     { return _tmp; }
   int max_size() const;
   void emit(C2_MacroAssembler& masm);

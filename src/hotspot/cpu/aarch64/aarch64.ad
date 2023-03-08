@@ -3934,7 +3934,7 @@ encode %{
       // We cannot use tbnz here, the target might be too far away and cannot
       // be encoded.
       __ tst(tmp2, (uint64_t)(intptr_t) ANONYMOUS_OWNER);
-      C2HandleAnonOMOwnerStub* stub = new (Compile::current()->comp_arena()) C2HandleAnonOMOwnerStub(tmp, rthread, tmp2);
+      C2HandleAnonOMOwnerStub* stub = new (Compile::current()->comp_arena()) C2HandleAnonOMOwnerStub(tmp, tmp2);
       Compile::current()->output()->add_stub(stub);
       __ br(Assembler::NE, stub->entry());
       __ bind(stub->continuation());

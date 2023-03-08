@@ -92,9 +92,8 @@ int C2HandleAnonOMOwnerStub::max_size() const {
 void C2HandleAnonOMOwnerStub::emit(C2_MacroAssembler& masm) {
   __ bind(entry());
   Register mon = monitor();
-  Register thr = thread();
-  __ movptr(Address(mon, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner)), thr);
-  __ subptr(Address(thr, JavaThread::lock_stack_current_offset()), oopSize);
+  __ movptr(Address(mon, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner)), r15_thread);
+  __ subptr(Address(r15_thread, JavaThread::lock_stack_current_offset()), oopSize);
   __ jmp(continuation());
 }
 
