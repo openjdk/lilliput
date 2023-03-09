@@ -166,8 +166,11 @@ bool oopDesc::has_klass_gap() {
 void oopDesc::set_narrow_klass(narrowKlass nk) {
   assert(DumpSharedSpaces, "Used by CDS only. Do not abuse!");
   assert(UseCompressedClassPointers, "must be");
-  assert(!UseCompactObjectHeaders, "not with compact headers");
-  _metadata._compressed_klass = nk;
+  if (UseCompactObjectHeaders) {
+    set_mark(mark().set_narrow_klass(nk));
+  } else {
+    _metadata._compressed_klass = nk;
+  }
 }
 #endif
 
