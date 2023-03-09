@@ -4254,8 +4254,7 @@ void MacroAssembler::load_method_holder(Register holder, Register method) {
 }
 
 // Loads the obj's Klass* into dst.
-// src and dst must be distinct registers
-// Preserves all registers (incl src, rscratch1 and rscratch2), but clobbers condition flags
+// Preserves all registers (incl src, rscratch1 and rscratch2).
 void MacroAssembler::load_nklass(Register dst, Register src) {
   assert(UseCompressedClassPointers, "expects UseCompressedClassPointers");
 
