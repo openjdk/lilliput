@@ -27,7 +27,7 @@
 #include "classfile/vmSymbols.hpp"
 #include "gc/shared/collectedHeap.inline.hpp"
 #include "gc/shared/genCollectedHeap.hpp"
-#include "gc/shared/slidingForwarding.inline.hpp"
+#include "gc/shared/gcForwarding.inline.hpp"
 #include "gc/shared/space.hpp"
 #include "gc/shared/space.inline.hpp"
 #include "gc/shared/spaceDecorator.inline.hpp"
@@ -253,7 +253,7 @@ void CompactibleSpace::clear(bool mangle_space) {
 }
 
 HeapWord* CompactibleSpace::forward(oop q, size_t size,
-                                    CompactPoint* cp, HeapWord* compact_top, SlidingForwarding* const forwarding) {
+                                    CompactPoint* cp, HeapWord* compact_top) {
   // q is alive
   // First check if we should switch compaction space
   assert(this == cp->space, "'this' should be current compaction space.");
@@ -276,13 +276,13 @@ HeapWord* CompactibleSpace::forward(oop q, size_t size,
 
   // store the forwarding pointer into the mark word
   if (cast_from_oop<HeapWord*>(q) != compact_top) {
-    forwarding->forward_to(q, cast_to_oop(compact_top));
+    GCForwarding::forward_to(q, cast_to_oop(compact_top));
     assert(q->is_gc_marked(), "encoding the pointer should preserve the mark");
   } else {
     // if the object isn't moving we can just set the mark to the default
     // mark and handle it specially later on.
     q->init_mark();
-    assert(!q->is_forwarded(), "should not be forwarded");
+    assert(!GCForwarding::is_forwarded(q), "should not be forwarded");
   }
 
   compact_top += size;
@@ -324,13 +324,12 @@ void ContiguousSpace::prepare_for_compaction(CompactPoint* cp) {
   HeapWord* cur_obj = bottom();
   HeapWord* scan_limit = top();
 
-  SlidingForwarding* const forwarding = GenCollectedHeap::heap()->forwarding();
   while (cur_obj < scan_limit) {
     if (cast_to_oop(cur_obj)->is_gc_marked()) {
       // prefetch beyond cur_obj
       Prefetch::write(cur_obj, interval);
       size_t size = cast_to_oop(cur_obj)->size();
-      compact_top = cp->space->forward(cast_to_oop(cur_obj), size, cp, compact_top, forwarding);
+      compact_top = cp->space->forward(cast_to_oop(cur_obj), size, cp, compact_top);
       cur_obj += size;
       end_of_live = cur_obj;
     } else {
@@ -346,7 +345,7 @@ void ContiguousSpace::prepare_for_compaction(CompactPoint* cp) {
       // we don't have to compact quite as often.
       if (cur_obj == compact_top && dead_spacer.insert_deadspace(cur_obj, end)) {
         oop obj = cast_to_oop(cur_obj);
-        compact_top = cp->space->forward(obj, obj->size(), cp, compact_top, forwarding);
+        compact_top = cp->space->forward(obj, obj->size(), cp, compact_top);
         end_of_live = end;
       } else {
         // otherwise, it really is a free region.
@@ -389,7 +388,6 @@ void CompactibleSpace::adjust_pointers() {
   HeapWord* cur_obj = bottom();
   HeapWord* const end_of_live = _end_of_live;  // Established by prepare_for_compaction().
   HeapWord* const first_dead = _first_dead;    // Established by prepare_for_compaction().
-  const SlidingForwarding* const forwarding = GenCollectedHeap::heap()->forwarding();
 
   assert(first_dead <= end_of_live, "Stands to reason, no?");
 
@@ -401,7 +399,7 @@ void CompactibleSpace::adjust_pointers() {
     if (cur_obj < first_dead || cast_to_oop(cur_obj)->is_gc_marked()) {
       // cur_obj is alive
       // point all the oops to the new location
-      size_t size = MarkSweep::adjust_pointers(forwarding, cast_to_oop(cur_obj));
+      size_t size = MarkSweep::adjust_pointers(cast_to_oop(cur_obj));
       debug_only(prev_obj = cur_obj);
       cur_obj += size;
     } else {
@@ -442,11 +440,9 @@ void CompactibleSpace::compact() {
     cur_obj = *(HeapWord**)(_first_dead);
   }
 
-  const SlidingForwarding* const forwarding = GenCollectedHeap::heap()->forwarding();
-
   debug_only(HeapWord* prev_obj = nullptr);
   while (cur_obj < end_of_live) {
-    if (!cast_to_oop(cur_obj)->is_forwarded()) {
+    if (!GCForwarding::is_forwarded(cast_to_oop(cur_obj))) {
       debug_only(prev_obj = cur_obj);
       // The first word of the dead object contains a pointer to the next live object or end of space.
       cur_obj = *(HeapWord**)cur_obj;
@@ -457,7 +453,7 @@ void CompactibleSpace::compact() {
 
       // size and destination
       size_t size = cast_to_oop(cur_obj)->size();
-      HeapWord* compaction_top = cast_from_oop<HeapWord*>(forwarding->forwardee(cast_to_oop(cur_obj)));
+      HeapWord* compaction_top = cast_from_oop<HeapWord*>(GCForwarding::forwardee(cast_to_oop(cur_obj)));
 
       // prefetch beyond compaction_top
       Prefetch::write(compaction_top, copy_interval);

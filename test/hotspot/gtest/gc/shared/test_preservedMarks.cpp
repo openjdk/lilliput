@@ -55,6 +55,9 @@ TEST_VM(PreservedMarks, iterate_and_restore) {
   FakeOop o3;
   FakeOop o4;
 
+  bool old_compact_headers = UseCompactObjectHeaders;
+  UseCompactObjectHeaders = false;
+
   // Make sure initial marks are correct.
   ASSERT_MARK_WORD_EQ(o1.mark(), FakeOop::originalMark());
   ASSERT_MARK_WORD_EQ(o2.mark(), FakeOop::originalMark());
@@ -78,9 +81,6 @@ TEST_VM(PreservedMarks, iterate_and_restore) {
   ASSERT_EQ(o2.get_oop()->forwardee(), o4.get_oop());
   // Adjust will update the PreservedMarks stack to
   // make sure the mark is updated at the new location.
-  // TODO: This is the only use of PM::adjust_during_full_gc().
-  // GCs use the variant with a forwarding structure here,
-  // test that variant, and remove the method.
   pm.adjust_during_full_gc();
 
   // Restore all preserved and verify that the changed
@@ -88,4 +88,6 @@ TEST_VM(PreservedMarks, iterate_and_restore) {
   pm.restore();
   ASSERT_MARK_WORD_EQ(o3.mark(), FakeOop::changedMark());
   ASSERT_MARK_WORD_EQ(o4.mark(), FakeOop::changedMark());
+
+  UseCompactObjectHeaders = old_compact_headers;
 }

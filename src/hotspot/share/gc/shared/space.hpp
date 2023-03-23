@@ -56,7 +56,6 @@ class Generation;
 class CompactibleSpace;
 class CardTableRS;
 class DirtyCardToOopClosure;
-class SlidingForwarding;
 class FilteringClosure;
 
 // A Space describes a heap area. Class Space is an abstract
@@ -385,7 +384,7 @@ public:
   // Invokes the "alloc_block" function of the then-current compaction
   // space.
   virtual HeapWord* forward(oop q, size_t size, CompactPoint* cp,
-                    HeapWord* compact_top, SlidingForwarding* const forwarding);
+                    HeapWord* compact_top);
 protected:
   // Used during compaction.
   HeapWord* _first_dead;

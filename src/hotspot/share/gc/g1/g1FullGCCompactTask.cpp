@@ -29,8 +29,8 @@
 #include "gc/g1/g1FullGCCompactionPoint.hpp"
 #include "gc/g1/g1FullGCCompactTask.hpp"
 #include "gc/g1/heapRegion.inline.hpp"
+#include "gc/shared/gcForwarding.inline.hpp"
 #include "gc/shared/gcTraceTime.inline.hpp"
-#include "gc/shared/slidingForwarding.inline.hpp"
 #include "logging/log.hpp"
 #include "oops/oop.inline.hpp"
 #include "utilities/ticks.hpp"
@@ -42,8 +42,8 @@ void G1FullGCCompactTask::G1CompactRegionClosure::clear_in_bitmap(oop obj) {
 
 size_t G1FullGCCompactTask::G1CompactRegionClosure::apply(oop obj) {
   size_t size = obj->size();
-  if (obj->is_forwarded()) {
-    HeapWord* destination = cast_from_oop<HeapWord*>(_forwarding->forwardee(obj));
+  if (GCForwarding::is_forwarded(obj)) {
+    HeapWord* destination = cast_from_oop<HeapWord*>(GCForwarding::forwardee(obj));
 
     // copy object and reinit its mark
     HeapWord* obj_addr = cast_from_oop<HeapWord*>(obj);

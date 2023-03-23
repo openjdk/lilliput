@@ -36,6 +36,7 @@
 #include "gc/serial/genMarkSweep.hpp"
 #include "gc/serial/serialGcRefProcProxyTask.hpp"
 #include "gc/shared/collectedHeap.inline.hpp"
+#include "gc/shared/gcForwarding.hpp"
 #include "gc/shared/gcHeapSummary.hpp"
 #include "gc/shared/gcTimer.hpp"
 #include "gc/shared/gcTrace.hpp"
@@ -92,6 +93,8 @@ void GenMarkSweep::invoke_at_safepoint(ReferenceProcessor* rp, bool clear_all_so
 
   mark_sweep_phase1(clear_all_softrefs);
 
+  GCForwarding::begin();
+
   mark_sweep_phase2();
 
   // Don't add any more derived pointers during phase3
@@ -103,6 +106,8 @@ void GenMarkSweep::invoke_at_safepoint(ReferenceProcessor* rp, bool clear_all_so
   mark_sweep_phase3();
 
   mark_sweep_phase4();
+
+  GCForwarding::end();
 
   restore_marks();
 
@@ -256,8 +261,6 @@ void GenMarkSweep::mark_sweep_phase3() {
 
   ClassLoaderDataGraph::verify_claimed_marks_cleared(ClassLoaderData::_claim_stw_fullgc_adjust);
 
-  AdjustPointerClosure adjust_pointer_closure(gch->forwarding());
-  CLDToOopClosure      adjust_cld_closure(&adjust_pointer_closure, ClassLoaderData::_claim_stw_fullgc_adjust);
   CodeBlobToOopClosure code_closure(&adjust_pointer_closure, CodeBlobToOopClosure::FixRelocations);
   gch->process_roots(GenCollectedHeap::SO_AllCodeCache,
                      &adjust_pointer_closure,

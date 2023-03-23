@@ -29,7 +29,6 @@
 
 #include "gc/shared/collectedHeap.hpp"
 #include "gc/shared/generation.hpp"
-#include "gc/shared/genCollectedHeap.hpp"
 #include "gc/shared/spaceDecorator.hpp"
 #include "oops/oop.inline.hpp"
 #include "oops/oopsHierarchy.hpp"

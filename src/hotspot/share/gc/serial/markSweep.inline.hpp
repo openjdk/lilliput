@@ -27,7 +27,7 @@
 
 #include "gc/serial/markSweep.hpp"
 
-#include "gc/shared/slidingForwarding.inline.hpp"
+#include "gc/shared/gcForwarding.inline.hpp"
 #include "classfile/classLoaderData.inline.hpp"
 #include "classfile/javaClasses.inline.hpp"
 #include "gc/shared/continuationGCSupport.inline.hpp"
@@ -40,16 +40,14 @@
 #include "utilities/align.hpp"
 #include "utilities/stack.inline.hpp"
 
-template <class T> inline void MarkSweep::adjust_pointer(const SlidingForwarding* const forwarding, T* p) {
+template <class T> inline void MarkSweep::adjust_pointer(T* p) {
   T heap_oop = RawAccess<>::oop_load(p);
   if (!CompressedOops::is_null(heap_oop)) {
     oop obj = CompressedOops::decode_not_null(heap_oop);
     assert(Universe::heap()->is_in(obj), "should be in heap");
 
-    markWord header = obj->mark();
-    if (header.is_marked()) {
-      oop new_obj = forwarding->forwardee(obj);
-      assert(new_obj != NULL, "must be forwarded");
+    if (GCForwarding::is_forwarded(obj)) {
+      oop new_obj = GCForwarding::forwardee(obj);
       assert(is_object_aligned(new_obj), "oop must be aligned");
       RawAccess<IS_NOT_NULL>::oop_store(p, new_obj);
     }
@@ -57,13 +55,12 @@ template <class T> inline void MarkSweep::adjust_pointer(const SlidingForwarding
 }
 
 template <typename T>
-void AdjustPointerClosure::do_oop_work(T* p)           { MarkSweep::adjust_pointer(_forwarding, p); }
+void AdjustPointerClosure::do_oop_work(T* p)           { MarkSweep::adjust_pointer(p); }
 inline void AdjustPointerClosure::do_oop(oop* p)       { do_oop_work(p); }
 inline void AdjustPointerClosure::do_oop(narrowOop* p) { do_oop_work(p); }
 
-inline size_t MarkSweep::adjust_pointers(const SlidingForwarding* const forwarding, oop obj) {
-  AdjustPointerClosure cl(forwarding);
-  return obj->oop_iterate_size(&cl);
+inline size_t MarkSweep::adjust_pointers(oop obj) {
+  return obj->oop_iterate_size(&MarkSweep::adjust_pointer_closure);
 }
 
 #endif // SHARE_GC_SERIAL_MARKSWEEP_INLINE_HPP

@@ -32,7 +32,6 @@
 class G1CollectedHeap;
 class G1CMBitMap;
 class G1FullCollector;
-class SlidingForwarding;
 class G1FullGCCompactionPoint;
 class HeapRegion;
 
@@ -93,7 +92,6 @@ private:
 
   class G1PrepareCompactLiveClosure : public StackObj {
     G1FullGCCompactionPoint* _cp;
-    SlidingForwarding* const _forwarding;
 
   public:
     G1PrepareCompactLiveClosure(G1FullGCCompactionPoint* cp);
@@ -103,16 +101,16 @@ private:
 
 // Closure to re-prepare objects in the serial compaction point queue regions for
 // serial compaction.
-//class G1SerialRePrepareClosure : public StackObj {
-//  G1FullGCCompactionPoint* _cp;
-//  HeapWord* _dense_prefix_top;
-//
-//public:
-//  G1SerialRePrepareClosure(G1FullGCCompactionPoint* hrcp, HeapWord* dense_prefix_top) :
-//    _cp(hrcp),
-//    _dense_prefix_top(dense_prefix_top) { }
-//
-//  inline size_t apply(oop obj);
-//};
+class G1SerialRePrepareClosure : public StackObj {
+  G1FullGCCompactionPoint* _cp;
+  HeapWord* _dense_prefix_top;
+
+public:
+  G1SerialRePrepareClosure(G1FullGCCompactionPoint* hrcp, HeapWord* dense_prefix_top) :
+    _cp(hrcp),
+    _dense_prefix_top(dense_prefix_top) { }
+
+  inline size_t apply(oop obj);
+};
 
 #endif // SHARE_GC_G1_G1FULLGCPREPARETASK_HPP
