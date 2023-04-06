@@ -76,6 +76,7 @@
 #include "gc/g1/heapRegionSet.inline.hpp"
 #include "gc/shared/concurrentGCBreakpoints.hpp"
 #include "gc/shared/gcBehaviours.hpp"
+#include "gc/shared/gcForwarding.hpp"
 #include "gc/shared/gcHeapSummary.hpp"
 #include "gc/shared/gcId.hpp"
 #include "gc/shared/gcLocker.inline.hpp"
@@ -1668,6 +1669,9 @@ jint G1CollectedHeap::initialize() {
   evac_failure_injector()->reset();
 
   G1InitLogger::print();
+
+  auto addr_to_idx = [](const void* addr) { return (size_t)G1CollectedHeap::heap()->addr_to_region(addr); };
+  GCForwarding::initialize(addr_to_idx, max_regions());
 
   return JNI_OK;
 }

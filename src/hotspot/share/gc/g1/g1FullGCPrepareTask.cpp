@@ -117,6 +117,7 @@ size_t G1FullGCPrepareTask::G1PrepareCompactLiveClosure::apply(oop object) {
 
 void G1FullGCPrepareTask::G1CalculatePointersClosure::prepare_for_compaction(HeapRegion* hr) {
   if (!_collector->is_free(hr->hrm_index())) {
+    GCForwarding::begin_region(hr->hrm_index(), _bitmap->count_marked(MemRegion(hr->bottom(), hr->top())));
     G1PrepareCompactLiveClosure prepare_compact(_cp);
     hr->apply_to_marked_objects(_bitmap, &prepare_compact);
   }

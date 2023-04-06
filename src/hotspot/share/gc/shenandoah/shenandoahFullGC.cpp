@@ -188,7 +188,6 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
 
     // The rest of prologue:
     _preserved_marks->init(heap->workers()->active_workers());
-    GCForwarding::begin();
 
     assert(heap->has_forwarded_objects() == has_forwarded_objects, "This should not change");
   }
@@ -223,6 +222,7 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
     // until all phases run together.
     ShenandoahHeapLocker lock(heap->lock());
 
+    GCForwarding::begin();
     phase2_calculate_target_addresses(worker_slices);
 
     OrderAccess::fence();
@@ -417,6 +417,8 @@ public:
     while (from_region != nullptr) {
       assert(is_candidate_region(from_region), "Sanity");
 
+      size_t num_marked = _heap->complete_marking_context()->count_marked(MemRegion(from_region->bottom(), from_region->top()));
+      GCForwarding::begin_region(from_region->index(), num_marked);
       cl.set_from_region(from_region);
       if (from_region->has_live()) {
         _heap->marked_object_iterate(from_region, &cl);

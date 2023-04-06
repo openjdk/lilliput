@@ -202,6 +202,8 @@ void MarkSweep::mark_object(oop obj) {
   if (obj->mark_must_be_preserved(mark)) {
     preserve_mark(obj, mark);
   }
+
+  _num_marked_objects++;
 }
 
 template <class T> void MarkSweep::mark_and_push(T* p) {
@@ -256,6 +258,8 @@ MarkSweep::IsAliveClosure   MarkSweep::is_alive;
 bool MarkSweep::IsAliveClosure::do_object_b(oop p) { return p->is_gc_marked(); }
 
 MarkSweep::KeepAliveClosure MarkSweep::keep_alive;
+
+size_t MarkSweep::_num_marked_objects = 0;
 
 void MarkSweep::KeepAliveClosure::do_oop(oop* p)       { MarkSweep::KeepAliveClosure::do_oop_work(p); }
 void MarkSweep::KeepAliveClosure::do_oop(narrowOop* p) { MarkSweep::KeepAliveClosure::do_oop_work(p); }

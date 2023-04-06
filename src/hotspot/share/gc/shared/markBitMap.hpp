@@ -98,6 +98,8 @@ public:
   void clear()                         { do_clear(_covered, true); }
   void clear_range(MemRegion mr)       { do_clear(mr, false);      }
   void clear_range_large(MemRegion mr) { do_clear(mr, true);       }
+
+  size_t count_marked(MemRegion mr);
 };
 
 #endif // SHARE_GC_SHARED_MARKBITMAP_HPP

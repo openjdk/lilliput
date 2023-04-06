@@ -174,6 +174,7 @@ public:
   void clear_large_range_of_words(idx_t beg, idx_t end);
   static void clear_range_of_words(bm_word_t* map, idx_t beg, idx_t end);
 
+  size_t count_marked(MemRegion mr) const;
 };
 
 #endif // SHARE_VM_GC_SHENANDOAH_SHENANDOAHMARKBITMAP_HPP

@@ -25,18 +25,34 @@
 #include "precompiled.hpp"
 #include "gc/shared/gcForwarding.hpp"
 #include "gc/shared/forwardingTable.hpp"
+#include "runtime/globals.hpp"
 
 ForwardingTable* GCForwarding::_forwarding_table = nullptr;
 
+void GCForwarding::initialize(AddrToIdxFn addr_to_idx, size_t max_regions) {
+  if (UseCompactObjectHeaders) {
+    assert(_forwarding_table == nullptr, "only call this once");
+    _forwarding_table = new ForwardingTable(addr_to_idx, max_regions);
+  }
+}
+
 void GCForwarding::begin() {
-  if (UseCompactObjectHeaders && _forwarding_table == nullptr) {
-    _forwarding_table = new ForwardingTable();
+  if (UseCompactObjectHeaders) {
+    assert(_forwarding_table != nullptr, "expect forwarding table initialized");
+    _forwarding_table->begin();
+  }
+}
+
+void GCForwarding::begin_region(size_t idx, size_t num_forwardings) {
+  if (UseCompactObjectHeaders) {
+    assert(_forwarding_table != nullptr, "expect forwarding table initialized");
+    _forwarding_table->begin_region(idx, num_forwardings);
   }
 }
 
 void GCForwarding::end() {
   if (UseCompactObjectHeaders) {
     assert(_forwarding_table != nullptr, "expect forwarding table initialized");
-    _forwarding_table->clear();
+    _forwarding_table->end();
   }
 }

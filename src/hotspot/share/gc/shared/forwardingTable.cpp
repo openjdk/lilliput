@@ -1,3 +1,4 @@
+
 /*
  * Copyright (c) 2021, Red Hat, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -24,24 +25,44 @@
 
 #include "precompiled.hpp"
 #include "gc/shared/forwardingTable.hpp"
-#include "oops/oop.inline.hpp"
-#include "runtime/thread.hpp"
-#include "utilities/concurrentHashTable.inline.hpp"
 
-ForwardingTable::ForwardingTable() :
-  _table(nullptr) { }
+PerRegionTable::PerRegionTable() : _used(false), _num_forwardings(0), _insertion_idx(0), _table(nullptr) {
+}
 
-void ForwardingTable::clear() {
-  class ClearEval {
-  public:
-    bool operator()(ForwardingTableValue* val) {
-      return true;
-    }
-  } eval;
-  class ClearDo {
-  public:
-    void operator()(ForwardingTableValue* val) { }
-  } del;
-  bool success = _table.try_bulk_delete(Thread::current(), eval, del);
-  assert(success, "must succeed");
+PerRegionTable::~PerRegionTable() {
+  if (_table != nullptr) {
+    FREE_C_HEAP_ARRAY(FwdTableEntry, _table);
+  }
+}
+
+void PerRegionTable::initialize(intx num_forwardings) {
+  _used = true;
+  _num_forwardings = num_forwardings;
+  _insertion_idx = 0;
+  _table = NEW_C_HEAP_ARRAY(FwdTableEntry, num_forwardings, mtGC);
+  for (intx i = 0; i < num_forwardings; i++) {
+    _table[i] = FwdTableEntry();
+  }
+}
+
+void ForwardingTable::begin() {
+  assert(_table == nullptr, "must not have been initialized");
+  _table = NEW_C_HEAP_ARRAY(PerRegionTable, _max_regions, mtGC);
+  for (size_t i = 0; i < _max_regions; i++) {
+    _table[i] = PerRegionTable();
+  }
+}
+
+void ForwardingTable::begin_region(size_t idx, size_t num_forwardings) {
+  assert(_table != nullptr, "must have been initialized");
+  _table[idx].initialize(num_forwardings);
+}
+
+void ForwardingTable::end() {
+  assert(_table != nullptr, "must have been initialized");
+  for (size_t i = 0; i < _max_regions; i++) {
+    _table[i].~PerRegionTable();
+  }
+  FREE_C_HEAP_ARRAY(PerRegionTable, _table);
+  _table = nullptr;
 }

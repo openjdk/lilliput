@@ -26,71 +26,58 @@
 #ifndef SHARE_GC_SHARED_FORWARDINGTABLE_HPP
 #define SHARE_GC_SHARED_FORWARDINGTABLE_HPP
 
+#include "gc/shared/gcForwarding.hpp"
 #include "memory/allocation.hpp"
-#include "memory/arena.hpp"
 #include "oops/oopsHierarchy.hpp"
-#include "utilities/concurrentHashTable.hpp"
 
-// A data-structure that maps oops to their forwarded locations. It is used
-// during full-GCs, which are sliding objects to the bottom of the heap (or some region),
-// and would loose their header information when storing the forwardee in the
-// object header.
-//
-// The implementation currently uses a generic concurrent hash-table. However, GC forwarding
-// comes with several constraints which may be possible to exploit for more efficient
-// implementation.
-//
-// - It is only used while mutators are paused.
-// - Forwarding happens in three distinct phases:
-//   - Forwardings are filled into the table. This is lots of inserts and some lookups
-//   - At some point, calculating forward locations is complete, from there on, only
-//     lookups are happening.
-//   - At the end, the whole forwarding information can be released all at once.
-// - Forwarding entries are never changed or deleted, except wholesale at the end.
-// - Inserting forwardees happens in a somewhat linear fashion: GC threads scan the heap
-//   (or regions of it) from bottom to top and insert forward locations for each reachable object.
-// - Conversely, lookups during adjust-references phase happens in a random-access manner.
-// - No two threads insert forwardings for the same object concurrently. Quite the contrary:
-//   worker threads divide up the heap into sub-regions and each worker forwards only objects
-//   that are in its assigned regions.
-//
-// The backing-store allocator of the forwarding table is using stupid malloc/free. This
-// could and should be improved to use a sort of arena allocator, where each GC thread
-// has its own arena to allocate from, which can be de-allocated wholesale at the end.
-
-class ForwardingTableValue {
+// TODO: Address range and num-regions permitting, we could switch to
+// a more compact encoding:
+// - N bits to encode number of words from start of from region
+// - M bits to encode number of words from start of to-region
+// - X bits to encode to-region index
+// from-region index is known implicitely.
+// For example, we could do M = N = 24 bits and X = 16 bits.
+class FwdTableEntry {
 private:
-  const HeapWord* const _object;
-  const HeapWord*       _forwardee;
-
+  HeapWord* _from;
+  HeapWord* _to;
 public:
-  ForwardingTableValue(const HeapWord* const object, const HeapWord* const forwardee) : _object(object), _forwardee(forwardee) {}
+  FwdTableEntry() : _from(nullptr), _to(nullptr) {}
+  HeapWord* from() const { return _from; }
+  HeapWord* to()   const { return _to;   }
 
-  inline const HeapWord* const object() const { return _object; }
-  inline const HeapWord* const forwardee() const { return _forwardee; }
-  inline void set_forwardee(HeapWord* fwd) { _forwardee = fwd; }
+  inline void forward_to(HeapWord* from, HeapWord* to);
 };
 
-class ForwardingTableConfig : public StackObj {
+class PerRegionTable : public CHeapObj<mtGC> {
+private:
+  bool _used;
+  intx _num_forwardings;
+  intx _insertion_idx;
+  FwdTableEntry* _table;
 public:
-  using Value = ForwardingTableValue;
-  static inline uintx get_hash(Value const& value, bool* is_dead);
-  static void* allocate_node(void* context, size_t size, Value const& value) {
-    return NEW_C_HEAP_ARRAY(char, size, mtGC);
-  }
-  static void free_node(void* context, void* memory, Value const& value) {
-    FREE_C_HEAP_ARRAY(char, memory);
-  }
+  PerRegionTable();
+  void initialize(intx num_forwardings);
+  ~PerRegionTable();
+  inline void forward_to(HeapWord* from, HeapWord* to);
+  inline HeapWord* forwardee(HeapWord* from);
 };
 
 class ForwardingTable : public CHeapObj<mtGC> {
 private:
-  ConcurrentHashTable<ForwardingTableConfig, mtGC> _table;
-public:
-  ForwardingTable();
+  AddrToIdxFn const _addr_to_idx;
+  size_t const _max_regions;
 
-  void clear();
-  inline oop forward_to(oop from, oop to);
+  PerRegionTable* _table;
+
+public:
+  ForwardingTable(AddrToIdxFn addr_to_idx, size_t max_regions): _addr_to_idx(addr_to_idx), _max_regions(max_regions), _table(nullptr) {}
+
+  void begin();
+  void begin_region(size_t idx, size_t num_forwardings);
+  void end();
+
+  inline void forward_to(oop from, oop to);
   inline oop forwardee(oop from);
 };
 

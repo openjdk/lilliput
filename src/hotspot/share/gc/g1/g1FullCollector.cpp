@@ -209,7 +209,6 @@ void G1FullCollector::collect() {
   deactivate_derived_pointers();
 
   GCForwarding::begin();
-
   phase2_prepare_compaction();
 
   if (has_compaction_targets()) {

@@ -115,7 +115,9 @@ class MarkSweep : AllStatic {
   // Non public closures
   static KeepAliveClosure keep_alive;
 
- public:
+  static size_t _num_marked_objects;
+
+public:
   static void initialize();
 
   // Public closures

@@ -120,6 +120,25 @@ void ShenandoahMarkBitMap::clear_range_large(MemRegion mr) {
   clear_large_range(beg, end);
 }
 
+size_t ShenandoahMarkBitMap::count_marked(MemRegion mr) const {
+  MemRegion intersection = mr.intersection(_covered);
+  assert(!intersection.is_empty(),
+         "Given range from " PTR_FORMAT " to " PTR_FORMAT " is completely outside the heap",
+          p2i(mr.start()), p2i(mr.end()));
+  // convert address range into offset range
+  HeapWord* beg = intersection.start();
+  HeapWord* end = intersection.end();
+  size_t sum = 0;
+  // We could probably be smarter here, but the complication is that we use
+  // two bits per object for strong vs weak marking.
+  for (HeapWord* current = beg; current < end; current++) {
+    if (is_marked(current)) {
+      sum++;
+    }
+  }
+  return sum;
+}
+
 #ifdef ASSERT
 void ShenandoahMarkBitMap::check_mark(HeapWord* addr) const {
   assert(ShenandoahHeap::heap()->is_in(addr),

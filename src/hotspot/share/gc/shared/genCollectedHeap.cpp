@@ -103,6 +103,7 @@ GenCollectedHeap::GenCollectedHeap(Generation::Name young,
   _full_collections_completed(0),
   _young_manager(nullptr),
   _old_manager(nullptr) {
+  GCForwarding::initialize([](const void*) -> size_t { return 0; }, 1);
 }
 
 jint GenCollectedHeap::initialize() {

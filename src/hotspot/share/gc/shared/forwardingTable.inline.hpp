@@ -27,83 +27,64 @@
 #define SHARE_GC_SHARED_FORWARDINGTABLE_INLINE_HPP
 
 #include "gc/shared/forwardingTable.hpp"
-#include "utilities/concurrentHashTable.inline.hpp"
+#include "utilities/ostream.hpp"
 
-inline uintx murmur3_hash(uintx k) {
-  k ^= k >> 33;
-  k *= 0xff51afd7ed558ccdLLU;
-  k ^= k >> 33;
-  k *= 0xc4ceb9fe1a85ec53LLU;
-  k ^= k >> 33;
-  return k;
+inline void FwdTableEntry::forward_to(HeapWord* from, HeapWord* to) {
+  assert(_from == nullptr, "forward only once");
+  assert(_to   == nullptr, "forward only once");
+  _from = from;
+  _to = to;
 }
 
-uintx ForwardingTableConfig::get_hash(ForwardingTableValue const& value, bool* is_dead) {
-  *is_dead = false;
-  return murmur3_hash(reinterpret_cast<uintx>(value.object()));
+inline void PerRegionTable::forward_to(HeapWord* from, HeapWord* to) {
+#ifdef ASSERT
+  if (_insertion_idx > 0) {
+    assert(_table[_insertion_idx].from() < from, "insertion must be monotonic");
+  }
+#endif
+  assert(_insertion_idx < _num_forwardings, "must be within bounds");
+  _table[_insertion_idx].forward_to(from, to);
+  _insertion_idx++;
 }
 
-class ForwardingTableLookup : public StackObj {
-private:
-  const HeapWord* const _object;
-public:
-  inline ForwardingTableLookup(const HeapWord* const object) : _object(object) {}
+inline HeapWord* PerRegionTable::forwardee(HeapWord* from) {
+  intx left = 0;
+  intx right = _insertion_idx - 1;
+  while (true) {
+    if (left > right) {
+      return nullptr;
+    }
+    // TODO: We could optimize this by not choosing the middle
+    // but instead interpolate based on current bounds and
+    // the address we are looking for.
+    intx middle = (left + right) / 2;
+    HeapWord* middle_value = _table[middle].from();
+    if (middle_value < from) {
+      left = middle + 1;
+    } else if (middle_value > from) {
+      right = middle - 1;
+    } else {
+      assert(middle_value == from, "must have found forwarding");
+      return _table[middle].to();
+    }
+  }
+}
 
-  inline uintx get_hash() const {
-    return murmur3_hash(reinterpret_cast<uintx>(_object));
-  }
-
-  inline bool equals(const ForwardingTableValue* const value, bool* is_dead) {
-    *is_dead = false;
-    return _object == value->object();
-  }
-};
-
-class ForwardingTableFound : public StackObj {
-private:
-  ForwardingTableValue* _value;
-public:
-  void operator()(ForwardingTableValue* const value) {
-    _value = value;
-  }
-
-  ForwardingTableValue* value() const {
-    return _value;
-  }
-};
-
-inline oop ForwardingTable::forward_to(oop from, oop to) {
-  assert(to != NULL, "Must not forwarde to NULL");
-  //tty->print_cr("forward_to: thread: " PTR_FORMAT ", from: " PTR_FORMAT ", to: " PTR_FORMAT, p2i(Thread::current()), p2i(cast_from_oop<HeapWord*>(from)), p2i(cast_from_oop<HeapWord*>(to)));
-  ForwardingTableLookup lookup(cast_from_oop<HeapWord*>(from));
-  ForwardingTableValue value(cast_from_oop<HeapWord*>(from), cast_from_oop<HeapWord*>(to));
-  ForwardingTableFound found;
-  bool grow;
-  oop result;
-  if (_table.insert_get(Thread::current(), lookup, value, found, &grow)) {
-    assert(_table.get(Thread::current(), lookup, found), "should be inserted now, thread: " PTR_FORMAT ", from: " PTR_FORMAT ", found: " PTR_FORMAT ", forwardee: " PTR_FORMAT, p2i(Thread::current()), p2i(cast_from_oop<HeapWord*>(from)), p2i(found.value()->forwardee()), p2i(cast_from_oop<HeapWord*>(to)));
-    assert(found.value()->forwardee() == cast_from_oop<HeapWord*>(to), "forwardee must be ours");
-    result = nullptr;
-  } else {
-    found.value()->set_forwardee(cast_from_oop<HeapWord*>(to));
-    result = nullptr;
-    //result = cast_to_oop(found.value()->forwardee());
-  }
-  if (grow) {
-    _table.grow(Thread::current());
-  }
-  return result;
+inline void ForwardingTable::forward_to(oop from, oop to) {
+  assert(_table != nullptr, "must have been initialized");
+  size_t idx = _addr_to_idx(from);
+  assert(idx < _max_regions, "must be within bounds");
+  //tty->print_cr("forward_to: from: " PTR_FORMAT ", to: " PTR_FORMAT ", idx: " SIZE_FORMAT, p2i(from), p2i(to), idx);
+  _table[idx].forward_to(cast_from_oop<HeapWord*>(from), cast_from_oop<HeapWord*>(to));
 }
 
 inline oop ForwardingTable::forwardee(oop from) {
-  ForwardingTableLookup lookup(cast_from_oop<HeapWord*>(from));
-  ForwardingTableFound found;
-  if (_table.get(Thread::current(), lookup, found)) {
-    // tty->print_cr("forwardee: " PTR_FORMAT, p2i(found.value()->forwardee()));
-    return cast_to_oop(found.value()->forwardee());
-  } else {
-    return nullptr;
-  }
+  assert(_table != nullptr, "must have been initialized");
+  size_t idx = _addr_to_idx(from);
+  assert(idx < _max_regions, "must be within bounds: idx: " SIZE_FORMAT ", _max_regions: " SIZE_FORMAT, idx, _max_regions);
+  HeapWord* to = _table[idx].forwardee(cast_from_oop<HeapWord*>(from));
+  //tty->print_cr("forwardee: from: " PTR_FORMAT ", to: " PTR_FORMAT ", idx: " SIZE_FORMAT, p2i(from), p2i(to), idx);
+  return cast_to_oop(to);
 }
 
 #endif // SHARE_GC_SHARED_FORWARDINGTABLE_INLINE_HPP

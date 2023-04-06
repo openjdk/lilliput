@@ -30,11 +30,16 @@
 
 class ForwardingTable;
 
+using AddrToIdxFn = size_t (*)(const void*);
+
 class GCForwarding : public AllStatic {
 private:
   static ForwardingTable* _forwarding_table;
 public:
+
+  static void initialize(AddrToIdxFn addr_to_idx, size_t max_regions);
   static void begin();
+  static void begin_region(size_t idx, size_t num_forwardings);
   static void end();
 
   static inline bool is_forwarded(oop obj);
