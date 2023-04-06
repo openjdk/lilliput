@@ -30,29 +30,19 @@
 #include "utilities/ostream.hpp"
 
 inline void FwdTableEntry::forward_to(HeapWord* from, HeapWord* to) {
-  assert(_from == nullptr, "forward only once");
-  assert(_to   == nullptr, "forward only once");
   _from = from;
   _to = to;
 }
 
-inline void PerRegionTable::forward_to(HeapWord* from, HeapWord* to) {
-#ifdef ASSERT
-  if (_insertion_idx > 0) {
-    assert(_table[_insertion_idx].from() < from, "insertion must be monotonic");
-  }
-#endif
-  assert(_insertion_idx < _num_forwardings, "must be within bounds");
-  _table[_insertion_idx].forward_to(from, to);
-  _insertion_idx++;
-}
-
-inline HeapWord* PerRegionTable::forwardee(HeapWord* from) {
+// When found, returns theindex into _table
+// When not found, returns a negative value i from which the insertion index can be derived:
+// insertion_idx = -(i + 1)
+inline intx PerRegionTable::lookup(HeapWord* from) {
   intx left = 0;
   intx right = _insertion_idx - 1;
   while (true) {
     if (left > right) {
-      return nullptr;
+      return -left - 1;
     }
     // TODO: We could optimize this by not choosing the middle
     // but instead interpolate based on current bounds and
@@ -65,8 +55,50 @@ inline HeapWord* PerRegionTable::forwardee(HeapWord* from) {
       right = middle - 1;
     } else {
       assert(middle_value == from, "must have found forwarding");
-      return _table[middle].to();
+      return middle;
     }
+  }
+}
+
+inline void PerRegionTable::reforward(HeapWord* from, HeapWord* to) {
+  intx idx = lookup(from);
+  if (idx < 0) {
+    intx ins_idx = -(idx + 1);
+    assert(_insertion_idx < _num_forwardings, "must have space for insertion");
+    for (intx i = _insertion_idx - 1; i >= ins_idx; i--) {
+      _table[i + 1] = _table[i];
+    }
+    _table[ins_idx].forward_to(from, to);
+    /*
+    tty->print_cr("could not find for re-forward: " PTR_FORMAT, p2i(from));
+    tty->print_cr("_insertion_idx: " INTX_FORMAT, _insertion_idx);
+    tty->print_cr("_num_forwardings: " INTX_FORMAT, _num_forwardings);
+    for (intx i = 0; i < _insertion_idx; i++) {
+      tty->print_cr("_table[" INTX_FORMAT "]: (" PTR_FORMAT " -> " PTR_FORMAT ")", i, p2i(_table[i].from()), p2i(_table[i].to()));
+    }
+    */
+  } else {
+    _table[idx].forward_to(from, to);
+  }
+}
+
+inline void PerRegionTable::forward_to(HeapWord* from, HeapWord* to) {
+  if (_insertion_idx > 0 && _table[_insertion_idx - 1].from() >= from) {
+    reforward(from, to);
+    return;
+  }
+  assert(_insertion_idx < _num_forwardings, "must be within bounds: _insertion_idx: " INTX_FORMAT ", _num_forwardings: " INTX_FORMAT, _insertion_idx, _num_forwardings);
+  assert(_used, "per region table must have been initialized");
+  _table[_insertion_idx].forward_to(from, to);
+  _insertion_idx++;
+}
+
+inline HeapWord* PerRegionTable::forwardee(HeapWord* from) {
+  intx idx = lookup(from);
+  if (idx < 0) {
+    return nullptr;
+  } else {
+    return _table[idx].to();
   }
 }
 

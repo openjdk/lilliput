@@ -36,6 +36,7 @@ PerRegionTable::~PerRegionTable() {
 }
 
 void PerRegionTable::initialize(intx num_forwardings) {
+  assert(!_used, "init per-region table only once");
   _used = true;
   _num_forwardings = num_forwardings;
   _insertion_idx = 0;

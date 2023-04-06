@@ -55,6 +55,10 @@ private:
   intx _num_forwardings;
   intx _insertion_idx;
   FwdTableEntry* _table;
+
+  inline intx lookup(HeapWord* from);
+  inline void reforward(HeapWord* from, HeapWord* to);
+
 public:
   PerRegionTable();
   void initialize(intx num_forwardings);
