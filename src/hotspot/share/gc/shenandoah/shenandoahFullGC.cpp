@@ -417,10 +417,10 @@ public:
     while (from_region != nullptr) {
       assert(is_candidate_region(from_region), "Sanity");
 
-      size_t num_marked = _heap->complete_marking_context()->count_marked(MemRegion(from_region->bottom(), from_region->top()));
-      GCForwarding::begin_region(from_region->index(), num_marked);
       cl.set_from_region(from_region);
       if (from_region->has_live()) {
+        size_t num_marked = _heap->complete_marking_context()->count_marked(MemRegion(from_region->bottom(), from_region->top()));
+        GCForwarding::begin_region(from_region->index(), num_marked);
         _heap->marked_object_iterate(from_region, &cl);
       }
 
@@ -474,6 +474,7 @@ void ShenandoahFullGC::calculate_target_humongous_objects() {
       size_t start = to_end - num_regions;
 
       if (start >= to_begin && start != r->index()) {
+        GCForwarding::begin_region(r->index(), 1);
         // Fits into current window, and the move is non-trivial. Record the move then, and continue scan.
         _preserved_marks->get(0)->push_if_necessary(old_obj, old_obj->mark());
         GCForwarding::forward_to(old_obj, cast_to_oop(heap->get_region(start)->bottom()));

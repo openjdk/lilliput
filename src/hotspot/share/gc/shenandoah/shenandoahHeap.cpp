@@ -28,6 +28,7 @@
 #include "memory/universe.hpp"
 
 #include "gc/shared/gcArguments.hpp"
+#include "gc/shared/gcForwarding.hpp"
 #include "gc/shared/gcTimer.hpp"
 #include "gc/shared/gcTraceTime.inline.hpp"
 #include "gc/shared/locationPrinter.inline.hpp"
@@ -403,6 +404,9 @@ jint ShenandoahHeap::initialize() {
   _control_thread = new ShenandoahControlThread();
 
   ShenandoahInitLogger::print();
+
+  auto addr_to_idx = [](const void* addr) { return ShenandoahHeap::heap()->heap_region_index_containing(addr); };
+  GCForwarding::initialize(addr_to_idx, num_regions());
 
   return JNI_OK;
 }

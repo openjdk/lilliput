@@ -27,6 +27,7 @@
 #define SHARE_GC_SHARED_FORWARDINGTABLE_INLINE_HPP
 
 #include "gc/shared/forwardingTable.hpp"
+#include "gc/shared/gc_globals.hpp"
 #include "utilities/ostream.hpp"
 
 inline void FwdTableEntry::forward_to(HeapWord* from, HeapWord* to) {
@@ -42,19 +43,22 @@ inline intx PerRegionTable::lookup(HeapWord* from) {
   intx right = _insertion_idx - 1;
   while (true) {
     if (left > right) {
-      return -left - 1;
+      assert(left >= 0 && left <= _insertion_idx, "must be in bounds and positive");
+      assert(left == 0 || _table[left - 1].from() < from, "correct insertion point");
+      assert(left == _insertion_idx || _table[left].from() > from, "correction insertion point");
+      intx ins_pt_encoded = -left - 1;
+      assert(ins_pt_encoded < 0, "must be negative");
+      assert(-(ins_pt_encoded + 1) == left, "check decoding");
+      return ins_pt_encoded;
     }
-    // TODO: We could optimize this by not choosing the middle
-    // but instead interpolate based on current bounds and
-    // the address we are looking for.
     intx middle = (left + right) / 2;
-    HeapWord* middle_value = _table[middle].from();
-    if (middle_value < from) {
+    HeapWord* middle_val = _table[middle].from();
+    if (middle_val < from) {
       left = middle + 1;
-    } else if (middle_value > from) {
+    } else if (middle_val > from) {
       right = middle - 1;
     } else {
-      assert(middle_value == from, "must have found forwarding");
+      assert(middle_val == from, "must have found forwarding");
       return middle;
     }
   }
@@ -64,19 +68,16 @@ inline void PerRegionTable::reforward(HeapWord* from, HeapWord* to) {
   intx idx = lookup(from);
   if (idx < 0) {
     intx ins_idx = -(idx + 1);
+    assert(ins_idx >= 0 && ins_idx < _insertion_idx, "insertion index must be within bounds");
     assert(_insertion_idx < _num_forwardings, "must have space for insertion");
+    assert(_insertion_idx > 0, "otherwise entry would be appended");
+    assert(ins_idx == 0 || _table[ins_idx - 1].from() < from, "must insert in order");
+    assert(_table[ins_idx].from() > from, "must insert in order");
     for (intx i = _insertion_idx - 1; i >= ins_idx; i--) {
       _table[i + 1] = _table[i];
     }
     _table[ins_idx].forward_to(from, to);
-    /*
-    tty->print_cr("could not find for re-forward: " PTR_FORMAT, p2i(from));
-    tty->print_cr("_insertion_idx: " INTX_FORMAT, _insertion_idx);
-    tty->print_cr("_num_forwardings: " INTX_FORMAT, _num_forwardings);
-    for (intx i = 0; i < _insertion_idx; i++) {
-      tty->print_cr("_table[" INTX_FORMAT "]: (" PTR_FORMAT " -> " PTR_FORMAT ")", i, p2i(_table[i].from()), p2i(_table[i].to()));
-    }
-    */
+    _insertion_idx++;
   } else {
     _table[idx].forward_to(from, to);
   }
@@ -84,6 +85,7 @@ inline void PerRegionTable::reforward(HeapWord* from, HeapWord* to) {
 
 inline void PerRegionTable::forward_to(HeapWord* from, HeapWord* to) {
   if (_insertion_idx > 0 && _table[_insertion_idx - 1].from() >= from) {
+    assert(UseG1GC || UseSerialGC, "happens only with G1 serial compaction");
     reforward(from, to);
     return;
   }
