@@ -1,5 +1,4 @@
 /*
- * Copyright (c) 2021, Red Hat, Inc. All rights reserved.
  * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -49,6 +48,9 @@ public:
   inline void forward_to(HeapWord* from, HeapWord* to);
 };
 
+/*
+ * The actual per-region forwarding table.
+ */
 class PerRegionTable : public CHeapObj<mtGC> {
 private:
   bool _used;
@@ -67,6 +69,43 @@ public:
   inline HeapWord* forwardee(HeapWord* from);
 };
 
+/*
+ * A forwarding-table implementation that's used by several full (sliding-) GCs.
+ * It exploits a number of properties:
+ * - Adding forwardings is single-threaded per region.
+ * - Adding forwarding happens in sequential order, except in some exceptional situations.
+ * - We know in advance how many forwardings we are going to insert.
+ * - Forwardings are never removed, except wholesale when we're done.
+*
+ * We maintain a number of per-region forwarding tables, one per region. These can
+ * easily be indexed by region-number. In order for this to work, the GC must pass
+ * a function pointer to the fwd table which finds the region that contains a given
+ * oop.
+ *
+ * Each per-region table is essentially a dense array of forwarding entries which are
+ * (oop, oop) - tuples. Each table holds exactly N entries, where N is the number
+ * of forwardings in the region. Entries in the table are always sorted by
+ * original (from-) address of the forwarding entries.
+ *
+ * Insertion of new forwardings usually happens in sequential order, which makes
+ * insertion trivial in these very common cases. The single exception is G1 serial
+ * compaction, which is a last-last-ditch attempt to squeeze out some more space. In
+ * this case we accept that we need to insert entries in the middle and copy all
+ * subsequent entries upwards.
+ *
+ * Lookup is a straightforward binary search of entries.
+ *
+ * It is important that code that wishes to use this forwarding table follow this lifecycle:
+ * - Allocate the ForwardingTable once, e.g. when the CollectedHeap is initialized.
+ *   This establishes how many regions will be used at maximum and also establishes the
+ *   fuction which maps heap addresses to region indices.
+ * - When forwarding starts, call begin(). This initializes the array that holds the per-region
+ *   tables.
+ * - When forwarding of a particular region starts (usually by a GC worker thread), call
+ *   begin_region(). This initializes the corresponding per-region table.
+ * - Insert and look-up forwardings.
+ * - When forwaring is finished, call end(). This will dispose all internal data structures.
+ */
 class ForwardingTable : public CHeapObj<mtGC> {
 private:
   AddrToIdxFn const _addr_to_idx;
