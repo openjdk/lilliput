@@ -84,7 +84,7 @@ inline void PerRegionTable::reforward(HeapWord* from, HeapWord* to) {
 
 inline void PerRegionTable::forward_to(HeapWord* from, HeapWord* to) {
   if (_insertion_idx > 0 && _table[_insertion_idx - 1].from() >= from) {
-    assert(UseG1GC || UseSerialGC, "happens only with G1 serial compaction");
+    assert(UseG1GC, "happens only with G1 serial compaction");
     reforward(from, to);
     return;
   }

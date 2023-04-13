@@ -103,7 +103,11 @@ GenCollectedHeap::GenCollectedHeap(Generation::Name young,
   _full_collections_completed(0),
   _young_manager(nullptr),
   _old_manager(nullptr) {
-  GCForwarding::initialize([](const void*) -> size_t { return 0; }, 1);
+  auto addr_to_idx = [](const void* addr) {
+    if (GenCollectedHeap::heap()->is_in_young(addr)) return (size_t)0;
+    else return (size_t)1;
+  };
+  GCForwarding::initialize(addr_to_idx, 2);
 }
 
 jint GenCollectedHeap::initialize() {

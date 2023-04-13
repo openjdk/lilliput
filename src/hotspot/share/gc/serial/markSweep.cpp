@@ -29,6 +29,7 @@
 #include "gc/shared/gcTimer.hpp"
 #include "gc/shared/gcTrace.hpp"
 #include "gc/shared/gc_globals.hpp"
+#include "gc/shared/genCollectedHeap.hpp"
 #include "memory/iterator.inline.hpp"
 #include "memory/universe.hpp"
 #include "oops/access.inline.hpp"
@@ -203,7 +204,11 @@ void MarkSweep::mark_object(oop obj) {
     preserve_mark(obj, mark);
   }
 
-  _num_marked_objects++;
+  if (GenCollectedHeap::heap()->is_in_young(obj)) {
+    _young_marked_objects++;
+  } else {
+    _old_marked_objects++;
+  }
 }
 
 template <class T> void MarkSweep::mark_and_push(T* p) {
@@ -259,7 +264,8 @@ bool MarkSweep::IsAliveClosure::do_object_b(oop p) { return p->is_gc_marked(); }
 
 MarkSweep::KeepAliveClosure MarkSweep::keep_alive;
 
-size_t MarkSweep::_num_marked_objects = 0;
+size_t MarkSweep::_young_marked_objects = 0;
+size_t MarkSweep::_old_marked_objects = 0;
 
 void MarkSweep::KeepAliveClosure::do_oop(oop* p)       { MarkSweep::KeepAliveClosure::do_oop_work(p); }
 void MarkSweep::KeepAliveClosure::do_oop(narrowOop* p) { MarkSweep::KeepAliveClosure::do_oop_work(p); }

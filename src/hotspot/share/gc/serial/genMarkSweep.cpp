@@ -94,7 +94,8 @@ void GenMarkSweep::invoke_at_safepoint(ReferenceProcessor* rp, bool clear_all_so
   mark_sweep_phase1(clear_all_softrefs);
 
   GCForwarding::begin();
-  GCForwarding::begin_region(0, _num_marked_objects);
+  GCForwarding::begin_region(0, _young_marked_objects);
+  GCForwarding::begin_region(1, _old_marked_objects);
 
   mark_sweep_phase2();
 
@@ -186,7 +187,8 @@ void GenMarkSweep::mark_sweep_phase1(bool clear_all_softrefs) {
 
   GenCollectedHeap* gch = GenCollectedHeap::heap();
 
-  _num_marked_objects = 0;
+  _young_marked_objects = 0;
+  _old_marked_objects = 0;
 
   ClassLoaderDataGraph::verify_claimed_marks_cleared(ClassLoaderData::_claim_stw_fullgc_mark);
 
