@@ -34,7 +34,7 @@ inline void FwdTableEntry::forward_to(HeapWord* from, HeapWord* to) {
   _to = to;
 }
 
-// When found, returns theindex into _table
+// When found, returns the index into _table
 // When not found, returns a negative value i from which the insertion index can be derived:
 // insertion_idx = -(i + 1)
 inline intx PerRegionTable::lookup(HeapWord* from) {

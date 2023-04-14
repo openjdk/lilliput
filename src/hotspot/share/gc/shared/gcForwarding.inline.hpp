@@ -38,6 +38,15 @@ inline bool GCForwarding::is_forwarded(oop obj) {
   }
 }
 
+inline bool GCForwarding::is_not_forwarded(oop obj) {
+  if (UseCompactObjectHeaders) {
+    assert(_forwarding_table != nullptr, "expect forwarding table initialized");
+    return _forwarding_table->forwardee(obj) == nullptr;
+  } else {
+    return !obj->is_forwarded();
+  }
+}
+
 inline oop GCForwarding::forwardee(oop obj) {
   if (UseCompactObjectHeaders) {
     assert(_forwarding_table != nullptr, "expect forwarding table initialized");
@@ -51,7 +60,6 @@ inline void GCForwarding::forward_to(oop obj, oop fwd) {
   if (UseCompactObjectHeaders) {
     assert(_forwarding_table != nullptr, "expect forwarding table initialized");
     _forwarding_table->forward_to(obj, fwd);
-    assert(is_forwarded(obj), "must be forwarded");
     assert(forwardee(obj) == fwd, "must be forwarded to correct forwardee");
   } else {
     obj->forward_to(fwd);

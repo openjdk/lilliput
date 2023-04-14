@@ -105,7 +105,7 @@ void G1FullGCCompactionPoint::forward(oop object, size_t size) {
     GCForwarding::forward_to(object, cast_to_oop(_compaction_top));
     assert(GCForwarding::is_forwarded(object), "must be forwarded");
   } else {
-    assert(!GCForwarding::is_forwarded(object), "must not be forwarded");
+    assert(GCForwarding::is_not_forwarded(object), "must not be forwarded");
   }
 
   // Update compaction values.

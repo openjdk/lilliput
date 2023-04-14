@@ -31,10 +31,10 @@
 
 // TODO: Address range and num-regions permitting, we could switch to
 // a more compact encoding:
-// - N bits to encode number of words from start of from region
+// - N bits to encode number of words from start of from-region
 // - M bits to encode number of words from start of to-region
 // - X bits to encode to-region index
-// from-region index is known implicitely.
+// from-region index is known implicitly.
 // For example, we could do M = N = 24 bits and X = 16 bits.
 class FwdTableEntry {
 private:
@@ -104,7 +104,7 @@ public:
  * - When forwarding of a particular region starts (usually by a GC worker thread), call
  *   begin_region(). This initializes the corresponding per-region table.
  * - Insert and look-up forwardings.
- * - When forwaring is finished, call end(). This will dispose all internal data structures.
+ * - When forwarding is finished, call end(). This will dispose all internal data structures.
  */
 class ForwardingTable : public CHeapObj<mtGC> {
 private:
@@ -124,4 +124,4 @@ public:
   inline oop forwardee(oop from);
 };
 
-#endif // SHARE_GC_SHARED_FORWARDINGABLE_HPP
+#endif // SHARE_GC_SHARED_FORWARDINGTABLE_HPP

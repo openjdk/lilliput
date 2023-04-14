@@ -282,7 +282,7 @@ HeapWord* CompactibleSpace::forward(oop q, size_t size,
     // if the object isn't moving we can just set the mark to the default
     // mark and handle it specially later on.
     q->init_mark();
-    assert(!GCForwarding::is_forwarded(q), "should not be forwarded");
+    assert(GCForwarding::is_not_forwarded(q), "should not be forwarded");
   }
 
   compact_top += size;
@@ -442,7 +442,7 @@ void CompactibleSpace::compact() {
 
   debug_only(HeapWord* prev_obj = nullptr);
   while (cur_obj < end_of_live) {
-    if (!GCForwarding::is_forwarded(cast_to_oop(cur_obj))) {
+    if (GCForwarding::is_not_forwarded(cast_to_oop(cur_obj))) {
       debug_only(prev_obj = cur_obj);
       // The first word of the dead object contains a pointer to the next live object or end of space.
       cur_obj = *(HeapWord**)cur_obj;

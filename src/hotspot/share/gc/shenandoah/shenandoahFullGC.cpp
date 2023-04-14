@@ -952,7 +952,7 @@ void ShenandoahFullGC::compact_humongous_objects() {
     ShenandoahHeapRegion* r = heap->get_region(c - 1);
     if (r->is_humongous_start()) {
       oop old_obj = cast_to_oop(r->bottom());
-      if (!GCForwarding::is_forwarded(old_obj)) {
+      if (GCForwarding::is_not_forwarded(old_obj)) {
         // No need to move the object, it stays at the same slot
         continue;
       }

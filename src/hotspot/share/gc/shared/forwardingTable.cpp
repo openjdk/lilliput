@@ -1,4 +1,3 @@
-
 /*
  * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -56,6 +55,7 @@ void ForwardingTable::begin() {
 
 void ForwardingTable::begin_region(size_t idx, size_t num_forwardings) {
   assert(_table != nullptr, "must have been initialized");
+  assert(idx < _max_regions, "region index must be within bounds");
   _table[idx].initialize(num_forwardings);
 }
 

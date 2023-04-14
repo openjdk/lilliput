@@ -55,8 +55,7 @@ TEST_VM(PreservedMarks, iterate_and_restore) {
   FakeOop o3;
   FakeOop o4;
 
-  bool old_compact_headers = UseCompactObjectHeaders;
-  UseCompactObjectHeaders = false;
+  FlagSetting fs(UseCompactObjectHeaders, false);
 
   // Make sure initial marks are correct.
   ASSERT_MARK_WORD_EQ(o1.mark(), FakeOop::originalMark());
@@ -88,6 +87,4 @@ TEST_VM(PreservedMarks, iterate_and_restore) {
   pm.restore();
   ASSERT_MARK_WORD_EQ(o3.mark(), FakeOop::changedMark());
   ASSERT_MARK_WORD_EQ(o4.mark(), FakeOop::changedMark());
-
-  UseCompactObjectHeaders = old_compact_headers;
 }
