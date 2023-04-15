@@ -34,67 +34,54 @@ inline void FwdTableEntry::forward_to(HeapWord* from, HeapWord* to) {
   _to = to;
 }
 
+inline uintx murmur3_hash(uintx k) {
+  k ^= k >> 33;
+  k *= 0xff51afd7ed558ccdLLU;
+  k ^= k >> 33;
+  k *= 0xc4ceb9fe1a85ec53LLU;
+  k ^= k >> 33;
+  return k;
+}
+
 // When found, returns the index into _table
 // When not found, returns a negative value i from which the insertion index can be derived:
 // insertion_idx = -(i + 1)
 inline intx PerRegionTable::lookup(HeapWord* from) {
-  intx left = 0;
-  intx right = _insertion_idx - 1;
-  while (true) {
-    if (left > right) {
-      assert(left >= 0 && left <= _insertion_idx, "must be in bounds and positive");
-      assert(left == 0 || _table[left - 1].from() < from, "correct insertion point");
-      assert(left == _insertion_idx || _table[left].from() > from, "correction insertion point");
-      intx ins_pt_encoded = -left - 1;
-      assert(ins_pt_encoded < 0, "must be negative");
-      assert(-(ins_pt_encoded + 1) == left, "check decoding");
-      return ins_pt_encoded;
+  uintx hash = murmur3_hash(reinterpret_cast<uintx>(from));
+  uintx idx = hash % _table_size;
+  // tty->print_cr("looking for: " PTR_FORMAT ", initial index: " UINTX_FORMAT ", table size: " UINTX_FORMAT, p2i(from), idx, _table_size);
+  for (uintx i = idx; i < (idx + _table_size); i++) {
+    uintx lookup_idx = i % _table_size;
+    HeapWord* entry = _table[lookup_idx].from();
+    if (entry == from) {
+      // tty->print_cr("Found: " UINTX_FORMAT ": " PTR_FORMAT, lookup_idx, p2i(_table[lookup_idx].from()));
+      return static_cast<intx>(lookup_idx);
+    } else if (entry == nullptr) {
+      //tty->print_cr("Not found: " UINTX_FORMAT, lookup_idx);
+      return -static_cast<intx>(lookup_idx) - 1;
     }
-    intx middle = (left + right) / 2;
-    HeapWord* middle_val = _table[middle].from();
-    if (middle_val < from) {
-      left = middle + 1;
-    } else if (middle_val > from) {
-      right = middle - 1;
-    } else {
-      assert(middle_val == from, "must have found forwarding");
-      return middle;
-    }
+    //tty->print_cr("Skipping: " UINTX_FORMAT ": " PTR_FORMAT, lookup_idx, p2i(_table[lookup_idx].from()));
   }
+  guarantee(false, "Forwarding table overflow - must not happen, tried to find entry: " PTR_FORMAT ", region-used: %s", p2i(from), BOOL_TO_STR(_used));
+  return 0;
 }
 
-inline void PerRegionTable::reforward(HeapWord* from, HeapWord* to) {
+inline void PerRegionTable::forward_to(HeapWord* from, HeapWord* to) {
   intx idx = lookup(from);
-  if (idx < 0) {
-    intx ins_idx = -(idx + 1);
-    assert(ins_idx >= 0 && ins_idx < _insertion_idx, "insertion index must be within bounds");
-    assert(_insertion_idx < _num_forwardings, "must have space for insertion");
-    assert(_insertion_idx > 0, "otherwise entry would be appended");
-    assert(ins_idx == 0 || _table[ins_idx - 1].from() < from, "must insert in order");
-    assert(_table[ins_idx].from() > from, "must insert in order");
-    for (intx i = _insertion_idx - 1; i >= ins_idx; i--) {
-      _table[i + 1] = _table[i];
-    }
-    _table[ins_idx].forward_to(from, to);
-    _insertion_idx++;
+  if (idx >= 0) {
+    assert(_table[idx].from() == from, "must have found correct entry");
+    _table[idx].forward_to(from, to);
   } else {
+    idx = -(idx + 1);
+    assert(_table[idx].from() == nullptr, "must not have found entry");
     _table[idx].forward_to(from, to);
   }
 }
 
-inline void PerRegionTable::forward_to(HeapWord* from, HeapWord* to) {
-  if (_insertion_idx > 0 && _table[_insertion_idx - 1].from() >= from) {
-    assert(UseG1GC, "happens only with G1 serial compaction, _insertion_idx: " INTX_FORMAT ", entry: " PTR_FORMAT " from: " PTR_FORMAT, _insertion_idx, p2i(_table[_insertion_idx-1].from()), p2i(from));
-    reforward(from, to);
-    return;
-  }
-  assert(_insertion_idx < _num_forwardings, "must be within bounds: _insertion_idx: " INTX_FORMAT ", _num_forwardings: " INTX_FORMAT, _insertion_idx, _num_forwardings);
-  assert(_used, "per region table must have been initialized");
-  _table[_insertion_idx].forward_to(from, to);
-  _insertion_idx++;
-}
-
 inline HeapWord* PerRegionTable::forwardee(HeapWord* from) {
+  if (!_used) {
+    return nullptr;
+  }
   intx idx = lookup(from);
   if (idx < 0) {
     return nullptr;

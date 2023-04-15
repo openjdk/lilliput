@@ -25,7 +25,9 @@
 #include "precompiled.hpp"
 #include "gc/shared/forwardingTable.hpp"
 
-PerRegionTable::PerRegionTable() : _used(false), _num_forwardings(0), _insertion_idx(0), _table(nullptr) {
+const float PerRegionTable::LOAD_FACTOR = 1.3f;
+
+PerRegionTable::PerRegionTable() : _used(false), _table_size(0), _table(nullptr) {
 }
 
 PerRegionTable::~PerRegionTable() {
@@ -37,10 +39,9 @@ PerRegionTable::~PerRegionTable() {
 void PerRegionTable::initialize(intx num_forwardings) {
   assert(!_used, "init per-region table only once");
   _used = true;
-  _num_forwardings = num_forwardings;
-  _insertion_idx = 0;
-  _table = NEW_C_HEAP_ARRAY(FwdTableEntry, num_forwardings, mtGC);
-  for (intx i = 0; i < num_forwardings; i++) {
+  _table_size = (intx)(num_forwardings * LOAD_FACTOR);
+  _table = NEW_C_HEAP_ARRAY(FwdTableEntry, _table_size, mtGC);
+  for (intx i = 0; i < _table_size; i++) {
     _table[i] = FwdTableEntry();
   }
 }

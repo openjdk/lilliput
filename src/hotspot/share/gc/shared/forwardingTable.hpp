@@ -53,9 +53,10 @@ public:
  */
 class PerRegionTable : public CHeapObj<mtGC> {
 private:
+  static const float LOAD_FACTOR;
+
   bool _used;
-  intx _num_forwardings;
-  intx _insertion_idx;
+  intx _table_size;
   FwdTableEntry* _table;
 
   inline intx lookup(HeapWord* from);
