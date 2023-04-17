@@ -365,9 +365,7 @@ public:
     // Object fits into current region, record new location:
     assert(_compact_point + obj_size <= _to_region->end(), "must fit");
     shenandoah_assert_not_forwarded(nullptr, p);
-    if (!UseCompactObjectHeaders) {
-      _preserved_marks->push_if_necessary(p, p->mark());
-    }
+    _preserved_marks->push_if_necessary(p, p->mark());
     GCForwarding::forward_to(p, cast_to_oop(_compact_point));
     _compact_point += obj_size;
   }
@@ -422,7 +420,6 @@ public:
       cl.set_from_region(from_region);
       if (from_region->has_live()) {
         size_t num_marked = _heap->complete_marking_context()->count_marked(MemRegion(from_region->bottom(), from_region->top()));
-        GCForwarding::begin_region(from_region->index(), num_marked);
         _heap->marked_object_iterate(from_region, &cl);
       }
 
@@ -476,11 +473,8 @@ void ShenandoahFullGC::calculate_target_humongous_objects() {
       size_t start = to_end - num_regions;
 
       if (start >= to_begin && start != r->index()) {
-        GCForwarding::begin_region(r->index(), 1);
         // Fits into current window, and the move is non-trivial. Record the move then, and continue scan.
-        if (!UseCompactObjectHeaders) {
-          _preserved_marks->get(0)->push_if_necessary(old_obj, old_obj->mark());
-        }
+        _preserved_marks->get(0)->push_if_necessary(old_obj, old_obj->mark());
         GCForwarding::forward_to(old_obj, cast_to_oop(heap->get_region(start)->bottom()));
         to_end = start;
         continue;
@@ -859,9 +853,7 @@ public:
       oop new_obj = cast_to_oop(compact_to);
 
       ContinuationGCSupport::relativize_stack_chunk(new_obj);
-      if (!UseCompactObjectHeaders) {
-        new_obj->init_mark();
-      }
+      new_obj->init_mark();
     }
   }
 };
@@ -976,9 +968,7 @@ void ShenandoahFullGC::compact_humongous_objects() {
       ContinuationGCSupport::relativize_stack_chunk(cast_to_oop<HeapWord*>(r->bottom()));
 
       oop new_obj = cast_to_oop(heap->get_region(new_start)->bottom());
-      if (!UseCompactObjectHeaders) {
-        new_obj->init_mark();
-      }
+      new_obj->init_mark();
 
       {
         for (size_t c = old_start; c <= old_end; c++) {

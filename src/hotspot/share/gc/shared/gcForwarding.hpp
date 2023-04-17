@@ -26,20 +26,19 @@
 #define SHARE_GC_SHARED_GCFORWARDING_HPP
 
 #include "memory/allStatic.hpp"
+#include "memory/memRegion.hpp"
 #include "oops/oopsHierarchy.hpp"
 
-class ForwardingTable;
-
-using AddrToIdxFn = size_t (*)(const void*);
+class SlidingForwarding;
 
 class GCForwarding : public AllStatic {
 private:
-  static ForwardingTable* _forwarding_table;
+  static SlidingForwarding* _sliding_forwarding;
 
 public:
-  static void initialize(AddrToIdxFn addr_to_idx, size_t max_regions);
+  static void initialize(MemRegion heap);
+  static void initialize(MemRegion heap, size_t region_size_words_shift);
   static void begin();
-  static void begin_region(size_t idx, size_t num_forwardings);
   static void end();
 
   static inline bool is_forwarded(oop obj);

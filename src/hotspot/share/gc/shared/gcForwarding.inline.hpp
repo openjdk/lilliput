@@ -25,32 +25,22 @@
 #ifndef SHARE_GC_SHARED_GCFORWARDING_INLINE_HPP
 #define SHARE_GC_SHARED_GCFORWARDING_INLINE_HPP
 
-#include "gc/shared/forwardingTable.inline.hpp"
 #include "gc/shared/gcForwarding.hpp"
+#include "gc/shared/slidingForwarding.inline.hpp"
 #include "oops/oop.inline.hpp"
 
 inline bool GCForwarding::is_forwarded(oop obj) {
-  if (UseCompactObjectHeaders) {
-    assert(_forwarding_table != nullptr, "expect forwarding table initialized");
-    return _forwarding_table->forwardee(obj) != nullptr;
-  } else {
-    return obj->is_forwarded();
-  }
+  return obj->is_forwarded();
 }
 
 inline bool GCForwarding::is_not_forwarded(oop obj) {
-  if (UseCompactObjectHeaders) {
-    assert(_forwarding_table != nullptr, "expect forwarding table initialized");
-    return _forwarding_table->forwardee(obj) == nullptr;
-  } else {
-    return !obj->is_forwarded();
-  }
+  return !obj->is_forwarded();
 }
 
 inline oop GCForwarding::forwardee(oop obj) {
   if (UseCompactObjectHeaders) {
-    assert(_forwarding_table != nullptr, "expect forwarding table initialized");
-    return _forwarding_table->forwardee(obj);
+    assert(_sliding_forwarding != nullptr, "expect sliding forwarding initialized");
+    return _sliding_forwarding->forwardee(obj);
   } else {
     return obj->forwardee();
   }
@@ -58,8 +48,8 @@ inline oop GCForwarding::forwardee(oop obj) {
 
 inline void GCForwarding::forward_to(oop obj, oop fwd) {
   if (UseCompactObjectHeaders) {
-    assert(_forwarding_table != nullptr, "expect forwarding table initialized");
-    _forwarding_table->forward_to(obj, fwd);
+    assert(_sliding_forwarding != nullptr, "expect sliding forwarding initialized");
+    _sliding_forwarding->forward_to(obj, fwd);
     assert(forwardee(obj) == fwd, "must be forwarded to correct forwardee");
   } else {
     obj->forward_to(fwd);

@@ -405,8 +405,7 @@ jint ShenandoahHeap::initialize() {
 
   ShenandoahInitLogger::print();
 
-  auto addr_to_idx = [](const void* addr) { return ShenandoahHeap::heap()->heap_region_index_containing(addr); };
-  GCForwarding::initialize(addr_to_idx, num_regions());
+  GCForwarding::initialize(_heap_region, ShenandoahHeapRegion::region_size_words_shift());
 
   return JNI_OK;
 }

@@ -1670,8 +1670,7 @@ jint G1CollectedHeap::initialize() {
 
   G1InitLogger::print();
 
-  auto addr_to_idx = [](const void* addr) { return (size_t)G1CollectedHeap::heap()->addr_to_region(addr); };
-  GCForwarding::initialize(addr_to_idx, max_regions());
+  GCForwarding::initialize(heap_rs.region(), HeapRegion::LogOfHRGrainBytes - LogHeapWordSize);
 
   return JNI_OK;
 }

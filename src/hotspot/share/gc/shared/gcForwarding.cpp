@@ -24,35 +24,34 @@
 
 #include "precompiled.hpp"
 #include "gc/shared/gcForwarding.hpp"
-#include "gc/shared/forwardingTable.hpp"
+#include "gc/shared/slidingForwarding.hpp"
 #include "runtime/globals.hpp"
 
-ForwardingTable* GCForwarding::_forwarding_table = nullptr;
+SlidingForwarding* GCForwarding::_sliding_forwarding = nullptr;
 
-void GCForwarding::initialize(AddrToIdxFn addr_to_idx, size_t max_regions) {
+void GCForwarding::initialize(MemRegion heap) {
   if (UseCompactObjectHeaders) {
-    assert(_forwarding_table == nullptr, "only call this once");
-    _forwarding_table = new ForwardingTable(addr_to_idx, max_regions);
+    assert(_sliding_forwarding == nullptr, "only call this once");
+    _sliding_forwarding = new SlidingForwarding(heap);
+  }
+}
+
+void GCForwarding::initialize(MemRegion heap, size_t region_size_words_shift) {
+  if (UseCompactObjectHeaders) {
+    assert(_sliding_forwarding == nullptr, "only call this once");
+    _sliding_forwarding = new SlidingForwarding(heap, region_size_words_shift);
   }
 }
 
 void GCForwarding::begin() {
   if (UseCompactObjectHeaders) {
-    assert(_forwarding_table != nullptr, "expect forwarding table initialized");
-    _forwarding_table->begin();
-  }
-}
-
-void GCForwarding::begin_region(size_t idx, size_t num_forwardings) {
-  if (UseCompactObjectHeaders) {
-    assert(_forwarding_table != nullptr, "expect forwarding table initialized");
-    _forwarding_table->begin_region(idx, num_forwardings);
+    assert(_sliding_forwarding != nullptr, "expect sliding forwarding initialized");
+    _sliding_forwarding->clear();
   }
 }
 
 void GCForwarding::end() {
   if (UseCompactObjectHeaders) {
-    assert(_forwarding_table != nullptr, "expect forwarding table initialized");
-    _forwarding_table->end();
+    assert(_sliding_forwarding != nullptr, "expect sliding forwarding initialized");
   }
 }
