@@ -25,9 +25,10 @@
 #ifndef SHARE_GC_SHARED_FORWARDINGTABLE_HPP
 #define SHARE_GC_SHARED_FORWARDINGTABLE_HPP
 
-#include "gc/shared/gcForwarding.hpp"
 #include "memory/allocation.hpp"
 #include "oops/oopsHierarchy.hpp"
+
+using AddrToIdxFn = size_t (*)(const void*);
 
 // TODO: Address range and num-regions permitting, we could switch to
 // a more compact encoding:
@@ -56,18 +57,21 @@ private:
   static const float LOAD_FACTOR;
 
   bool _used;
-  intx _table_size;
+  int _table_size_bits;
+  uintx _table_size;
+  uintx _max_psl;
   FwdTableEntry* _table;
 
-  inline intx lookup(HeapWord* from);
-  inline void reforward(HeapWord* from, HeapWord* to);
-
+  inline uintx home_index(HeapWord* from) const;
+  inline uintx psl(uintx idx, uintx home) const;
 public:
   PerRegionTable();
   void initialize(intx num_forwardings);
   ~PerRegionTable();
   inline void forward_to(HeapWord* from, HeapWord* to);
   inline HeapWord* forwardee(HeapWord* from);
+
+  uintx max_psl() const { return _max_psl; }
 };
 
 /*

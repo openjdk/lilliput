@@ -24,10 +24,12 @@
 
 #include "precompiled.hpp"
 #include "gc/shared/forwardingTable.hpp"
+#include "utilities/powerOfTwo.hpp"
+#include "utilities/ostream.hpp"
 
-const float PerRegionTable::LOAD_FACTOR = 1.3f;
+const float PerRegionTable::LOAD_FACTOR = 0.9f;
 
-PerRegionTable::PerRegionTable() : _used(false), _table_size(0), _table(nullptr) {
+PerRegionTable::PerRegionTable() : _used(false), _table_size_bits(0), _table_size(0), _max_psl(0), _table(nullptr) {
 }
 
 PerRegionTable::~PerRegionTable() {
@@ -39,9 +41,11 @@ PerRegionTable::~PerRegionTable() {
 void PerRegionTable::initialize(intx num_forwardings) {
   assert(!_used, "init per-region table only once");
   _used = true;
-  _table_size = (intx)(num_forwardings * LOAD_FACTOR);
+  _table_size = round_up_power_of_2((uintx)((float)num_forwardings / LOAD_FACTOR));
+  _table_size_bits = log2i_exact(_table_size);
+  _max_psl = 0;
   _table = NEW_C_HEAP_ARRAY(FwdTableEntry, _table_size, mtGC);
-  for (intx i = 0; i < _table_size; i++) {
+  for (uintx i = 0; i < _table_size; i++) {
     _table[i] = FwdTableEntry();
   }
 }
@@ -62,7 +66,9 @@ void ForwardingTable::begin_region(size_t idx, size_t num_forwardings) {
 
 void ForwardingTable::end() {
   assert(_table != nullptr, "must have been initialized");
+  //tty->print_cr("Max-PSLs for " SIZE_FORMAT " tables", _max_regions);
   for (size_t i = 0; i < _max_regions; i++) {
+    //tty->print_cr("table[" SIZE_FORMAT "]: " UINTX_FORMAT, i, _table[i].max_psl());
     _table[i].~PerRegionTable();
   }
   FREE_C_HEAP_ARRAY(PerRegionTable, _table);

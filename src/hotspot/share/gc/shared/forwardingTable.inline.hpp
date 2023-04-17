@@ -27,6 +27,7 @@
 
 #include "gc/shared/forwardingTable.hpp"
 #include "gc/shared/gc_globals.hpp"
+#include "oops/oop.inline.hpp"
 #include "utilities/ostream.hpp"
 
 inline void FwdTableEntry::forward_to(HeapWord* from, HeapWord* to) {
@@ -43,51 +44,120 @@ inline uintx murmur3_hash(uintx k) {
   return k;
 }
 
-// When found, returns the index into _table
-// When not found, returns a negative value i from which the insertion index can be derived:
-// insertion_idx = -(i + 1)
-inline intx PerRegionTable::lookup(HeapWord* from) {
-  uintx hash = murmur3_hash(reinterpret_cast<uintx>(from));
-  uintx idx = hash % _table_size;
-  // tty->print_cr("looking for: " PTR_FORMAT ", initial index: " UINTX_FORMAT ", table size: " UINTX_FORMAT, p2i(from), idx, _table_size);
-  for (uintx i = idx; i < (idx + _table_size); i++) {
-    uintx lookup_idx = i % _table_size;
-    HeapWord* entry = _table[lookup_idx].from();
-    if (entry == from) {
-      // tty->print_cr("Found: " UINTX_FORMAT ": " PTR_FORMAT, lookup_idx, p2i(_table[lookup_idx].from()));
-      return static_cast<intx>(lookup_idx);
-    } else if (entry == nullptr) {
-      //tty->print_cr("Not found: " UINTX_FORMAT, lookup_idx);
-      return -static_cast<intx>(lookup_idx) - 1;
-    }
-    //tty->print_cr("Skipping: " UINTX_FORMAT ": " PTR_FORMAT, lookup_idx, p2i(_table[lookup_idx].from()));
+inline uintx PerRegionTable::home_index(HeapWord* from) const {
+  if (_table_size_bits == 0) {
+    return 0; // Single-element table would underflow the right-shift and hit UB
   }
-  guarantee(false, "Forwarding table overflow - must not happen, tried to find entry: " PTR_FORMAT ", region-used: %s", p2i(from), BOOL_TO_STR(_used));
-  return 0;
+
+  uint64_t val = reinterpret_cast<uint64_t>(from);
+  val *= 0xbf58476d1ce4e5b9ull;
+  val ^= val >> 56;
+  val *= 0x94d049bb133111ebull;
+  val = (val * 11400714819323198485llu) >> (64 - _table_size_bits);
+  assert(val < _table_size, "must fit in table: val: " UINT64_FORMAT ", table-size: " UINTX_FORMAT ", table-size-bits: %d", val, _table_size, _table_size_bits);
+  return reinterpret_cast<uintx>(val);
+  //uintx hash = murmur3_hash(reinterpret_cast<uintx>(from));
+  //return hash % _table_size;
+}
+
+inline uintx PerRegionTable::psl(uintx idx, uintx home) const {
+  // Calculate distance between idx and home, accounting for
+  // wrap-around.
+  // By adding the table-size to idx, we ensure that the resulting
+  // index is larger than home. Then we can subtract home and
+  // modulo with table-size (by masking, table-size is power-of-2)
+  // to get the actual difference.
+  assert(home < _table_size, "home index must be within table");
+  uintx psl = (idx + _table_size - home) & (_table_size - 1);
+  assert(psl < _table_size, "must be within table size");
+  return psl;
 }
 
 inline void PerRegionTable::forward_to(HeapWord* from, HeapWord* to) {
-  intx idx = lookup(from);
-  if (idx >= 0) {
-    assert(_table[idx].from() == from, "must have found correct entry");
-    _table[idx].forward_to(from, to);
-  } else {
-    idx = -(idx + 1);
-    assert(_table[idx].from() == nullptr, "must not have found entry");
-    _table[idx].forward_to(from, to);
+  uintx home_idx = home_index(from);
+  uintx end = home_idx + _table_size;
+  uintx mask = _table_size - 1;
+  //tty->print_cr("Inserting: " PTR_FORMAT ", home index: " UINTX_FORMAT, p2i(from), home_idx);
+  for (uintx i = home_idx; i < end; i++) {
+    uintx idx = i & mask;
+    uintx my_psl = psl(idx, home_idx);
+    HeapWord* entry = _table[idx].from();
+    if (entry == nullptr || entry == from) {
+      //tty->print_cr("Inserted at idx: " UINTX_FORMAT, idx);
+      // We found an empty slot or a slot containing the key we are looking for.
+      _table[idx].forward_to(from, to);
+      _max_psl = MAX2(my_psl, _max_psl);
+      return;
+    }
+    // See if we shall swap the existing entry with the new one.
+    // See: https://programming.guide/robin-hood-hashing.html
+    // PSL = probe sequence length.
+    uintx other_home_idx = home_index(entry);
+    uintx other_psl = psl(idx, other_home_idx);
+    //tty->print_cr("My PSL: " UINTX_FORMAT ", other PSL: " UINTX_FORMAT, my_psl, other_psl);
+    if (my_psl > other_psl) {
+      // Take from the rich, give to the poor :-)
+      HeapWord* new_to = _table[idx].to();
+      _table[idx].forward_to(from, to);
+      from = entry;
+      to = new_to;
+      //tty->print_cr("swap, no inserting: " PTR_FORMAT, p2i(from));
+      home_idx = other_home_idx;
+      _max_psl = MAX2(my_psl, _max_psl);
+    }
   }
+  guarantee(false, "overflow while inserting");
 }
 
 inline HeapWord* PerRegionTable::forwardee(HeapWord* from) {
   if (!_used) {
     return nullptr;
   }
-  intx idx = lookup(from);
-  if (idx < 0) {
-    return nullptr;
-  } else {
-    return _table[idx].to();
+  //if (_max_psl > 0) tty->print_cr("Max-PSL: " UINTX_FORMAT, _max_psl);
+  uintx home_idx = home_index(from);
+  uintx mask = _table_size - 1;
+  //tty->print_cr("Searching: " PTR_FORMAT ", home index: " UINTX_FORMAT, p2i(from), home_idx);
+  for (uintx i = home_idx; i <= home_idx + _max_psl; i++) {
+    //tty->print_cr("checking index: " UINTX_FORMAT, i);
+    uintx idx = i & mask;
+    HeapWord* entry = _table[idx].from();
+    if (entry == from) {
+      //tty->print_cr("Found at idx: " UINTX_FORMAT, idx);
+      return _table[idx].to();
+    } else if (entry == nullptr) {
+      //tty->print_cr("Found null at idx: " UINTX_FORMAT, idx);
+      return nullptr;
+    } else {
+      uintx my_psl = psl(idx, home_idx);
+      uintx other_psl = psl(idx, home_index(entry));
+      if (other_psl < my_psl) {
+        //tty->print_cr("Found smaller PSL at idx: " UINTX_FORMAT, idx);
+        return nullptr;
+      }
+    }
   }
+  /*
+  uintx middle = home_idx + _max_psl / 2;
+  HeapWord* entry = _table[middle].from();
+  if (entry == from) {
+    return _table[middle].to();
+  }
+
+  uintx mask = _table_size - 1;
+  for (uintx i = 1; i <= (_max_psl + 1) / 2; i++) {
+    uintx left = (middle + _table_size - i) & mask;
+    entry = _table[left].from();
+    if (entry == from) {
+      return _table[left].to();
+    }
+    uintx right = (middle + i) & mask;
+    entry = _table[right].from();
+    if (entry == from) {
+      return _table[right].to();
+    }
+  }
+  */
+  return nullptr;
 }
 
 inline void ForwardingTable::forward_to(oop from, oop to) {
