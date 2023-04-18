@@ -31,7 +31,6 @@
 
 class G1FullCollector;
 class HeapRegion;
-class SlidingForwarding;
 
 class G1FullGCCompactionPoint : public CHeapObj<mtGC> {
   G1FullCollector* _collector;
@@ -53,7 +52,7 @@ public:
   bool is_initialized();
   void initialize(HeapRegion* hr);
   void update();
-  void forward(SlidingForwarding* const forwarding, oop object, size_t size);
+  void forward(oop object, size_t size);
   void add(HeapRegion* hr);
 
   void remove_at_or_above(uint bottom);

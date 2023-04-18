@@ -60,6 +60,17 @@ void MarkBitMap::do_clear(MemRegion mr, bool large) {
   }
 }
 
+size_t MarkBitMap::count_marked(MemRegion mr) {
+  MemRegion intersection = mr.intersection(_covered);
+  assert(!intersection.is_empty(),
+         "Given range from " PTR_FORMAT " to " PTR_FORMAT " is completely outside the heap",
+         p2i(mr.start()), p2i(mr.end()));
+  // convert address range into offset range
+  size_t beg = addr_to_offset(intersection.start());
+  size_t end = addr_to_offset(intersection.end());
+  return _bm.count_one_bits(beg, end);
+}
+
 #ifdef ASSERT
 void MarkBitMap::check_mark(HeapWord* addr) {
   assert(Universe::heap()->is_in(addr),

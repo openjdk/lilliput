@@ -33,7 +33,6 @@
 #include "gc/g1/heapRegion.inline.hpp"
 #include "gc/shared/gcTraceTime.inline.hpp"
 #include "gc/shared/referenceProcessor.hpp"
-#include "gc/shared/slidingForwarding.inline.hpp"
 #include "logging/log.hpp"
 #include "memory/iterator.inline.hpp"
 #include "oops/oop.inline.hpp"
@@ -108,11 +107,11 @@ G1FullGCPrepareTask::G1CalculatePointersClosure::G1CalculatePointersClosure(G1Fu
 
 
 G1FullGCPrepareTask::G1PrepareCompactLiveClosure::G1PrepareCompactLiveClosure(G1FullGCCompactionPoint* cp) :
-    _cp(cp), _forwarding(G1CollectedHeap::heap()->forwarding()) { }
+    _cp(cp) { }
 
 size_t G1FullGCPrepareTask::G1PrepareCompactLiveClosure::apply(oop object) {
   size_t size = object->size();
-  _cp->forward(_forwarding, object, size);
+  _cp->forward(object, size);
   return size;
 }
 

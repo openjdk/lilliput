@@ -835,7 +835,16 @@ void DefNewGeneration::collect(bool   full,
     // as a result of a partial evacuation of eden
     // and from-space.
     swap_spaces();   // For uniformity wrt ParNewGeneration.
-    from()->set_next_compaction_space(to());
+    // Ensure that compaction spaces are in address-order.
+    if (from()->bottom() < to()->bottom()) {
+      eden()->set_next_compaction_space(from());
+      from()->set_next_compaction_space(to());
+      to()->set_next_compaction_space(nullptr);
+    } else {
+      eden()->set_next_compaction_space(to());
+      to()->set_next_compaction_space(from());
+      from()->set_next_compaction_space(nullptr);
+    }
     heap->set_incremental_collection_failed();
 
     // Inform the next generation that a promotion failure occurred.

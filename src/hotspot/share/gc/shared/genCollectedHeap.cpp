@@ -39,6 +39,7 @@
 #include "gc/shared/collectedHeap.inline.hpp"
 #include "gc/shared/collectorCounters.hpp"
 #include "gc/shared/continuationGCSupport.inline.hpp"
+#include "gc/shared/gcForwarding.hpp"
 #include "gc/shared/gcId.hpp"
 #include "gc/shared/gcInitLogger.hpp"
 #include "gc/shared/gcLocker.hpp"
@@ -54,7 +55,6 @@
 #include "gc/shared/oopStorageParState.inline.hpp"
 #include "gc/shared/oopStorageSet.inline.hpp"
 #include "gc/shared/scavengableNMethods.hpp"
-#include "gc/shared/slidingForwarding.hpp"
 #include "gc/shared/space.hpp"
 #include "gc/shared/strongRootsScope.hpp"
 #include "gc/shared/weakProcessor.hpp"
@@ -117,7 +117,6 @@ jint GenCollectedHeap::initialize() {
   }
 
   initialize_reserved_region(heap_rs);
-  _forwarding = new SlidingForwarding(_reserved);
 
   _rem_set = create_rem_set(heap_rs.region());
   _rem_set->initialize();
@@ -133,6 +132,8 @@ jint GenCollectedHeap::initialize() {
   _old_gen = _old_gen_spec->init(old_rs, rem_set());
 
   GCInitLogger::print();
+
+  GCForwarding::initialize(_reserved);
 
   return JNI_OK;
 }
@@ -1036,7 +1037,6 @@ GenCollectedHeap* GenCollectedHeap::heap() {
 void GenCollectedHeap::prepare_for_compaction() {
   // Start by compacting into same gen.
   CompactPoint cp(_old_gen);
-  _forwarding->clear();
   _old_gen->prepare_for_compaction(&cp);
   _young_gen->prepare_for_compaction(&cp);
 }

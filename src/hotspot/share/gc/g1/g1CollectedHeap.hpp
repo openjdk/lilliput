@@ -85,7 +85,6 @@ class MemoryPool;
 class nmethod;
 class ReferenceProcessor;
 class STWGCTimer;
-class SlidingForwarding;
 class WorkerThreads;
 
 typedef OverflowTaskQueue<ScannerTask, mtGC>           G1ScannerTasksQueue;
@@ -253,8 +252,6 @@ private:
   // Helper for monitoring and management support.
   G1MonitoringSupport* _monitoring_support;
 
-  SlidingForwarding* _forwarding;
-
   uint _num_humongous_objects; // Current amount of (all) humongous objects found in the heap.
   uint _num_humongous_reclaim_candidates; // Number of humongous object eager reclaim candidates.
 public:
@@ -267,10 +264,6 @@ public:
   bool should_sample_collection_set_candidates() const;
   void set_collection_set_candidates_stats(G1MonotonicArenaMemoryStats& stats);
   void set_young_gen_card_set_stats(const G1MonotonicArenaMemoryStats& stats);
-
-  SlidingForwarding* forwarding() const {
-    return _forwarding;
-  }
 
 private:
 

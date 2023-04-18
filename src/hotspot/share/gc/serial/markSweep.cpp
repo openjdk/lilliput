@@ -26,10 +26,10 @@
 #include "compiler/compileBroker.hpp"
 #include "gc/serial/markSweep.inline.hpp"
 #include "gc/shared/collectedHeap.inline.hpp"
-#include "gc/shared/genCollectedHeap.hpp"
 #include "gc/shared/gcTimer.hpp"
 #include "gc/shared/gcTrace.hpp"
 #include "gc/shared/gc_globals.hpp"
+#include "gc/shared/genCollectedHeap.hpp"
 #include "memory/iterator.inline.hpp"
 #include "memory/universe.hpp"
 #include "oops/access.inline.hpp"
@@ -64,6 +64,7 @@ MarkSweep::FollowRootClosure  MarkSweep::follow_root_closure;
 
 MarkAndPushClosure MarkSweep::mark_and_push_closure(ClassLoaderData::_claim_stw_fullgc_mark);
 CLDToOopClosure    MarkSweep::follow_cld_closure(&mark_and_push_closure, ClassLoaderData::_claim_stw_fullgc_mark);
+CLDToOopClosure    MarkSweep::adjust_cld_closure(&adjust_pointer_closure, ClassLoaderData::_claim_stw_fullgc_adjust);
 
 template <class T> void MarkSweep::KeepAliveClosure::do_oop_work(T* p) {
   mark_and_push(p);
@@ -145,8 +146,8 @@ template <class T> void MarkSweep::follow_root(T* p) {
 void MarkSweep::FollowRootClosure::do_oop(oop* p)       { follow_root(p); }
 void MarkSweep::FollowRootClosure::do_oop(narrowOop* p) { follow_root(p); }
 
-void PreservedMark::adjust_pointer(const SlidingForwarding* const forwarding) {
-  MarkSweep::adjust_pointer(forwarding, &_obj);
+void PreservedMark::adjust_pointer() {
+  MarkSweep::adjust_pointer(&_obj);
 }
 
 void PreservedMark::restore() {
@@ -202,6 +203,12 @@ void MarkSweep::mark_object(oop obj) {
   if (obj->mark_must_be_preserved(mark)) {
     preserve_mark(obj, mark);
   }
+
+  if (GenCollectedHeap::heap()->is_in_young(obj)) {
+    _young_marked_objects++;
+  } else {
+    _old_marked_objects++;
+  }
 }
 
 template <class T> void MarkSweep::mark_and_push(T* p) {
@@ -220,19 +227,19 @@ void MarkAndPushClosure::do_oop_work(T* p)            { MarkSweep::mark_and_push
 void MarkAndPushClosure::do_oop(      oop* p)         { do_oop_work(p); }
 void MarkAndPushClosure::do_oop(narrowOop* p)         { do_oop_work(p); }
 
-void MarkSweep::adjust_marks() {
-  const SlidingForwarding* const forwarding = GenCollectedHeap::heap()->forwarding();
+AdjustPointerClosure MarkSweep::adjust_pointer_closure;
 
+void MarkSweep::adjust_marks() {
   // adjust the oops we saved earlier
   for (size_t i = 0; i < _preserved_count; i++) {
-    _preserved_marks[i].adjust_pointer(forwarding);
+    _preserved_marks[i].adjust_pointer();
   }
 
   // deal with the overflow stack
   StackIterator<PreservedMark, mtGC> iter(_preserved_overflow_stack);
   while (!iter.is_empty()) {
     PreservedMark* p = iter.next_addr();
-    p->adjust_pointer(forwarding);
+    p->adjust_pointer();
   }
 }
 
@@ -256,6 +263,9 @@ MarkSweep::IsAliveClosure   MarkSweep::is_alive;
 bool MarkSweep::IsAliveClosure::do_object_b(oop p) { return p->is_gc_marked(); }
 
 MarkSweep::KeepAliveClosure MarkSweep::keep_alive;
+
+size_t MarkSweep::_young_marked_objects = 0;
+size_t MarkSweep::_old_marked_objects = 0;
 
 void MarkSweep::KeepAliveClosure::do_oop(oop* p)       { MarkSweep::KeepAliveClosure::do_oop_work(p); }
 void MarkSweep::KeepAliveClosure::do_oop(narrowOop* p) { MarkSweep::KeepAliveClosure::do_oop_work(p); }

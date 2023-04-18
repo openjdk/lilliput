@@ -26,7 +26,7 @@
 #include "gc/g1/g1FullCollector.inline.hpp"
 #include "gc/g1/g1FullGCCompactionPoint.hpp"
 #include "gc/g1/heapRegion.hpp"
-#include "gc/shared/slidingForwarding.inline.hpp"
+#include "gc/shared/gcForwarding.inline.hpp"
 #include "oops/oop.inline.hpp"
 #include "utilities/debug.hpp"
 
@@ -92,7 +92,7 @@ void G1FullGCCompactionPoint::switch_region() {
   initialize_values();
 }
 
-void G1FullGCCompactionPoint::forward(SlidingForwarding* const forwarding, oop object, size_t size) {
+void G1FullGCCompactionPoint::forward(oop object, size_t size) {
   assert(_current_region != NULL, "Must have been initialized");
 
   // Ensure the object fit in the current region.
@@ -102,10 +102,10 @@ void G1FullGCCompactionPoint::forward(SlidingForwarding* const forwarding, oop o
 
   // Store a forwarding pointer if the object should be moved.
   if (cast_from_oop<HeapWord*>(object) != _compaction_top) {
-    forwarding->forward_to(object, cast_to_oop(_compaction_top));
-    assert(object->is_forwarded(), "must be forwarded");
+    GCForwarding::forward_to(object, cast_to_oop(_compaction_top));
+    assert(GCForwarding::is_forwarded(object), "must be forwarded");
   } else {
-    assert(!object->is_forwarded(), "must not be forwarded");
+    assert(GCForwarding::is_not_forwarded(object), "must not be forwarded");
   }
 
   // Update compaction values.

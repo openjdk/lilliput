@@ -68,6 +68,10 @@ bool ShenandoahMarkingContext::is_bitmap_clear_range(HeapWord* start, HeapWord* 
   return _mark_bit_map.get_next_marked_addr(start, end) == end;
 }
 
+size_t ShenandoahMarkingContext::count_marked(MemRegion mr) const {
+  return _mark_bit_map.count_marked(mr);
+}
+
 void ShenandoahMarkingContext::initialize_top_at_mark_start(ShenandoahHeapRegion* r) {
   size_t idx = r->index();
   HeapWord *bottom = r->bottom();

@@ -38,7 +38,6 @@
 class ReferenceProcessor;
 class DataLayout;
 class SerialOldTracer;
-class SlidingForwarding;
 class STWGCTimer;
 
 // MarkSweep takes care of global mark-compact garbage collection for a
@@ -116,7 +115,10 @@ class MarkSweep : AllStatic {
   // Non public closures
   static KeepAliveClosure keep_alive;
 
- public:
+  static size_t _young_marked_objects;
+  static size_t _old_marked_objects;
+
+public:
   static void initialize();
 
   // Public closures
@@ -125,6 +127,8 @@ class MarkSweep : AllStatic {
   static MarkAndPushClosure   mark_and_push_closure;
   static FollowStackClosure   follow_stack_closure;
   static CLDToOopClosure      follow_cld_closure;
+  static AdjustPointerClosure adjust_pointer_closure;
+  static CLDToOopClosure      adjust_cld_closure;
 
   // Accessors
   static uint total_invocations() { return _total_invocations; }
@@ -141,11 +145,11 @@ class MarkSweep : AllStatic {
   static void adjust_marks();   // Adjust the pointers in the preserved marks table
   static void restore_marks();  // Restore the marks that we saved in preserve_mark
 
-  static size_t adjust_pointers(const SlidingForwarding* const forwarding, oop obj);
+  static size_t adjust_pointers(oop obj);
 
   static void follow_stack();   // Empty marking stack.
 
-  template <class T> static inline void adjust_pointer(const SlidingForwarding* const forwarding, T* p);
+  template <class T> static inline void adjust_pointer(T* p);
 
   // Check mark and maybe push on marking stack
   template <class T> static void mark_and_push(T* p);
@@ -179,10 +183,7 @@ public:
 };
 
 class AdjustPointerClosure: public BasicOopIterateClosure {
-private:
-  const SlidingForwarding* const _forwarding;
  public:
-  AdjustPointerClosure(const SlidingForwarding* forwarding) : _forwarding(forwarding) {}
   template <typename T> void do_oop_work(T* p);
   virtual void do_oop(oop* p);
   virtual void do_oop(narrowOop* p);
@@ -196,7 +197,7 @@ private:
 
 public:
   PreservedMark(oop obj, markWord mark) : _obj(obj), _mark(mark) {}
-  void adjust_pointer(const SlidingForwarding* const forwarding);
+  void adjust_pointer();
   void restore();
 };
 
