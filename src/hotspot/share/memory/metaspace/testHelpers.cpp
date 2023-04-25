@@ -53,8 +53,21 @@ MetaWord* MetaspaceTestArena::allocate(size_t word_size) {
   return _arena->allocate(word_size);
 }
 
+MetaWord* MetaspaceTestArena::allocate_for_klass(size_t word_size) {
+  return _arena->allocate_for_klass(word_size);
+}
+
+MetaWord* MetaspaceTestArena::allocate_from_freeblocks_only(size_t word_size) {
+  return _arena->allocate_from_freeblocks_only(word_size);
+}
+
 void MetaspaceTestArena::deallocate(MetaWord* p, size_t word_size) {
   return _arena->deallocate(p, word_size);
+}
+
+// Update statistics. This walks all in-use chunks.
+void MetaspaceTestArena::add_to_statistics(ArenaStats* out) const {
+  return _arena->add_to_statistics(out);
 }
 
 ///// MetaspaceTestArea //////
@@ -98,7 +111,7 @@ MetaspaceTestArena* MetaspaceTestContext::create_arena(Metaspace::MetaspaceType 
   MetaspaceArena* arena = nullptr;
   {
     MutexLocker ml(lock,  Mutex::_no_safepoint_check_flag);
-    arena = new MetaspaceArena(_context->cm(), growth_policy, MetaspaceMinAlignmentWords,
+    arena = new MetaspaceArena(_context->cm(), growth_policy,
                                lock, &_used_words_counter, _name);
   }
   return new MetaspaceTestArena(lock, arena);

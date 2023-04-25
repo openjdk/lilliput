@@ -94,9 +94,6 @@ class MetaspaceArena : public CHeapObj<mtClass> {
   // List of chunks. Head of the list is the current chunk.
   MetachunkList _chunks;
 
-  // Alignment alignment, in words.
-  const int _alignment_words;
-
   // Structure to take care of leftover/deallocated space in used chunks.
   // Owned by the Arena. Gets allocated on demand only.
   FreeBlocks* _fbl;
@@ -165,9 +162,12 @@ class MetaspaceArena : public CHeapObj<mtClass> {
   // Allocate from the arena proper, once dictionary allocations and fencing are sorted out.
   MetaWord* allocate_inner(size_t word_size);
 
+  // Allocate from freeblocks
+  MetaWord* allocate_from_freeblocks_locked(size_t wordsize);
+
 public:
 
-  MetaspaceArena(ChunkManager* chunk_manager, const ArenaGrowthPolicy* growth_policy, int alignment_words,
+  MetaspaceArena(ChunkManager* chunk_manager, const ArenaGrowthPolicy* growth_policy,
                  Mutex* lock, SizeAtomicCounter* total_used_words_counter,
                  const char* name);
 
@@ -180,6 +180,12 @@ public:
   // 4) Attempt to get a new chunk and allocate from that chunk.
   // At any point, if we hit a commit limit, we return null.
   MetaWord* allocate(size_t word_size);
+
+  // Allocate a block suitable for placing a Klass
+  MetaWord* allocate_for_klass(size_t word_size);
+
+  // Allocate from the heap of salvaged (prematurely deallocated) blocks
+  MetaWord* allocate_from_freeblocks_only(size_t word_size);
 
   // Prematurely returns a metaspace allocation to the _block_freelists because it is not
   // needed anymore.

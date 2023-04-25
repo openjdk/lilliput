@@ -55,6 +55,15 @@ class InternalStats : public AllStatic {
   /*  from deallocated blocks. */                   \
   DEBUG_ONLY(x_atomic(num_allocs_from_deallocated_blocks)) \
                                                     \
+  /* Number of times an non-class allocation was */ \
+  /*  satisfied via deallocated blocks from      */ \
+  /*  class space. */                               \
+  DEBUG_ONLY(x_atomic(num_allocs_stolen_from_class_space)) \
+                                                   \
+  /* Number of splinter blocks added from        */ \
+  /*  Klass alignment gaps                       */ \
+  DEBUG_ONLY(x_atomic(num_klass_alignment_splinters_added)) \
+                                                    \
   /* Number of times an arena retired a chunk */    \
   DEBUG_ONLY(x_atomic(num_chunks_retired))          \
                                                     \

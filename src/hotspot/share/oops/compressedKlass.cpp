@@ -36,6 +36,7 @@ int CompressedKlassPointers::_shift_copy = 0;
 #ifdef _LP64
 int LogKlassAlignmentInBytes = -1;
 int KlassAlignmentInBytes    = -1;
+int KlassAlignmentInWords    = -1;
 int MaxNarrowKlassPointerBits = -1;
 uint64_t  NarrowKlassPointerBitMask = 0;
 uint64_t KlassEncodingMetaspaceMax = 0;

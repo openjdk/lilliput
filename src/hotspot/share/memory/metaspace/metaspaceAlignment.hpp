@@ -45,22 +45,18 @@ static const int MetaspaceMinAlignmentWords = MetaspaceMinAlignmentBytes / Bytes
 // We cannot guarantee allocation alignment beyond this value.
 static const int MetaspaceMaxAlignmentWords = chunklevel::MIN_CHUNK_WORD_SIZE;
 
-// Given a net allocation word size and an alignment value, return the raw word size we actually
-// allocate internally.
-inline size_t get_raw_word_size_for_requested_word_size(size_t net_word_size,
-                                                        size_t alignment_words) {
+// Given a net allocation word size, return the raw word size we actually allocate.
+// Note: externally visible for gtests.
+//static
+inline size_t get_raw_word_size_for_requested_word_size(size_t word_size) {
 
-  // The alignment should be between the minimum alignment but cannot be larger than the smallest chunk size
-  assert(is_power_of_2(alignment_words), "invalid alignment");
-  assert(alignment_words >= MetaspaceMinAlignmentWords &&
-         alignment_words <= MetaspaceMaxAlignmentWords,
-         "invalid alignment (" SIZE_FORMAT ")", alignment_words);
+  // Deallocated metablocks are kept in a binlist which limits their minimal
+  //  size to at least the size of a binlist item.
+  size_t raw_word_size = MAX2(word_size, FreeBlocks::MinWordSize);
 
-  // Deallocated metablocks are kept in a binlist which means blocks need to have
-  // a minimal size
-  size_t raw_word_size = MAX2(net_word_size, FreeBlocks::MinWordSize);
-
-  raw_word_size = align_up(raw_word_size, alignment_words);
+  // Metaspace allocations are aligned to the minimum metaspace alignment
+  // (1 word on 64-bit, 2 words on 32-bit)
+  raw_word_size = align_up(raw_word_size, metaspace::MetaspaceMinAlignmentWords);
 
   return raw_word_size;
 }
