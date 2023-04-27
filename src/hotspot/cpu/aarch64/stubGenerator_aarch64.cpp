@@ -8074,6 +8074,10 @@ class StubGenerator: public StubCodeGenerator {
     if (vmIntrinsics::is_intrinsic_available(vmIntrinsics::_dcos)) {
       StubRoutines::_dcos = generate_dsin_dcos(/* isCos = */ true);
     }
+
+    if (UseFastLocking) {
+      StubRoutines::aarch64::_check_lock_stack = generate_check_lock_stack();
+    }
   }
 
   void generate_continuation_stubs() {
@@ -8149,10 +8153,6 @@ class StubGenerator: public StubCodeGenerator {
     generate_compare_long_strings();
 
     generate_string_indexof_stubs();
-
-    if (UseFastLocking) {
-      StubRoutines::aarch64::_check_lock_stack = generate_check_lock_stack();
-    }
 
 #ifdef COMPILER2
     if (UseMultiplyToLenIntrinsic) {

@@ -3989,6 +3989,10 @@ void StubGenerator::generate_initial_stubs() {
   }
 
   generate_libm_stubs();
+
+  if (UseFastLocking) {
+    StubRoutines::x86::_check_lock_stack = generate_check_lock_stack();
+  }
 }
 
 void StubGenerator::generate_continuation_stubs() {
@@ -4153,10 +4157,6 @@ void StubGenerator::generate_compiler_stubs() {
     StubRoutines::x86::_decoding_table_base64 = base64_decoding_table_addr();
     StubRoutines::_base64_encodeBlock = generate_base64_encodeBlock();
     StubRoutines::_base64_decodeBlock = generate_base64_decodeBlock();
-  }
-
-  if (UseFastLocking) {
-    StubRoutines::x86::_check_lock_stack = generate_check_lock_stack();
   }
 
 #ifdef COMPILER2
