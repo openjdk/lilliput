@@ -390,7 +390,7 @@ var getJibProfilesCommon = function (input, data) {
         };
     };
 
-    common.boot_jdk_version = "19";
+    common.boot_jdk_version = "20";
     common.boot_jdk_build_number = "36";
     common.boot_jdk_home = input.get("boot_jdk", "install_path") + "/jdk-"
         + common.boot_jdk_version
@@ -851,7 +851,7 @@ var getJibProfilesProfiles = function (input, common, data) {
     [ "linux-aarch64", "linux-x64", "macosx-x64", "macosx-aarch64", "windows-x64" ]
         .forEach(function (name) {
             var o = artifactData[name]
-            var jdk_subdir = (o.jdk_subdir != null ? o.jdk_subdir : "jdk-" + data.version);
+            var jdk_subdir = "jdk-" + data.version;
             var jdk_suffix = (o.jdk_suffix != null ? o.jdk_suffix : "tar.gz");
             var pf = o.platform
             var jcovName = name + "-jcov";
@@ -1150,9 +1150,9 @@ var getJibProfilesDependencies = function (input, common) {
         jtreg: {
             server: "jpg",
             product: "jtreg",
-            version: "7.1.1",
+            version: "7.2",
             build_number: "1",
-            file: "bundles/jtreg-7.1.1+1.zip",
+            file: "bundles/jtreg-7.2+1.zip",
             environment_name: "JT_HOME",
             environment_path: input.get("jtreg", "home_path") + "/bin",
             configure_args: "--with-jtreg=" + input.get("jtreg", "home_path"),

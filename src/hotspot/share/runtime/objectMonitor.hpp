@@ -342,7 +342,6 @@ class ObjectMonitor : public CHeapObj<mtObjectMonitor> {
 
   // Use the following at your own risk
   intx      complete_exit(JavaThread* current);
-  bool      reenter(intx recursions, JavaThread* current);
 
   static void maybe_deflate_dead(oop* p);
 

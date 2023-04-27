@@ -144,7 +144,7 @@ void C2_MacroAssembler::verified_entry(int framesize, int stack_bang_size, bool 
   if (!is_stub) {
     BarrierSetAssembler* bs = BarrierSet::barrier_set()->barrier_set_assembler();
  #ifdef _LP64
-    if (BarrierSet::barrier_set()->barrier_set_nmethod() != NULL) {
+    if (BarrierSet::barrier_set()->barrier_set_nmethod() != nullptr) {
       // We put the non-hot code of the nmethod entry barrier out-of-line in a stub.
       Label dummy_slow_path;
       Label dummy_continuation;
@@ -161,7 +161,7 @@ void C2_MacroAssembler::verified_entry(int framesize, int stack_bang_size, bool 
     }
 #else
     // Don't bother with out-of-line nmethod entry barrier stub for x86_32.
-    bs->nmethod_entry_barrier(this, NULL /* slow_path */, NULL /* continuation */);
+    bs->nmethod_entry_barrier(this, nullptr /* slow_path */, nullptr /* continuation */);
 #endif
   }
 }
@@ -242,7 +242,7 @@ void C2_MacroAssembler::rtm_abort_ratio_calculation(Register tmpReg,
   imulptr(scrReg, scrReg, RTMAbortRatio);
   cmpptr(tmpReg, scrReg);
   jccb(Assembler::below, L_check_always_rtm1);
-  if (method_data != NULL) {
+  if (method_data != nullptr) {
     // set rtm_state to "no rtm" in MDO
     mov_metadata(tmpReg, method_data);
     lock();
@@ -256,7 +256,7 @@ void C2_MacroAssembler::rtm_abort_ratio_calculation(Register tmpReg,
   movptr(tmpReg, Address(rtm_counters_Reg, RTMLockingCounters::total_count_offset()));
   cmpptr(tmpReg, RTMLockingThreshold / RTMTotalCountIncrRate);
   jccb(Assembler::below, L_done);
-  if (method_data != NULL) {
+  if (method_data != nullptr) {
     // set rtm_state to "always rtm" in MDO
     mov_metadata(tmpReg, method_data);
     lock();
@@ -274,7 +274,7 @@ void C2_MacroAssembler::rtm_profiling(Register abort_status_Reg,
                                       Metadata* method_data,
                                       bool profile_rtm) {
 
-  assert(rtm_counters != NULL, "should not be NULL when profiling RTM");
+  assert(rtm_counters != nullptr, "should not be null when profiling RTM");
   // update rtm counters based on rax value at abort
   // reads abort_status_Reg, updates flags
   lea(rtm_counters_Reg, ExternalAddress((address)rtm_counters));
@@ -284,7 +284,7 @@ void C2_MacroAssembler::rtm_profiling(Register abort_status_Reg,
     if (RTMRetryCount > 0) {
       push(abort_status_Reg);
     }
-    assert(rtm_counters != NULL, "should not be NULL when profiling RTM");
+    assert(rtm_counters != nullptr, "should not be null when profiling RTM");
     rtm_abort_ratio_calculation(abort_status_Reg, rtm_counters_Reg, rtm_counters, method_data);
     // restore abort status
     if (RTMRetryCount > 0) {
@@ -370,7 +370,7 @@ void C2_MacroAssembler::rtm_stack_locking(Register objReg, Register tmpReg, Regi
       // tmpReg, scrReg and flags are killed
       branch_on_random_using_rdtsc(tmpReg, scrReg, RTMTotalCountIncrRate, L_noincrement);
     }
-    assert(stack_rtm_counters != NULL, "should not be NULL when profiling RTM");
+    assert(stack_rtm_counters != nullptr, "should not be null when profiling RTM");
     atomic_incptr(ExternalAddress((address)stack_rtm_counters->total_count_addr()), scrReg);
     bind(L_noincrement);
   }
@@ -430,7 +430,7 @@ void C2_MacroAssembler::rtm_inflated_locking(Register objReg, Register boxReg, R
       // tmpReg, scrReg and flags are killed
       branch_on_random_using_rdtsc(tmpReg, scrReg, RTMTotalCountIncrRate, L_noincrement);
     }
-    assert(rtm_counters != NULL, "should not be NULL when profiling RTM");
+    assert(rtm_counters != nullptr, "should not be null when profiling RTM");
     atomic_incptr(ExternalAddress((address)rtm_counters->total_count_addr()), scrReg);
     bind(L_noincrement);
   }
@@ -2233,7 +2233,7 @@ void C2_MacroAssembler::reduceFloatMinMax(int opcode, int vlen, bool is_dst_vali
                                           XMMRegister dst, XMMRegister src,
                                           XMMRegister tmp, XMMRegister atmp, XMMRegister btmp,
                                           XMMRegister xmm_0, XMMRegister xmm_1) {
-  int permconst[] = {1, 14};
+  const int permconst[] = {1, 14};
   XMMRegister wsrc = src;
   XMMRegister wdst = xmm_0;
   XMMRegister wtmp = (xmm_1 == xnoreg) ? xmm_0: xmm_1;
@@ -2326,6 +2326,14 @@ XMMRegister C2_MacroAssembler::get_lane(BasicType typ, XMMRegister dst, XMMRegis
   }
 }
 
+void C2_MacroAssembler::movsxl(BasicType typ, Register dst) {
+  if (typ == T_BYTE) {
+    movsbl(dst, dst);
+  } else if (typ == T_SHORT) {
+    movswl(dst, dst);
+  }
+}
+
 void C2_MacroAssembler::get_elem(BasicType typ, Register dst, XMMRegister src, int elemindex) {
   int esize =  type2aelembytes(typ);
   int elem_per_lane = 16/esize;
@@ -2337,13 +2345,11 @@ void C2_MacroAssembler::get_elem(BasicType typ, Register dst, XMMRegister src, i
       movq(dst, src);
     } else {
       movdl(dst, src);
-      if (typ == T_BYTE)
-        movsbl(dst, dst);
-      else if (typ == T_SHORT)
-        movswl(dst, dst);
+      movsxl(typ, dst);
     }
   } else {
     extract(typ, dst, src, eindex);
+    movsxl(typ, dst);
   }
 }
 
@@ -3329,9 +3335,9 @@ void C2_MacroAssembler::arrays_hashcode(Register ary1, Register cnt1, Register r
   }
 
   // For "renaming" for readibility of the code
-  XMMRegister vcoef[] = { vcoef0, vcoef1, vcoef2, vcoef3 },
-              vresult[] = { vresult0, vresult1, vresult2, vresult3 },
-              vtmp[] = { vtmp0, vtmp1, vtmp2, vtmp3 };
+  const XMMRegister vcoef[] = { vcoef0, vcoef1, vcoef2, vcoef3 },
+                    vresult[] = { vresult0, vresult1, vresult2, vresult3 },
+                    vtmp[] = { vtmp0, vtmp1, vtmp2, vtmp3 };
 
   const int elsize = arrays_hashcode_elsize(eltype);
 
@@ -6139,3 +6145,14 @@ void C2_MacroAssembler::rearrange_bytes(XMMRegister dst, XMMRegister shuffle, XM
   evpshufb(dst, ktmp, xtmp3, shuffle, true, vlen_enc);
 }
 
+void C2_MacroAssembler::vector_rearrange_int_float(BasicType bt, XMMRegister dst,
+                                                   XMMRegister shuffle, XMMRegister src, int vlen_enc) {
+  if (vlen_enc == AVX_128bit) {
+    vpermilps(dst, src, shuffle, vlen_enc);
+  } else if (bt == T_INT) {
+    vpermd(dst, shuffle, src, vlen_enc);
+  } else {
+    assert(bt == T_FLOAT, "");
+    vpermps(dst, shuffle, src, vlen_enc);
+  }
+}
