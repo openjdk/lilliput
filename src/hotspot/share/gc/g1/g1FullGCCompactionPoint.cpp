@@ -169,8 +169,8 @@ uint G1FullGCCompactionPoint::forward_humongous(HeapRegion* hr) {
   _collector->marker(0)->preserved_stack()->push_if_necessary(obj, obj->mark());
 
   HeapRegion* dest_hr = _compaction_regions->at(range_begin);
-  obj->forward_to(cast_to_oop(dest_hr->bottom()));
-  assert(obj->is_forwarded(), "Object must be forwarded!");
+  GCForwarding::forward_to(obj, cast_to_oop(dest_hr->bottom()));
+  assert(GCForwarding::is_forwarded(obj), "Object must be forwarded!");
 
   // Add the humongous object regions to the compaction point.
   add_humongous(hr);
