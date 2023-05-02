@@ -22,6 +22,11 @@
  *
  */
 
+// Note Lilliput:
+// Tests rely on array members starting at the same offset, otherwise vectorization does not kick in. Not true
+// for Lilliput.
+// For now I just enforce -CompactObjectHeaders.
+
 /*
  * @test
  * @bug 8304042
@@ -79,7 +84,7 @@ public class TestIndependentPacksWithCyclicDependency {
                                    "-XX:CompileCommand=compileonly,compiler.loopopts.superword.TestIndependentPacksWithCyclicDependency::test*",
                                    "-XX:CompileCommand=compileonly,compiler.loopopts.superword.TestIndependentPacksWithCyclicDependency::verify",
                                    "-XX:CompileCommand=compileonly,compiler.loopopts.superword.TestIndependentPacksWithCyclicDependency::init",
-                                   "-XX:LoopUnrollLimit=1000");
+                                   "-XX:LoopUnrollLimit=1000", "-XX:+UnlockExperimentalVMOptions", "-XX:-UseCompactObjectHeaders");
     }
 
     TestIndependentPacksWithCyclicDependency() {
