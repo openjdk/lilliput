@@ -31,6 +31,13 @@ import java.util.Random;
 import java.util.Arrays;
 import java.nio.ByteOrder;
 
+// Note Lilliput:
+// Tests test that vectorization is used to fill destination byte array if alignment allows. That works in Stock VM
+// since for both byte[] and long[] members start at the same offset. It does not work in Lilliput, nor would it work
+// in stock if we fix "8139457: Array bases are aligned at HeapWord granularity", since bytes start at offset 12, long
+// at offset 16.
+// For now I just enforce -CompactObjectHeaders.
+
 /*
  * @test
  * @bug 8300258
@@ -55,7 +62,7 @@ public class TestVectorizationMismatchedAccess {
             if (ByteOrder.nativeOrder() != ByteOrder.LITTLE_ENDIAN) {
                 throw new RuntimeException("fix test that was written for a little endian platform");
             }
-            TestFramework.runWithFlags("--add-modules", "java.base", "--add-exports", "java.base/jdk.internal.misc=ALL-UNNAMED");
+            TestFramework.runWithFlags("-XX:+UnlockExperimentalVMOptions", "-XX:-UseCompactObjectHeaders", "--add-modules", "java.base", "--add-exports", "java.base/jdk.internal.misc=ALL-UNNAMED");
         }
     }
 
