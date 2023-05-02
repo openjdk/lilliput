@@ -308,7 +308,6 @@ bool oopDesc::is_forwarded() const {
 
 // Used by scavengers
 void oopDesc::forward_to(oop p) {
-  verify_forwardee(p);
   markWord m = markWord::encode_pointer_as_mark(p);
   assert(forwardee(m) == p, "encoding must be reversable");
   set_mark(m);
@@ -316,7 +315,6 @@ void oopDesc::forward_to(oop p) {
 
 void oopDesc::forward_to_self() {
 #ifdef _LP64
-  verify_forwardee(this);
   markWord m = mark();
   // If mark is displaced, we need to preserve the Klass* from real header.
   assert(SafepointSynchronize::is_at_safepoint(), "we can only safely fetch the displaced header at safepoint");
@@ -332,7 +330,6 @@ void oopDesc::forward_to_self() {
 }
 
 oop oopDesc::forward_to_atomic(oop p, markWord compare, atomic_memory_order order) {
-  verify_forwardee(p);
   markWord m = markWord::encode_pointer_as_mark(p);
   assert(forwardee(m) == p, "encoding must be reversable");
   markWord old_mark = cas_set_mark(m, compare, order);
@@ -345,7 +342,6 @@ oop oopDesc::forward_to_atomic(oop p, markWord compare, atomic_memory_order orde
 
 oop oopDesc::forward_to_self_atomic(markWord compare, atomic_memory_order order) {
 #ifdef _LP64
-  verify_forwardee(this);
   markWord m = compare;
   // If mark is displaced, we need to preserve the Klass* from real header.
   assert(SafepointSynchronize::is_at_safepoint(), "we can only safely fetch the displaced header at safepoint");
