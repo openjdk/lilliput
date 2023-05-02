@@ -247,24 +247,34 @@ MetaWord* MetaspaceArena::allocate_for_klass(size_t word_size) {
   MetaWord* all = allocate_inner(total_word_size);
 
   if (all != nullptr) {
+
+    MetaWord* salvage = nullptr;
+    size_t salvage_words = alignment_padding_needed;
+
     if (is_aligned(all, KlassAlignmentInBytes)) {
       // The new allocation is already properly aligned. Happens if the allocation caused
-      // a new chunk to be created. No need to salvage the alignment gap.
+      // a new chunk to be created. Salvage the trailing alignment gap.
       k = all;
+      salvage = k + word_size;
     } else {
-      if (alignment_padding_needed > FreeBlocks::MinWordSize) {
-        // If alignment gap is large enough to be reused, squirrel it away
-        UL2(trace, "Save off alignment gap " PTR_FORMAT ", " SIZE_FORMAT " words.",
-            p2i(all), alignment_padding_needed);
-        DEBUG_ONLY(InternalStats::inc_num_klass_alignment_splinters_added();)
-        // Note: Don't use deallocate here; it is only for external use since it does size
-        // adjustment
-        add_allocation_to_fbl(all, alignment_padding_needed);
-      }
-      // Adjust Klass location to be properly aligned
+      // The new allocation is not aligned; we expanded the current chunk. Salvage the leading
+      // alignment padding.
       k = all + alignment_padding_needed;
+      salvage = all;
     }
+
+    // If alignment gap is large enough to be reused, squirrel it away
+    if (alignment_padding_needed > FreeBlocks::MinWordSize) {
+      UL2(trace, "Save off alignment gap " PTR_FORMAT ", " SIZE_FORMAT " words.",
+          p2i(salvage), alignment_padding_needed);
+      DEBUG_ONLY(InternalStats::inc_num_klass_alignment_splinters_added();)
+      // Note: Don't use deallocate here; it is only for external use since it does size
+      // adjustment
+      add_allocation_to_fbl(salvage, alignment_padding_needed);
+    }
+
   }
+
   assert_is_aligned(k, KlassAlignmentInWords);
   UL2(trace, "Returning " PTR_FORMAT ".", p2i(k));
   return k;
@@ -544,12 +554,18 @@ void MetaspaceArena::print_on(outputStream* st) const {
 
 void MetaspaceArena::print_on_locked(outputStream* st) const {
   assert_lock_strong(_lock);
-  st->print_cr("sm %s: %d chunks, total word size: " SIZE_FORMAT ", committed word size: " SIZE_FORMAT, _name,
-               _chunks.count(), _chunks.calc_word_size(), _chunks.calc_committed_word_size());
+  st->print_cr("Arena @" PTR_FORMAT " (%s): %d chunks, total word size: " SIZE_FORMAT ", committed word size: " SIZE_FORMAT,
+               p2i(this), _name, _chunks.count(), _chunks.calc_word_size(), _chunks.calc_committed_word_size());
   _chunks.print_on(st);
   st->cr();
-  st->print_cr("growth-policy " PTR_FORMAT ", lock " PTR_FORMAT ", cm " PTR_FORMAT ", fbl " PTR_FORMAT,
-                p2i(_growth_policy), p2i(_lock), p2i(_chunk_manager), p2i(_fbl));
+  st->print("growth-policy " PTR_FORMAT ", lock " PTR_FORMAT ", cm " PTR_FORMAT ", fbl " PTR_FORMAT,
+             p2i(_growth_policy), p2i(_lock), p2i(_chunk_manager), p2i(_fbl));
+  if (_fbl) {
+    st->print(" (");
+    _fbl->print_on(st);
+    st->print(")");
+  }
+  st->cr();
 }
 
 } // namespace metaspace

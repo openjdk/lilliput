@@ -27,6 +27,7 @@
 #include "memory/metaspace/freeBlocks.hpp"
 #include "utilities/debug.hpp"
 #include "utilities/globalDefinitions.hpp"
+#include "utilities/ostream.hpp"
 
 namespace metaspace {
 
@@ -69,6 +70,11 @@ MetaWord* FreeBlocks::remove_block(size_t requested_word_size) {
     }
   }
   return p;
+}
+
+void FreeBlocks::print_on(outputStream* st) const {
+  st->print("small_blocks: %u blocks, " SIZE_FORMAT " words; tree: %u nodes, " SIZE_FORMAT " words.",
+            _small_blocks.count(), _small_blocks.total_size(), _tree.count(), _tree.total_size());
 }
 
 } // namespace metaspace

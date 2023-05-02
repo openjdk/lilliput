@@ -796,9 +796,7 @@ static T calc_envelope_max(T value, float width) {
   return (T)((double)value * (1.0f + width));
 }
 
-// test_with_chunk_turnover: if true, we test allocation for an arena that allocates multiple chunks.
-// if false, we test allocation for one gigantic chunk (the easier, better predictable scenario).
-static void test_allocate_for_klass(bool test_with_chunk_turnover) {
+static void test_allocate_for_klass_repeat_random(bool test_with_chunk_turnover) {
 
   if (!Metaspace::using_class_space()) {
     return; // Skip for compressed class pointers off
@@ -812,88 +810,69 @@ static void test_allocate_for_klass(bool test_with_chunk_turnover) {
   // Test that each all allocations succeed, are aligned correctly, and that the remainder
   // alignment gaps are salvaged.
 
-  // The different MetaspaceType will cause us to exercise different chunk allocation policies and
-  // exercise allocate_for_klass with chunk turnover
   MetaspaceGtestContext context;
-  MetaspaceTestArena* arena = context.create_arena(
-      test_with_chunk_turnover ?
-          Metaspace::ReflectionMetaspaceType : // starts with a small chunk, working itself up
-          Metaspace::BootMetaspaceType         // starts with a big chunk
-          );
+
+  // - If we are to allocate from one chunk (test_with_chunk_turnover=false), we use BootMetaspaceType
+  //   policy for the arena; that will cause the arena to allocate one gigantic chunk right at the start.
+  // - If we are to allocate from different chunks (test_with_chunk_turnover=true), we use
+  //   ClassMirrorHolderMetaspaceType, which is the most fine-granular growth policy (see metaspaceAllocationGrowthPolicy.cpp).
+  //   In addition, we alternate allocations between two arenas to prevent chunks from growing in-place.
+  MetaspaceTestArena* arenas[2];
+  if (test_with_chunk_turnover) {
+    arenas[0] = context.create_arena(Metaspace::ClassMirrorHolderMetaspaceType);
+    arenas[1] = context.create_arena(Metaspace::ClassMirrorHolderMetaspaceType);
+  } else {
+    arenas[0] = arenas[1] = context.create_arena(Metaspace::BootMetaspaceType);
+  }
 
   const size_t klass_slot_size_words = KlassAlignmentInWords;
   const size_t klass_size_words = align_up(sizeof(Klass), BytesPerWord) / BytesPerWord;
   assert(klass_size_words < klass_slot_size_words, "Sanity");
 
-  // We allocate blocks that are always < 1 klass_slot_size_words in size. Therefore we can exactly determine
-  // the remainder size regardless of the underlying chunk geometry (since one slot is always smaller than
-  // the smallest chunk)
-  RandSizeGenerator rgen(1 + sizeof(Klass) / BytesPerWord, klass_slot_size_words);
+  // We allocate blocks with a size distribution between 1 and 3 class space slots.
+  RandSizeGenerator rgen(klass_size_words, 3 * klass_slot_size_words);
 
   size_t allocated_words = 0;
-  size_t last_word_size = 0;
-  size_t expected_used_words = 0;
-  size_t expected_freeblock_words = 0;
-  uintx expected_freeblock_num = 0;
-  for (int i = 0; i < 1000; i++) {
+  const int num_allocations = 10 ;
+  for (int i = 0; i < num_allocations; i++) {
+    MetaspaceTestArena* const arena = arenas[i % 2]; // alternate between arenas.
+
     size_t word_size = rgen.get();
-    assert(word_size <= klass_slot_size_words && word_size >= klass_size_words, "Sanity");
 
     MetaWord* p = arena->allocate_for_klass(word_size);
     ASSERT_NOT_NULL(p);
     ASSERT_TRUE(is_aligned(p, KlassAlignmentInBytes));
 
     allocated_words += word_size;
-    const size_t remainder_last_block = last_word_size > 0 ? klass_slot_size_words - last_word_size : 0;
-    expected_used_words += (word_size + remainder_last_block);
-
-    if (remainder_last_block >= FreeBlocks::MinWordSize) {
-      expected_freeblock_words += remainder_last_block;
-      expected_freeblock_num++;
-    }
-
-    last_word_size = word_size;
   }
 
-  // Test
+  // Sanity check sizes.
   ArenaStats stats;
-  arena->add_to_statistics(&stats);
-
-  // Check size of salvaged space.
-  // Note: due to chunk turnover, exact numbers for used/salvaged can be lower (because on chunk turnover, only *committed*
-  // space of old chunk is salvaged). Predicting that gets intricate and makes the test brittle, therefore I just require that
-  // we are within 30% of the target.
-  const size_t expected_used_words_min = calc_envelope_min(expected_used_words, 0.3f);
-  const size_t expected_used_words_max = calc_envelope_max(expected_used_words, 0.3f);
-
-  const size_t expected_freeblock_words_min = calc_envelope_min(expected_freeblock_words, 0.3f);
-  const size_t expected_freeblock_words_max = calc_envelope_max(expected_freeblock_words, 0.3f);
-
-  const uintx expected_freeblock_num_min = calc_envelope_min(expected_freeblock_num, 0.3f);
-  const uintx expected_freeblock_num_max = calc_envelope_max(expected_freeblock_num, 0.3f);
-
-  EXPECT_GE(stats.totals()._used_words, expected_used_words_min);
-  EXPECT_LE(stats.totals()._used_words, expected_used_words_max);
-
-  EXPECT_GE(stats._free_blocks_word_size, expected_freeblock_words_min);
-  EXPECT_LE(stats._free_blocks_word_size, expected_freeblock_words_max);
-
-  EXPECT_GE(stats._free_blocks_num, expected_freeblock_num_min);
-  EXPECT_LE(stats._free_blocks_num, expected_freeblock_num_max);
-
-  // Now check that we can allocate the salvaged space via allocate_from_freeblocks_only;
-  size_t allocated_from_fbl = 0;
-  for (MetaWord* p = arena->allocate_from_freeblocks_only(2); p != nullptr; p = arena->allocate_from_freeblocks_only(2)) {
-    allocated_from_fbl += 2;
+  arenas[0]->add_to_statistics(&stats);
+  if (arenas[0] != arenas[1]) {
+    arenas[1]->add_to_statistics(&stats);
   }
 
-  EXPECT_GE(allocated_from_fbl, expected_freeblock_words_min);
-  EXPECT_LE(allocated_from_fbl, expected_freeblock_words_max);
+  // When the arena does a chunk turnover, it salvages the space of the old chunk that is *committed*, which may
+  // not be the whole chunk. In addition, it cannot salvage blocks that are smaller than FreeBlocks min word size.
+  // All of that makes for some fuzziness when estimating usage.
 
-  delete arena;
+  EXPECT_GE(stats.totals()._used_words, allocated_words);
+  EXPECT_LE(stats.totals()._used_words, num_allocations * (3 * klass_slot_size_words));
 
+  const size_t used_but_not_allocated = stats.totals()._used_words - allocated_words;
+  EXPECT_GE(stats._free_blocks_word_size, (uintx)1);
+  EXPECT_LE(stats._free_blocks_word_size, used_but_not_allocated);
+
+  EXPECT_GE(stats._free_blocks_num, (uintx)1);
+  EXPECT_LE(stats._free_blocks_num, (uintx)num_allocations * 2);
+
+  delete arenas[0];
+  if (arenas[0] != arenas[1]) {
+    delete arenas[1];
+  }
 }
 
-TEST_VM(metaspace, MetaspaceArena_test_klass_allocation_1) { test_allocate_for_klass(Metaspace::StandardMetaspaceType); }
-TEST_VM(metaspace, MetaspaceArena_test_klass_allocation_2) { test_allocate_for_klass(Metaspace::BootMetaspaceType); }
+TEST_VM(metaspace, MetaspaceArena_test_klass_allocation_random_one_chunk)    { test_allocate_for_klass_repeat_random(false); }
+TEST_VM(metaspace, MetaspaceArena_test_klass_allocation_random_many_chunks)  { test_allocate_for_klass_repeat_random(true); }
 

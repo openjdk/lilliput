@@ -110,6 +110,8 @@ public:
     return _small_blocks.is_empty() && _tree.is_empty();
   }
 
+  void print_on(outputStream* st) const;
+
 };
 
 } // namespace metaspace

@@ -873,7 +873,7 @@ void Metaspace::post_initialize() {
 }
 
 size_t Metaspace::max_allocation_word_size() {
-  return metaspace::chunklevel::MAX_CHUNK_WORD_SIZE;
+  return metaspace::chunklevel::MAX_CHUNK_WORD_SIZE - KlassAlignmentInWords;
 }
 
 #ifdef _LP64
