@@ -72,6 +72,16 @@ class oopDesc {
   inline markWord  mark_acquire()  const;
   inline markWord* mark_addr() const;
 
+  // Fetches the mark-word. If the object is locked
+  // by a monitor, then the mark-word will be fetched
+  // from the monitor.
+  inline markWord resolve_mark() const;
+
+  // Safely fetches the mark-word (when using compact headers):
+  // - When object is forwarded, then fetch mark-word from forwardee.
+  // - When object is locked by monitor, fetch mark-word from monitor.
+  inline markWord safe_mark() const;
+
   inline void set_mark(markWord m);
   static inline void set_mark(HeapWord* mem, markWord m);
 
@@ -80,17 +90,21 @@ class oopDesc {
   inline markWord cas_set_mark(markWord new_mark, markWord old_mark);
   inline markWord cas_set_mark(markWord new_mark, markWord old_mark, atomic_memory_order order);
 
-  inline markWord resolve_mark() const;
-
   // Used only to re-initialize the mark word (e.g., of promoted
   // objects during a GC) -- requires a valid klass pointer
   inline void init_mark();
+  inline void safe_init_mark();
 
   inline Klass* klass() const;
   inline Klass* klass_or_null() const;
   inline Klass* klass_or_null_acquire() const;
   // Get the raw value without any checks.
   inline Klass* klass_raw() const;
+
+  // Safely fetches the Klass* (when using compact headers):
+  // - When object is forwarded, then fetch Klass* from forwardee.
+  // - When object is locked by monitor, fetch Klass* from monitor.
+  inline Klass* safe_klass() const;
 
   void set_narrow_klass(narrowKlass nk) NOT_CDS_JAVA_HEAP_RETURN;
   inline void set_klass(Klass* k);
@@ -114,6 +128,8 @@ class oopDesc {
 
   // Returns the actual oop size of the object in machine words
   inline size_t size();
+
+  inline size_t safe_size();
 
   // Sometimes (for complicated concurrency-related reasons), it is useful
   // to be able to figure out the size of an object knowing its klass.

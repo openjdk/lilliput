@@ -891,21 +891,7 @@ void DefNewGeneration::remove_forwarding_pointers() {
   struct ResetForwardedMarkWord : ObjectClosure {
     void do_object(oop obj) override {
       if (obj->is_forwarded()) {
-#ifdef _LP64
-        if (UseCompactObjectHeaders) {
-          oop forwardee = obj->forwardee();
-          markWord header = forwardee->mark();
-          if (header.has_displaced_mark_helper()) {
-            header = header.displaced_mark_helper();
-          }
-          assert(UseCompressedClassPointers, "assume +UseCompressedClassPointers");
-          narrowKlass nklass = header.narrow_klass();
-          obj->set_mark(markWord::prototype().set_narrow_klass(nklass));
-        } else
-#endif
-        {
-          obj->init_mark();
-        }
+        obj->safe_init_mark();
       }
     }
   } cl;

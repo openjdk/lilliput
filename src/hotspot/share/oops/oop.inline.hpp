@@ -96,15 +96,42 @@ markWord oopDesc::resolve_mark() const {
   return hdr;
 }
 
+markWord oopDesc::safe_mark() const {
+#ifdef _LP64
+  if (UseCompactObjectHeaders) {
+    markWord hdr = mark();
+    if (hdr.is_marked() && !hdr.self_forwarded()) {
+      // Fetch mark from forwarded object.
+      oop fwd = cast_to_oop(hdr.decode_pointer());
+      hdr = fwd->mark();
+    }
+    if (hdr.has_monitor()) {
+      // Fetch mark from displaced header.
+      ObjectMonitor* monitor = hdr.monitor();
+      hdr = monitor->header();
+    }
+    return hdr;
+  } else
+#endif
+  return mark();
+}
+
 void oopDesc::init_mark() {
 #ifdef _LP64
   if (UseCompactObjectHeaders) {
-    markWord header = resolve_mark();
-    assert(UseCompressedClassPointers, "expect compressed klass pointers");
-    set_mark(markWord((header.value() & markWord::klass_mask_in_place) | markWord::prototype().value()));
+    set_mark(klass()->prototype_header());
   } else
 #endif
   set_mark(markWord::prototype());
+}
+
+void oopDesc::safe_init_mark() {
+#ifdef _LP64
+  if (UseCompactObjectHeaders) {
+    set_mark(safe_klass()->prototype_header());
+  } else
+#endif
+  init_mark();
 }
 
 Klass* oopDesc::klass() const {
@@ -154,6 +181,14 @@ Klass* oopDesc::klass_raw() const {
   return klass();
 }
 
+Klass* oopDesc::safe_klass() const {
+  if (UseCompactObjectHeaders) {
+    return safe_mark().klass();
+  } else {
+    return klass();
+  }
+}
+
 void oopDesc::set_klass(Klass* k) {
   assert(Universe::is_bootstrapping() || (k != NULL && k->is_klass()), "incorrect Klass");
   assert(!UseCompactObjectHeaders, "don't set Klass* with compact headers");
@@ -189,6 +224,14 @@ bool oopDesc::is_a(Klass* k) const {
 
 size_t oopDesc::size()  {
   return size_given_klass(klass());
+}
+
+size_t oopDesc::safe_size() {
+  if (UseCompactObjectHeaders) {
+    return size_given_klass(safe_klass());
+  } else {
+    return size();
+  }
 }
 
 size_t oopDesc::size_given_klass(Klass* klass)  {

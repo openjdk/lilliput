@@ -180,17 +180,10 @@ void MarkSweep::mark_object(oop obj) {
   markWord mark = obj->mark();
 #ifdef _LP64
   if (UseCompactObjectHeaders) {
-    markWord real_mark = mark;
-    if (real_mark.has_displaced_mark_helper()) {
-      real_mark = real_mark.displaced_mark_helper();
-    }
-    Klass* klass = real_mark.klass();
-    obj->set_mark(klass->prototype_header().set_marked());
+    obj->set_mark(obj->klass()->prototype_header().set_marked());
   } else
 #endif
-  {
-    obj->set_mark(markWord::prototype().set_marked());
-  }
+  obj->set_mark(markWord::prototype().set_marked());
 
   if (obj->mark_must_be_preserved(mark)) {
     preserve_mark(obj, mark);

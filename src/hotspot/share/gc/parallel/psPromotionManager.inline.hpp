@@ -63,7 +63,7 @@ inline void PSPromotionManager::claim_or_forward_depth(T* p) {
   push_depth(ScannerTask(p));
 }
 
-inline void PSPromotionManager::promotion_trace_event(oop new_obj, oop old_obj, Klass* klass,
+inline void PSPromotionManager::promotion_trace_event(oop new_obj, oop old_obj,
                                                       size_t obj_size,
                                                       uint age, bool tenured,
                                                       const PSPromotionLAB* lab) {
@@ -76,14 +76,14 @@ inline void PSPromotionManager::promotion_trace_event(oop new_obj, oop old_obj, 
       if (gc_tracer->should_report_promotion_in_new_plab_event()) {
         size_t obj_bytes = obj_size * HeapWordSize;
         size_t lab_size = lab->capacity();
-        gc_tracer->report_promotion_in_new_plab_event(klass, obj_bytes,
+        gc_tracer->report_promotion_in_new_plab_event(old_obj->safe_klass(), obj_bytes,
                                                       age, tenured, lab_size);
       }
     } else {
       // Promotion of object directly to heap
       if (gc_tracer->should_report_promotion_outside_plab_event()) {
         size_t obj_bytes = obj_size * HeapWordSize;
-        gc_tracer->report_promotion_outside_plab_event(klass, obj_bytes,
+        gc_tracer->report_promotion_outside_plab_event(old_obj->safe_klass(), obj_bytes,
                                                        age, tenured);
       }
     }
@@ -163,16 +163,7 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
 
   oop new_obj = nullptr;
   bool new_obj_is_tenured = false;
-  Klass* klass;
-#ifdef _LP64
-  if (UseCompactObjectHeaders) {
-    klass = test_mark.safe_klass();
-  } else
-#endif
-  {
-    klass = o->klass();
-  }
-  size_t new_obj_size = o->size_given_klass(klass);
+  size_t new_obj_size = o->safe_size();
 
   // Find the objects age, MT safe.
   uint age = (test_mark.has_displaced_mark_helper() /* o->has_displaced_mark() */) ?
@@ -187,7 +178,7 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
         if (new_obj_size > (YoungPLABSize / 2)) {
           // Allocate this object directly
           new_obj = cast_to_oop(young_space()->cas_allocate(new_obj_size));
-          promotion_trace_event(new_obj, o, klass, new_obj_size, age, false, nullptr);
+          promotion_trace_event(new_obj, o, new_obj_size, age, false, nullptr);
         } else {
           // Flush and fill
           _young_lab.flush();
@@ -197,7 +188,7 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
             _young_lab.initialize(MemRegion(lab_base, YoungPLABSize));
             // Try the young lab allocation again.
             new_obj = cast_to_oop(_young_lab.allocate(new_obj_size));
-            promotion_trace_event(new_obj, o, klass, new_obj_size, age, false, &_young_lab);
+            promotion_trace_event(new_obj, o, new_obj_size, age, false, &_young_lab);
           } else {
             _young_gen_is_full = true;
           }
@@ -223,7 +214,7 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
         if (new_obj_size > (OldPLABSize / 2)) {
           // Allocate this object directly
           new_obj = cast_to_oop(old_gen()->allocate(new_obj_size));
-          promotion_trace_event(new_obj, o, klass, new_obj_size, age, true, nullptr);
+          promotion_trace_event(new_obj, o, new_obj_size, age, true, nullptr);
         } else {
           // Flush and fill
           _old_lab.flush();
@@ -233,7 +224,7 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
             _old_lab.initialize(MemRegion(lab_base, OldPLABSize));
             // Try the old lab allocation again.
             new_obj = cast_to_oop(_old_lab.allocate(new_obj_size));
-            promotion_trace_event(new_obj, o, klass, new_obj_size, age, true, &_old_lab);
+            promotion_trace_event(new_obj, o, new_obj_size, age, true, &_old_lab);
           }
         }
       }
