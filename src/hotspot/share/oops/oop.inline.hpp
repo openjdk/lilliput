@@ -182,9 +182,12 @@ Klass* oopDesc::klass_raw() const {
 }
 
 Klass* oopDesc::safe_klass() const {
+#ifdef _LP64
   if (UseCompactObjectHeaders) {
     return safe_mark().klass();
-  } else {
+  } else
+#endif
+  {
     return klass();
   }
 }
