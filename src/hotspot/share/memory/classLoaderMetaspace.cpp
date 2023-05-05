@@ -38,6 +38,7 @@
 #include "memory/metaspace/runningCounters.hpp"
 #include "memory/metaspaceTracer.hpp"
 #include "oops/compressedKlass.hpp"
+#include "oops/klass.hpp"
 #include "utilities/align.hpp"
 #include "utilities/debug.hpp"
 #include "utilities/globalDefinitions.hpp"
@@ -60,13 +61,10 @@ ClassLoaderMetaspace::ClassLoaderMetaspace(Mutex* lock, Metaspace::MetaspaceType
   ChunkManager* const non_class_cm =
           ChunkManager::chunkmanager_nonclass();
 
-  const int klass_alignment_words = KlassAlignmentInBytes / BytesPerWord;
-
   // Initialize non-class Arena
   _non_class_space_arena = new MetaspaceArena(
       non_class_cm,
       ArenaGrowthPolicy::policy_for_space_type(space_type, false),
-      metaspace::MetaspaceMinAlignmentWords,
       lock,
       RunningCounters::used_nonclass_counter(),
       "non-class sm");
@@ -79,7 +77,6 @@ ClassLoaderMetaspace::ClassLoaderMetaspace(Mutex* lock, Metaspace::MetaspaceType
     _class_space_arena = new MetaspaceArena(
         class_cm,
         ArenaGrowthPolicy::policy_for_space_type(space_type, true),
-        klass_alignment_words,
         lock,
         RunningCounters::used_class_counter(),
         "class sm");
@@ -104,11 +101,49 @@ ClassLoaderMetaspace::~ClassLoaderMetaspace() {
 
 // Allocate word_size words from Metaspace.
 MetaWord* ClassLoaderMetaspace::allocate(size_t word_size, Metaspace::MetadataType mdType) {
+  UL2(trace, "Allocate " SIZE_FORMAT " words (type %s)...",
+      word_size, mdType == Metaspace::ClassType ? "class" : "nonclass");
+  MetaWord* p = nullptr;
+
+#ifdef ASSERT
+  // Sanity checks
   if (Metaspace::is_class_space_allocation(mdType)) {
-    return class_space_arena()->allocate(word_size);
-  } else {
-    return non_class_space_arena()->allocate(word_size);
+    assert(Metaspace::using_class_space(), "Sanity");
+    assert(word_size >= sizeof(Klass) / BytesPerWord, "odd size for class space allocation (" SIZE_FORMAT ")", word_size);
   }
+#endif
+
+  if (UseCompactObjectHeaders) {
+    // New header mode
+    if (Metaspace::is_class_space_allocation(mdType)) {
+      // Allocate Klass at a location suitable for placing a Klass
+      p = class_space_arena()->allocate_for_klass(word_size);
+    } else {
+      // Try to steal from class space first. Non-class allocations are typically
+      // fine grained, so we may satisfy the allocation from the salvaged alignment
+      // gaps in class space.
+      if (Metaspace::using_class_space()) {
+        p = class_space_arena()->allocate_from_freeblocks_only(word_size);
+        if (p != nullptr) {
+          UL2(trace, "Stole " SIZE_FORMAT " words from class space.", word_size);
+          DEBUG_ONLY(InternalStats::inc_num_allocs_stolen_from_class_space();)
+        }
+      }
+      // Failing that, just use the normal metaspace
+      if (p == nullptr) {
+        p = non_class_space_arena()->allocate(word_size);
+      }
+    }
+  } else {
+    // Legacy header mode. No special placement logic needed for Klass.
+    if (Metaspace::is_class_space_allocation(mdType)) {
+      return class_space_arena()->allocate(word_size);
+    } else {
+      return non_class_space_arena()->allocate(word_size);
+    }
+  }
+  UL2(trace, "Returning " PTR_FORMAT ".", p2i(p));
+  return p;
 }
 
 // Attempt to expand the GC threshold to be good for at least another word_size words
@@ -145,10 +180,29 @@ MetaWord* ClassLoaderMetaspace::expand_and_allocate(size_t word_size, Metaspace:
 // Prematurely returns a metaspace allocation to the _block_freelists
 // because it is not needed anymore.
 void ClassLoaderMetaspace::deallocate(MetaWord* ptr, size_t word_size, bool is_class) {
-  if (Metaspace::using_class_space() && is_class) {
-    class_space_arena()->deallocate(ptr, word_size);
+  // Sanity checks
+  assert(is_aligned(ptr, BytesPerWord), "misaligned pointer");
+  assert(word_size != 0, "Invalid size");
+
+  if (UseCompactObjectHeaders) {
+    // New header mode
+    if (Metaspace::using_class_space() && is_class) {
+      class_space_arena()->deallocate(ptr, word_size);
+    } else {
+      // If we stole this allocation from class space, return it to class space.
+      if (Metaspace::class_space_contains(ptr)) {
+        class_space_arena()->deallocate(ptr, word_size);
+      } else {
+        non_class_space_arena()->deallocate(ptr, word_size);
+      }
+    }
   } else {
-    non_class_space_arena()->deallocate(ptr, word_size);
+    // Legacy header mode
+    if (Metaspace::using_class_space() && is_class) {
+      class_space_arena()->deallocate(ptr, word_size);
+    } else {
+      non_class_space_arena()->deallocate(ptr, word_size);
+    }
   }
   DEBUG_ONLY(InternalStats::inc_num_deallocs();)
 }

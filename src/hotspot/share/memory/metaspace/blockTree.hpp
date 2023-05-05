@@ -362,7 +362,7 @@ public:
   //  larger than that size. Upon return, *p_real_word_size contains the actual
   //  block size.
   MetaWord* remove_block(size_t word_size, size_t* p_real_word_size) {
-    assert(word_size >= MinWordSize, "invalid block size " SIZE_FORMAT, word_size);
+    assert(word_size > 0, "invalid block size " SIZE_FORMAT, word_size);
 
     Node* n = find_closest_fit(word_size);
 

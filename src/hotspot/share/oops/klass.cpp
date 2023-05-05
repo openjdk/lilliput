@@ -195,7 +195,9 @@ Method* Klass::uncached_lookup_method(const Symbol* name, const Symbol* signatur
 
 void* Klass::operator new(size_t size, ClassLoaderData* loader_data, size_t word_size, TRAPS) throw() {
   MetaWord* p = Metaspace::allocate(loader_data, word_size, MetaspaceObj::ClassType, THREAD);
-  assert(is_aligned(p, KlassAlignmentInBytes), "metaspace returned badly aligned memory.");
+  assert(is_aligned(p, KlassAlignmentInBytes),
+         "metaspace returned badly aligned memory (" PTR_FORMAT "), alignment required: %u",
+         p2i(p), (unsigned)KlassAlignmentInBytes);
   return p;
 }
 

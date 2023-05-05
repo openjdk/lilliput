@@ -1500,6 +1500,8 @@ void Arguments::set_use_compressed_klass_ptrs() {
   }
 
   KlassAlignmentInBytes = 1 << LogKlassAlignmentInBytes;
+  assert(is_aligned(KlassAlignmentInBytes, BytesPerWord), "Must be at least word-sized");
+  KlassAlignmentInWords = KlassAlignmentInBytes / BytesPerWord;
   NarrowKlassPointerBitMask = ((((uint64_t)1) << MaxNarrowKlassPointerBits) - 1);
   KlassEncodingMetaspaceMax = UCONST64(1) << (MaxNarrowKlassPointerBits + LogKlassAlignmentInBytes);
 

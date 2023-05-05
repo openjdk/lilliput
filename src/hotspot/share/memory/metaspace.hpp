@@ -121,6 +121,7 @@ public:
                             MetaspaceObj::Type type);
 
   static bool contains(const void* ptr);
+  static bool class_space_contains(const void* ptr);
   static bool contains_non_shared(const void* ptr);
 
   // Free empty virtualspaces

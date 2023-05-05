@@ -229,7 +229,8 @@ VirtualSpaceNode::VirtualSpaceNode(ReservedSpace rs, bool owns_rs, CommitLimiter
   _total_reserved_words_counter(reserve_counter),
   _total_committed_words_counter(commit_counter)
 {
-  UL2(debug, "born (word_size " SIZE_FORMAT ").", _word_size);
+  UL2(debug, "born: [" PTR_FORMAT ".." PTR_FORMAT "), (word_size " SIZE_FORMAT ").",
+      p2i(_rs.base()), p2i(_rs.end()), _word_size);
 
   // Update reserved counter in vslist
   _total_reserved_words_counter->increment_by(_word_size);

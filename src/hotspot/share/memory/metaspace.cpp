@@ -873,7 +873,7 @@ void Metaspace::post_initialize() {
 }
 
 size_t Metaspace::max_allocation_word_size() {
-  return metaspace::chunklevel::MAX_CHUNK_WORD_SIZE;
+  return metaspace::chunklevel::MAX_CHUNK_WORD_SIZE - KlassAlignmentInWords;
 }
 
 #ifdef _LP64
@@ -1052,10 +1052,11 @@ bool Metaspace::contains(const void* ptr) {
   return contains_non_shared(ptr);
 }
 
-bool Metaspace::contains_non_shared(const void* ptr) {
-  if (using_class_space() && VirtualSpaceList::vslist_class()->contains((MetaWord*)ptr)) {
-     return true;
-  }
+bool Metaspace::class_space_contains(const void* ptr) {
+  return using_class_space() && VirtualSpaceList::vslist_class()->contains((MetaWord*)ptr);
+}
 
-  return VirtualSpaceList::vslist_nonclass()->contains((MetaWord*)ptr);
+bool Metaspace::contains_non_shared(const void* ptr) {
+  return class_space_contains(ptr) ||
+         VirtualSpaceList::vslist_nonclass()->contains((MetaWord*)ptr);
 }

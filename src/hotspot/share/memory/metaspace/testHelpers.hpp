@@ -43,6 +43,7 @@ class outputStream;
 
 namespace metaspace {
 
+struct ArenaStats;
 class MetaspaceContext;
 class MetaspaceArena;
 
@@ -62,8 +63,10 @@ public:
   ~MetaspaceTestArena();
 
   MetaWord* allocate(size_t word_size);
+  MetaWord* allocate_for_klass(size_t word_size);
+  MetaWord* allocate_from_freeblocks_only(size_t word_size);
   void deallocate(MetaWord* p, size_t word_size);
-
+  void add_to_statistics(ArenaStats* out) const;
 };
 
 // Wraps an instance of a MetaspaceContext together with some side objects for easy use in test beds (whitebox, gtests)
