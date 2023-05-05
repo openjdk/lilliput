@@ -806,6 +806,10 @@ static void test_allocate_for_klass_repeat_random(bool test_with_chunk_turnover)
     return; // Skip for traditional headers.
   }
 
+  if (Settings::use_allocation_guard()) {
+    return; // Skip for guards since it makes estimating usage very difficult.
+  }
+
   // Repeatedly call allocate_for_klass with random but legit looking Klass sizes.
   // Test that each all allocations succeed, are aligned correctly, and that the remainder
   // alignment gaps are salvaged.
@@ -833,7 +837,7 @@ static void test_allocate_for_klass_repeat_random(bool test_with_chunk_turnover)
   RandSizeGenerator rgen(klass_size_words, 3 * klass_slot_size_words);
 
   size_t allocated_words = 0;
-  const int num_allocations = 10 ;
+  const int num_allocations = 100;
   for (int i = 0; i < num_allocations; i++) {
     MetaspaceTestArena* const arena = arenas[i % 2]; // alternate between arenas.
 
@@ -846,16 +850,17 @@ static void test_allocate_for_klass_repeat_random(bool test_with_chunk_turnover)
     allocated_words += word_size;
   }
 
-  // Sanity check sizes.
+  // Sanity check sizes:
+
+  // When the arena does a chunk turnover, it salvages the space of the old chunk that is *committed*, which may
+  // not be the whole chunk. In addition, it cannot salvage blocks that are smaller than FreeBlocks min word size.
+  // All of that makes for some fuzziness when estimating usage.
+
   ArenaStats stats;
   arenas[0]->add_to_statistics(&stats);
   if (arenas[0] != arenas[1]) {
     arenas[1]->add_to_statistics(&stats);
   }
-
-  // When the arena does a chunk turnover, it salvages the space of the old chunk that is *committed*, which may
-  // not be the whole chunk. In addition, it cannot salvage blocks that are smaller than FreeBlocks min word size.
-  // All of that makes for some fuzziness when estimating usage.
 
   EXPECT_GE(stats.totals()._used_words, allocated_words);
   EXPECT_LE(stats.totals()._used_words, num_allocations * (3 * klass_slot_size_words));
