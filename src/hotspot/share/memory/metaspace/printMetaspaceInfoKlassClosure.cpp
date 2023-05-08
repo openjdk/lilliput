@@ -40,6 +40,8 @@ void PrintMetaspaceInfoKlassClosure::do_klass(Klass* k) {
   _out->cr_indent();
   _out->print(UINTX_FORMAT_W(4) ": ", _cnt);
 
+  _out->print("Klass @" PTR_FORMAT " ", p2i(k));
+
   // Print a 's' for shared classes
   _out->put(k->is_shared() ? 's': ' ');
 
