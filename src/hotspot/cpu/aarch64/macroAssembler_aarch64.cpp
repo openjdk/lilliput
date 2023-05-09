@@ -4590,7 +4590,6 @@ MacroAssembler::KlassDecodeMode MacroAssembler::klass_decode_mode() {
 // Given an arbitrary base address, return the KlassDecodeMode that would be used. Return KlassDecodeNone
 // if base address is not valid for encoding.
 MacroAssembler::KlassDecodeMode MacroAssembler::klass_decode_mode_for_base(address base) {
-  assert(CompressedKlassPointers::shift() != 0, "not lilliput?");
 
   const uint64_t base_u64 = (uint64_t) base;
 
@@ -4603,7 +4602,7 @@ MacroAssembler::KlassDecodeMode MacroAssembler::klass_decode_mode_for_base(addre
     return KlassDecodeXor;
   }
 
-  const uint64_t shifted_base = base_u64 >> CompressedKlassPointers::shift();
+  const uint64_t shifted_base = base_u64 >> LogKlassAlignmentInBytes;
   if ((shifted_base & 0xffff0000ffffffff) == 0) {
     return KlassDecodeMovk;
   }

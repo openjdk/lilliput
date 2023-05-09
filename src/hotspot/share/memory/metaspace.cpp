@@ -829,6 +829,7 @@ void Metaspace::global_initialize() {
 
     // Set up compressed class pointer encoding.
     CompressedKlassPointers::initialize((address)rs.base(), rs.size());
+
   }
 
 #endif
