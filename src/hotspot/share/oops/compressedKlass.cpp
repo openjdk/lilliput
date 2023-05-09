@@ -97,6 +97,7 @@ void CompressedKlassPointers::initialize(address addr, size_t len) {
 
   assert(LogKlassAlignmentInBytes < (1 << encodingShiftWidth), "Shift too large");
   assert((((uintptr_t)thebase) & ~baseAddressMask) == 0, "Base address " PTR_FORMAT " unaligned", p2i(thebase));
+
   _value = (UseCompactObjectHeaders ? ((uintptr_t)1 << useCompactObjectHeadersShift) : 0) |
            (UseCompressedClassPointers ? ((uintptr_t)1 << useCompressedClassPointersShift) : 0) |
            ((uintptr_t)LogKlassAlignmentInBytes << encodingShiftShift) |
