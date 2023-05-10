@@ -58,7 +58,7 @@ public class CompressedKlassPointers {
   private static synchronized void initialize(TypeDataBase db) {
     Type type = db.lookupType("CompressedKlassPointers");
 
-    baseField = type.getAddressField("_base");
+    baseField = type.getAddressField("_base_copy");
     shiftField = type.getCIntegerField("_shift_copy");
   }
 
