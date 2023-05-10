@@ -74,7 +74,7 @@ class CompressedKlassPointers : public AllStatic {
   // base will always be page aligned, so we have a 12-bit alignment shadow to store the rest
   // of the data.
 
-  static uintptr_t _value;
+  static uintptr_t _config;
   static constexpr int useCompactObjectHeadersShift = 0;
   static constexpr int useCompressedClassPointersShift = 1;
   static constexpr int encodingShiftShift = 2;
@@ -119,7 +119,7 @@ public:
   // The encoding base. Note: this is not necessarily the base address of the
   // class space nor the base address of the CDS archive.
   static inline address base() {
-    return (address)(_value & baseAddressMask);
+    return (address)(_config & baseAddressMask);
   }
 
   // End of the encoding range.
@@ -129,11 +129,11 @@ public:
 
   // Shift == LogKlassAlignmentInBytes (TODO: unify)
   static inline int shift() {
-    return (_value >> encodingShiftShift) & right_n_bits(encodingShiftWidth);
+    return (_config >> encodingShiftShift) & right_n_bits(encodingShiftWidth);
   }
 
-  static inline bool use_compact_object_headers()    { return (_value >> useCompactObjectHeadersShift) & 1; }
-  static inline bool use_compressed_class_pointers() { return (_value >> useCompressedClassPointersShift) & 1; }
+  static inline bool use_compact_object_headers()    { return (_config >> useCompactObjectHeadersShift) & 1; }
+  static inline bool use_compressed_class_pointers() { return (_config >> useCompressedClassPointersShift) & 1; }
 
   static bool is_null(Klass* v)      { return v == nullptr; }
   static bool is_null(narrowKlass v) { return v == 0; }
