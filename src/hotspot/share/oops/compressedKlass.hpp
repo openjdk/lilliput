@@ -66,11 +66,29 @@ class CompressedKlassPointers : public AllStatic {
   friend class VMStructs;
   friend class ArchiveBuilder;
 
-  // Encoding base
-  static address _base;
+  // A dense representation of values one often loads in quick succession, in order to fold
+  // all of them into a single load:
+  // - UseCompactObjectHeaders and UseCompressedClassPointers flags
+  // - encoding base and encoding shift
+  // We can encode everything (including the encoding base) in a 64-bit word. The encoding
+  // base will always be page aligned, so we have a 12-bit alignment shadow to store the rest
+  // of the data.
 
-  // Shift is actually a constant; we keep this just for the SA (see vmStructs.cpp and
+  static uintptr_t _config;
+  static constexpr int useCompactObjectHeadersShift = 0;
+  static constexpr int useCompressedClassPointersShift = 1;
+  static constexpr int encodingShiftShift = 2;
+  static constexpr int encodingShiftWidth = 5;
+  static constexpr int baseAddressMask = ~right_n_bits(12);
+
+  static void set_encoding_base(address base);
+  static void set_encoding_shift(int shift);
+  static void set_use_compact_headers(bool b);
+  static void set_use_compressed_class_pointers(bool b);
+
+  // These members hold copies of encoding base and shift and only exist for SA (see vmStructs.cpp and
   // sun/jvm/hotspot/oops/CompressedKlassPointers.java)
+  static address _base_copy;
   static int _shift_copy;
 
   // The decode/encode versions taking an explicit base are for the sole use of CDS
@@ -96,17 +114,26 @@ public:
   //  structures outside this range).
   static void initialize(address addr, size_t len);
 
-  static void     print_mode(outputStream* st);
+  static void print_mode(outputStream* st);
 
   // The encoding base. Note: this is not necessarily the base address of the
   // class space nor the base address of the CDS archive.
-  static address  base()             { return  _base; }
+  static inline address base() {
+    return (address)(_config & baseAddressMask);
+  }
 
   // End of the encoding range.
-  static address  end()              { return base() + KlassEncodingMetaspaceMax; }
+  static inline address  end() {
+    return base() + KlassEncodingMetaspaceMax;
+  }
 
   // Shift == LogKlassAlignmentInBytes (TODO: unify)
-  static int      shift()            { return  LogKlassAlignmentInBytes; }
+  static inline int shift() {
+    return (_config >> encodingShiftShift) & right_n_bits(encodingShiftWidth);
+  }
+
+  static inline bool use_compact_object_headers()    { return (_config >> useCompactObjectHeadersShift) & 1; }
+  static inline bool use_compressed_class_pointers() { return (_config >> useCompressedClassPointersShift) & 1; }
 
   static bool is_null(Klass* v)      { return v == nullptr; }
   static bool is_null(narrowKlass v) { return v == 0; }

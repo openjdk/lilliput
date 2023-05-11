@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2021 SAP SE. All rights reserved.
- * Copyright (c) 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2023 Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2023, Oracle and/or its affiliates. All rights reserved.
  *
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -25,12 +26,13 @@
  */
 
 #include "precompiled.hpp"
-#include "oops/compressedKlass.hpp"
+#include "oops/compressedKlass.inline.hpp"
 #include "utilities/ostream.hpp"
 #include "utilities/debug.hpp"
 #include "runtime/globals.hpp"
 
-address CompressedKlassPointers::_base = nullptr;
+uintptr_t CompressedKlassPointers::_config = 0;
+address CompressedKlassPointers::_base_copy = nullptr;
 int CompressedKlassPointers::_shift_copy = 0;
 
 #ifdef _LP64
@@ -54,6 +56,8 @@ void CompressedKlassPointers::initialize(address addr, size_t len) {
   assert(len <= (size_t)KlassEncodingMetaspaceMax, "Range " SIZE_FORMAT " too large "
          "- cannot be contained fully in narrow Klass pointer encoding range.", len);
 
+  address thebase = nullptr;
+
   if (UseSharedSpaces || DumpSharedSpaces) {
 
     // Special requirements if CDS is active:
@@ -71,24 +75,38 @@ void CompressedKlassPointers::initialize(address addr, size_t len) {
     //  encoding. We also set the expected value range to 4G (encoding range
     //  cannot be larger than that).
 
-    _base = addr;
+    thebase = addr;
 
   } else {
 
     // (Note that this case is almost not worth optimizing for. CDS is typically on.)
     if ((addr + len) <= (address)KlassEncodingMetaspaceMax) {
-      _base = 0;
+      thebase = nullptr;
     } else {
-      _base = addr;
+      thebase = addr;
     }
   }
 
-  assert(is_valid_base(_base), "Address " PTR_FORMAT " was chosen as encoding base for range ["
-                               PTR_FORMAT ", " PTR_FORMAT ") but is not a valid encoding base",
-                               p2i(_base), p2i(addr), p2i(addr + len));
+  assert(is_valid_base(thebase), "Address " PTR_FORMAT " was chosen as encoding base for range ["
+                              PTR_FORMAT ", " PTR_FORMAT ") but is not a valid encoding base",
+                              p2i(thebase), p2i(addr), p2i(addr + len));
 
   // For SA
+  _base_copy = thebase;
   _shift_copy = LogKlassAlignmentInBytes;
+
+  assert(LogKlassAlignmentInBytes < (1 << encodingShiftWidth), "Shift too large");
+  assert((((uintptr_t)thebase) & ~baseAddressMask) == 0, "Base address " PTR_FORMAT " unaligned", p2i(thebase));
+
+  _config = (UseCompactObjectHeaders ? ((uintptr_t)1 << useCompactObjectHeadersShift) : 0) |
+           (UseCompressedClassPointers ? ((uintptr_t)1 << useCompressedClassPointersShift) : 0) |
+           ((uintptr_t)LogKlassAlignmentInBytes << encodingShiftShift) |
+           ((uintptr_t)thebase & baseAddressMask);
+
+  assert(use_compact_object_headers() == UseCompactObjectHeaders, "Sanity");
+  assert(use_compressed_class_pointers() == UseCompressedClassPointers, "Sanity");
+  assert(shift() == LogKlassAlignmentInBytes, "Sanity");
+  assert(base() == thebase, "Sanity");
 
 #else
   ShouldNotReachHere(); // 64-bit only
@@ -119,4 +137,3 @@ bool CompressedKlassPointers::is_valid_base(address p) {
   return false;
 }
 #endif
-

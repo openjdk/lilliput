@@ -100,7 +100,7 @@ void oopDesc::init_mark() {
 #ifdef _LP64
   if (UseCompactObjectHeaders) {
     markWord header = resolve_mark();
-    assert(UseCompressedClassPointers, "expect compressed klass pointers");
+    assert(CompressedKlassPointers::use_compressed_class_pointers(), "expect compressed klass pointers");
     set_mark(markWord((header.value() & markWord::klass_mask_in_place) | markWord::prototype().value()));
   } else
 #endif
@@ -109,11 +109,11 @@ void oopDesc::init_mark() {
 
 Klass* oopDesc::klass() const {
 #ifdef _LP64
-  if (UseCompactObjectHeaders) {
-    assert(UseCompressedClassPointers, "only with compressed class pointers");
+  if (CompressedKlassPointers::use_compact_object_headers()) {
+    assert(CompressedKlassPointers::use_compressed_class_pointers(), "only with compressed class pointers");
     markWord header = resolve_mark();
     return header.klass();
-  } else if (UseCompressedClassPointers) {
+  } else if (CompressedKlassPointers::use_compressed_class_pointers()) {
     return CompressedKlassPointers::decode_not_null(_metadata._compressed_klass);
   } else
 #endif
@@ -122,11 +122,11 @@ Klass* oopDesc::klass() const {
 
 Klass* oopDesc::klass_or_null() const {
 #ifdef _LP64
-  if (UseCompactObjectHeaders) {
-    assert(UseCompressedClassPointers, "only with compressed class pointers");
+  if (CompressedKlassPointers::use_compact_object_headers()) {
+    assert(CompressedKlassPointers::use_compressed_class_pointers(), "only with compressed class pointers");
     markWord header = resolve_mark();
     return header.klass_or_null();
-  } else if (UseCompressedClassPointers) {
+  } else if (CompressedKlassPointers::use_compressed_class_pointers()) {
     return CompressedKlassPointers::decode(_metadata._compressed_klass);
   } else
 #endif
@@ -135,14 +135,14 @@ Klass* oopDesc::klass_or_null() const {
 
 Klass* oopDesc::klass_or_null_acquire() const {
 #ifdef _LP64
-  if (UseCompactObjectHeaders) {
-    assert(UseCompressedClassPointers, "only with compressed class pointers");
+  if (CompressedKlassPointers::use_compact_object_headers()) {
+    assert(CompressedKlassPointers::use_compressed_class_pointers(), "only with compressed class pointers");
     markWord header = mark_acquire();
     if (header.has_monitor()) {
       header = header.monitor()->header();
     }
     return header.klass_or_null();
-  } else if (UseCompressedClassPointers) {
+  } else if (CompressedKlassPointers::use_compressed_class_pointers()) {
      narrowKlass nklass = Atomic::load_acquire(&_metadata._compressed_klass);
      return CompressedKlassPointers::decode(nklass);
   } else
@@ -157,7 +157,7 @@ Klass* oopDesc::klass_raw() const {
 void oopDesc::set_klass(Klass* k) {
   assert(Universe::is_bootstrapping() || (k != NULL && k->is_klass()), "incorrect Klass");
   assert(!UseCompactObjectHeaders, "don't set Klass* with compact headers");
-  if (UseCompressedClassPointers) {
+  if (CompressedKlassPointers::use_compressed_class_pointers()) {
     _metadata._compressed_klass = CompressedKlassPointers::encode_not_null(k);
   } else {
     _metadata._klass = k;
@@ -168,7 +168,7 @@ void oopDesc::release_set_klass(HeapWord* mem, Klass* k) {
   assert(Universe::is_bootstrapping() || (k != NULL && k->is_klass()), "incorrect Klass");
   assert(!UseCompactObjectHeaders, "don't set Klass* with compact headers");
   char* raw_mem = ((char*)mem + klass_offset_in_bytes());
-  if (UseCompressedClassPointers) {
+  if (CompressedKlassPointers::use_compressed_class_pointers()) {
     Atomic::release_store((narrowKlass*)raw_mem,
                           CompressedKlassPointers::encode_not_null(k));
   } else {
@@ -178,7 +178,7 @@ void oopDesc::release_set_klass(HeapWord* mem, Klass* k) {
 
 void oopDesc::set_klass_gap(HeapWord* mem, int v) {
   assert(!UseCompactObjectHeaders, "don't set Klass* gap with compact headers");
-  if (UseCompressedClassPointers) {
+  if (CompressedKlassPointers::use_compressed_class_pointers()) {
     *(int*)(((char*)mem) + klass_gap_offset_in_bytes()) = v;
   }
 }
