@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -36,7 +36,7 @@ int C2SafepointPollStub::max_size() const {
 }
 
 void C2SafepointPollStub::emit(C2_MacroAssembler& masm) {
-  assert(SharedRuntime::polling_page_return_handler_blob() != NULL,
+  assert(SharedRuntime::polling_page_return_handler_blob() != nullptr,
          "polling page return stub not created yet");
   address stub = SharedRuntime::polling_page_return_handler_blob()->entry_point();
 
@@ -64,19 +64,11 @@ void C2EntryBarrierStub::emit(C2_MacroAssembler& masm) {
   __ emit_int32(0);   // nmethod guard value
 }
 
-int C2CheckLockStackStub::max_size() const {
-  return 20;
-}
-
-void C2CheckLockStackStub::emit(C2_MacroAssembler& masm) {
-  __ bind(entry());
-  assert(StubRoutines::aarch64::check_lock_stack() != NULL, "need runtime call stub");
-  __ far_call(StubRoutines::aarch64::check_lock_stack());
-  __ b(continuation());
-}
-
 int C2HandleAnonOMOwnerStub::max_size() const {
-  return 20;
+  // Max size of stub has been determined by testing with 0, in which case
+  // C2CodeStubList::emit() will throw an assertion and report the actual size that
+  // is needed.
+  return 24;
 }
 
 void C2HandleAnonOMOwnerStub::emit(C2_MacroAssembler& masm) {
@@ -89,9 +81,12 @@ void C2HandleAnonOMOwnerStub::emit(C2_MacroAssembler& masm) {
   __ str(rthread, Address(mon, ObjectMonitor::owner_offset_in_bytes()));
 
   // Pop owner object from lock-stack.
-  __ ldr(t, Address(rthread, JavaThread::lock_stack_current_offset()));
-  __ sub(t, t, oopSize);
-  __ str(t, Address(rthread, JavaThread::lock_stack_current_offset()));
+  __ ldrw(t, Address(rthread, JavaThread::lock_stack_top_offset()));
+  __ subw(t, t, oopSize);
+#ifdef ASSERT
+  __ str(zr, Address(rthread, t));
+#endif
+  __ strw(t, Address(rthread, JavaThread::lock_stack_top_offset()));
 
   __ b(continuation());
 }

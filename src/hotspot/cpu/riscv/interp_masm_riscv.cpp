@@ -781,7 +781,7 @@ void InterpreterMacroAssembler::remove_activation(
 void InterpreterMacroAssembler::lock_object(Register lock_reg)
 {
   assert(lock_reg == c_rarg1, "The argument is only for looks. It must be c_rarg1");
-  if (UseHeavyMonitors) {
+  if (LockingMode == LM_MONITOR) {
     call_VM(noreg,
             CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorenter),
             lock_reg);
@@ -809,11 +809,11 @@ void InterpreterMacroAssembler::lock_object(Register lock_reg)
       bnez(tmp, slow_case);
     }
 
-    if (UseFastLocking) {
+    if (LockingMode == LM_LIGHTWEIGHT) {
       ld(tmp, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
       fast_lock(obj_reg, tmp, t0, t1, slow_case);
       j(count);
-    } else {
+    } else if (LockingMode == LM_LEGACY) {
       // Load (object->mark() | 1) into swap_reg
       ld(t0, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
       ori(swap_reg, t0, 1);
@@ -847,10 +847,15 @@ void InterpreterMacroAssembler::lock_object(Register lock_reg)
     bind(slow_case);
 
     // Call the runtime routine for slow case
-    call_VM(noreg,
-            CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorenter),
-            UseFastLocking ? obj_reg : lock_reg);
-
+    if (LockingMode == LM_LIGHTWEIGHT) {
+      call_VM(noreg,
+              CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorenter_obj),
+              obj_reg);
+    } else {
+      call_VM(noreg,
+              CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorenter),
+              lock_reg);
+    }
     j(done);
 
     bind(count);
@@ -876,7 +881,7 @@ void InterpreterMacroAssembler::unlock_object(Register lock_reg)
 {
   assert(lock_reg == c_rarg1, "The argument is only for looks. It must be rarg1");
 
-  if (UseHeavyMonitors) {
+  if (LockingMode == LM_MONITOR) {
     call_VM_leaf(CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorexit), lock_reg);
   } else {
     Label count, done;
@@ -887,37 +892,43 @@ void InterpreterMacroAssembler::unlock_object(Register lock_reg)
 
     save_bcp(); // Save in case of exception
 
-    if (UseFastLocking) {
-      Label slow_case;
-      // Load oop into obj_reg(c_rarg3)
-      ld(obj_reg, Address(lock_reg, BasicObjectLock::obj_offset_in_bytes()));
+    if (LockingMode != LM_LIGHTWEIGHT) {
+      // Convert from BasicObjectLock structure to object and BasicLock
+      // structure Store the BasicLock address into x10
+      la(swap_reg, Address(lock_reg, BasicObjectLock::lock_offset_in_bytes()));
+    }
 
-      // Free entry
-      sd(zr, Address(lock_reg, BasicObjectLock::obj_offset_in_bytes()));
+    // Load oop into obj_reg(c_rarg3)
+    ld(obj_reg, Address(lock_reg, BasicObjectLock::obj_offset_in_bytes()));
+
+    // Free entry
+    sd(zr, Address(lock_reg, BasicObjectLock::obj_offset_in_bytes()));
+
+    if (LockingMode == LM_LIGHTWEIGHT) {
+      Label slow_case;
 
       // Check for non-symmetric locking. This is allowed by the spec and the interpreter
       // must handle it.
-      Register tmp = header_reg;
-      ld(tmp, Address(xthread, JavaThread::lock_stack_current_offset()));
-      ld(tmp, Address(tmp, -oopSize));
-      bne(tmp, obj_reg, slow_case);
+      Register tmp1 = t0;
+      Register tmp2 = header_reg;
+      // First check for lock-stack underflow.
+      lwu(tmp1, Address(xthread, JavaThread::lock_stack_top_offset()));
+      mv(tmp2, (unsigned)LockStack::start_offset());
+      ble(tmp1, tmp2, slow_case);
+      // Then check if the top of the lock-stack matches the unlocked object.
+      subw(tmp1, tmp1, oopSize);
+      add(tmp1, xthread, tmp1);
+      ld(tmp1, Address(tmp1, 0));
+      bne(tmp1, obj_reg, slow_case);
 
       ld(header_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
+      andi(t0, header_reg, markWord::monitor_value);
+      bnez(t0, slow_case);
       fast_unlock(obj_reg, header_reg, swap_reg, t0, slow_case);
       j(count);
 
       bind(slow_case);
-    } else {
-      // Convert from BasicObjectLock structure to object and BasicLock
-      // structure Store the BasicLock address into x10
-      la(swap_reg, Address(lock_reg, BasicObjectLock::lock_offset_in_bytes()));
-
-      // Load oop into obj_reg(c_rarg3)
-      ld(obj_reg, Address(lock_reg, BasicObjectLock::obj_offset_in_bytes()));
-
-      // Free entry
-      sd(zr, Address(lock_reg, BasicObjectLock::obj_offset_in_bytes()));
-
+    } else if (LockingMode == LM_LEGACY) {
       // Load the old header from BasicLock structure
       ld(header_reg, Address(swap_reg,
                              BasicLock::displaced_header_offset_in_bytes()));

@@ -1788,18 +1788,6 @@ void MachPrologNode::emit(CodeBuffer &cbuf, PhaseRegAlloc *ra_) const {
 
   __ build_frame(framesize);
 
-  int max_monitors = C->method() != NULL ? C->max_monitors() : 0;
-  if (UseFastLocking && max_monitors > 0) {
-    C2CheckLockStackStub* stub = new (C->comp_arena()) C2CheckLockStackStub();
-    C->output()->add_stub(stub);
-    __ ldr(r9, Address(rthread, JavaThread::lock_stack_current_offset()));
-    __ ldr(r10, Address(rthread, JavaThread::lock_stack_limit_offset()));
-    __ add(r9, r9, max_monitors * oopSize);
-    __ cmp(r9, r10);
-    __ br(Assembler::GE, stub->entry());
-    __ bind(stub->continuation());
-  }
-
   if (C->stub_function() == NULL) {
     BarrierSetAssembler* bs = BarrierSet::barrier_set()->barrier_set_assembler();
     if (BarrierSet::barrier_set()->barrier_set_nmethod() != NULL) {
@@ -3851,46 +3839,42 @@ encode %{
     // Check for existing monitor
     __ tbnz(disp_hdr, exact_log2(markWord::monitor_value), object_has_monitor);
 
-    if (!UseHeavyMonitors) {
-      if (UseFastLocking) {
-        __ fast_lock(oop, disp_hdr, tmp, rscratch1, no_count, false);
-
-        // Indicate success at cont.
-        __ cmp(oop, oop);
-        __ b(count);
-      } else {
-        // Set tmp to be (markWord of object | UNLOCK_VALUE).
-        __ orr(tmp, disp_hdr, markWord::unlocked_value);
-
-        // Initialize the box. (Must happen before we update the object mark!)
-        __ str(tmp, Address(box, BasicLock::displaced_header_offset_in_bytes()));
-
-        // Compare object markWord with an unlocked value (tmp) and if
-        // equal exchange the stack address of our box with object markWord.
-        // On failure disp_hdr contains the possibly locked markWord.
-        __ cmpxchg(oop, tmp, box, Assembler::xword, /*acquire*/ true,
-                   /*release*/ true, /*weak*/ false, disp_hdr);
-        __ br(Assembler::EQ, cont);
-
-        assert(oopDesc::mark_offset_in_bytes() == 0, "offset of _mark is not 0");
-
-        // If the compare-and-exchange succeeded, then we found an unlocked
-        // object, will have now locked it will continue at label cont
-
-        // Check if the owner is self by comparing the value in the
-        // markWord of object (disp_hdr) with the stack pointer.
-        __ mov(rscratch1, sp);
-        __ sub(disp_hdr, disp_hdr, rscratch1);
-        __ mov(tmp, (address) (~(os::vm_page_size()-1) | markWord::lock_mask_in_place));
-        // If condition is true we are cont and hence we can store 0 as the
-        // displaced header in the box, which indicates that it is a recursive lock.
-        __ ands(tmp/*==0?*/, disp_hdr, tmp);   // Sets flags for result
-        __ str(tmp/*==0, perhaps*/, Address(box, BasicLock::displaced_header_offset_in_bytes()));
-        __ b(cont);
-      }
-    } else {
+    if (LockingMode == LM_MONITOR) {
       __ tst(oop, oop); // Set NE to indicate 'failure' -> take slow-path. We know that oop != 0.
       __ b(cont);
+    } else if (LockingMode == LM_LEGACY) {
+      // Set tmp to be (markWord of object | UNLOCK_VALUE).
+      __ orr(tmp, disp_hdr, markWord::unlocked_value);
+
+      // Initialize the box. (Must happen before we update the object mark!)
+      __ str(tmp, Address(box, BasicLock::displaced_header_offset_in_bytes()));
+
+      // Compare object markWord with an unlocked value (tmp) and if
+      // equal exchange the stack address of our box with object markWord.
+      // On failure disp_hdr contains the possibly locked markWord.
+      __ cmpxchg(oop, tmp, box, Assembler::xword, /*acquire*/ true,
+                 /*release*/ true, /*weak*/ false, disp_hdr);
+      __ br(Assembler::EQ, cont);
+
+      assert(oopDesc::mark_offset_in_bytes() == 0, "offset of _mark is not 0");
+
+      // If the compare-and-exchange succeeded, then we found an unlocked
+      // object, will have now locked it will continue at label cont
+
+      // Check if the owner is self by comparing the value in the
+      // markWord of object (disp_hdr) with the stack pointer.
+      __ mov(rscratch1, sp);
+      __ sub(disp_hdr, disp_hdr, rscratch1);
+      __ mov(tmp, (address) (~(os::vm_page_size()-1) | markWord::lock_mask_in_place));
+      // If condition is true we are cont and hence we can store 0 as the
+      // displaced header in the box, which indicates that it is a recursive lock.
+      __ ands(tmp/*==0?*/, disp_hdr, tmp);   // Sets flags for result
+      __ str(tmp/*==0, perhaps*/, Address(box, BasicLock::displaced_header_offset_in_bytes()));
+      __ b(cont);
+    } else {
+      assert(LockingMode == LM_LIGHTWEIGHT, "must be");
+      __ fast_lock(oop, disp_hdr, tmp, rscratch1, no_count);
+      __ b(count);
     }
 
     // Handle existing monitor.
@@ -3904,7 +3888,7 @@ encode %{
     __ cmpxchg(tmp, zr, rthread, Assembler::xword, /*acquire*/ true,
                /*release*/ true, /*weak*/ false, rscratch1); // Sets flags for result
 
-    if (!UseFastLocking) {
+    if (LockingMode != LM_LIGHTWEIGHT) {
       // Store a non-null value into the box to avoid looking like a re-entrant
       // lock. The fast-path monitor unlock code checks for
       // markWord::monitor_value so use markWord::unused_mark which has the
@@ -3944,7 +3928,7 @@ encode %{
 
     assert_different_registers(oop, box, tmp, disp_hdr);
 
-    if (!UseHeavyMonitors && !UseFastLocking) {
+    if (LockingMode == LM_LEGACY) {
       // Find the lock address and load the displaced header from the stack.
       __ ldr(disp_hdr, Address(box, BasicLock::displaced_header_offset_in_bytes()));
 
@@ -3957,25 +3941,21 @@ encode %{
     __ ldr(tmp, Address(oop, oopDesc::mark_offset_in_bytes()));
     __ tbnz(tmp, exact_log2(markWord::monitor_value), object_has_monitor);
 
-    if (!UseHeavyMonitors) {
-      if (UseFastLocking) {
-        __ fast_unlock(oop, tmp, box, disp_hdr, no_count);
-
-        // Indicate success at cont.
-        __ cmp(oop, oop);
-        __ b(count);
-      } else {
-        // Check if it is still a light weight lock, this is is true if we
-        // see the stack address of the basicLock in the markWord of the
-        // object.
-
-        __ cmpxchg(oop, box, disp_hdr, Assembler::xword, /*acquire*/ false,
-                   /*release*/ true, /*weak*/ false, tmp);
-        __ b(cont);
-      }
-    } else {
+    if (LockingMode == LM_MONITOR) {
       __ tst(oop, oop); // Set NE to indicate 'failure' -> take slow-path. We know that oop != 0.
       __ b(cont);
+    } else if (LockingMode == LM_LEGACY) {
+      // Check if it is still a light weight lock, this is is true if we
+      // see the stack address of the basicLock in the markWord of the
+      // object.
+
+      __ cmpxchg(oop, box, disp_hdr, Assembler::xword, /*acquire*/ false,
+                 /*release*/ true, /*weak*/ false, tmp);
+      __ b(cont);
+    } else {
+      assert(LockingMode == LM_LIGHTWEIGHT, "must be");
+      __ fast_unlock(oop, tmp, box, disp_hdr, no_count);
+      __ b(count);
     }
 
     assert(oopDesc::mark_offset_in_bytes() == 0, "offset of _mark is not 0");
@@ -3985,13 +3965,13 @@ encode %{
     STATIC_ASSERT(markWord::monitor_value <= INT_MAX);
     __ add(tmp, tmp, -(int)markWord::monitor_value); // monitor
 
-    if (UseFastLocking) {
+    if (LockingMode == LM_LIGHTWEIGHT) {
       // If the owner is anonymous, we need to fix it -- in an outline stub.
       Register tmp2 = disp_hdr;
       __ ldr(tmp2, Address(tmp, ObjectMonitor::owner_offset_in_bytes()));
       // We cannot use tbnz here, the target might be too far away and cannot
       // be encoded.
-      __ tst(tmp2, (uint64_t)(intptr_t) ANONYMOUS_OWNER);
+      __ tst(tmp2, (uint64_t)ObjectMonitor::ANONYMOUS_OWNER);
       C2HandleAnonOMOwnerStub* stub = new (Compile::current()->comp_arena()) C2HandleAnonOMOwnerStub(tmp, tmp2);
       Compile::current()->output()->add_stub(stub);
       __ br(Assembler::NE, stub->entry());
@@ -4365,7 +4345,18 @@ operand immI_positive()
 // BoolTest condition for signed compare
 operand immI_cmp_cond()
 %{
-  predicate(n->get_int() < (int)(BoolTest::unsigned_compare));
+  predicate(!Matcher::is_unsigned_booltest_pred(n->get_int()));
+  match(ConI);
+
+  op_cost(0);
+  format %{ %}
+  interface(CONST_INTER);
+%}
+
+// BoolTest condition for unsigned compare
+operand immI_cmpU_cond()
+%{
+  predicate(Matcher::is_unsigned_booltest_pred(n->get_int()));
   match(ConI);
 
   op_cost(0);
@@ -4465,6 +4456,28 @@ operand immI26()
 operand immI19()
 %{
   predicate(((-(1 << 18)) <= n->get_int()) && (n->get_int() < (1 << 18)));
+  match(ConI);
+
+  op_cost(0);
+  format %{ %}
+  interface(CONST_INTER);
+%}
+
+// 5 bit signed integer
+operand immI5()
+%{
+  predicate(Assembler::is_simm(n->get_int(), 5));
+  match(ConI);
+
+  op_cost(0);
+  format %{ %}
+  interface(CONST_INTER);
+%}
+
+// 7 bit unsigned integer
+operand immIU7()
+%{
+  predicate(Assembler::is_uimm(n->get_int(), 7));
   match(ConI);
 
   op_cost(0);
@@ -4607,6 +4620,28 @@ operand immLoffset8()
 operand immLoffset16()
 %{
   predicate(Address::offset_ok_for_immed(n->get_long(), 4));
+  match(ConL);
+
+  op_cost(0);
+  format %{ %}
+  interface(CONST_INTER);
+%}
+
+// 5 bit signed long integer
+operand immL5()
+%{
+  predicate(Assembler::is_simm(n->get_long(), 5));
+  match(ConL);
+
+  op_cost(0);
+  format %{ %}
+  interface(CONST_INTER);
+%}
+
+// 7 bit unsigned long integer
+operand immLU7()
+%{
+  predicate(Assembler::is_uimm(n->get_long(), 7));
   match(ConL);
 
   op_cost(0);

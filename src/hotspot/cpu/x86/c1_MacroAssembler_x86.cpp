@@ -62,16 +62,17 @@ int C1_MacroAssembler::lock_object(Register hdr, Register obj, Register disp_hdr
   // Load object header
   movptr(hdr, Address(obj, hdr_offset));
 
-  if (UseFastLocking) {
+  if (LockingMode == LM_LIGHTWEIGHT) {
 #ifdef _LP64
     const Register thread = r15_thread;
 #else
     const Register thread = disp_hdr;
     get_thread(thread);
 #endif
-    fast_lock_impl(obj, hdr, thread, tmp, slow_case, LP64_ONLY(false) NOT_LP64(true));
-  } else {
+    fast_lock_impl(obj, hdr, thread, tmp, slow_case);
+  } else  if (LockingMode == LM_LEGACY) {
     Label done;
+    // and mark it as unlocked
     orptr(hdr, markWord::unlocked_value);
     // save unlocked object header into the displaced header location on the stack
     movptr(Address(disp_hdr, 0), hdr);
@@ -118,7 +119,7 @@ void C1_MacroAssembler::unlock_object(Register hdr, Register obj, Register disp_
   assert(hdr != obj && hdr != disp_hdr && obj != disp_hdr, "registers must be different");
   Label done;
 
-  if (!UseFastLocking) {
+  if (LockingMode != LM_LIGHTWEIGHT) {
     // load displaced header
     movptr(hdr, Address(disp_hdr, 0));
     // if the loaded hdr is null we had recursive locking
@@ -131,11 +132,11 @@ void C1_MacroAssembler::unlock_object(Register hdr, Register obj, Register disp_
   movptr(obj, Address(disp_hdr, BasicObjectLock::obj_offset_in_bytes()));
   verify_oop(obj);
 
-  if (UseFastLocking) {
+  if (LockingMode == LM_LIGHTWEIGHT) {
     movptr(disp_hdr, Address(obj, hdr_offset));
     andptr(disp_hdr, ~(int32_t)markWord::lock_mask_in_place);
     fast_unlock_impl(obj, disp_hdr, hdr, slow_case);
-  } else {
+  } else if (LockingMode == LM_LEGACY) {
     // test if object header is pointing to the displaced header, and if so, restore
     // the displaced header in the object - if the object header is not pointing to
     // the displaced header, get the object header instead
@@ -322,7 +323,7 @@ void C1_MacroAssembler::inline_cache_check(Register receiver, Register iCache) {
 }
 
 
-void C1_MacroAssembler::build_frame(int frame_size_in_bytes, int bang_size_in_bytes, int max_monitors) {
+void C1_MacroAssembler::build_frame(int frame_size_in_bytes, int bang_size_in_bytes) {
   assert(bang_size_in_bytes >= frame_size_in_bytes, "stack bang size incorrect");
   // Make sure there is enough stack space for this method's activation.
   // Note that we do this before doing an enter(). This matches the
@@ -342,19 +343,6 @@ void C1_MacroAssembler::build_frame(int frame_size_in_bytes, int bang_size_in_by
   }
 #endif // !_LP64 && COMPILER2
   decrement(rsp, frame_size_in_bytes); // does not emit code for frame_size == 0
-
-#ifdef _LP64
-  if (UseFastLocking && max_monitors > 0) {
-    Label ok;
-    movptr(rax, Address(r15_thread, JavaThread::lock_stack_current_offset()));
-    addptr(rax, max_monitors * wordSize);
-    cmpptr(rax, Address(r15_thread, JavaThread::lock_stack_limit_offset()));
-    jcc(Assembler::less, ok);
-    assert(StubRoutines::x86::check_lock_stack() != nullptr, "need runtime call stub");
-    call(RuntimeAddress(StubRoutines::x86::check_lock_stack()));
-    bind(ok);
-  }
-#endif
 
   BarrierSetAssembler* bs = BarrierSet::barrier_set()->barrier_set_assembler();
   // C1 code is not hot enough to micro optimize the nmethod entry barrier with an out-of-line stub

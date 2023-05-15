@@ -91,7 +91,6 @@
   template(ShenandoahFinalUpdateRefs)             \
   template(ShenandoahFinalRoots)                  \
   template(ShenandoahDegeneratedGC)               \
-  template(RendezvousGCThreads)                   \
   template(Exit)                                  \
   template(LinuxDllLoad)                          \
   template(WhiteBoxOperation)                     \
@@ -108,7 +107,8 @@
   template(GTestExecuteAtSafepoint)               \
   template(GTestStopSafepoint)                    \
   template(JFROldObject)                          \
-  template(JvmtiPostObjectFree)
+  template(JvmtiPostObjectFree)                   \
+  template(RendezvousGCThreads)
 
 class Thread;
 class outputStream;

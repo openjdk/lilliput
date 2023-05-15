@@ -1028,7 +1028,6 @@ void Compile::Init(bool aliasing) {
 
   set_do_vector_loop(false);
   set_has_monitors(false);
-  reset_max_monitors();
 
   if (AllowVectorizeOnDemand) {
     if (has_method() && (_directive->VectorizeOption || _directive->VectorizeDebugOption)) {
@@ -4020,9 +4019,6 @@ bool Compile::final_graph_reshaping() {
     // must be infinite loops.
     for (DUIterator_Fast jmax, j = n->fast_outs(jmax); j < jmax; j++)
       if (!frc._visited.test(n->fast_out(j)->_idx)) {
-        DEBUG_ONLY( n->fast_out(j)->dump(); );
-        DEBUG_ONLY( n->dump_bfs(1, 0, "-"); );
-        assert(false, "infinite loop");
         record_method_not_compilable("infinite loop");
         return true;            // Found unvisited kid; must be unreach
       }
