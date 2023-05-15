@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -156,6 +156,7 @@ public class Threads {
         virtualConstructor.addMapping("ServiceThread", ServiceThread.class);
         virtualConstructor.addMapping("MonitorDeflationThread", MonitorDeflationThread.class);
         virtualConstructor.addMapping("NotificationThread", NotificationThread.class);
+        virtualConstructor.addMapping("StringDedupThread", StringDedupThread.class);
     }
 
     public Threads() {
@@ -210,7 +211,7 @@ public class Threads {
 
     // refer to Threads::owning_thread_from_monitor_owner
     public JavaThread owningThreadFromMonitor(Address o) {
-        assert(!VM.getVM().getCommandLineBooleanFlag("UseFastLocking"));
+        assert(VM.getVM().getCommandLineFlag("LockingMode").getInt() != LockingMode.getLightweight());
         if (o == null) return null;
         for (int i = 0; i < getNumberOfThreads(); i++) {
             JavaThread thread = getJavaThreadAt(i);
@@ -228,7 +229,7 @@ public class Threads {
     }
 
     public JavaThread owningThreadFromMonitor(ObjectMonitor monitor) {
-        if (VM.getVM().getCommandLineBooleanFlag("UseFastLocking")) {
+        if (VM.getVM().getCommandLineFlag("LockingMode").getInt() == LockingMode.getLightweight()) {
             if (monitor.isOwnedAnonymous()) {
                 OopHandle object = monitor.object();
                 for (int i = 0; i < getNumberOfThreads(); i++) {

@@ -9848,49 +9848,54 @@ void MacroAssembler::check_stack_alignment(Register sp, const char* msg, unsigne
   bind(L_stack_ok);
 }
 
-void MacroAssembler::fast_lock_impl(Register obj, Register hdr, Register thread, Register tmp, Label& slow, bool rt_check_stack) {
+// Implements fast-locking.
+// Branches to slow upon failure to lock the object, with ZF cleared.
+// Falls through upon success with unspecified ZF.
+//
+// obj: the object to be locked
+// hdr: the (pre-loaded) header of the object, must be rax
+// thread: the thread which attempts to lock obj
+// tmp: a temporary register
+void MacroAssembler::fast_lock_impl(Register obj, Register hdr, Register thread, Register tmp, Label& slow) {
   assert(hdr == rax, "header must be in rax for cmpxchg");
   assert_different_registers(obj, hdr, thread, tmp);
 
   // First we need to check if the lock-stack has room for pushing the object reference.
-  if (rt_check_stack) {
-    movptr(tmp, Address(thread, JavaThread::lock_stack_current_offset()));
-    cmpptr(tmp, Address(thread, JavaThread::lock_stack_limit_offset()));
-    jcc(Assembler::greaterEqual, slow);
-  }
-#ifdef ASSERT
-  else {
-    Label ok;
-    movptr(tmp, Address(thread, JavaThread::lock_stack_current_offset()));
-    cmpptr(tmp, Address(thread, JavaThread::lock_stack_limit_offset()));
-    jcc(Assembler::less, ok);
-    stop("Not enough room in lock stack; should have been checked in the method prologue");
-    bind(ok);
-  }
-#endif
+  // Note: we subtract 1 from the end-offset so that we can do a 'greater' comparison, instead
+  // of 'greaterEqual' below, which readily clears the ZF. This makes C2 code a little simpler and
+  // avoids one branch.
+  cmpl(Address(thread, JavaThread::lock_stack_top_offset()), LockStack::end_offset() - 1);
+  jcc(Assembler::greater, slow);
 
   // Now we attempt to take the fast-lock.
-  // Clear lowest two header bits (locked state).
+  // Clear lock_mask bits (locked state).
   andptr(hdr, ~(int32_t)markWord::lock_mask_in_place);
   movptr(tmp, hdr);
-  // Set lowest bit (unlocked state).
+  // Set unlocked_value bit.
   orptr(hdr, markWord::unlocked_value);
   lock();
   cmpxchgptr(tmp, Address(obj, oopDesc::mark_offset_in_bytes()));
   jcc(Assembler::notEqual, slow);
 
   // If successful, push object to lock-stack.
-  movptr(tmp, Address(thread, JavaThread::lock_stack_current_offset()));
-  movptr(Address(tmp, 0), obj);
-  increment(tmp, oopSize);
-  movptr(Address(thread, JavaThread::lock_stack_current_offset()), tmp);
+  movl(tmp, Address(thread, JavaThread::lock_stack_top_offset()));
+  movptr(Address(thread, tmp), obj);
+  incrementl(tmp, oopSize);
+  movl(Address(thread, JavaThread::lock_stack_top_offset()), tmp);
 }
 
+// Implements fast-unlocking.
+// Branches to slow upon failure, with ZF cleared.
+// Falls through upon success, with unspecified ZF.
+//
+// obj: the object to be unlocked
+// hdr: the (pre-loaded) header of the object, must be rax
+// tmp: a temporary register
 void MacroAssembler::fast_unlock_impl(Register obj, Register hdr, Register tmp, Label& slow) {
   assert(hdr == rax, "header must be in rax for cmpxchg");
   assert_different_registers(obj, hdr, tmp);
 
-  // Mark-word must be 00 now, try to swing it back to 01 (unlocked)
+  // Mark-word must be lock_mask now, try to swing it back to unlocked_value.
   movptr(tmp, hdr); // The expected old value
   orptr(tmp, markWord::unlocked_value);
   lock();
@@ -9901,7 +9906,11 @@ void MacroAssembler::fast_unlock_impl(Register obj, Register hdr, Register tmp, 
   const Register thread = r15_thread;
 #else
   const Register thread = rax;
-  get_thread(rax);
+  get_thread(thread);
 #endif
-  subptr(Address(thread, JavaThread::lock_stack_current_offset()), oopSize);
+  subl(Address(thread, JavaThread::lock_stack_top_offset()), oopSize);
+#ifdef ASSERT
+  movl(tmp, Address(thread, JavaThread::lock_stack_top_offset()));
+  movptr(Address(thread, tmp), 0);
+#endif
 }

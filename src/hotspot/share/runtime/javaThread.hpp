@@ -513,9 +513,7 @@ private:
   virtual bool is_Java_thread() const            { return true;  }
   virtual bool can_call_java() const             { return true; }
 
-  virtual bool is_active_Java_thread() const {
-    return on_thread_list() && !is_terminated();
-  }
+  virtual bool is_active_Java_thread() const;
 
   // Thread oop. threadObj() can be null for initial JavaThread
   // (or for threads attached via JNI)
@@ -1143,6 +1141,7 @@ private:
   ParkEvent * _SleepEvent;
 public:
   bool sleep(jlong millis);
+  bool sleep_nanos(jlong nanos);
 
   // java.lang.Thread interruption support
   void interrupt();
@@ -1154,9 +1153,12 @@ private:
 public:
   LockStack& lock_stack() { return _lock_stack; }
 
-  static ByteSize lock_stack_current_offset()    { return byte_offset_of(JavaThread, _lock_stack) + LockStack::current_offset(); }
-  static ByteSize lock_stack_limit_offset()    { return byte_offset_of(JavaThread, _lock_stack) + LockStack::limit_offset(); }
-
+  static ByteSize lock_stack_offset()      { return byte_offset_of(JavaThread, _lock_stack); }
+  // Those offsets are used in code generators to access the LockStack that is embedded in this
+  // JavaThread structure. Those accesses are relative to the current thread, which
+  // is typically in a dedicated register.
+  static ByteSize lock_stack_top_offset()  { return lock_stack_offset() + LockStack::top_offset(); }
+  static ByteSize lock_stack_base_offset() { return lock_stack_offset() + LockStack::base_offset(); }
 
   static OopStorage* thread_oop_storage();
 

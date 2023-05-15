@@ -50,11 +50,12 @@
 //
 //  - the two lock bits are used to describe three states: locked/unlocked and monitor.
 //
-//    [ptr             | 00]  locked             ptr points to real header on stack
+//    [ptr             | 00]  locked             ptr points to real header on stack (stack-locking in use)
+//    [header          | 00]  locked             locked regular object header (fast-locking in use)
 //    [header          | 01]  unlocked           regular object header
-//    [ptr             | 10]  monitor            inflated lock (header is wapped out)
+//    [ptr             | 10]  monitor            inflated lock (header is swapped out)
 //    [ptr             | 11]  marked             used to mark an object
-//    [0 ............ 0| 00]  inflating          inflation in progress
+//    [0 ............ 0| 00]  inflating          inflation in progress (stack-locking in use)
 //
 //    We assume that stack/thread pointers have the lowest two bits cleared.
 //
@@ -169,6 +170,7 @@ class markWord {
   // check for and avoid overwriting a 0 value installed by some
   // other thread.  (They should spin or block instead.  The 0 value
   // is transient and *should* be short-lived).
+  // Fast-locking does not use INFLATING.
   static markWord INFLATING() { return zero(); }    // inflate-in-progress
 
   // Should this header be preserved during GC?
@@ -183,7 +185,8 @@ class markWord {
     return markWord(value() | unlocked_value);
   }
   bool has_locker() const {
-    return !UseFastLocking && ((value() & lock_mask_in_place) == locked_value);
+    assert(LockingMode == LM_LEGACY, "should only be called with legacy stack locking");
+    return (value() & lock_mask_in_place) == locked_value;
   }
   BasicLock* locker() const {
     assert(has_locker(), "check");
@@ -191,9 +194,11 @@ class markWord {
   }
 
   bool is_fast_locked() const {
-    return UseFastLocking && ((value() & lock_mask_in_place) == locked_value);
+    assert(LockingMode == LM_LIGHTWEIGHT, "should only be called with new lightweight locking");
+    return (value() & lock_mask_in_place) == locked_value;
   }
   markWord set_fast_locked() const {
+    // Clear the lock_mask_in_place bits to set locked_value:
     return markWord(value() & ~lock_mask_in_place);
   }
 
@@ -207,8 +212,8 @@ class markWord {
   }
   bool has_displaced_mark_helper() const {
     intptr_t lockbits = value() & lock_mask_in_place;
-    return UseFastLocking ? lockbits == monitor_value   // monitor?
-                    : (lockbits & unlocked_value) == 0; // monitor | stack-locked?
+    return LockingMode == LM_LIGHTWEIGHT  ? lockbits == monitor_value   // monitor?
+                                          : (lockbits & unlocked_value) == 0; // monitor | stack-locked?
   }
   markWord displaced_mark_helper() const;
   void set_displaced_mark_helper(markWord m) const;
