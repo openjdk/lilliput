@@ -1577,11 +1577,11 @@ Node *AllocateNode::make_ideal_mark(PhaseGVN *phase, Node* obj, Node* control, N
     Node* klass_node = in(AllocateNode::KlassNode);
     Node* proto_adr = phase->transform(new AddPNode(klass_node, klass_node, phase->MakeConX(in_bytes(Klass::prototype_header_offset()))));
     mark_node = LoadNode::make(*phase, control, mem, proto_adr, TypeRawPtr::BOTTOM, TypeX_X, TypeX_X->basic_type(), MemNode::unordered);
-    return mark_node;
   } else {
     // For now only enable fast locking for non-array types
-    return phase->MakeConX(markWord::prototype().value());
+    mark_node = phase->MakeConX(markWord::prototype().value());
   }
+  return mark_node;
 }
 
 // Retrieve the length from the AllocateArrayNode. Narrow the type with a
