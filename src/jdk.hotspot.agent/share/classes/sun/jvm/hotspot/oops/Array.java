@@ -57,6 +57,18 @@ public class Array extends Oop {
   private static long lengthOffsetInBytes=0;
   private static long typeSize;
 
+  // Check whether an element of a typeArrayOop with the given type must be
+  // aligned 0 mod 8.  The typeArrayOop itself must be aligned at least this
+  // strongly.
+  private static boolean elementTypeShouldBeAligned(BasicType type) {
+    if (VM.getVM().isLP64()) {
+      if (type == BasicType.T_OBJECT || type == BasicType.T_ARRAY) {
+        return !VM.getVM().isCompressedOopsEnabled();
+      }
+    }
+    return type == BasicType.T_DOUBLE || type == BasicType.T_LONG;
+  }
+
   private static long headerSizeInBytes() {
     if (headerSize != 0) {
       return headerSize;
@@ -75,7 +87,7 @@ public class Array extends Oop {
   }
 
    private static long headerSize(BasicType type) {
-     if (Universe.elementTypeShouldBeAligned(type)) {
+     if (elementTypeShouldBeAligned(type)) {
         return alignObjectSize(headerSizeInBytes())/VM.getVM().getHeapWordSize();
      } else {
        return headerSizeInBytes()/VM.getVM().getHeapWordSize();
@@ -118,7 +130,7 @@ public class Array extends Oop {
   public static long baseOffsetInBytes(BasicType type) {
     if (VM.getVM().isCompactObjectHeadersEnabled()) {
       long typeSizeInBytes = headerSizeInBytes();
-      if (Universe.elementTypeShouldBeAligned(type)) {
+      if (elementTypeShouldBeAligned(type)) {
         VM vm = VM.getVM();
         return vm.alignUp(typeSizeInBytes, vm.getVM().getHeapWordSize());
       } else {
