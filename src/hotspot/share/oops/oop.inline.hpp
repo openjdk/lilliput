@@ -70,12 +70,12 @@ void oopDesc::set_mark(HeapWord* mem, markWord m) {
   *(markWord*)(((char*)mem) + mark_offset_in_bytes()) = m;
 }
 
-void oopDesc::release_set_mark(markWord m) {
-  Atomic::release_store(&_mark, m);
-}
-
 void oopDesc::release_set_mark(HeapWord* mem, markWord m) {
   Atomic::release_store((markWord*)(((char*)mem) + mark_offset_in_bytes()), m);
+}
+
+void oopDesc::release_set_mark(markWord m) {
+  Atomic::release_store(&_mark, m);
 }
 
 markWord oopDesc::cas_set_mark(markWord new_mark, markWord old_mark) {
