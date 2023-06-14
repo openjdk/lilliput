@@ -74,6 +74,7 @@ class oopDesc {
 
   inline void set_mark(markWord m);
   static inline void set_mark(HeapWord* mem, markWord m);
+  static inline void release_set_mark(HeapWord* mem, markWord m);
 
   inline void release_set_mark(markWord m);
   static inline void release_set_mark(HeapWord* mem, markWord m);
@@ -322,7 +323,7 @@ class oopDesc {
   static bool has_klass_gap();
 
   // for code generation
-  static int mark_offset_in_bytes()      { return offset_of(oopDesc, _mark); }
+  static int mark_offset_in_bytes()      { return (int)offset_of(oopDesc, _mark); }
   static int klass_gap_offset_in_bytes() {
     assert(has_klass_gap(), "only applicable to compressed klass pointers");
     assert(!UseCompactObjectHeaders, "don't use klass_offset_in_bytes() with compact headers");
