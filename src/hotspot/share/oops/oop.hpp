@@ -77,7 +77,6 @@ class oopDesc {
   static inline void release_set_mark(HeapWord* mem, markWord m);
 
   inline void release_set_mark(markWord m);
-  static inline void release_set_mark(HeapWord* mem, markWord m);
   inline markWord cas_set_mark(markWord new_mark, markWord old_mark);
   inline markWord cas_set_mark(markWord new_mark, markWord old_mark, atomic_memory_order order);
 

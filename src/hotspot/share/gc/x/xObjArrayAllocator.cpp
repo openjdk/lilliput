@@ -50,9 +50,18 @@ oop XObjArrayAllocator::initialize(HeapWord* mem) const {
   // time and time-to-safepoint
   const size_t segment_max = XUtils::bytes_to_words(64 * K);
   const BasicType element_type = ArrayKlass::cast(_klass)->element_type();
-  const size_t header = arrayOopDesc::header_size(element_type);
-  const size_t payload_size = _word_size - header;
+int base_offset = arrayOopDesc::base_offset_in_bytes(element_type);
 
+  // Clear leading 32 bit, if necessary.
+  if (!is_aligned(base_offset, HeapWordSize)) {
+    assert(is_aligned(base_offset, BytesPerInt), "array base must be 32 bit aligned");
+    *reinterpret_cast<jint*>(reinterpret_cast<char*>(mem) + base_offset) = 0;
+    base_offset += BytesPerInt;
+  }
+  assert(is_aligned(base_offset, HeapWordSize), "remaining array base must be 64 bit aligned");
+
+  const size_t header = heap_word_size(base_offset);
+  const size_t payload_size = _word_size - header;
   if (payload_size <= segment_max) {
     // To small to use segmented clearing
     return ObjArrayAllocator::initialize(mem);
@@ -63,8 +72,12 @@ oop XObjArrayAllocator::initialize(HeapWord* mem) const {
   // The array is going to be exposed before it has been completely
   // cleared, therefore we can't expose the header at the end of this
   // function. Instead explicitly initialize it according to our needs.
-  arrayOopDesc::set_mark(mem, markWord::prototype());
-  arrayOopDesc::release_set_klass(mem, _klass);
+  if (UseCompactObjectHeaders) {
+    oopDesc::release_set_mark(mem, _klass->prototype_header());
+  } else {
+    arrayOopDesc::set_mark(mem, markWord::prototype());
+    arrayOopDesc::release_set_klass(mem, _klass);
+  }
   assert(_length >= 0, "length should be non-negative");
   arrayOopDesc::set_length(mem, _length);
 

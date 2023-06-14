@@ -228,7 +228,7 @@ bool CollectedHeap::is_oop(oop object) const {
     return false;
   }
 
-  if (!Metaspace::contains(object->klass_raw())) {
+  if (!UseCompactObjectHeaders && !Metaspace::contains(object->klass_raw())) {
     return false;
   }
 

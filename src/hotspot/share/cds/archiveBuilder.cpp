@@ -638,7 +638,7 @@ void ArchiveBuilder::make_shallow_copy(DumpRegion *dump_region, SourceObjInfo* s
   }
 
   log_trace(cds)("Copy: " PTR_FORMAT " ==> " PTR_FORMAT " %d (%s)", p2i(src), p2i(dest), bytes,
-                 MetaspaceObj::type_name(ref->msotype()));
+                 MetaspaceObj::type_name(src_info->msotype()));
   src_info->set_buffered_addr((address)dest);
 
   _alloc_stats.record(src_info->msotype(), int(newtop - oldtop), src_info->read_only());
