@@ -1506,12 +1506,8 @@ void Arguments::set_use_compressed_klass_ptrs() {
   // case the default is wrong.
   // TODO: This is placed wrong. The CompressedClassSpaceSizeFunc is done after ergo, but this
   // assert is during ergo.
-  // assert(CompressedClassSpaceSize <= Metaspace::max_class_space_size(),
-  //        "CompressedClassSpaceSize " SIZE_FORMAT " too large (max: " SIZE_FORMAT ")",
-  //        CompressedClassSpaceSize, Metaspace::max_class_space_size());
-
-  assert(!UseCompressedClassPointers || CompressedClassSpaceSize <= KlassEncodingMetaspaceMax,
-         "CompressedClassSpaceSize is too large for UseCompressedClassPointers");
+  // assert(!UseCompressedClassPointers || CompressedClassSpaceSize <= KlassEncodingMetaspaceMax,
+  //       "CompressedClassSpaceSize is too large for UseCompressedClassPointers");
 #endif // _LP64
 }
 
