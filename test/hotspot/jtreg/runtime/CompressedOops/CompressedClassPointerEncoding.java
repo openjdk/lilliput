@@ -323,6 +323,8 @@ public class CompressedClassPointerEncoding {
         // $1 with force base address
         // $2 with compressed class space size
         String[] vmOptionsTemplate = new String[] {
+                "-XX:+UnlockExperimentalVMOptions",
+                "-XX:+UseCompactObjectHeaders",
                 "-XX:CompressedClassSpaceBaseAddress=$1",
                 "-XX:CompressedClassSpaceSize=$2",
                 "-Xshare:off",                         // Disable CDS
