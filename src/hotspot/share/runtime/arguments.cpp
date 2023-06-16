@@ -3127,10 +3127,6 @@ jint Arguments::finalize_vm_init_args(bool patch_mod_javabase) {
   if (UseCompactObjectHeaders && LockingMode == LM_LEGACY) {
     FLAG_SET_DEFAULT(LockingMode, LM_LIGHTWEIGHT);
   }
-
-  if (!UseCompactObjectHeaders) {
-    FLAG_SET_DEFAULT(UseSharedSpaces, false);
-  }
 #endif
 
   return JNI_OK;
