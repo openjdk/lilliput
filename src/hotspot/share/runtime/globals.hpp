@@ -1410,9 +1410,9 @@ const int ObjectAlignmentInBytes = 8;
   product(size_t, CompressedClassSpaceSize, 1*G,                            \
           "Maximum size of class area in Metaspace when compressed "        \
           "class pointers are used")                                        \
-          constraint(CompressedClassSpaceSizeConstraintFunc, AfterErgo)     \
+          range(1*M, 3*G)                                                   \
                                                                             \
-  product(size_t, CompressedClassSpaceBaseAddress, 0, DIAGNOSTIC,           \
+  develop(size_t, CompressedClassSpaceBaseAddress, 0,                       \
           "Force the class space to be allocated at this address or "       \
           "fails VM initialization (requires -Xshare=off.")                 \
                                                                             \

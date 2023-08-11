@@ -27,13 +27,11 @@
 #include "memory/metaspace/freeBlocks.hpp"
 #include "utilities/debug.hpp"
 #include "utilities/globalDefinitions.hpp"
-#include "utilities/ostream.hpp"
 
 namespace metaspace {
 
 void FreeBlocks::add_block(MetaWord* p, size_t word_size) {
-  assert(is_aligned(p, BytesPerWord), "Bad alignment");
-  assert(word_size >= MinWordSize, "invalid block size (" SIZE_FORMAT ")", word_size);
+  assert(word_size >= MinWordSize, "sanity (" SIZE_FORMAT ")", word_size);
   if (word_size > MaxSmallBlocksWordSize) {
     _tree.add_block(p, word_size);
   } else {
@@ -49,32 +47,17 @@ MetaWord* FreeBlocks::remove_block(size_t requested_word_size) {
   if (requested_word_size > MaxSmallBlocksWordSize) {
     p = _tree.remove_block(requested_word_size, &real_size);
   } else {
-    // Small blocks: prefer bin lists; if nothing fitting found, take a bigger block
-    // and reuse that.
     p = _small_blocks.remove_block(requested_word_size, &real_size);
-    if (p == nullptr) {
-      p = _tree.remove_block(requested_word_size, &real_size);
-    }
   }
   if (p != nullptr) {
     // Blocks which are larger than a certain threshold are split and
     //  the remainder is handed back to the manager.
-    // Attention alignment: the resulting block must have the right alignment
-    //  for the enclosing arena. ATM this works, since the arena aligns allocated block
-    //  size. If we ever switch to a different model (e.g. aligning the start
-    //  address of allocated blocks instead of the request size) this should be
-    //  rewritten).
     const size_t waste = real_size - requested_word_size;
     if (waste > MinWordSize) {
       add_block(p + requested_word_size, waste);
     }
   }
   return p;
-}
-
-void FreeBlocks::print_on(outputStream* st) const {
-  st->print("small_blocks: %u blocks, " SIZE_FORMAT " words; tree: %u nodes, " SIZE_FORMAT " words.",
-            _small_blocks.count(), _small_blocks.total_size(), _tree.count(), _tree.total_size());
 }
 
 } // namespace metaspace

@@ -26,7 +26,6 @@
 #include "precompiled.hpp"
 #include "memory/metaspace/chunkManager.hpp"
 #include "memory/metaspace/counters.hpp"
-#include "memory/metaspace/metaspaceAlignment.hpp"
 #include "memory/metaspace/metaspaceArena.hpp"
 #include "memory/metaspace/metaspaceArenaGrowthPolicy.hpp"
 #include "memory/metaspace/metaspaceSettings.hpp"
@@ -34,14 +33,10 @@
 #include "runtime/mutexLocker.hpp"
 #include "utilities/debug.hpp"
 #include "utilities/globalDefinitions.hpp"
-
-
 //#define LOG_PLEASE
 #include "metaspaceGtestCommon.hpp"
 #include "metaspaceGtestContexts.hpp"
 #include "metaspaceGtestSparseArray.hpp"
-
-#include "unittest.hpp"
 
 using metaspace::ArenaGrowthPolicy;
 using metaspace::ChunkManager;
@@ -55,6 +50,11 @@ using metaspace::InUseChunkStats;
 // Little randomness helper
 static bool fifty_fifty() {
   return IntRange(100).random_value() < 50;
+}
+
+// See metaspaceArena.cpp : needed for predicting commit sizes.
+namespace metaspace {
+  extern size_t get_raw_word_size_for_requested_word_size(size_t net_word_size);
 }
 
 // A MetaspaceArenaTestBed contains a single MetaspaceArena and its lock.

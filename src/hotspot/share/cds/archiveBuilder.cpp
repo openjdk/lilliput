@@ -40,9 +40,7 @@
 #include "memory/allStatic.hpp"
 #include "memory/memRegion.hpp"
 #include "memory/resourceArea.hpp"
-#include "oops/compressedKlass.inline.hpp"
 #include "oops/instanceKlass.hpp"
-#include "oops/klass.inline.hpp"
 #include "oops/objArrayKlass.hpp"
 #include "oops/objArrayOop.inline.hpp"
 #include "oops/oopHandle.inline.hpp"
@@ -212,10 +210,8 @@ bool ArchiveBuilder::gather_klass_and_symbol(MetaspaceClosure::Ref* ref, bool re
     if (!is_excluded(klass)) {
       _klasses->append(klass);
     }
-    // See ArchiveBuilder::make_shallow_copies: make sure we have enough space for both maximum
-    // Klass alignment as well as the RuntimeInfo* pointer we will embed in front of a Klass.
-    _estimated_metaspaceobj_bytes += align_up(BytesPerWord, KlassAlignmentInBytes) +
-        align_up(sizeof(void*), SharedSpaceObjectAlignment);
+    // See RunTimeClassInfo::get_for()
+    _estimated_metaspaceobj_bytes += align_up(BytesPerWord, SharedSpaceObjectAlignment);
   } else if (ref->msotype() == MetaspaceObj::SymbolType) {
     // Make sure the symbol won't be GC'ed while we are dumping the archive.
     Symbol* sym = (Symbol*)ref->obj();
@@ -615,10 +611,8 @@ void ArchiveBuilder::make_shallow_copy(DumpRegion *dump_region, SourceObjInfo* s
       SystemDictionaryShared::validate_before_archiving(InstanceKlass::cast(klass));
       dump_region->allocate(sizeof(address));
     }
-    dest = dump_region->allocate(bytes, KlassAlignmentInBytes);
-  } else {
-    dest = dump_region->allocate(bytes);
   }
+  dest = dump_region->allocate(bytes);
   newtop = dump_region->top();
 
   memcpy(dest, src, bytes);
@@ -637,13 +631,10 @@ void ArchiveBuilder::make_shallow_copy(DumpRegion *dump_region, SourceObjInfo* s
     ArchivePtrMarker::mark_pointer((address*)dest);
   }
 
-  log_trace(cds)("Copy: " PTR_FORMAT " ==> " PTR_FORMAT " %d (%s)", p2i(src), p2i(dest), bytes,
-                 MetaspaceObj::type_name(src_info->msotype()));
+  log_trace(cds)("Copy: " PTR_FORMAT " ==> " PTR_FORMAT " %d", p2i(src), p2i(dest), bytes);
   src_info->set_buffered_addr((address)dest);
 
   _alloc_stats.record(src_info->msotype(), int(newtop - oldtop), src_info->read_only());
-
-  DEBUG_ONLY(_alloc_stats.verify((int)dump_region->used(), src_info->read_only()));
 }
 
 // This is used by code that hand-assemble data structures, such as the LambdaProxyClassKey, that are
@@ -703,13 +694,6 @@ void ArchiveBuilder::make_klasses_shareable() {
     const char* generated = "";
     Klass* k = get_buffered_addr(klasses()->at(i));
     k->remove_java_mirror();
-#ifdef _LP64
-    if (UseCompactObjectHeaders) {
-      Klass* requested_k = to_requested(k);
-      narrowKlass nk = CompressedKlassPointers::encode_not_null(requested_k, _requested_static_archive_bottom);
-      k->set_prototype_header(markWord::prototype().set_narrow_klass(nk));
-    }
-#endif //_LP64
     if (k->is_objArray_klass()) {
       // InstanceKlass and TypeArrayKlass will in turn call remove_unshareable_info
       // on their array classes.
