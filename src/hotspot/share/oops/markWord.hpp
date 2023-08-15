@@ -26,6 +26,7 @@
 #define SHARE_OOPS_MARKWORD_HPP
 
 #include "metaprogramming/primitiveConversions.hpp"
+#include "oops/compressedKlass.hpp" // for narrowKlass
 #include "oops/oopsHierarchy.hpp"
 #include "runtime/globals.hpp"
 
