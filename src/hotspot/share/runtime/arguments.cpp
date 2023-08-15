@@ -1484,30 +1484,8 @@ void Arguments::set_use_compressed_oops() {
 
 void Arguments::set_use_compressed_klass_ptrs() {
 #ifdef _LP64
-
-  if (UseCompactObjectHeaders) {
-    // 512 byte alignment, 22-bit values (Lilliput)
-    LogKlassAlignmentInBytes = 9;
-    MaxNarrowKlassPointerBits = 22;
-  } else {
-    // Traditional: 8 byte alignment, 32-bit values
-    LogKlassAlignmentInBytes = 3;
-    MaxNarrowKlassPointerBits = 32;
-  }
-
-  KlassAlignmentInBytes = 1 << LogKlassAlignmentInBytes;
-  assert(is_aligned(KlassAlignmentInBytes, BytesPerWord), "Must be at least word-sized");
-  KlassAlignmentInWords = KlassAlignmentInBytes / BytesPerWord;
-  NarrowKlassPointerBitMask = ((((uint64_t)1) << MaxNarrowKlassPointerBits) - 1);
-  KlassEncodingMetaspaceMax = UCONST64(1) << (MaxNarrowKlassPointerBits + LogKlassAlignmentInBytes);
-
-  // Assert validity of compressed class space size. User arg should have been checked at this point
-  // (see CompressedClassSpaceSizeConstraintFunc()), so no need to be nice about it, this fires in
-  // case the default is wrong.
-  // TODO: This is placed wrong. The CompressedClassSpaceSizeFunc is done after ergo, but this
-  // assert is during ergo.
-  // assert(!UseCompressedClassPointers || CompressedClassSpaceSize <= KlassEncodingMetaspaceMax,
-  //       "CompressedClassSpaceSize is too large for UseCompressedClassPointers");
+  assert(!UseCompressedClassPointers || CompressedClassSpaceSize <= KlassEncodingMetaspaceMax,
+         "CompressedClassSpaceSize is too large for UseCompressedClassPointers");
 #endif // _LP64
 }
 

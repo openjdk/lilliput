@@ -146,10 +146,7 @@ public:
       _max_delta(max_delta), _is_packed(false) {}
 
   char* expand_top_to(char* newtop);
-  // Allocate with default alignment (SharedSpaceObjectAlignment)
   char* allocate(size_t num_bytes);
-  // Allocate with an arbitrary alignment.
-  char* allocate(size_t num_bytes, size_t alignment);
 
   void append_intptr_t(intptr_t n, bool need_to_mark = false) NOT_CDS_RETURN;
 

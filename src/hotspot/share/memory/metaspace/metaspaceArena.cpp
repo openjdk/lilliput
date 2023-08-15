@@ -26,13 +26,11 @@
 #include "precompiled.hpp"
 #include "logging/log.hpp"
 #include "logging/logStream.hpp"
-#include "oops/klass.hpp"    // just for sizeof(Klass)
 #include "memory/metaspace/chunkManager.hpp"
 #include "memory/metaspace/counters.hpp"
 #include "memory/metaspace/freeBlocks.hpp"
 #include "memory/metaspace/internalStats.hpp"
 #include "memory/metaspace/metachunk.hpp"
-#include "memory/metaspace/metaspaceAlignment.hpp"
 #include "memory/metaspace/metaspaceArena.hpp"
 #include "memory/metaspace/metaspaceArenaGrowthPolicy.hpp"
 #include "memory/metaspace/metaspaceCommon.hpp"
@@ -51,8 +49,6 @@ namespace metaspace {
 
 #define LOGFMT         "Arena @" PTR_FORMAT " (%s)"
 #define LOGFMT_ARGS    p2i(this), this->_name
-
-constexpr size_t min_reasonable_klass_size = align_up(sizeof(Klass), BytesPerWord) / BytesPerWord;
 
 // Returns the level of the next chunk to be added, acc to growth policy.
 chunklevel_t MetaspaceArena::next_chunk_level() const {
@@ -124,7 +120,6 @@ MetaspaceArena::MetaspaceArena(ChunkManager* chunk_manager, const ArenaGrowthPol
 #ifdef ASSERT
   , _first_fence(nullptr)
 #endif
-
 {
   UL(debug, ": born.");
 
@@ -218,88 +213,6 @@ bool MetaspaceArena::attempt_enlarge_current_chunk(size_t requested_word_size) {
   return success;
 }
 
-MetaWord* MetaspaceArena::allocate_from_freeblocks_only(size_t word_size) {
-  MutexLocker cl(lock(), Mutex::_no_safepoint_check_flag);
-  const size_t raw_word_size = get_raw_word_size_for_requested_word_size(word_size);
-  return allocate_from_freeblocks_locked(raw_word_size);
-}
-
-MetaWord* MetaspaceArena::allocate_for_klass(size_t word_size) {
-  MutexLocker cl(lock(), Mutex::_no_safepoint_check_flag);
-  assert(word_size >= min_reasonable_klass_size,
-         "Suspiciously small for Klass: " SIZE_FORMAT, word_size);
-
-  UL2(trace, "Allocate for Klass: " SIZE_FORMAT " words.", word_size);
-
-  // Klass alignment must be <= smallest chunk size to guarantee that a newly created chunk
-  // will always allocate at a Klass-suitable address.
-  assert((size_t)KlassAlignmentInWords <= chunklevel::MIN_CHUNK_WORD_SIZE, "Must be");
-
-  size_t alignment_padding_needed = 0;
-  if (current_chunk() != nullptr) {
-    const size_t used_words = current_chunk()->used_words();
-    const size_t next_klass_offset = align_up(used_words, KlassAlignmentInWords);
-    alignment_padding_needed = next_klass_offset - used_words;
-  }
-  const size_t total_word_size = alignment_padding_needed + word_size;
-
-  MetaWord* k = nullptr;
-  MetaWord* all = allocate_inner(total_word_size);
-
-  if (all != nullptr) {
-
-    MetaWord* salvage = nullptr;
-    size_t salvage_words = alignment_padding_needed;
-
-    if (is_aligned(all, KlassAlignmentInBytes)) {
-      // The new allocation is already properly aligned. Happens if the allocation caused
-      // a new chunk to be created. Salvage the trailing alignment gap.
-      k = all;
-      salvage = k + word_size;
-    } else {
-      // The new allocation is not aligned; we expanded the current chunk. Salvage the leading
-      // alignment padding.
-      k = all + alignment_padding_needed;
-      salvage = all;
-    }
-
-    // If alignment gap is large enough to be reused, squirrel it away
-    if (alignment_padding_needed > FreeBlocks::MinWordSize) {
-      UL2(trace, "Save off alignment gap " PTR_FORMAT ", " SIZE_FORMAT " words.",
-          p2i(salvage), alignment_padding_needed);
-      DEBUG_ONLY(InternalStats::inc_num_klass_alignment_splinters_added();)
-      // Note: Don't use deallocate here; it is only for external use since it does size
-      // adjustment
-      add_allocation_to_fbl(salvage, alignment_padding_needed);
-    }
-
-  }
-
-  assert_is_aligned(k, KlassAlignmentInWords);
-  UL2(trace, "Returning " PTR_FORMAT ".", p2i(k));
-  return k;
-}
-
-// Allocate from freeblocks
-MetaWord* MetaspaceArena::allocate_from_freeblocks_locked(size_t word_size) {
-  DEBUG_ONLY(verify_locked();)
-  MetaWord* p = nullptr;
-  assert_lock_strong(lock());
-  UL2(trace, "Attempt to take requested " SIZE_FORMAT " words from fbl.", word_size);
-  if (_fbl != nullptr && !_fbl->is_empty()) {
-    p = _fbl->remove_block(word_size);
-    if (p != nullptr) {
-      DEBUG_ONLY(InternalStats::inc_num_allocs_from_deallocated_blocks();)
-      UL2(trace, "taken from fbl (now: %d, " SIZE_FORMAT ").",
-          _fbl->count(), _fbl->total_size());
-      // Note: free blocks in freeblock dictionary still count as "used" as far as statistics go;
-      // therefore we have no need to adjust any usage counters (see epilogue of allocate_inner())
-      // and can just return here.
-    }
-  }
-  return p;
-}
-
 // Allocate memory from Metaspace.
 // 1) Attempt to allocate from the free block list.
 // 2) Attempt to allocate from the current chunk.
@@ -314,9 +227,17 @@ MetaWord* MetaspaceArena::allocate(size_t requested_word_size) {
   const size_t raw_word_size = get_raw_word_size_for_requested_word_size(requested_word_size);
 
   // Before bothering the arena proper, attempt to re-use a block from the free blocks list
-  p = allocate_from_freeblocks_locked(raw_word_size);
-  if (p != nullptr) {
-    return p;
+  if (_fbl != nullptr && !_fbl->is_empty()) {
+    p = _fbl->remove_block(raw_word_size);
+    if (p != nullptr) {
+      DEBUG_ONLY(InternalStats::inc_num_allocs_from_deallocated_blocks();)
+      UL2(trace, "taken from fbl (now: %d, " SIZE_FORMAT ").",
+          _fbl->count(), _fbl->total_size());
+      // Note: free blocks in freeblock dictionary still count as "used" as far as statistics go;
+      // therefore we have no need to adjust any usage counters (see epilogue of allocate_inner())
+      // and can just return here.
+      return p;
+    }
   }
 
   // Primary allocation
@@ -554,18 +475,12 @@ void MetaspaceArena::print_on(outputStream* st) const {
 
 void MetaspaceArena::print_on_locked(outputStream* st) const {
   assert_lock_strong(_lock);
-  st->print_cr("Arena @" PTR_FORMAT " (%s): %d chunks, total word size: " SIZE_FORMAT ", committed word size: " SIZE_FORMAT,
-               p2i(this), _name, _chunks.count(), _chunks.calc_word_size(), _chunks.calc_committed_word_size());
+  st->print_cr("sm %s: %d chunks, total word size: " SIZE_FORMAT ", committed word size: " SIZE_FORMAT, _name,
+               _chunks.count(), _chunks.calc_word_size(), _chunks.calc_committed_word_size());
   _chunks.print_on(st);
   st->cr();
-  st->print("growth-policy " PTR_FORMAT ", lock " PTR_FORMAT ", cm " PTR_FORMAT ", fbl " PTR_FORMAT,
-             p2i(_growth_policy), p2i(_lock), p2i(_chunk_manager), p2i(_fbl));
-  if (_fbl) {
-    st->print(" (");
-    _fbl->print_on(st);
-    st->print(")");
-  }
-  st->cr();
+  st->print_cr("growth-policy " PTR_FORMAT ", lock " PTR_FORMAT ", cm " PTR_FORMAT ", fbl " PTR_FORMAT,
+                p2i(_growth_policy), p2i(_lock), p2i(_chunk_manager), p2i(_fbl));
 }
 
 } // namespace metaspace

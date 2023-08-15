@@ -86,8 +86,6 @@ class MacroAssembler: public Assembler {
 
   void call_VM_helper(Register oop_result, address entry_point, int number_of_arguments, bool check_exceptions = true);
 
- public:
-
   enum KlassDecodeMode {
     KlassDecodeNone,
     KlassDecodeZero,
@@ -95,15 +93,7 @@ class MacroAssembler: public Assembler {
     KlassDecodeMovk
   };
 
-  // Return the current narrow Klass pointer decode mode. Initialized on first call.
-  static KlassDecodeMode klass_decode_mode();
-
-  // Given an arbitrary base address, return the KlassDecodeMode that would be used. Return KlassDecodeNone
-  // if base address is not valid for encoding.
-  static KlassDecodeMode klass_decode_mode_for_base(address base);
-
-  // Returns a static string
-  static const char* describe_klass_decode_mode(KlassDecodeMode mode);
+  KlassDecodeMode klass_decode_mode();
 
  private:
   static KlassDecodeMode _klass_decode_mode;
