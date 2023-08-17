@@ -109,9 +109,6 @@ public:
   // The largest possible single allocation
   static size_t max_allocation_word_size();
 
-  // The largest allowed size for class space
-  LP64_ONLY(static size_t max_class_space_size();)
-
   static MetaWord* allocate(ClassLoaderData* loader_data, size_t word_size,
                             MetaspaceObj::Type type, TRAPS);
 
@@ -121,7 +118,6 @@ public:
                             MetaspaceObj::Type type);
 
   static bool contains(const void* ptr);
-  static bool class_space_contains(const void* ptr);
   static bool contains_non_shared(const void* ptr);
 
   // Free empty virtualspaces

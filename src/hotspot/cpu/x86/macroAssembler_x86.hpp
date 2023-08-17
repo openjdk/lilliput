@@ -80,28 +80,6 @@ class MacroAssembler: public Assembler {
   void restore_rax(Register tmp);
 
  public:
-
-  enum KlassDecodeMode {
-    KlassDecodeNone,
-    KlassDecodeZero,
-    KlassDecodeXor,
-    KlassDecodeAdd
-  };
-
-  // Return the current narrow Klass pointer decode mode. Initialized on first call.
-  static KlassDecodeMode klass_decode_mode();
-
-  // Given an arbitrary base address, return the KlassDecodeMode that would be used. Return KlassDecodeNone
-  // if base address is not valid for encoding.
-  static KlassDecodeMode klass_decode_mode_for_base(address base);
-
-  // Returns a static string
-  static const char* describe_klass_decode_mode(KlassDecodeMode mode);
-
- private:
-  static KlassDecodeMode _klass_decode_mode;
-
- public:
   MacroAssembler(CodeBuffer* code) : Assembler(code) {}
 
  // These routines should emit JVMTI PopFrame and ForceEarlyReturn handling code.
@@ -139,13 +117,13 @@ class MacroAssembler: public Assembler {
     if (op == 0xEB || (op & 0xF0) == 0x70) {
       // short offset operators (jmp and jcc)
       char* disp = (char*) &branch[1];
-      int imm8 = target - (address) &disp[1];
+      int imm8 = checked_cast<int>(target - (address) &disp[1]);
       guarantee(this->is8bit(imm8), "Short forward jump exceeds 8-bit offset at %s:%d",
                 file == nullptr ? "<null>" : file, line);
-      *disp = imm8;
+      *disp = (char)imm8;
     } else {
       int* disp = (int*) &branch[(op == 0x0F || op == 0xC7)? 2: 1];
-      int imm32 = target - (address) &disp[1];
+      int imm32 = checked_cast<int>(target - (address) &disp[1]);
       *disp = imm32;
     }
   }
@@ -782,7 +760,7 @@ public:
   void addptr(Register dst, int32_t src);
   void addptr(Register dst, Register src);
   void addptr(Register dst, RegisterOrConstant src) {
-    if (src.is_constant()) addptr(dst, src.as_constant());
+    if (src.is_constant()) addptr(dst, checked_cast<int>(src.as_constant()));
     else                   addptr(dst, src.as_register());
   }
 

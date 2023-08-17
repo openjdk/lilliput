@@ -55,6 +55,7 @@
  * @library /test/lib
  * @modules java.base/jdk.internal.misc
  *          java.xml
+ * @requires vm.debug
  * @requires vm.bits == 64
  * @requires vm.flagless
  * @run main/native GTestWrapper --gtest_filter=metaspace* -XX:+UnlockDiagnosticVMOptions -XX:-UseCompressedClassPointers
@@ -66,6 +67,7 @@
  * @library /test/lib
  * @modules java.base/jdk.internal.misc
  *          java.xml
+ * @requires vm.debug
  * @requires vm.bits == 64
  * @requires vm.flagless
  * @run main/native GTestWrapper --gtest_filter=metaspace* -Xlog:metaspace* -XX:+UnlockExperimentalVMOptions -XX:+UseCompactObjectHeaders -XX:+UseCompressedClassPointers -XX:VerifyMetaspaceInterval=3
@@ -76,6 +78,7 @@
  * @library /test/lib
  * @modules java.base/jdk.internal.misc
  *          java.xml
+ * @requires vm.debug
  * @requires vm.bits == 64
  * @requires vm.flagless
  * @run main/native GTestWrapper --gtest_filter=metaspace* -Xlog:metaspace* -XX:+UnlockExperimentalVMOptions -XX:-UseCompactObjectHeaders -XX:+UseCompressedClassPointers -XX:VerifyMetaspaceInterval=3
@@ -86,6 +89,7 @@
  * @library /test/lib
  * @modules java.base/jdk.internal.misc
  *          java.xml
+ * @requires vm.debug
  * @requires vm.bits == 64
  * @requires vm.flagless
  * @run main/native GTestWrapper --gtest_filter=metaspace* -Xlog:metaspace* -XX:-UseCompressedClassPointers -XX:VerifyMetaspaceInterval=3

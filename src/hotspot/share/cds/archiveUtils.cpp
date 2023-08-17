@@ -206,26 +206,12 @@ void DumpRegion::commit_to(char* newtop) {
 }
 
 
-char* DumpRegion::allocate(size_t num_bytes, size_t alignment) {
-  // We align the starting address of each allocation.
-  char* p = (char*)align_up(_top, alignment);
-  char* newtop = p + num_bytes;
-  // Leave _top always SharedSpaceObjectAlignment aligned. But not more -
-  //  if we allocate with large alignments, lets not waste the gaps.
-  // Ideally we would not need to align _top to anything here but CDS has
-  //  a number of implicit alignment assumptions. Leaving this unaligned
-  //  here will trip of at least ReadClosure (assuming word alignment) and
-  //  DumpAllocStats (will get confused about counting bytes on 32-bit
-  //  platforms if we align to anything less than SharedSpaceObjectAlignment
-  //  here).
-  newtop = align_up(newtop, SharedSpaceObjectAlignment);
-  expand_top_to(newtop);
-  memset(p, 0, newtop - p); // todo: needed? debug_only?
-  return p;
-}
-
 char* DumpRegion::allocate(size_t num_bytes) {
-  return allocate(num_bytes, SharedSpaceObjectAlignment);
+  char* p = (char*)align_up(_top, (size_t)SharedSpaceObjectAlignment);
+  char* newtop = p + align_up(num_bytes, (size_t)SharedSpaceObjectAlignment);
+  expand_top_to(newtop);
+  memset(p, 0, newtop - p);
+  return p;
 }
 
 void DumpRegion::append_intptr_t(intptr_t n, bool need_to_mark) {
@@ -291,21 +277,6 @@ void WriteClosure::do_ptr(void** p) {
   _dump_region->append_intptr_t((intptr_t)ptr, true);
 }
 
-void WriteClosure::do_oop(oop* o) {
-  if (*o == nullptr) {
-    _dump_region->append_intptr_t(0);
-  } else {
-    assert(HeapShared::can_write(), "sanity");
-    intptr_t p;
-    if (UseCompressedOops) {
-      p = (intptr_t)CompressedOops::encode_not_null(*o);
-    } else {
-      p = cast_from_oop<intptr_t>(HeapShared::to_requested_address(*o));
-    }
-    _dump_region->append_intptr_t(p);
-  }
-}
-
 void WriteClosure::do_region(u_char* start, size_t size) {
   assert((intptr_t)start % sizeof(intptr_t) == 0, "bad alignment");
   assert(size % sizeof(intptr_t) == 0, "bad size");
@@ -344,30 +315,8 @@ void ReadClosure::do_tag(int tag) {
   int old_tag;
   old_tag = (int)(intptr_t)nextPtr();
   // do_int(&old_tag);
-  assert(tag == old_tag, "tag doesn't match (%d, expected %d)", old_tag, tag);
+  assert(tag == old_tag, "old tag doesn't match");
   FileMapInfo::assert_mark(tag == old_tag);
-}
-
-void ReadClosure::do_oop(oop *p) {
-  if (UseCompressedOops) {
-    narrowOop o = CompressedOops::narrow_oop_cast(nextPtr());
-    if (CompressedOops::is_null(o) || !ArchiveHeapLoader::is_in_use()) {
-      *p = nullptr;
-    } else {
-      assert(ArchiveHeapLoader::can_use(), "sanity");
-      assert(ArchiveHeapLoader::is_in_use(), "must be");
-      *p = ArchiveHeapLoader::decode_from_archive(o);
-    }
-  } else {
-    intptr_t dumptime_oop = nextPtr();
-    if (dumptime_oop == 0 || !ArchiveHeapLoader::is_in_use()) {
-      *p = nullptr;
-    } else {
-      assert(!ArchiveHeapLoader::is_loaded(), "ArchiveHeapLoader::can_load() is not supported for uncompessed oops");
-      intptr_t runtime_oop = dumptime_oop + ArchiveHeapLoader::mapped_heap_delta();
-      *p = cast_to_oop(runtime_oop);
-    }
-  }
 }
 
 void ReadClosure::do_region(u_char* start, size_t size) {

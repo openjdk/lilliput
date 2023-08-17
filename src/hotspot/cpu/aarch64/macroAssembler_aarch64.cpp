@@ -1020,7 +1020,7 @@ void MacroAssembler::call_VM(Register oop_result,
                              Register arg_1,
                              Register arg_2,
                              bool check_exceptions) {
-  assert(arg_1 != c_rarg2, "smashed arg");
+  assert_different_registers(arg_1, c_rarg2);
   pass_arg2(this, arg_2);
   pass_arg1(this, arg_1);
   call_VM_helper(oop_result, entry_point, 2, check_exceptions);
@@ -1032,11 +1032,10 @@ void MacroAssembler::call_VM(Register oop_result,
                              Register arg_2,
                              Register arg_3,
                              bool check_exceptions) {
-  assert(arg_1 != c_rarg3, "smashed arg");
-  assert(arg_2 != c_rarg3, "smashed arg");
+  assert_different_registers(arg_1, c_rarg2, c_rarg3);
+  assert_different_registers(arg_2, c_rarg3);
   pass_arg3(this, arg_3);
 
-  assert(arg_1 != c_rarg2, "smashed arg");
   pass_arg2(this, arg_2);
 
   pass_arg1(this, arg_1);
@@ -1067,7 +1066,7 @@ void MacroAssembler::call_VM(Register oop_result,
                              Register arg_2,
                              bool check_exceptions) {
 
-  assert(arg_1 != c_rarg2, "smashed arg");
+  assert_different_registers(arg_1, c_rarg2);
   pass_arg2(this, arg_2);
   pass_arg1(this, arg_1);
   call_VM(oop_result, last_java_sp, entry_point, 2, check_exceptions);
@@ -1080,10 +1079,9 @@ void MacroAssembler::call_VM(Register oop_result,
                              Register arg_2,
                              Register arg_3,
                              bool check_exceptions) {
-  assert(arg_1 != c_rarg3, "smashed arg");
-  assert(arg_2 != c_rarg3, "smashed arg");
+  assert_different_registers(arg_1, c_rarg2, c_rarg3);
+  assert_different_registers(arg_2, c_rarg3);
   pass_arg3(this, arg_3);
-  assert(arg_1 != c_rarg2, "smashed arg");
   pass_arg2(this, arg_2);
   pass_arg1(this, arg_1);
   call_VM(oop_result, last_java_sp, entry_point, 3, check_exceptions);
@@ -1587,6 +1585,7 @@ void MacroAssembler::call_VM_leaf(address entry_point, Register arg_0) {
 }
 
 void MacroAssembler::call_VM_leaf(address entry_point, Register arg_0, Register arg_1) {
+  assert_different_registers(arg_1, c_rarg0);
   pass_arg0(this, arg_0);
   pass_arg1(this, arg_1);
   call_VM_leaf_base(entry_point, 2);
@@ -1594,6 +1593,8 @@ void MacroAssembler::call_VM_leaf(address entry_point, Register arg_0, Register 
 
 void MacroAssembler::call_VM_leaf(address entry_point, Register arg_0,
                                   Register arg_1, Register arg_2) {
+  assert_different_registers(arg_1, c_rarg0);
+  assert_different_registers(arg_2, c_rarg0, c_rarg1);
   pass_arg0(this, arg_0);
   pass_arg1(this, arg_1);
   pass_arg2(this, arg_2);
@@ -1607,31 +1608,27 @@ void MacroAssembler::super_call_VM_leaf(address entry_point, Register arg_0) {
 
 void MacroAssembler::super_call_VM_leaf(address entry_point, Register arg_0, Register arg_1) {
 
-  assert(arg_0 != c_rarg1, "smashed arg");
+  assert_different_registers(arg_0, c_rarg1);
   pass_arg1(this, arg_1);
   pass_arg0(this, arg_0);
   MacroAssembler::call_VM_leaf_base(entry_point, 2);
 }
 
 void MacroAssembler::super_call_VM_leaf(address entry_point, Register arg_0, Register arg_1, Register arg_2) {
-  assert(arg_0 != c_rarg2, "smashed arg");
-  assert(arg_1 != c_rarg2, "smashed arg");
+  assert_different_registers(arg_0, c_rarg1, c_rarg2);
+  assert_different_registers(arg_1, c_rarg2);
   pass_arg2(this, arg_2);
-  assert(arg_0 != c_rarg1, "smashed arg");
   pass_arg1(this, arg_1);
   pass_arg0(this, arg_0);
   MacroAssembler::call_VM_leaf_base(entry_point, 3);
 }
 
 void MacroAssembler::super_call_VM_leaf(address entry_point, Register arg_0, Register arg_1, Register arg_2, Register arg_3) {
-  assert(arg_0 != c_rarg3, "smashed arg");
-  assert(arg_1 != c_rarg3, "smashed arg");
-  assert(arg_2 != c_rarg3, "smashed arg");
+  assert_different_registers(arg_0, c_rarg1, c_rarg2, c_rarg3);
+  assert_different_registers(arg_1, c_rarg2, c_rarg3);
+  assert_different_registers(arg_2, c_rarg3);
   pass_arg3(this, arg_3);
-  assert(arg_0 != c_rarg2, "smashed arg");
-  assert(arg_1 != c_rarg2, "smashed arg");
   pass_arg2(this, arg_2);
-  assert(arg_0 != c_rarg1, "smashed arg");
   pass_arg1(this, arg_1);
   pass_arg0(this, arg_0);
   MacroAssembler::call_VM_leaf_base(entry_point, 4);
@@ -4557,73 +4554,63 @@ void  MacroAssembler::decode_heap_oop_not_null(Register dst, Register src) {
 
 MacroAssembler::KlassDecodeMode MacroAssembler::_klass_decode_mode(KlassDecodeNone);
 
-// Returns a static string
-const char* MacroAssembler::describe_klass_decode_mode(MacroAssembler::KlassDecodeMode mode) {
-  switch (mode) {
-  case KlassDecodeNone: return "none";
-  case KlassDecodeZero: return "zero";
-  case KlassDecodeXor:  return "xor";
-  case KlassDecodeMovk: return "movk";
-  default:
-    ShouldNotReachHere();
-  }
-  return NULL;
-}
-
-// Return the current narrow Klass pointer decode mode.
 MacroAssembler::KlassDecodeMode MacroAssembler::klass_decode_mode() {
-  if (_klass_decode_mode == KlassDecodeNone) {
-    // First time initialization
-    assert(UseCompressedClassPointers, "not using compressed class pointers");
-    assert(Metaspace::initialized(), "metaspace not initialized yet");
+  assert(UseCompressedClassPointers, "not using compressed class pointers");
+  assert(Metaspace::initialized(), "metaspace not initialized yet");
 
-    _klass_decode_mode = klass_decode_mode_for_base(CompressedKlassPointers::base());
-    guarantee(_klass_decode_mode != KlassDecodeNone,
-              PTR_FORMAT " is not a valid encoding base on aarch64",
-              p2i(CompressedKlassPointers::base()));
-    log_info(metaspace)("klass decode mode initialized: %s", describe_klass_decode_mode(_klass_decode_mode));
-  }
-  return _klass_decode_mode;
-}
-
-// Given an arbitrary base address, return the KlassDecodeMode that would be used. Return KlassDecodeNone
-// if base address is not valid for encoding.
-MacroAssembler::KlassDecodeMode MacroAssembler::klass_decode_mode_for_base(address base) {
-
-  const uint64_t base_u64 = (uint64_t) base;
-
-  if (base_u64 == 0) {
-    return KlassDecodeZero;
+  if (_klass_decode_mode != KlassDecodeNone) {
+    return _klass_decode_mode;
   }
 
-  if (operand_valid_for_logical_immediate(false, base_u64) &&
-      ((base_u64 & (KlassEncodingMetaspaceMax - 1)) == 0)) {
-    return KlassDecodeXor;
+  assert(LogKlassAlignmentInBytes == CompressedKlassPointers::shift()
+         || 0 == CompressedKlassPointers::shift(), "decode alg wrong");
+
+  if (CompressedKlassPointers::base() == nullptr) {
+    return (_klass_decode_mode = KlassDecodeZero);
   }
 
-  const uint64_t shifted_base = base_u64 >> LogKlassAlignmentInBytes;
-  if ((shifted_base & 0xffff0000ffffffff) == 0) {
-    return KlassDecodeMovk;
+  if (operand_valid_for_logical_immediate(
+        /*is32*/false, (uint64_t)CompressedKlassPointers::base())) {
+    const uint64_t range_mask =
+      (1ULL << log2i(CompressedKlassPointers::range())) - 1;
+    if (((uint64_t)CompressedKlassPointers::base() & range_mask) == 0) {
+      return (_klass_decode_mode = KlassDecodeXor);
+    }
   }
 
-  return KlassDecodeNone;
+  const uint64_t shifted_base =
+    (uint64_t)CompressedKlassPointers::base() >> CompressedKlassPointers::shift();
+  guarantee((shifted_base & 0xffff0000ffffffff) == 0,
+            "compressed class base bad alignment");
+
+  return (_klass_decode_mode = KlassDecodeMovk);
 }
 
 void MacroAssembler::encode_klass_not_null(Register dst, Register src) {
-  assert (UseCompressedClassPointers, "should only be used for compressed headers");
-  assert(CompressedKlassPointers::shift() != 0, "not lilliput?");
   switch (klass_decode_mode()) {
   case KlassDecodeZero:
-    lsr(dst, src, LogKlassAlignmentInBytes);
+    if (CompressedKlassPointers::shift() != 0) {
+      lsr(dst, src, LogKlassAlignmentInBytes);
+    } else {
+      if (dst != src) mov(dst, src);
+    }
     break;
 
   case KlassDecodeXor:
-    eor(dst, src, (uint64_t)CompressedKlassPointers::base());
-    lsr(dst, dst, LogKlassAlignmentInBytes);
+    if (CompressedKlassPointers::shift() != 0) {
+      eor(dst, src, (uint64_t)CompressedKlassPointers::base());
+      lsr(dst, dst, LogKlassAlignmentInBytes);
+    } else {
+      eor(dst, src, (uint64_t)CompressedKlassPointers::base());
+    }
     break;
 
   case KlassDecodeMovk:
-    ubfx(dst, src, LogKlassAlignmentInBytes, MaxNarrowKlassPointerBits);
+    if (CompressedKlassPointers::shift() != 0) {
+      ubfx(dst, src, LogKlassAlignmentInBytes, 32);
+    } else {
+      movw(dst, src);
+    }
     break;
 
   case KlassDecodeNone:
@@ -4639,28 +4626,35 @@ void MacroAssembler::encode_klass_not_null(Register r) {
 void  MacroAssembler::decode_klass_not_null(Register dst, Register src) {
   assert (UseCompressedClassPointers, "should only be used for compressed headers");
 
-  assert(CompressedKlassPointers::shift() != 0, "not lilliput?");
-
   switch (klass_decode_mode()) {
   case KlassDecodeZero:
-    if (dst != src) mov(dst, src);
+    if (CompressedKlassPointers::shift() != 0) {
+      lsl(dst, src, LogKlassAlignmentInBytes);
+    } else {
+      if (dst != src) mov(dst, src);
+    }
     break;
 
   case KlassDecodeXor:
-    lsl(dst, src, LogKlassAlignmentInBytes);
-    eor(dst, dst, (uint64_t)CompressedKlassPointers::base());
+    if (CompressedKlassPointers::shift() != 0) {
+      lsl(dst, src, LogKlassAlignmentInBytes);
+      eor(dst, dst, (uint64_t)CompressedKlassPointers::base());
+    } else {
+      eor(dst, src, (uint64_t)CompressedKlassPointers::base());
+    }
     break;
 
   case KlassDecodeMovk: {
     const uint64_t shifted_base =
       (uint64_t)CompressedKlassPointers::base() >> CompressedKlassPointers::shift();
 
-    // Invalid base should have been gracefully handled via klass_decode_mode() in VM initialization.
-    assert((shifted_base & 0xffff0000ffffffff) == 0, "incompatible base");
-
     if (dst != src) movw(dst, src);
     movk(dst, shifted_base >> 32, 32);
-    lsl(dst, dst, LogKlassAlignmentInBytes);
+
+    if (CompressedKlassPointers::shift() != 0) {
+      lsl(dst, dst, LogKlassAlignmentInBytes);
+    }
+
     break;
   }
 

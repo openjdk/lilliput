@@ -31,7 +31,6 @@
 #include "gc/shared/plab.hpp"
 #include "gc/shared/threadLocalAllocBuffer.hpp"
 #include "gc/shared/tlab_globals.hpp"
-#include "memory/metaspace.hpp"
 #include "runtime/arguments.hpp"
 #include "runtime/globals.hpp"
 #include "runtime/globals_extension.hpp"
@@ -53,20 +52,6 @@
 // value(s) of the flag(s) on the command line.  In the constraint
 // checking functions,  FLAG_IS_CMDLINE() is used to check if
 // the flag has been set by the user and so should be checked.
-
-// As ParallelGCThreads differs among GC modes, we need constraint function.
-JVMFlag::Error ParallelGCThreadsConstraintFunc(uint value, bool verbose) {
-  JVMFlag::Error status = JVMFlag::SUCCESS;
-
-#if INCLUDE_PARALLELGC
-  status = ParallelGCThreadsConstraintFuncParallel(value, verbose);
-  if (status != JVMFlag::SUCCESS) {
-    return status;
-  }
-#endif
-
-  return status;
-}
 
 static JVMFlag::Error MinPLABSizeBounds(const char* name, size_t value, bool verbose) {
   if ((GCConfig::is_gc_selected(CollectedHeap::G1) || GCConfig::is_gc_selected(CollectedHeap::Parallel)) &&
@@ -401,21 +386,6 @@ JVMFlag::Error SurvivorRatioConstraintFunc(uintx value, bool verbose) {
   }
 }
 
-JVMFlag::Error CompressedClassSpaceSizeConstraintFunc(size_t value, bool verbose) {
-#ifdef _LP64
-  // There is no minimal value check, although class space will be transparently enlarged
-  // to a multiple of metaspace root chunk size (4m).
-  // The max. value of class space size depends on narrow klass pointer encoding range size
-  // and CDS, see metaspace.cpp.
-  if (value > Metaspace::max_class_space_size()) {
-    JVMFlag::printError(verbose, "CompressedClassSpaceSize " SIZE_FORMAT " too large (max: " SIZE_FORMAT ")\n",
-                        value, Metaspace::max_class_space_size());
-    return JVMFlag::VIOLATES_CONSTRAINT;
-  }
-#endif
-  return JVMFlag::SUCCESS;
-}
-
 JVMFlag::Error MetaspaceSizeConstraintFunc(size_t value, bool verbose) {
   if (value > MaxMetaspaceSize) {
     JVMFlag::printError(verbose,
@@ -451,4 +421,3 @@ JVMFlag::Error GCCardSizeInBytesConstraintFunc(uint value, bool verbose) {
     return JVMFlag::SUCCESS;
   }
 }
-

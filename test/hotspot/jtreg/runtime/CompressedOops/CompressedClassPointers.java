@@ -58,9 +58,6 @@ public class CompressedClassPointers {
 
     // CDS off, small heap, ccs size default (1G)
     // A small heap should allow us to place the ccs within the lower 32G and thus allow zero based encoding.
-    /* Lilliput: cannot work due to drastically reduced narrow klass pointer range (atm 2g and that may get
-       smaller still). There is an argument for improving CDS/CCS reservation and make it more likely to run
-       zero-based, but that logic has to be rethought.
     public static void smallHeapTest() throws Exception {
         ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(
             "-XX:+UnlockDiagnosticVMOptions",
@@ -75,11 +72,9 @@ public class CompressedClassPointers {
         }
         output.shouldHaveExitValue(0);
     }
-     */
 
     // CDS off, small heap, ccs size explicitely set to 1G
     // A small heap should allow us to place the ccs within the lower 32G and thus allow zero based encoding.
-    /* Lilliput: See comment above.
     public static void smallHeapTestWith1G() throws Exception {
         ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(
             "-XX:+UnlockDiagnosticVMOptions",
@@ -94,13 +89,10 @@ public class CompressedClassPointers {
         }
         output.shouldHaveExitValue(0);
     }
-    */
 
     // CDS off, a very large heap, ccs size left to 1G default.
     // We expect the ccs to be mapped somewhere far beyond the heap, such that it is not possible
     // to use zero based encoding.
-    /* Lilliput: I am not sure what the point of this test CCS reservation is independent from
-       heap. See below the desparate attempts to predict heap reservation on PPC. Why do we even care?
     public static void largeHeapTest() throws Exception {
         ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(
             "-XX:+UnlockDiagnosticVMOptions",
@@ -121,13 +113,11 @@ public class CompressedClassPointers {
         }
         output.shouldHaveExitValue(0);
     }
-     */
 
     // Settings as in largeHeapTest() except for max heap size. We make max heap
     // size even larger such that it cannot fit into lower 32G but not too large
     // for compressed oops.
     // We expect a zerobased ccs.
-    /* Lilliput: narrow klass pointer range drastically reduced. See comments under smallHeapTest().
     public static void largeHeapAbove32GTest() throws Exception {
         ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(
             "-XX:+UnlockDiagnosticVMOptions",
@@ -147,13 +137,8 @@ public class CompressedClassPointers {
         }
         output.shouldHaveExitValue(0);
     }
-    */
 
     // Using large paged heap, metaspace uses small pages.
-    /* Lilliput: not sure what the point of this test is. The ability to have a class space if heap uses
-       large pages? Why would that be a problem? Kept alive for now since it makes no problems even with
-       smaller class pointers.
-     */
     public static void largePagesForHeapTest() throws Exception {
         ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(
                 "-XX:+UnlockDiagnosticVMOptions",
@@ -214,7 +199,6 @@ public class CompressedClassPointers {
         }
     }
 
-    /* Lilliput: narrow klass pointer range drastically reduced. See comments under smallHeapTest().
     public static void smallHeapTestNoCoop() throws Exception {
         ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(
             "-XX:-UseCompressedOops",
@@ -230,9 +214,7 @@ public class CompressedClassPointers {
         output.shouldContain("Narrow klass base: 0x0000000000000000");
         output.shouldHaveExitValue(0);
     }
-    */
 
-    /* Lilliput: narrow klass pointer range drastically reduced. See comments under smallHeapTest().
     public static void smallHeapTestWith1GNoCoop() throws Exception {
         ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(
             "-XX:-UseCompressedOops",
@@ -252,9 +234,7 @@ public class CompressedClassPointers {
         }
         output.shouldHaveExitValue(0);
     }
-    */
 
-    /* Lilliput: narrow klass pointer range drastically reduced. See comments under smallHeapTest().
     public static void largeHeapTestNoCoop() throws Exception {
         ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(
             "-XX:-UseCompressedOops",
@@ -274,7 +254,6 @@ public class CompressedClassPointers {
         }
         output.shouldHaveExitValue(0);
     }
-    */
 
     public static void largePagesTestNoCoop() throws Exception {
         ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(
@@ -343,17 +322,17 @@ public class CompressedClassPointers {
     }
 
     public static void main(String[] args) throws Exception {
-        // smallHeapTest();
-        // smallHeapTestWith1G();
-        // largeHeapTest();
-        // largeHeapAbove32GTest();
+        smallHeapTest();
+        smallHeapTestWith1G();
+        largeHeapTest();
+        largeHeapAbove32GTest();
         largePagesForHeapTest();
         heapBaseMinAddressTest();
         sharingTest();
 
-        // smallHeapTestNoCoop();
-        // smallHeapTestWith1GNoCoop();
-        // largeHeapTestNoCoop();
+        smallHeapTestNoCoop();
+        smallHeapTestWith1GNoCoop();
+        largeHeapTestNoCoop();
         largePagesTestNoCoop();
         heapBaseMinAddressTestNoCoop();
         sharingTestNoCoop();

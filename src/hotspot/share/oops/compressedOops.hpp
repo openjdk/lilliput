@@ -40,7 +40,7 @@ struct NarrowPtrStruct {
   address _base;
   // Number of shift bits for encoding/decoding narrow ptrs.
   // 0 if using wide ptrs or zero based unscaled narrow ptrs,
-  // LogMinObjAlignmentInBytes/LogKlassAlignmentInBytes otherwise.
+  // LogMinObjAlignmentInBytes otherwise.
   int     _shift;
   // Generate code with implicit null checks for narrow ptrs.
   bool    _use_implicit_null_checks;

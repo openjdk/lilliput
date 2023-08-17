@@ -25,8 +25,8 @@
 #ifndef SHARE_CDS_ARCHIVEUTILS_HPP
 #define SHARE_CDS_ARCHIVEUTILS_HPP
 
+#include "cds/serializeClosure.hpp"
 #include "logging/log.hpp"
-#include "memory/iterator.hpp"
 #include "memory/virtualspace.hpp"
 #include "utilities/bitMap.hpp"
 #include "utilities/exceptions.hpp"
@@ -146,10 +146,7 @@ public:
       _max_delta(max_delta), _is_packed(false) {}
 
   char* expand_top_to(char* newtop);
-  // Allocate with default alignment (SharedSpaceObjectAlignment)
   char* allocate(size_t num_bytes);
-  // Allocate with an arbitrary alignment.
-  char* allocate(size_t num_bytes, size_t alignment);
 
   void append_intptr_t(intptr_t n, bool need_to_mark = false) NOT_CDS_RETURN;
 
@@ -205,7 +202,6 @@ public:
     _dump_region->append_intptr_t((intptr_t)tag);
   }
 
-  void do_oop(oop* o);
   void do_region(u_char* start, size_t size);
   bool reading() const { return false; }
 };
@@ -229,7 +225,6 @@ public:
   void do_int(int* p);
   void do_bool(bool *p);
   void do_tag(int tag);
-  void do_oop(oop *p);
   void do_region(u_char* start, size_t size);
   bool reading() const { return true; }
 };

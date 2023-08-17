@@ -36,7 +36,6 @@
 #include "memory/metaspace/chunkManager.hpp"
 #include "memory/metaspace/commitLimiter.hpp"
 #include "memory/metaspace/internalStats.hpp"
-#include "memory/metaspace/metaspaceAlignment.hpp"
 #include "memory/metaspace/metaspaceCommon.hpp"
 #include "memory/metaspace/metaspaceContext.hpp"
 #include "memory/metaspace/metaspaceReporter.hpp"
@@ -48,6 +47,7 @@
 #include "memory/metaspaceUtils.hpp"
 #include "memory/resourceArea.hpp"
 #include "memory/universe.hpp"
+#include "oops/compressedKlass.inline.hpp"
 #include "oops/compressedOops.hpp"
 #include "prims/jvmtiExport.hpp"
 #include "runtime/atomic.hpp"
@@ -589,18 +589,11 @@ bool Metaspace::class_space_is_initialized() {
 // On error, returns an unreserved space.
 ReservedSpace Metaspace::reserve_address_space_for_compressed_classes(size_t size) {
 
-  // Note: code below is broken and needs rethinking since it confuses encoding base
-  // with compressed class space attach address; both don't have be the same.
-  // That is also the reason why we atm don't get zero-based encoding for aarch.
-  // Comment is also wrong, at least for 9-bit shift.
-
-  // Will be fixed. For now it works well enough.
-
 #if defined(AARCH64) || defined(PPC64)
   const size_t alignment = Metaspace::reserve_alignment();
 
-  // AArch64: Try to align metaspace so that we can decode a compressed
-  // klass with a single MOVK instruction. We can do this iff the
+  // AArch64: Try to align metaspace class space so that we can decode a
+  // compressed klass with a single MOVK instruction. We can do this iff the
   // compressed class base is a multiple of 4G.
   // Additionally, above 32G, ensure the lower LogKlassAlignmentInBytes bits
   // of the upper 32-bits of the address are zero so we can handle a shift
@@ -623,18 +616,37 @@ ReservedSpace Metaspace::reserve_address_space_for_compressed_classes(size_t siz
     {  nullptr, nullptr, 0 }
   };
 
+  // Calculate a list of all possible values for the starting address for the
+  // compressed class space.
+  ResourceMark rm;
+  GrowableArray<address> list(36);
   for (int i = 0; search_ranges[i].from != nullptr; i ++) {
     address a = search_ranges[i].from;
-    if (CompressedKlassPointers::is_valid_base(a)) {
-      while (a < search_ranges[i].to) {
-        ReservedSpace rs(size, Metaspace::reserve_alignment(),
-                         os::vm_page_size(), (char*)a);
-        if (rs.is_reserved()) {
-          assert(a == (address)rs.base(), "Sanity");
-          return rs;
-        }
-        a +=  search_ranges[i].increment;
-      }
+    assert(CompressedKlassPointers::is_valid_base(a), "Sanity");
+    while (a < search_ranges[i].to) {
+      list.append(a);
+      a +=  search_ranges[i].increment;
+    }
+  }
+
+  int len = list.length();
+  int r = 0;
+  if (!DumpSharedSpaces) {
+    // Starting from a random position in the list. If the address cannot be reserved
+    // (the OS already assigned it for something else), go to the next position, wrapping
+    // around if necessary, until we exhaust all the items.
+    os::init_random((int)os::javaTimeNanos());
+    r = os::random();
+    log_info(metaspace)("Randomizing compressed class space: start from %d out of %d locations",
+                        r % len, len);
+  }
+  for (int i = 0; i < len; i++) {
+    address a = list.at((i + r) % len);
+    ReservedSpace rs(size, Metaspace::reserve_alignment(),
+                     os::vm_page_size(), (char*)a);
+    if (rs.is_reserved()) {
+      assert(a == (address)rs.base(), "Sanity");
+      return rs;
     }
   }
 #endif // defined(AARCH64) || defined(PPC64)
@@ -873,23 +885,8 @@ void Metaspace::post_initialize() {
 }
 
 size_t Metaspace::max_allocation_word_size() {
-  return metaspace::chunklevel::MAX_CHUNK_WORD_SIZE - KlassAlignmentInWords;
+  return metaspace::chunklevel::MAX_CHUNK_WORD_SIZE;
 }
-
-#ifdef _LP64
-// The largest allowed size for class space
-size_t Metaspace::max_class_space_size() {
-  assert(KlassEncodingMetaspaceMax > 0, "too early.");
-  // This is a bit fuzzy. Max value of class space size depends on narrow klass pointer
-  // encoding range size and CDS, since class space shares encoding range with CDS. CDS
-  // archives are usually pretty small though, so to keep matters simple, for now we
-  // just assume a reasonable default (this is hackish; improve!).
-  const size_t slice_for_cds = M * 128;
-  assert(KlassEncodingMetaspaceMax >= (slice_for_cds * 2), "rethink this");
-  const size_t max_class_space_size = KlassEncodingMetaspaceMax - slice_for_cds;
-  return max_class_space_size;
-}
-#endif // _LP64
 
 // This version of Metaspace::allocate does not throw OOM but simply returns null, and
 // is suitable for calling from non-Java threads.
@@ -1052,11 +1049,10 @@ bool Metaspace::contains(const void* ptr) {
   return contains_non_shared(ptr);
 }
 
-bool Metaspace::class_space_contains(const void* ptr) {
-  return using_class_space() && VirtualSpaceList::vslist_class()->contains((MetaWord*)ptr);
-}
-
 bool Metaspace::contains_non_shared(const void* ptr) {
-  return class_space_contains(ptr) ||
-         VirtualSpaceList::vslist_nonclass()->contains((MetaWord*)ptr);
+  if (using_class_space() && VirtualSpaceList::vslist_class()->contains((MetaWord*)ptr)) {
+     return true;
+  }
+
+  return VirtualSpaceList::vslist_nonclass()->contains((MetaWord*)ptr);
 }
