@@ -894,10 +894,6 @@ private:
       to_page = start_in_place_relocation(ZAddress::offset(addr));
       set_target(to_age, to_page);
     }
-
-    if (SuspendibleThreadSet::should_yield()) {
-      SuspendibleThreadSet::yield();
-    }
   }
 
 public:
@@ -1098,7 +1094,6 @@ public:
     ZRelocateWork<ZRelocateSmallAllocator> small(&_small_allocator, _generation);
     ZRelocateWork<ZRelocateMediumAllocator> medium(&_medium_allocator, _generation);
 
-    SuspendibleThreadSetJoiner sts_joiner;
     const auto do_forwarding = [&](ZForwarding* forwarding) {
       ZPage* const page = forwarding->page();
       if (page->is_small()) {
