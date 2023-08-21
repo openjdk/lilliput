@@ -223,6 +223,9 @@ class markWord {
     return (ObjectMonitor*) (value() ^ monitor_value);
   }
   bool has_displaced_mark_helper() const {
+    if (UseCompactObjectHeaders) {
+      return false;
+    }
     intptr_t lockbits = value() & lock_mask_in_place;
     return LockingMode == LM_LIGHTWEIGHT  ? lockbits == monitor_value   // monitor?
                                           : (lockbits & unlocked_value) == 0; // monitor | stack-locked?
@@ -253,6 +256,10 @@ class markWord {
   static markWord encode(ObjectMonitor* monitor) {
     uintptr_t tmp = (uintptr_t) monitor;
     return markWord(tmp | monitor_value);
+  }
+
+  markWord set_has_monitor() {
+    return markWord((value() & ~lock_mask_in_place) | monitor_value);
   }
 
   // used to encode pointers during GC

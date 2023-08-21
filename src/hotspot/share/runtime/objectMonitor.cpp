@@ -45,6 +45,7 @@
 #include "runtime/mutexLocker.hpp"
 #include "runtime/objectMonitor.hpp"
 #include "runtime/objectMonitor.inline.hpp"
+#include "runtime/objectMonitorMapper.hpp"
 #include "runtime/orderAccess.hpp"
 #include "runtime/osThread.hpp"
 #include "runtime/perfData.hpp"
@@ -450,8 +451,12 @@ bool ObjectMonitor::enter(JavaThread* current) {
   assert(_recursions == 0, "invariant");
   assert(owner_raw() == current, "invariant");
   assert(_succ != current, "invariant");
-  assert(object()->mark() == markWord::encode(this), "invariant");
-
+  if (UseCompactObjectHeaders) {
+    assert(object()->mark().has_monitor(), "invariant");
+    assert(ObjectMonitorMapper::get_monitor(object()) == this, "invariant");
+  } else {
+    assert(object()->mark() == markWord::encode(this), "invariant");
+  }
   // The thread -- now the owner -- is back in vm mode.
   // Report the glorious news via TI,DTrace and jvmstat.
   // The probe effect is non-trivial.  All the reportage occurs
@@ -596,6 +601,7 @@ bool ObjectMonitor::deflate_monitor() {
 
     // Install the old mark word if nobody else has already done it.
     install_displaced_markword_in_object(obj);
+    ObjectMonitorMapper::remove_monitor(this);
   }
 
   // Release object's oop storage since the ObjectMonitor has been deflated:
@@ -948,7 +954,12 @@ void ObjectMonitor::ReenterI(JavaThread* current, ObjectWaiter* currentNode) {
   assert(currentNode != nullptr, "invariant");
   assert(currentNode->_thread == current, "invariant");
   assert(_waiters > 0, "invariant");
-  assert(object()->mark() == markWord::encode(this), "invariant");
+  if (UseCompactObjectHeaders) {
+    assert(object()->mark().has_monitor(), "invariant");
+    assert(ObjectMonitorMapper::get_monitor(object()) == this, "invariant");
+  } else {
+    assert(object()->mark() == markWord::encode(this), "invariant");
+  }
 
   assert(current->thread_state() != _thread_blocked, "invariant");
 
@@ -1007,7 +1018,12 @@ void ObjectMonitor::ReenterI(JavaThread* current, ObjectWaiter* currentNode) {
   // In addition, current.TState is stable.
 
   assert(owner_raw() == current, "invariant");
-  assert(object()->mark() == markWord::encode(this), "invariant");
+  if (UseCompactObjectHeaders) {
+    assert(object()->mark().has_monitor(), "invariant");
+    assert(ObjectMonitorMapper::get_monitor(object()) == this, "invariant");
+  } else {
+    assert(object()->mark() == markWord::encode(this), "invariant");
+  }
   UnlinkAfterAcquire(current, currentNode);
   if (_succ == current) _succ = nullptr;
   assert(_succ != current, "invariant");

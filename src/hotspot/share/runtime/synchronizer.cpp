@@ -45,6 +45,7 @@
 #include "runtime/mutexLocker.hpp"
 #include "runtime/objectMonitor.hpp"
 #include "runtime/objectMonitor.inline.hpp"
+#include "runtime/objectMonitorMapper.hpp"
 #include "runtime/os.inline.hpp"
 #include "runtime/osThread.hpp"
 #include "runtime/perfData.hpp"
@@ -269,6 +270,8 @@ void ObjectSynchronizer::initialize() {
 
   // Start the timer for deflations, so it does not trigger immediately.
   _last_async_deflation_time_ns = os::javaTimeNanos();
+
+  ObjectMonitorMapper::initialize();
 }
 
 MonitorList ObjectSynchronizer::_in_use_list;
@@ -342,7 +345,7 @@ bool ObjectSynchronizer::quick_notify(oopDesc* obj, JavaThread* current, bool al
   }
 
   if (mark.has_monitor()) {
-    ObjectMonitor* const mon = mark.monitor();
+    ObjectMonitor* const mon = ObjectMonitorMapper::get_monitor(obj);
     assert(mon->object() == oop(obj), "invariant");
     if (mon->owner() != current) return false;  // slow-path for IMS exception
 
@@ -389,7 +392,7 @@ bool ObjectSynchronizer::quick_enter(oop obj, JavaThread* current,
   const markWord mark = obj->mark();
 
   if (mark.has_monitor()) {
-    ObjectMonitor* const m = mark.monitor();
+    ObjectMonitor* const m = ObjectMonitorMapper::get_monitor(obj);
     // An async deflation or GC can race us before we manage to make
     // the ObjectMonitor busy by setting the owner below. If we detect
     // that race we just bail out to the slow-path here.
@@ -582,7 +585,7 @@ void ObjectSynchronizer::exit(oop object, BasicLock* lock, JavaThread* current) 
           // Fetch that monitor, set owner correctly to this thread, and
           // exit it (allowing waiting threads to enter).
           assert(old_mark.has_monitor(), "must have monitor");
-          ObjectMonitor* monitor = old_mark.monitor();
+          ObjectMonitor* monitor = ObjectMonitorMapper::get_monitor(object);
           assert(monitor->is_owner_anonymous(), "must be anonymous owner");
           monitor->set_owner_from_anonymous(current);
           monitor->exit(current);
@@ -613,7 +616,7 @@ void ObjectSynchronizer::exit(oop object, BasicLock* lock, JavaThread* current) 
             // Monitor owner's stack and update the BasicLocks because a
             // Java Monitor can be asynchronously inflated by a thread that
             // does not own the Java Monitor.
-            ObjectMonitor* m = mark.monitor();
+            ObjectMonitor* m = ObjectMonitorMapper::get_monitor(object);
             assert(m->object()->mark() == mark, "invariant");
             assert(m->is_entered(current), "invariant");
           }
@@ -927,6 +930,22 @@ intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {
       assert(LockingMode == LM_MONITOR, "+VerifyHeavyMonitors requires LockingMode == 0 (LM_MONITOR)");
       guarantee((obj->mark().value() & markWord::lock_mask_in_place) != markWord::locked_value, "must not be lightweight/stack-locked");
     }
+    if (UseCompactObjectHeaders) {
+      while (true) {
+        hash = mark.hash();
+        if (hash != 0) {                     // if it has a hash, just return it
+          return hash;
+        }
+        hash = get_next_hash(current, obj);  // get a new hash
+        temp = mark.copy_set_hash(hash);     // merge the hash into header
+        // try to install the hash
+        test = obj->cas_set_mark(temp, mark);
+        if (test == mark) {                  // if the hash was installed, return it
+          return hash;
+        }
+        mark = test;
+      }
+    }
     if (mark.is_neutral()) {               // if this is a normal header
       hash = mark.hash();
       if (hash != 0) {                     // if it has a hash, just return it
@@ -943,7 +962,7 @@ intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {
       // installed the hash just before our attempt or inflation has
       // occurred or... so we fall thru to inflate the monitor for
       // stability and then install the hash.
-    } else if (mark.has_monitor()) {
+    } else if (mark.has_monitor() && !UseCompactObjectHeaders) {
       monitor = mark.monitor();
       temp = monitor->header();
       assert(temp.is_neutral(), "invariant: header=" INTPTR_FORMAT, temp.value());
@@ -1056,7 +1075,7 @@ bool ObjectSynchronizer::current_thread_holds_lock(JavaThread* current,
     // Inflated monitor so header points to ObjectMonitor (tagged pointer).
     // The first stage of async deflation does not affect any field
     // used by this comparison so the ObjectMonitor* is usable here.
-    ObjectMonitor* monitor = mark.monitor();
+    ObjectMonitor* monitor = ObjectMonitorMapper::get_monitor(obj);
     return monitor->is_entered(current) != 0;
   }
   // Unlocked case, header in place
@@ -1084,7 +1103,7 @@ JavaThread* ObjectSynchronizer::get_lock_owner(ThreadsList * t_list, Handle h_ob
     // Inflated monitor so header points to ObjectMonitor (tagged pointer).
     // The first stage of async deflation does not affect any field
     // used by this comparison so the ObjectMonitor* is usable here.
-    ObjectMonitor* monitor = mark.monitor();
+    ObjectMonitor* monitor = ObjectMonitorMapper::get_monitor(obj);
     assert(monitor != nullptr, "monitor should be non-null");
     // owning_thread_from_monitor() may also return null here:
     return Threads::owning_thread_from_monitor(t_list, monitor);
@@ -1305,7 +1324,7 @@ static void post_monitor_inflate_event(EventJavaMonitorInflate* event,
 void ObjectSynchronizer::inflate_helper(oop obj) {
   markWord mark = obj->mark_acquire();
   if (mark.has_monitor()) {
-    ObjectMonitor* monitor = mark.monitor();
+    ObjectMonitor* monitor = ObjectMonitorMapper::get_monitor(obj);
     markWord dmw = monitor->header();
     assert(dmw.is_neutral(), "sanity check: header=" INTPTR_FORMAT, dmw.value());
     return;
@@ -1335,7 +1354,7 @@ ObjectMonitor* ObjectSynchronizer::inflate(Thread* current, oop object,
 
     // CASE: inflated
     if (mark.has_monitor()) {
-      ObjectMonitor* inf = mark.monitor();
+      ObjectMonitor* inf = ObjectMonitorMapper::get_monitor(object);
       markWord dmw = inf->header();
       assert(dmw.is_neutral(), "invariant: header=" INTPTR_FORMAT, dmw.value());
       if (LockingMode == LM_LIGHTWEIGHT && inf->is_owner_anonymous() && is_lock_owned(current, object)) {
@@ -1381,9 +1400,8 @@ ObjectMonitor* ObjectSynchronizer::inflate(Thread* current, oop object,
         // Owned by somebody else.
         monitor->set_owner_anonymous();
       }
-      markWord monitor_mark = markWord::encode(monitor);
-      markWord old_mark = object->cas_set_mark(monitor_mark, mark);
-      if (old_mark == mark) {
+      bool mapped = ObjectMonitorMapper::map_monitor(monitor, object, mark);
+      if (mapped) {
         // Success! Return inflated monitor.
         if (own) {
           JavaThread::cast(current)->lock_stack().remove(object);
@@ -1522,7 +1540,7 @@ ObjectMonitor* ObjectSynchronizer::inflate(Thread* current, oop object,
     // prepare m for installation - set monitor to initial state
     m->set_header(mark);
 
-    if (object->cas_set_mark(markWord::encode(m), mark) != mark) {
+    if (!ObjectMonitorMapper::map_monitor(m, object, mark)) {
       delete m;
       m = nullptr;
       continue;
@@ -2000,7 +2018,7 @@ void ObjectSynchronizer::chk_in_use_entry(ObjectMonitor* n, outputStream* out,
                     p2i(obj), mark.value());
       *error_cnt_p = *error_cnt_p + 1;
     }
-    ObjectMonitor* const obj_mon = mark.monitor();
+    ObjectMonitor* const obj_mon = ObjectMonitorMapper::get_monitor(obj);
     if (n != obj_mon) {
       out->print_cr("ERROR: monitor=" INTPTR_FORMAT ": in-use monitor's "
                     "object does not refer to the same monitor: obj="

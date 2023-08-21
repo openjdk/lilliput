@@ -53,6 +53,7 @@
 #include "runtime/jfieldIDWorkaround.hpp"
 #include "runtime/jniHandles.inline.hpp"
 #include "runtime/objectMonitor.inline.hpp"
+#include "runtime/objectMonitorMapper.hpp"
 #include "runtime/osThread.hpp"
 #include "runtime/signature.hpp"
 #include "runtime/stackWatermarkSet.inline.hpp"
@@ -1484,7 +1485,7 @@ JvmtiEnvBase::get_object_monitor_usage(JavaThread* calling_thread, jobject objec
   jint nWant = 0, nWait = 0;
   markWord mark = hobj->mark();
   if (mark.has_monitor()) {
-    mon = mark.monitor();
+    mon = ObjectMonitorMapper::get_monitor(hobj());
     assert(mon != nullptr, "must have monitor");
     // this object has a heavyweight monitor
     nWant = mon->contentions(); // # of threads contending for monitor

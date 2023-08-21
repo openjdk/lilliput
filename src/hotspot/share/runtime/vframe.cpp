@@ -243,14 +243,15 @@ void javaVFrame::print_lock_info_on(outputStream* st, int frame_count) {
           // the lock or if we are blocked trying to acquire it. Only
           // an inflated monitor that is first on the monitor list in
           // the first frame can block us on a monitor enter.
-          markWord mark = monitor->owner()->mark();
+          oop obj = monitor->owner();
+          markWord mark = obj->mark();
           // The first stage of async deflation does not affect any field
           // used by this comparison so the ObjectMonitor* is usable here.
           if (mark.has_monitor() &&
               ( // we have marked ourself as pending on this monitor
-                mark.monitor() == thread()->current_pending_monitor() ||
+                ObjectMonitorMapper::get_monitor(obj) == thread()->current_pending_monitor() ||
                 // we are not the owner of this monitor
-                !mark.monitor()->is_entered(thread())
+                !ObjectMonitorMapper::get_monitor(obj)->is_entered(thread())
               )) {
             lock_state = "waiting to lock";
           }

@@ -1243,8 +1243,7 @@ void LIRGenerator::do_isInstance(Intrinsic* x) {
 }
 
 void LIRGenerator::load_klass(LIR_Opr obj, LIR_Opr klass, CodeEmitInfo* null_check_info) {
-  CodeStub* slow_path = UseCompactObjectHeaders ? new LoadKlassStub(klass) : nullptr;
-  __ load_klass(obj, klass, null_check_info, slow_path);
+  __ load_klass(obj, klass, null_check_info);
 }
 
 // Example: object.getClass ()

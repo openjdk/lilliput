@@ -31,6 +31,7 @@
 #include "oops/markWord.inline.hpp"
 #include "oops/oop.inline.hpp"
 #include "runtime/objectMonitor.inline.hpp"
+#include "runtime/objectMonitorMapper.hpp"
 #include "runtime/thread.hpp"
 
 // This is a variant of ObjectSynchronizer::stable_mark(), which does the same thing, but also
@@ -70,7 +71,7 @@ markWord ShenandoahObjectUtils::stable_mark(oop obj) {
     if (mark.has_monitor()) {
       // It is safe to access the object monitor because all Java and GC worker threads
       // participate in the monitor deflation protocol (i.e, they react to handshakes and STS requests).
-      ObjectMonitor* inf = mark.monitor();
+      ObjectMonitor* inf = ObjectMonitorMapper::get_monitor(obj);
       markWord dmw = inf->header();
       assert(dmw.is_neutral(), "invariant: header=" INTPTR_FORMAT ", original mark: " INTPTR_FORMAT, dmw.value(), mark.value());
       return dmw;

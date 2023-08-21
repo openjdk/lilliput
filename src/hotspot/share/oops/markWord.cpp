@@ -30,6 +30,7 @@
 #include "utilities/ostream.hpp"
 
 markWord markWord::displaced_mark_helper() const {
+  assert(!UseCompactObjectHeaders, "No displaced headers with compact headers");
   assert(has_displaced_mark_helper(), "check");
   if (has_monitor()) {
     // Has an inflated monitor. Must be checked before has_locker().
@@ -46,6 +47,7 @@ markWord markWord::displaced_mark_helper() const {
 }
 
 void markWord::set_displaced_mark_helper(markWord m) const {
+  assert(!UseCompactObjectHeaders, "no displaced headers with compact headers");
   assert(has_displaced_mark_helper(), "check");
   if (has_monitor()) {
     // Has an inflated monitor. Must be checked before has_locker().
@@ -68,7 +70,7 @@ void markWord::print_on(outputStream* st, bool print_monitor_info) const {
   } else if (has_monitor()) {  // last bits = 10
     // have to check has_monitor() before is_locked()
     st->print(" monitor(" INTPTR_FORMAT ")=", value());
-    if (print_monitor_info) {
+    if (print_monitor_info && !UseCompactObjectHeaders) {
       ObjectMonitor* mon = monitor();
       if (mon == nullptr) {
         st->print("null (this should never be seen!)");
