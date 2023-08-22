@@ -49,7 +49,7 @@ private:
 
 public:
   static void initialize();
-  static ObjectMonitor* get_monitor(oop object);
+  static ObjectMonitor* get_monitor(oop object, markWord mark);
   static bool map_monitor(ObjectMonitor* monitor, oop obj, markWord mark);
   static void remove_monitor(ObjectMonitor* monitor);
 };

@@ -348,6 +348,8 @@ private:
   // Use the following at your own risk
   intx      complete_exit(JavaThread* current);
 
+  static void maybe_deflate_dead(oop* p);
+
  private:
   void      AddWaiter(ObjectWaiter* waiter);
   void      INotify(JavaThread* current);
@@ -360,6 +362,8 @@ private:
   int       NotRunnable(JavaThread* current, JavaThread* Owner);
   int       TrySpin(JavaThread* current);
   void      ExitEpilog(JavaThread* current, ObjectWaiter* Wakee);
+
+  void assert_monitor_object() NOT_DEBUG_RETURN;
 
   // Deflation support
   bool      deflate_monitor();

@@ -89,22 +89,26 @@ void ObjectMonitorMapper::initialize() {
   }
 }
 
-ObjectMonitor* ObjectMonitorMapper::get_monitor(oop object) {
-  assert(object->mark().has_monitor(), "object must be monitor-locked");
+ObjectMonitor* ObjectMonitorMapper::get_monitor(oop object, markWord mark) {
+  if (!mark.has_monitor()) {
+    return nullptr;
+  }
   if (UseCompactObjectHeaders) {
     ObjectMonitorTableLookup lookup(object);
     ObjectMonitorTableFound found;
     _table->get(Thread::current(), lookup, found);
-    //tty->print_cr("finding monitor for obj: " PTR_FORMAT ", monitor: " PTR_FORMAT, p2i(object), p2i(found.monitor()));
+    if (found.monitor() == nullptr) {
+      tty->print_cr("finding monitor for obj: " PTR_FORMAT ", monitor: " PTR_FORMAT, p2i(object), p2i(found.monitor()));
+    }
     return found.monitor();
   } else {
-    return object->mark().monitor();
+    return mark.monitor();
   }
 }
 
 bool ObjectMonitorMapper::map_monitor(ObjectMonitor* monitor, oop object, markWord mark) {
   if (UseCompactObjectHeaders) {
-    // tty->print_cr("mapping monitor for obj: " PTR_FORMAT ", monitor: " PTR_FORMAT, p2i(object), p2i(monitor));
+    tty->print_cr("mapping monitor for obj: " PTR_FORMAT ", monitor: " PTR_FORMAT, p2i(object), p2i(monitor));
     ObjectMonitorTableLookup lookup(monitor->object_peek());
     ObjectMonitorTableFound found;
     bool inserted = _table->insert_get(Thread::current(), lookup, monitor, found);
@@ -130,7 +134,12 @@ bool ObjectMonitorMapper::map_monitor(ObjectMonitor* monitor, oop object, markWo
 }
 
 void ObjectMonitorMapper::remove_monitor(ObjectMonitor* monitor) {
-  ObjectMonitorTableLookup lookup(monitor->object_peek());
-  bool removed = _table->remove(Thread::current(), lookup);
-  assert(removed, "object monitor must have been removed");
+  if (UseCompactObjectHeaders) {
+    oop obj = monitor->object_peek();
+    assert(obj != nullptr, "must still have object");
+    tty->print_cr("removing monitor for obj: " PTR_FORMAT ", monitor: " PTR_FORMAT, p2i(obj), p2i(monitor));
+    ObjectMonitorTableLookup lookup(obj);
+    bool removed = _table->remove(Thread::current(), lookup);
+    assert(removed, "object monitor must have been removed");
+  }
 }

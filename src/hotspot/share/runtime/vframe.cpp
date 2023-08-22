@@ -247,11 +247,12 @@ void javaVFrame::print_lock_info_on(outputStream* st, int frame_count) {
           markWord mark = obj->mark();
           // The first stage of async deflation does not affect any field
           // used by this comparison so the ObjectMonitor* is usable here.
-          if (mark.has_monitor() &&
+          ObjectMonitor* mon = ObjectMonitorMapper::get_monitor(obj, mark);
+          if (mon != nullptr &&
               ( // we have marked ourself as pending on this monitor
-                ObjectMonitorMapper::get_monitor(obj) == thread()->current_pending_monitor() ||
+                mon  == thread()->current_pending_monitor() ||
                 // we are not the owner of this monitor
-                !ObjectMonitorMapper::get_monitor(obj)->is_entered(thread())
+                !mon->is_entered(thread())
               )) {
             lock_state = "waiting to lock";
           }
