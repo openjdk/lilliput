@@ -116,21 +116,8 @@ bool ObjectMonitorMapper::map_monitor(ObjectMonitor* monitor, oop object, markWo
       // Somebody else won.
       return false;
     }
-    while (true) {
-      markWord monitor_mark = mark.set_has_monitor();;
-      markWord old_mark = object->cas_set_mark(monitor_mark, mark);
-      if (old_mark == mark) {
-        break;
-      }
-      assert(!old_mark.has_monitor(), "should not happen");
-      mark = old_mark;
-    }
-    return true;
-  } else {
-    markWord monitor_mark = markWord::encode(monitor);
-    markWord old_mark = object->cas_set_mark(monitor_mark, mark);
-    return old_mark == mark;
   }
+  return true;
 }
 
 void ObjectMonitorMapper::remove_monitor(ObjectMonitor* monitor) {

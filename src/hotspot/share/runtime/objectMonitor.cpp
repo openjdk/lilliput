@@ -669,16 +669,16 @@ void ObjectMonitor::install_displaced_markword_in_object(const oop obj) {
   // can rarely reach this point, but only one can win.
   markWord expected;
   if (UseCompactObjectHeaders) {
+    // Un-map the monitor before we update the mark-word. Monitor inflation happens lazily, which means
+    // that we allow the monitor-bit to be set, but no monitor mapped. When that happens, the inflating
+    // thread will try to install and map a new monitor.
+    ObjectMonitorMapper::remove_monitor(this);
     expected = dmw.set_has_monitor();
   } else {
     expected = markWord::encode(this);
   }
   markWord res = obj->cas_set_mark(dmw, expected);
-  if (res == expected) {
-    if (UseCompactObjectHeaders) {
-      ObjectMonitorMapper::remove_monitor(this);
-    }
-  } else {
+  if (res != expected) {
     // This should be rare so log at the Info level when it happens.
     log_info(monitorinflation)("install_displaced_markword_in_object: "
                                "failed cas_set_mark: new_mark=" INTPTR_FORMAT

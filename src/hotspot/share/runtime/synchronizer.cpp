@@ -1358,7 +1358,7 @@ ObjectMonitor* ObjectSynchronizer::inflate(Thread* current, oop object,
     if (mark.has_monitor()) {
       ObjectMonitor* inf = ObjectMonitorMapper::get_monitor(object, mark);
       if (inf == nullptr) {
-        // concurrent deflation has already deflated the monitor, try again.
+        // concurrent deflation has already deflated the monitor, or another thread is inflating, try again.
         continue;
       }
       markWord dmw = inf->header();
@@ -1406,8 +1406,13 @@ ObjectMonitor* ObjectSynchronizer::inflate(Thread* current, oop object,
         // Owned by somebody else.
         monitor->set_owner_anonymous();
       }
-      bool mapped = ObjectMonitorMapper::map_monitor(monitor, object, mark);
-      if (mapped) {
+      markWord monitor_mark = mark.set_has_monitor();
+      markWord old_mark = object->cas_set_mark(monitor_mark, mark);
+      if (old_mark == mark) {
+        if (!ObjectMonitorMapper::map_monitor(monitor, object, mark)) {
+          delete monitor;
+          continue; // Some other thread installed its own monitor lazily, retry.
+        }
         // Success! Return inflated monitor.
         if (own) {
           JavaThread::cast(current)->lock_stack().remove(object);
@@ -1546,13 +1551,25 @@ ObjectMonitor* ObjectSynchronizer::inflate(Thread* current, oop object,
     // prepare m for installation - set monitor to initial state
     m->set_header(mark);
 
-    if (!ObjectMonitorMapper::map_monitor(m, object, mark)) {
+    markWord new_mark;
+    if (LockingMode == LM_LIGHTWEIGHT) {
+      new_mark = mark.set_has_monitor();
+    } else {
+      new_mark = markWord::encode(m);
+    }
+    if (object->cas_set_mark(new_mark, mark) != mark) {
       delete m;
       m = nullptr;
       continue;
       // interference - the markword changed - just retry.
       // The state-transitions are one-way, so there's no chance of
       // live-lock -- "Inflated" is an absorbing state.
+    }
+
+    if (!ObjectMonitorMapper::map_monitor(m, object, mark)) {
+      delete m;
+      m = nullptr;
+      continue; // Some other thread installed its own monitor lazily, retry.
     }
 
     // Once the ObjectMonitor is configured and object is associated

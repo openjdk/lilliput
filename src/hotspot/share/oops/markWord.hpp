@@ -258,7 +258,7 @@ class markWord {
     return markWord(tmp | monitor_value);
   }
 
-  markWord set_has_monitor() {
+  markWord set_has_monitor() const {
     return markWord((value() & ~lock_mask_in_place) | monitor_value);
   }
 
