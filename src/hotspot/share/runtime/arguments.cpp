@@ -3098,7 +3098,7 @@ jint Arguments::finalize_vm_init_args(bool patch_mod_javabase) {
       warning("ZGC does not work with compact object headers, disabling UseCompactObjectHeaders");
       FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
     } else {
-      fatal("Incompatible options: +UseZGC can not currently be used together with +UseCompactObjectHeaders");
+      vm_exit_during_initialization("Incompatible options: +UseZGC can not currently be used together with +UseCompactObjectHeaders");
     }
   }
 
