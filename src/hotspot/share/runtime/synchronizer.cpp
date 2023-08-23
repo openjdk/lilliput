@@ -24,9 +24,8 @@
 
 #include "precompiled.hpp"
 #include "classfile/vmSymbols.hpp"
-#include "gc/shared/suspendibleThreadSet.hpp"
+#include "gc/shared/collectedHeap.hpp"
 #include "jfr/jfrEvents.hpp"
-#include "gc/shared/suspendibleThreadSet.hpp"
 #include "logging/log.hpp"
 #include "logging/logStream.hpp"
 #include "memory/allocation.inline.hpp"
@@ -1642,8 +1641,8 @@ public:
   bool evaluate_at_safepoint() const override { return false; }
   VMOp_Type type() const override { return VMOp_RendezvousGCThreads; }
   void doit() override {
-    SuspendibleThreadSet::synchronize();
-    SuspendibleThreadSet::desynchronize();
+    Universe::heap()->safepoint_synchronize_begin();
+    Universe::heap()->safepoint_synchronize_end();
   };
 };
 

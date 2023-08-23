@@ -27,7 +27,7 @@ package gc.stress.gcbasher;
 import java.io.IOException;
 
 /*
- * @test TestGCBasherWithZGenerational
+ * @test id=TestGCBasherWithZGenerational
  * @key stress
  * @library /
  * @requires vm.gc.ZGenerational
@@ -36,7 +36,7 @@ import java.io.IOException;
  * @run main/othervm/timeout=200 -Xlog:gc*=info -Xmx384m -server -XX:+UseZGC -XX:+ZGenerational  gc.stress.gcbasher.TestGCBasherWithZ 120000
  */
 /*
- * @test TestGCBasherWithZSinglegen
+ * @test id=TestGCBasherWithZSinglegen
  * @key stress
  * @library /
  * @requires vm.gc.ZSinglegen
@@ -46,7 +46,7 @@ import java.io.IOException;
  */
 
 /*
- * @test TestGCBasherDeoptWithZGenerational
+ * @test id=TestGCBasherDeoptWithZGenerational
  * @key stress
  * @library /
  * @requires vm.gc.ZGenerational
@@ -58,7 +58,7 @@ import java.io.IOException;
  */
 
 /*
- * @test TestGCBasherDeoptWithZSinglegen
+ * @test id=TestGCBasherDeoptWithZSinglegen
  * @key stress
  * @library /
  * @requires vm.gc.ZSinglegen

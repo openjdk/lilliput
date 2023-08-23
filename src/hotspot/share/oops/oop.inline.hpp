@@ -90,7 +90,8 @@ markWord oopDesc::resolve_mark() const {
   markWord hdr = mark();
   if (hdr.has_monitor()) {
     ObjectMonitor* monitor = hdr.monitor();
-    return monitor->header();
+    hdr = monitor->header();
+    assert(!CompressedKlassPointers::is_null(hdr.narrow_klass()), "displaced header Klass* == null");
   }
   return hdr;
 }
