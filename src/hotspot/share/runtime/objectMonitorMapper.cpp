@@ -98,7 +98,7 @@ ObjectMonitor* ObjectMonitorMapper::get_monitor(oop object, markWord mark) {
     ObjectMonitorTableFound found;
     _table->get(Thread::current(), lookup, found);
     if (found.monitor() == nullptr) {
-      tty->print_cr("finding monitor for obj: " PTR_FORMAT ", monitor: " PTR_FORMAT, p2i(object), p2i(found.monitor()));
+      //tty->print_cr("finding monitor for obj: " PTR_FORMAT ", monitor: " PTR_FORMAT, p2i(object), p2i(found.monitor()));
     }
     return found.monitor();
   } else {
@@ -108,25 +108,45 @@ ObjectMonitor* ObjectMonitorMapper::get_monitor(oop object, markWord mark) {
 
 bool ObjectMonitorMapper::map_monitor(ObjectMonitor* monitor, oop object, markWord mark) {
   if (UseCompactObjectHeaders) {
-    tty->print_cr("mapping monitor for obj: " PTR_FORMAT ", monitor: " PTR_FORMAT, p2i(object), p2i(monitor));
+    // tty->print_cr("mapping monitor for obj: " PTR_FORMAT ", monitor: " PTR_FORMAT, p2i(object), p2i(monitor));
     ObjectMonitorTableLookup lookup(monitor->object_peek());
     ObjectMonitorTableFound found;
     bool inserted = _table->insert_get(Thread::current(), lookup, monitor, found);
-    if (!inserted) {
-      // Somebody else won.
-      return false;
-    }
+    return inserted;
   }
   return true;
 }
 
-void ObjectMonitorMapper::remove_monitor(ObjectMonitor* monitor) {
+class ObjectMonitorTableRemoveLookup : public StackObj {
+private:
+  ObjectMonitor* _monitor;
+  oop _object;
+public:
+  ObjectMonitorTableRemoveLookup(ObjectMonitor* mon, oop obj) : _monitor(mon), _object(obj) {}
+
+  uintx get_hash() const {
+    return hash(_object);
+  }
+
+  bool equals(ObjectMonitorTableValue* value) {
+    ObjectMonitor* other = *value;
+    return other == _monitor && other->object_peek() == _object;
+  }
+
+  bool is_dead(ObjectMonitorTableValue* value) {
+    return (*value)->object_peek() == nullptr;
+  }
+};
+
+bool ObjectMonitorMapper::remove_monitor(ObjectMonitor* monitor) {
   if (UseCompactObjectHeaders) {
     oop obj = monitor->object_peek();
-    assert(obj != nullptr, "must still have object");
-    tty->print_cr("removing monitor for obj: " PTR_FORMAT ", monitor: " PTR_FORMAT, p2i(obj), p2i(monitor));
-    ObjectMonitorTableLookup lookup(obj);
+    tty->print_cr("removing mapping for obj: " PTR_FORMAT " and monitor: " PTR_FORMAT, p2i(obj), p2i(monitor));
+    assert(obj != nullptr, "must still have object: " PTR_FORMAT, p2i(monitor));
+    // tty->print_cr("removing monitor for obj: " PTR_FORMAT ", monitor: " PTR_FORMAT, p2i(obj), p2i(monitor));
+    ObjectMonitorTableRemoveLookup lookup(monitor, obj);
     bool removed = _table->remove(Thread::current(), lookup);
-    assert(removed, "object monitor must have been removed");
+    return removed;
   }
+  return true;
 }

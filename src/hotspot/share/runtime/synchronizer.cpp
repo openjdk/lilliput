@@ -945,7 +945,7 @@ intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {
           return hash;
         }
         mark = test;
-        tty->print_cr("retrying to install i-hash");
+        // tty->print_cr("retrying to install i-hash");
       }
     }
     if (mark.is_neutral()) {               // if this is a normal header
@@ -1358,8 +1358,25 @@ ObjectMonitor* ObjectSynchronizer::inflate(Thread* current, oop object,
     if (mark.has_monitor()) {
       ObjectMonitor* inf = ObjectMonitorMapper::get_monitor(object, mark);
       if (inf == nullptr) {
-        // concurrent deflation has already deflated the monitor, or another thread is inflating, try again.
-        continue;
+        assert(LockingMode == LM_LIGHTWEIGHT, "no legacy locking here");
+        // Deflation has already deflated the monitor, but we are left with the monitor-bit set
+        // (see comment below in the LIGHTWEIGHT section). Or another thread racily inflates.
+        // Install monitor 'lazily' here.
+        inf = new ObjectMonitor(object);
+        inf->set_header(mark.clear_lock_bits().set_unlocked());
+        bool own = is_lock_owned(current, object);
+        if (own) {
+          // Owned by us.
+          inf->set_owner_from(nullptr, current);
+        } else {
+          // Owned by somebody else.
+          inf->set_owner_anonymous();
+        }
+        bool success = ObjectMonitorMapper::map_monitor(inf, object, mark);
+        if (!success) {
+          delete inf;
+          continue; // Racing inflating thread beat us, try again and grab the other OM.
+        }
       }
       markWord dmw = inf->header();
       assert(dmw.is_neutral(), "invariant: header=" INTPTR_FORMAT, dmw.value());
@@ -1397,7 +1414,7 @@ ObjectMonitor* ObjectSynchronizer::inflate(Thread* current, oop object,
     LogStreamHandle(Trace, monitorinflation) lsh;
     if (LockingMode == LM_LIGHTWEIGHT && mark.is_fast_locked()) {
       ObjectMonitor* monitor = new ObjectMonitor(object);
-      monitor->set_header(mark.set_unlocked());
+      monitor->set_header(mark.clear_lock_bits().set_unlocked());
       bool own = is_lock_owned(current, object);
       if (own) {
         // Owned by us.
@@ -1410,6 +1427,13 @@ ObjectMonitor* ObjectSynchronizer::inflate(Thread* current, oop object,
       markWord old_mark = object->cas_set_mark(monitor_mark, mark);
       if (old_mark == mark) {
         if (!ObjectMonitorMapper::map_monitor(monitor, object, mark)) {
+          // When this happens, it means that we have a racing deflater, which has
+          // not yet completed deflation. IOW, it has already cleared the monitor-bit
+          // in the header, we have subsequently set the monitor-bit, and now fail
+          // to install the mapping because the deflater has not yet un-mapped
+          // the old monitor. We loop around and retry.
+          // We might want to help the deflater, and do the unmapping ourselves,
+          // and retry the new mapping right away. Not sure if that is worth it, though.
           delete monitor;
           continue; // Some other thread installed its own monitor lazily, retry.
         }

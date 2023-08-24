@@ -669,10 +669,6 @@ void ObjectMonitor::install_displaced_markword_in_object(const oop obj) {
   // can rarely reach this point, but only one can win.
   markWord expected;
   if (UseCompactObjectHeaders) {
-    // Un-map the monitor before we update the mark-word. Monitor inflation happens lazily, which means
-    // that we allow the monitor-bit to be set, but no monitor mapped. When that happens, the inflating
-    // thread will try to install and map a new monitor.
-    ObjectMonitorMapper::remove_monitor(this);
     expected = dmw.set_has_monitor();
   } else {
     expected = markWord::encode(this);
@@ -685,6 +681,11 @@ void ObjectMonitor::install_displaced_markword_in_object(const oop obj) {
                                ", old_mark=" INTPTR_FORMAT ", res=" INTPTR_FORMAT,
                                dmw.value(), markWord::encode(this).value(),
                                res.value());
+  } else {
+    if (UseCompactObjectHeaders) {
+      bool removed = ObjectMonitorMapper::remove_monitor(this);
+      assert(removed, "somebody else re-inflated");
+    }
   }
 
   // Note: It does not matter which thread restored the header/dmw

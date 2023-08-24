@@ -51,7 +51,7 @@ public:
   static void initialize();
   static ObjectMonitor* get_monitor(oop object, markWord mark);
   static bool map_monitor(ObjectMonitor* monitor, oop obj, markWord mark);
-  static void remove_monitor(ObjectMonitor* monitor);
+  static bool remove_monitor(ObjectMonitor* monitor);
 };
 
 #endif // SHARE_RUNTIME_OBJECTMONITORMAPPER_HPP
