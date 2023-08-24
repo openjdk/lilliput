@@ -58,6 +58,7 @@ inline volatile markWord* ObjectMonitor::header_addr() {
 }
 
 inline void ObjectMonitor::set_header(markWord hdr) {
+  assert(hdr.is_neutral(), "must be neutral: " INTPTR_FORMAT, hdr.value());
   Atomic::store(&_header, hdr);
 }
 

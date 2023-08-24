@@ -4316,7 +4316,7 @@ void MacroAssembler::load_method_holder(Register holder, Register method) {
 void MacroAssembler::load_nklass(Register dst, Register src) {
   assert(UseCompressedClassPointers, "expects UseCompressedClassPointers");
 
-  if (!UseCompactObjectHeaders) {
+  if (true || !UseCompactObjectHeaders) {
     ldrw(dst, Address(src, oopDesc::klass_offset_in_bytes()));
     return;
   }
@@ -4337,11 +4337,7 @@ void MacroAssembler::load_nklass(Register dst, Register src) {
 
 void MacroAssembler::load_klass(Register dst, Register src) {
   if (UseCompressedClassPointers) {
-    if (UseCompactObjectHeaders) {
-      load_nklass(dst, src);
-    } else {
-      ldrw(dst, Address(src, oopDesc::klass_offset_in_bytes()));
-    }
+    ldrw(dst, Address(src, oopDesc::klass_offset_in_bytes()));
     decode_klass_not_null(dst);
   } else {
     ldr(dst, Address(src, oopDesc::klass_offset_in_bytes()));

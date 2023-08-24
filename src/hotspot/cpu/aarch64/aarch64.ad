@@ -3839,8 +3839,12 @@ encode %{
     }
 
     // Check for existing monitor
-    __ tbnz(disp_hdr, exact_log2(markWord::monitor_value), object_has_monitor);
-
+    if (UseCompactObjectHeaders) {
+      // Handle monitors in runtime.
+      __ tbnz(disp_hdr, exact_log2(markWord::monitor_value), no_count);
+    } else {
+      __ tbnz(disp_hdr, exact_log2(markWord::monitor_value), object_has_monitor);
+    }
     if (LockingMode == LM_MONITOR) {
       __ tst(oop, oop); // Set NE to indicate 'failure' -> take slow-path. We know that oop != 0.
       __ b(cont);
@@ -3879,33 +3883,37 @@ encode %{
       __ b(count);
     }
 
-    // Handle existing monitor.
-    __ bind(object_has_monitor);
+    if (!UseCompactObjectHeaders) {
+      // With compact object headers, monitors are handled in runtime (for now).
 
-    // The object's monitor m is unlocked iff m->owner == NULL,
-    // otherwise m->owner may contain a thread or a stack address.
-    //
-    // Try to CAS m->owner from NULL to current thread.
-    __ add(tmp, disp_hdr, (in_bytes(ObjectMonitor::owner_offset())-markWord::monitor_value));
-    __ cmpxchg(tmp, zr, rthread, Assembler::xword, /*acquire*/ true,
-               /*release*/ true, /*weak*/ false, rscratch1); // Sets flags for result
+      // Handle existing monitor.
+      __ bind(object_has_monitor);
 
-    if (LockingMode != LM_LIGHTWEIGHT) {
-      // Store a non-null value into the box to avoid looking like a re-entrant
-      // lock. The fast-path monitor unlock code checks for
-      // markWord::monitor_value so use markWord::unused_mark which has the
-      // relevant bit set, and also matches ObjectSynchronizer::enter.
-      __ mov(tmp, (address)markWord::unused_mark().value());
-      __ str(tmp, Address(box, BasicLock::displaced_header_offset_in_bytes()));
+      // The object's monitor m is unlocked iff m->owner == NULL,
+      // otherwise m->owner may contain a thread or a stack address.
+      //
+      // Try to CAS m->owner from NULL to current thread.
+      __ add(tmp, disp_hdr, (in_bytes(ObjectMonitor::owner_offset())-markWord::monitor_value));
+      __ cmpxchg(tmp, zr, rthread, Assembler::xword, /*acquire*/ true,
+                 /*release*/ true, /*weak*/ false, rscratch1); // Sets flags for result
+
+      if (LockingMode != LM_LIGHTWEIGHT) {
+        // Store a non-null value into the box to avoid looking like a re-entrant
+        // lock. The fast-path monitor unlock code checks for
+        // markWord::monitor_value so use markWord::unused_mark which has the
+        // relevant bit set, and also matches ObjectSynchronizer::enter.
+        __ mov(tmp, (address)markWord::unused_mark().value());
+        __ str(tmp, Address(box, BasicLock::displaced_header_offset_in_bytes()));
+      }
+      __ br(Assembler::EQ, cont); // CAS success means locking succeeded
+
+      __ cmp(rscratch1, rthread);
+      __ br(Assembler::NE, cont); // Check for recursive locking
+
+      // Recursive lock case
+      __ increment(Address(disp_hdr, in_bytes(ObjectMonitor::recursions_offset()) - markWord::monitor_value), 1);
+      // flag == EQ still from the cmp above, checking if this is a reentrant lock
     }
-    __ br(Assembler::EQ, cont); // CAS success means locking succeeded
-
-    __ cmp(rscratch1, rthread);
-    __ br(Assembler::NE, cont); // Check for recursive locking
-
-    // Recursive lock case
-    __ increment(Address(disp_hdr, in_bytes(ObjectMonitor::recursions_offset()) - markWord::monitor_value), 1);
-    // flag == EQ still from the cmp above, checking if this is a reentrant lock
 
     __ bind(cont);
     // flag == EQ indicates success
@@ -3941,7 +3949,12 @@ encode %{
 
     // Handle existing monitor.
     __ ldr(tmp, Address(oop, oopDesc::mark_offset_in_bytes()));
-    __ tbnz(tmp, exact_log2(markWord::monitor_value), object_has_monitor);
+    if (UseCompactObjectHeaders) {
+      // Handle monitors in runtime.
+      __ tbnz(tmp, exact_log2(markWord::monitor_value), no_count);
+    } else {
+      __ tbnz(tmp, exact_log2(markWord::monitor_value), object_has_monitor);
+    }
 
     if (LockingMode == LM_MONITOR) {
       __ tst(oop, oop); // Set NE to indicate 'failure' -> take slow-path. We know that oop != 0.
@@ -3962,44 +3975,48 @@ encode %{
 
     assert(oopDesc::mark_offset_in_bytes() == 0, "offset of _mark is not 0");
 
-    // Handle existing monitor.
-    __ bind(object_has_monitor);
-    STATIC_ASSERT(markWord::monitor_value <= INT_MAX);
-    __ add(tmp, tmp, -(int)markWord::monitor_value); // monitor
+    if (!UseCompactObjectHeaders) {
+      // With compact object headers, monitors are handled in runtime (for now).
 
-    if (LockingMode == LM_LIGHTWEIGHT) {
-      // If the owner is anonymous, we need to fix it -- in an outline stub.
-      Register tmp2 = disp_hdr;
-      __ ldr(tmp2, Address(tmp, ObjectMonitor::owner_offset()));
-      // We cannot use tbnz here, the target might be too far away and cannot
-      // be encoded.
-      __ tst(tmp2, (uint64_t)ObjectMonitor::ANONYMOUS_OWNER);
-      C2HandleAnonOMOwnerStub* stub = new (Compile::current()->comp_arena()) C2HandleAnonOMOwnerStub(tmp, tmp2);
-      Compile::current()->output()->add_stub(stub);
-      __ br(Assembler::NE, stub->entry());
-      __ bind(stub->continuation());
+      // Handle existing monitor.
+      __ bind(object_has_monitor);
+      STATIC_ASSERT(markWord::monitor_value <= INT_MAX);
+      __ add(tmp, tmp, -(int)markWord::monitor_value); // monitor
+
+      if (LockingMode == LM_LIGHTWEIGHT) {
+        // If the owner is anonymous, we need to fix it -- in an outline stub.
+        Register tmp2 = disp_hdr;
+        __ ldr(tmp2, Address(tmp, ObjectMonitor::owner_offset()));
+        // We cannot use tbnz here, the target might be too far away and cannot
+        // be encoded.
+        __ tst(tmp2, (uint64_t)ObjectMonitor::ANONYMOUS_OWNER);
+        C2HandleAnonOMOwnerStub* stub = new (Compile::current()->comp_arena()) C2HandleAnonOMOwnerStub(tmp, tmp2);
+        Compile::current()->output()->add_stub(stub);
+        __ br(Assembler::NE, stub->entry());
+        __ bind(stub->continuation());
+      }
+
+      __ ldr(disp_hdr, Address(tmp, ObjectMonitor::recursions_offset()));
+
+      Label notRecursive;
+      __ cbz(disp_hdr, notRecursive);
+
+      // Recursive lock
+      __ sub(disp_hdr, disp_hdr, 1u);
+      __ str(disp_hdr, Address(tmp, ObjectMonitor::recursions_offset()));
+      __ cmp(disp_hdr, disp_hdr); // Sets flags for result
+      __ b(cont);
+
+      __ bind(notRecursive);
+      __ ldr(rscratch1, Address(tmp, ObjectMonitor::EntryList_offset()));
+      __ ldr(disp_hdr, Address(tmp, ObjectMonitor::cxq_offset()));
+      __ orr(rscratch1, rscratch1, disp_hdr); // Will be 0 if both are 0.
+      __ cmp(rscratch1, zr); // Sets flags for result
+      __ cbnz(rscratch1, cont);
+      // need a release store here
+      __ lea(tmp, Address(tmp, ObjectMonitor::owner_offset()));
+      __ stlr(zr, tmp); // set unowned
     }
-
-    __ ldr(disp_hdr, Address(tmp, ObjectMonitor::recursions_offset()));
-
-    Label notRecursive;
-    __ cbz(disp_hdr, notRecursive);
-
-    // Recursive lock
-    __ sub(disp_hdr, disp_hdr, 1u);
-    __ str(disp_hdr, Address(tmp, ObjectMonitor::recursions_offset()));
-    __ cmp(disp_hdr, disp_hdr); // Sets flags for result
-    __ b(cont);
-
-    __ bind(notRecursive);
-    __ ldr(rscratch1, Address(tmp, ObjectMonitor::EntryList_offset()));
-    __ ldr(disp_hdr, Address(tmp, ObjectMonitor::cxq_offset()));
-    __ orr(rscratch1, rscratch1, disp_hdr); // Will be 0 if both are 0.
-    __ cmp(rscratch1, zr); // Sets flags for result
-    __ cbnz(rscratch1, cont);
-    // need a release store here
-    __ lea(tmp, Address(tmp, ObjectMonitor::owner_offset()));
-    __ stlr(zr, tmp); // set unowned
 
     __ bind(cont);
     // flag == EQ indicates success
@@ -7345,22 +7362,10 @@ instruct loadNKlassLilliput(iRegNNoSp dst, memory4 mem, rFlagsReg cr)
 
   ins_cost(4 * INSN_COST);
   format %{ "ldrw  $dst, $mem\t# compressed class ptr" %}
-  ins_encode %{
-    assert($mem$$disp == oopDesc::klass_offset_in_bytes(), "expect correct offset");
-    assert($mem$$index$$Register == noreg, "expect no index");
-    Register dst = $dst$$Register;
-    Register obj = $mem$$base$$Register;
-    C2LoadNKlassStub* stub = new (Compile::current()->comp_arena()) C2LoadNKlassStub(dst);
-    Compile::current()->output()->add_stub(stub);
-    __ ldr(dst, Address(obj, oopDesc::mark_offset_in_bytes()));
-    // NOTE: We can't use tbnz here, because the target is sometimes too far away
-    // and cannot be encoded.
-    __ tst(dst, markWord::monitor_value);
-    __ br(Assembler::NE, stub->entry());
-    __ bind(stub->continuation());
-    __ lsr(dst, dst, markWord::klass_shift);
-  %}
-  ins_pipe(pipe_slow);
+
+  ins_encode(aarch64_enc_ldrw(dst, mem));
+
+  ins_pipe(iload_reg_mem);
 %}
 
 // Load Float

@@ -85,20 +85,10 @@ markWord oopDesc::cas_set_mark(markWord new_mark, markWord old_mark, atomic_memo
   return Atomic::cmpxchg(&_mark, old_mark, new_mark, order);
 }
 
-markWord oopDesc::resolve_mark() const {
-  assert(LockingMode != LM_LEGACY, "Not safe with legacy stack-locking");
-  markWord hdr = mark();
-  if (hdr.has_monitor()) {
-    ObjectMonitor* monitor = hdr.monitor();
-    return monitor->header();
-  }
-  return hdr;
-}
-
 void oopDesc::init_mark() {
 #ifdef _LP64
   if (UseCompactObjectHeaders) {
-    markWord header = resolve_mark();
+    markWord header = mark();
     assert(UseCompressedClassPointers, "expect compressed klass pointers");
     set_mark(markWord((header.value() & markWord::klass_mask_in_place) | markWord::prototype().value()));
   } else
@@ -110,8 +100,7 @@ Klass* oopDesc::klass() const {
 #ifdef _LP64
   if (UseCompactObjectHeaders) {
     assert(UseCompressedClassPointers, "only with compressed class pointers");
-    markWord header = resolve_mark();
-    return header.klass();
+    return mark().klass();
   } else if (UseCompressedClassPointers) {
     return CompressedKlassPointers::decode_not_null(_metadata._compressed_klass);
   } else
@@ -123,8 +112,7 @@ Klass* oopDesc::klass_or_null() const {
 #ifdef _LP64
   if (UseCompactObjectHeaders) {
     assert(UseCompressedClassPointers, "only with compressed class pointers");
-    markWord header = resolve_mark();
-    return header.klass_or_null();
+    return mark().klass_or_null();
   } else if (UseCompressedClassPointers) {
     return CompressedKlassPointers::decode(_metadata._compressed_klass);
   } else
@@ -136,11 +124,7 @@ Klass* oopDesc::klass_or_null_acquire() const {
 #ifdef _LP64
   if (UseCompactObjectHeaders) {
     assert(UseCompressedClassPointers, "only with compressed class pointers");
-    markWord header = mark_acquire();
-    if (header.has_monitor()) {
-      header = header.monitor()->header();
-    }
-    return header.klass_or_null();
+    return mark_acquire().klass_or_null();
   } else if (UseCompressedClassPointers) {
      narrowKlass nklass = Atomic::load_acquire(&_metadata._compressed_klass);
      return CompressedKlassPointers::decode(nklass);

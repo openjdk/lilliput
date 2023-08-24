@@ -45,6 +45,7 @@
 #include "runtime/mutexLocker.hpp"
 #include "runtime/objectMonitor.hpp"
 #include "runtime/objectMonitor.inline.hpp"
+#include "runtime/objectMonitorMapper.hpp"
 #include "runtime/orderAccess.hpp"
 #include "runtime/osThread.hpp"
 #include "runtime/perfData.hpp"
@@ -318,6 +319,18 @@ void ObjectMonitor::ClearSuccOnSuspend::operator()(JavaThread* current) {
   }
 }
 
+#ifdef ASSERT
+void ObjectMonitor::assert_monitor_object() {
+  if (UseCompactObjectHeaders) {
+    oop obj = object();
+    markWord mark = obj->mark();
+    assert(ObjectMonitorMapper::get_monitor(obj, mark) == this, "invariant");
+  } else {
+    assert(object()->mark() == markWord::encode(this), "invariant");
+  }
+}
+#endif
+
 // -----------------------------------------------------------------------------
 // Enter support
 
@@ -356,10 +369,7 @@ bool ObjectMonitor::enter(JavaThread* current) {
   if (TrySpin(current) > 0) {
     assert(owner_raw() == current, "must be current: owner=" INTPTR_FORMAT, p2i(owner_raw()));
     assert(_recursions == 0, "must be 0: recursions=" INTX_FORMAT, _recursions);
-    assert(object()->mark() == markWord::encode(this),
-           "object mark must match encoded this: mark=" INTPTR_FORMAT
-           ", encoded this=" INTPTR_FORMAT, object()->mark().value(),
-           markWord::encode(this).value());
+    assert_monitor_object();
     current->_Stalled = 0;
     return true;
   }
@@ -450,7 +460,7 @@ bool ObjectMonitor::enter(JavaThread* current) {
   assert(_recursions == 0, "invariant");
   assert(owner_raw() == current, "invariant");
   assert(_succ != current, "invariant");
-  assert(object()->mark() == markWord::encode(this), "invariant");
+  assert_monitor_object();
 
   // The thread -- now the owner -- is back in vm mode.
   // Report the glorious news via TI,DTrace and jvmstat.
@@ -606,6 +616,21 @@ bool ObjectMonitor::deflate_monitor() {
   return true;  // Success, ObjectMonitor has been deflated.
 }
 
+// We might access the dead object headers for parsable heap walk, make sure
+// headers are in correct shape, e.g. monitors deflated.
+void ObjectMonitor::maybe_deflate_dead(oop* p) {
+  oop obj = *p;
+  assert(obj != NULL, "must not yet been cleared");
+  markWord mark = obj->mark();
+  ObjectMonitor* monitor = ObjectMonitorMapper::get_monitor(obj, mark);
+  if (monitor != nullptr) {
+    if (p == monitor->_object.ptr_raw()) {
+      assert(monitor->object_peek() == obj, "lock object must match");
+      monitor->install_displaced_markword_in_object(obj);
+    }
+  }
+}
+
 // Install the displaced mark word (dmw) of a deflating ObjectMonitor
 // into the header of the object associated with the monitor. This
 // idempotent method is called by a thread that is deflating a
@@ -642,14 +667,25 @@ void ObjectMonitor::install_displaced_markword_in_object(const oop obj) {
   // Install displaced mark word if the object's header still points
   // to this ObjectMonitor. More than one racing caller to this function
   // can rarely reach this point, but only one can win.
-  markWord res = obj->cas_set_mark(dmw, markWord::encode(this));
-  if (res != markWord::encode(this)) {
+  markWord expected;
+  if (UseCompactObjectHeaders) {
+    expected = dmw.set_has_monitor();
+  } else {
+    expected = markWord::encode(this);
+  }
+  markWord res = obj->cas_set_mark(dmw, expected);
+  if (res != expected) {
     // This should be rare so log at the Info level when it happens.
     log_info(monitorinflation)("install_displaced_markword_in_object: "
                                "failed cas_set_mark: new_mark=" INTPTR_FORMAT
                                ", old_mark=" INTPTR_FORMAT ", res=" INTPTR_FORMAT,
                                dmw.value(), markWord::encode(this).value(),
                                res.value());
+  } else {
+    if (UseCompactObjectHeaders) {
+      bool removed = ObjectMonitorMapper::remove_monitor(this);
+      assert(removed, "somebody else re-inflated");
+    }
   }
 
   // Note: It does not matter which thread restored the header/dmw
@@ -948,8 +984,7 @@ void ObjectMonitor::ReenterI(JavaThread* current, ObjectWaiter* currentNode) {
   assert(currentNode != nullptr, "invariant");
   assert(currentNode->_thread == current, "invariant");
   assert(_waiters > 0, "invariant");
-  assert(object()->mark() == markWord::encode(this), "invariant");
-
+  assert_monitor_object();
   assert(current->thread_state() != _thread_blocked, "invariant");
 
   int nWakeups = 0;
@@ -1007,7 +1042,7 @@ void ObjectMonitor::ReenterI(JavaThread* current, ObjectWaiter* currentNode) {
   // In addition, current.TState is stable.
 
   assert(owner_raw() == current, "invariant");
-  assert(object()->mark() == markWord::encode(this), "invariant");
+  assert_monitor_object();
   UnlinkAfterAcquire(current, currentNode);
   if (_succ == current) _succ = nullptr;
   assert(_succ != current, "invariant");
@@ -1638,7 +1673,7 @@ void ObjectMonitor::wait(jlong millis, bool interruptible, TRAPS) {
   // Verify a few postconditions
   assert(owner_raw() == current, "invariant");
   assert(_succ != current, "invariant");
-  assert(object()->mark() == markWord::encode(this), "invariant");
+  assert_monitor_object();
 
   // check if the notification happened
   if (!WasNotified) {
