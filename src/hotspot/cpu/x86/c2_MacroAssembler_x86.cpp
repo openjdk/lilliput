@@ -663,8 +663,15 @@ void C2_MacroAssembler::fast_lock(Register objReg, Register boxReg, Register tmp
   // (rsp or the address of the box) into  m->owner is harmless.
   // Invariant: tmpReg == 0.  tmpReg is EAX which is the implicit cmpxchg comparand.
   lock();
-  cmpxchgptr(thread, Address(boxReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner)));
+  cmpxchgptr(scrReg, Address(boxReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner)));
   movptr(Address(scrReg, 0), 3);          // box->_displaced_header = 3
+  // If we weren't able to swing _owner from null to the BasicLock
+  // then take the slow path.
+  jccb  (Assembler::notZero, NO_COUNT);
+  // update _owner from BasicLock to thread
+  get_thread (scrReg);                    // beware: clobbers ICCs
+  movptr(Address(boxReg, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner)), scrReg);
+  xorptr(boxReg, boxReg);                 // set icc.ZFlag = 1 to indicate success
 
   // If the CAS fails we can either retry or pass control to the slow path.
   // We use the latter tactic.
@@ -6172,3 +6179,15 @@ void C2_MacroAssembler::vector_rearrange_int_float(BasicType bt, XMMRegister dst
     vpermps(dst, shuffle, src, vlen_enc);
   }
 }
+
+#ifdef _LP64
+void C2_MacroAssembler::load_nklass_compact_c2(Register dst, Register obj) {
+  C2LoadNKlassStub* stub = new (Compile::current()->comp_arena()) C2LoadNKlassStub(dst);
+  Compile::current()->output()->add_stub(stub);
+  movq(dst, Address(obj, oopDesc::mark_offset_in_bytes()));
+  testb(dst, markWord::monitor_value);
+  jcc(Assembler::notZero, stub->entry());
+  bind(stub->continuation());
+  shrq(dst, markWord::klass_shift);
+}
+#endif

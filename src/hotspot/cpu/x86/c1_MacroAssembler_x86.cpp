@@ -164,21 +164,20 @@ void C1_MacroAssembler::try_allocate(Register obj, Register var_size_in_bytes, i
 
 void C1_MacroAssembler::initialize_header(Register obj, Register klass, Register len, Register t1, Register t2) {
   assert_different_registers(obj, klass, len, t1, t2);
+#ifdef _LP64
   if (UseCompactObjectHeaders) {
     movptr(t1, Address(klass, Klass::prototype_header_offset()));
     movptr(Address(obj, oopDesc::mark_offset_in_bytes()), t1);
-  } else {
+  } else if (UseCompressedClassPointers) { // Take care not to kill klass
     movptr(Address(obj, oopDesc::mark_offset_in_bytes()), checked_cast<int32_t>(markWord::prototype().value()));
-#ifdef _LP64
-    if (UseCompressedClassPointers) { // Take care not to kill klass
-      movptr(t1, klass);
-      encode_klass_not_null(t1, rscratch1);
-      movl(Address(obj, oopDesc::klass_offset_in_bytes()), t1);
-    } else
+    movptr(t1, klass);
+    encode_klass_not_null(t1, rscratch1);
+    movl(Address(obj, oopDesc::klass_offset_in_bytes()), t1);
+  } else
 #endif
-    {
-      movptr(Address(obj, oopDesc::klass_offset_in_bytes()), klass);
-    }
+  {
+    movptr(Address(obj, oopDesc::mark_offset_in_bytes()), checked_cast<int32_t>(markWord::prototype().value()));
+    movptr(Address(obj, oopDesc::klass_offset_in_bytes()), klass);
   }
   if (len->is_valid()) {
     movl(Address(obj, arrayOopDesc::length_offset_in_bytes()), len);
@@ -218,7 +217,9 @@ void C1_MacroAssembler::initialize_object(Register obj, Register klass, Register
   assert((con_size_in_bytes & MinObjAlignmentInBytesMask) == 0,
          "con_size_in_bytes is not multiple of alignment");
   const int hdr_size_in_bytes = instanceOopDesc::header_size() * HeapWordSize;
-
+  if (UseCompactObjectHeaders) {
+    assert(hdr_size_in_bytes == 8, "check object headers size");
+  }
   initialize_header(obj, klass, noreg, t1, t2);
 
   if (!(UseTLAB && ZeroTLAB && is_tlab_allocated)) {
@@ -226,31 +227,30 @@ void C1_MacroAssembler::initialize_object(Register obj, Register klass, Register
     const Register t1_zero = t1;
     const Register index = t2;
     const int threshold = 6 * BytesPerWord;   // approximate break even point for code size (see comments below)
-    int hdr_size_aligned = align_up(hdr_size_in_bytes, BytesPerWord); // klass gap is already cleared by init_header().
     if (var_size_in_bytes != noreg) {
       mov(index, var_size_in_bytes);
-      initialize_body(obj, index, hdr_size_aligned, t1_zero);
+      initialize_body(obj, index, hdr_size_in_bytes, t1_zero);
     } else if (con_size_in_bytes <= threshold) {
       // use explicit null stores
       // code size = 2 + 3*n bytes (n = number of fields to clear)
       xorptr(t1_zero, t1_zero); // use t1_zero reg to clear memory (shorter code)
-      for (int i = hdr_size_aligned; i < con_size_in_bytes; i += BytesPerWord)
+      for (int i = hdr_size_in_bytes; i < con_size_in_bytes; i += BytesPerWord)
         movptr(Address(obj, i), t1_zero);
-    } else if (con_size_in_bytes > hdr_size_aligned) {
+    } else if (con_size_in_bytes > hdr_size_in_bytes) {
       // use loop to null out the fields
       // code size = 16 bytes for even n (n = number of fields to clear)
       // initialize last object field first if odd number of fields
       xorptr(t1_zero, t1_zero); // use t1_zero reg to clear memory (shorter code)
-      movptr(index, (con_size_in_bytes - hdr_size_aligned) >> 3);
+      movptr(index, (con_size_in_bytes - hdr_size_in_bytes) >> 3);
       // initialize last object field if constant size is odd
-      if (((con_size_in_bytes - hdr_size_aligned) & 4) != 0)
+      if (((con_size_in_bytes - hdr_size_in_bytes) & 4) != 0)
         movptr(Address(obj, con_size_in_bytes - (1*BytesPerWord)), t1_zero);
       // initialize remaining object fields: rdx is a multiple of 2
       { Label loop;
         bind(loop);
-        movptr(Address(obj, index, Address::times_8, hdr_size_aligned - (1*BytesPerWord)),
+        movptr(Address(obj, index, Address::times_8, hdr_size_in_bytes - (1*BytesPerWord)),
                t1_zero);
-        NOT_LP64(movptr(Address(obj, index, Address::times_8, hdr_size_aligned - (2*BytesPerWord)),
+        NOT_LP64(movptr(Address(obj, index, Address::times_8, hdr_size_in_bytes - (2*BytesPerWord)),
                t1_zero);)
         decrement(index);
         jcc(Assembler::notZero, loop);
@@ -287,9 +287,22 @@ void C1_MacroAssembler::allocate_array(Register obj, Register len, Register t1, 
 
   initialize_header(obj, klass, len, t1, t2);
 
+  // Clear leading 4 bytes, if necessary.
+  // TODO: This could perhaps go into initialize_body() and also clear the leading 4 bytes
+  // for non-array objects, thereby replacing the klass-gap clearing code in initialize_header().
+  int base_offset = base_offset_in_bytes;
+#ifdef _LP64
+  if (!is_aligned(base_offset, BytesPerWord)) {
+    assert(is_aligned(base_offset, BytesPerInt), "must be 4-byte aligned");
+    movl(Address(obj, base_offset), 0);
+    base_offset += BytesPerInt;
+  }
+#endif
+  assert(is_aligned(base_offset, BytesPerWord), "must be word aligned");
+
   // clear rest of allocated space
   const Register len_zero = len;
-  initialize_body(obj, arr_size, base_offset_in_bytes, len_zero);
+  initialize_body(obj, arr_size, base_offset, len_zero);
 
   if (CURRENT_ENV->dtrace_alloc_probes()) {
     assert(obj == rax, "must be");
@@ -304,8 +317,7 @@ void C1_MacroAssembler::allocate_array(Register obj, Register len, Register t1, 
 void C1_MacroAssembler::inline_cache_check(Register receiver, Register iCache) {
   verify_oop(receiver);
   // explicit null check not needed since load from [klass_offset] causes a trap
-  // check against inline cache
-  assert(!MacroAssembler::needs_explicit_null_check(oopDesc::klass_offset_in_bytes()), "must add explicit null check");
+  // check against inline cache. This is checked in Universe::genesis().
   int start_offset = offset();
 
   if (UseCompressedClassPointers) {

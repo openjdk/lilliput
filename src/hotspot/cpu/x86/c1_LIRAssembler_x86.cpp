@@ -3195,8 +3195,6 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
 
   Address src_length_addr = Address(src, arrayOopDesc::length_offset_in_bytes());
   Address dst_length_addr = Address(dst, arrayOopDesc::length_offset_in_bytes());
-  Address src_klass_addr = Address(src, oopDesc::klass_offset_in_bytes());
-  Address dst_klass_addr = Address(dst, oopDesc::klass_offset_in_bytes());
 
   // length and pos's are all sign extended at this point on 64bit
 
@@ -3321,6 +3319,7 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
        store_parameter(src, 4);
 
 #ifndef _LP64
+        Address dst_klass_addr = Address(dst, oopDesc::klass_offset_in_bytes());
         __ movptr(tmp, dst_klass_addr);
         __ movptr(tmp, Address(tmp, ObjArrayKlass::element_klass_offset()));
         __ push(tmp);
@@ -3537,13 +3536,14 @@ void LIR_Assembler::emit_load_klass(LIR_OpLoadKlass* op) {
     // Fast-path: shift and decode Klass*.
     __ shrq(result, markWord::klass_shift);
     __ decode_klass_not_null(result, tmp);
-  } else
-  if (UseCompressedClassPointers) {
+  } else if (UseCompressedClassPointers) {
     __ movl(result, Address(obj, oopDesc::klass_offset_in_bytes()));
     __ decode_klass_not_null(result, rscratch1);
   } else
 #endif
+  {
     __ movptr(result, Address(obj, oopDesc::klass_offset_in_bytes()));
+  }
 }
 
 void LIR_Assembler::emit_profile_call(LIR_OpProfileCall* op) {
