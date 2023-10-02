@@ -725,7 +725,7 @@ void ArchiveBuilder::make_klasses_shareable() {
     Klass* k = get_buffered_addr(klasses()->at(i));
     k->remove_java_mirror();
 #ifdef _LP64
-#ifdef INCLUDE_CDS_JAVA_HEAP
+#if INCLUDE_CDS_JAVA_HEAP
     if (UseCompactObjectHeaders) {
       Klass* requested_k = to_requested(k);
       address narrow_klass_base = _requested_static_archive_bottom; // runtime encoding base == runtime mapping start
