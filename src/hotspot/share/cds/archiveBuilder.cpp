@@ -725,6 +725,7 @@ void ArchiveBuilder::make_klasses_shareable() {
     Klass* k = get_buffered_addr(klasses()->at(i));
     k->remove_java_mirror();
 #ifdef _LP64
+#ifdef INCLUDE_CDS_JAVA_HEAP
     if (UseCompactObjectHeaders) {
       Klass* requested_k = to_requested(k);
       address narrow_klass_base = _requested_static_archive_bottom; // runtime encoding base == runtime mapping start
@@ -732,6 +733,7 @@ void ArchiveBuilder::make_klasses_shareable() {
       narrowKlass nk = CompressedKlassPointers::encode_not_null(requested_k, narrow_klass_base, narrow_klass_shift);
       k->set_prototype_header(markWord::prototype().set_narrow_klass(nk));
     }
+#endif // INCLUDE_CDS_JAVA_HEAP
 #endif //_LP64
     if (k->is_objArray_klass()) {
       // InstanceKlass and TypeArrayKlass will in turn call remove_unshareable_info
