@@ -66,17 +66,11 @@ class ObjectSampleMarker : public StackObj {
   void mark(oop obj) {
     assert(obj != nullptr, "invariant");
     // save the original markWord
-    markWord mark = obj->mark();
-    _store->push(ObjectSampleMarkWord(obj, mark));
+    _store->push(ObjectSampleMarkWord(obj, obj->mark()));
     // now we will set the mark word to "marked" in order to quickly
     // identify sample objects during the reachability search from gc roots.
     assert(!obj->mark().is_marked(), "should only mark an object once");
-#ifdef _LP64
-    if (mark.has_displaced_mark_helper()) {
-      mark = mark.displaced_mark_helper();
-    }
-#endif
-    obj->set_mark(markWord::prototype().set_marked() LP64_ONLY(.set_narrow_klass(mark.narrow_klass())));
+    obj->set_mark(obj->prototype_mark().set_marked());
     assert(obj->mark().is_marked(), "invariant");
   }
 };

@@ -25,8 +25,9 @@
 #ifndef SHARE_OOPS_MARKWORD_HPP
 #define SHARE_OOPS_MARKWORD_HPP
 
+#include "gc/shared/gc_globals.hpp"
 #include "metaprogramming/primitiveConversions.hpp"
-#include "oops/compressedKlass.hpp" // for narrowKlass
+#include "oops/compressedKlass.hpp"
 #include "oops/oopsHierarchy.hpp"
 #include "runtime/globals.hpp"
 
@@ -283,12 +284,12 @@ class markWord {
   }
 
 #ifdef _LP64
+  inline markWord actual_mark() const;
   inline Klass* klass() const;
   inline Klass* klass_or_null() const;
-  inline Klass* safe_klass() const;
-  inline markWord set_klass(const Klass* klass) const;
   inline narrowKlass narrow_klass() const;
-  inline markWord set_narrow_klass(const narrowKlass klass) const;
+  inline markWord set_narrow_klass(narrowKlass nklass) const;
+  inline markWord set_klass(Klass* klass) const;
 #endif
 
   // Prototype mark for initialization
@@ -305,13 +306,18 @@ class markWord {
   // Recover address of oop from encoded form used in mark
   inline void* decode_pointer() { return (void*)clear_lock_bits().value(); }
 
+#ifdef _LP64
   inline bool self_forwarded() const {
-    return mask_bits(value(), self_forwarded_mask_in_place) != 0;
+    bool self_fwd = mask_bits(value(), self_forwarded_mask_in_place) != 0;
+    assert(!self_fwd || UseAltGCForwarding, "Only set self-fwd bit when using alt GC forwarding");
+    return self_fwd;
   }
 
   inline markWord set_self_forwarded() const {
+    assert(UseAltGCForwarding, "Only call this with alt GC forwarding");
     return markWord(value() | self_forwarded_mask_in_place | marked_value);
   }
+#endif
 };
 
 // Support atomic operations.

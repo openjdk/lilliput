@@ -83,8 +83,6 @@ public:
   bool is_bitmap_clear() const;
   bool is_bitmap_clear_range(HeapWord* start, HeapWord* end) const;
 
-  size_t count_marked(MemRegion mr) const;
-
   bool is_complete();
   void mark_complete();
   void mark_incomplete();

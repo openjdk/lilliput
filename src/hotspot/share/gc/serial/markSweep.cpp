@@ -29,7 +29,6 @@
 #include "gc/shared/gcTimer.hpp"
 #include "gc/shared/gcTrace.hpp"
 #include "gc/shared/gc_globals.hpp"
-#include "gc/shared/genCollectedHeap.hpp"
 #include "memory/iterator.inline.hpp"
 #include "memory/universe.hpp"
 #include "oops/access.inline.hpp"
@@ -61,7 +60,6 @@ MarkSweep::FollowRootClosure  MarkSweep::follow_root_closure;
 
 MarkAndPushClosure MarkSweep::mark_and_push_closure(ClassLoaderData::_claim_stw_fullgc_mark);
 CLDToOopClosure    MarkSweep::follow_cld_closure(&mark_and_push_closure, ClassLoaderData::_claim_stw_fullgc_mark);
-CLDToOopClosure    MarkSweep::adjust_cld_closure(&adjust_pointer_closure, ClassLoaderData::_claim_stw_fullgc_adjust);
 
 template <class T> void MarkSweep::KeepAliveClosure::do_oop_work(T* p) {
   mark_and_push(p);
@@ -165,33 +163,17 @@ void MarkSweep::mark_object(oop obj) {
     _string_dedup_requests->add(obj);
   }
 
+  // Do the transform while we still have the header intact,
+  // which might include important class information.
   ContinuationGCSupport::transform_stack_chunk(obj);
 
   // some marks may contain information we need to preserve so we store them away
   // and overwrite the mark.  We'll restore it at the end of markSweep.
   markWord mark = obj->mark();
-#ifdef _LP64
-  if (UseCompactObjectHeaders) {
-    markWord real_mark = mark;
-    if (real_mark.has_displaced_mark_helper()) {
-      real_mark = real_mark.displaced_mark_helper();
-    }
-    Klass* klass = real_mark.klass();
-    obj->set_mark(klass->prototype_header().set_marked());
-  } else
-#endif
-  {
-    obj->set_mark(markWord::prototype().set_marked());
-  }
+  obj->set_mark(obj->prototype_mark().set_marked());
 
   if (obj->mark_must_be_preserved(mark)) {
     preserve_mark(obj, mark);
-  }
-
-  if (GenCollectedHeap::heap()->is_in_young(obj)) {
-    _young_marked_objects++;
-  } else {
-    _old_marked_objects++;
   }
 }
 
@@ -211,16 +193,23 @@ void MarkAndPushClosure::do_oop_work(T* p)            { MarkSweep::mark_and_push
 void MarkAndPushClosure::do_oop(      oop* p)         { do_oop_work(p); }
 void MarkAndPushClosure::do_oop(narrowOop* p)         { do_oop_work(p); }
 
-AdjustPointerClosure MarkSweep::adjust_pointer_closure;
-
-void MarkSweep::adjust_marks() {
+template <bool ALT_FWD>
+void MarkSweep::adjust_marks_impl() {
   // adjust the oops we saved earlier
   for (size_t i = 0; i < _preserved_count; i++) {
-    PreservedMarks::adjust_preserved_mark(_preserved_marks + i);
+    PreservedMarks::adjust_preserved_mark<ALT_FWD>(_preserved_marks + i);
   }
 
   // deal with the overflow stack
   _preserved_overflow_stack_set.get()->adjust_during_full_gc();
+}
+
+void MarkSweep::adjust_marks() {
+  if (UseAltGCForwarding) {
+    adjust_marks_impl<true>();
+  } else {
+    adjust_marks_impl<false>();
+  }
 }
 
 void MarkSweep::restore_marks() {
@@ -240,9 +229,6 @@ MarkSweep::IsAliveClosure   MarkSweep::is_alive;
 bool MarkSweep::IsAliveClosure::do_object_b(oop p) { return p->is_gc_marked(); }
 
 MarkSweep::KeepAliveClosure MarkSweep::keep_alive;
-
-size_t MarkSweep::_young_marked_objects = 0;
-size_t MarkSweep::_old_marked_objects = 0;
 
 void MarkSweep::KeepAliveClosure::do_oop(oop* p)       { MarkSweep::KeepAliveClosure::do_oop_work(p); }
 void MarkSweep::KeepAliveClosure::do_oop(narrowOop* p) { MarkSweep::KeepAliveClosure::do_oop_work(p); }

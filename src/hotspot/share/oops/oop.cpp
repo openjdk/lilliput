@@ -35,7 +35,6 @@
 #include "oops/oop.inline.hpp"
 #include "oops/verifyOopClosure.hpp"
 #include "runtime/handles.inline.hpp"
-#include "runtime/interfaceSupport.inline.hpp"
 #include "runtime/javaThread.hpp"
 #include "runtime/synchronizer.hpp"
 #include "utilities/macros.hpp"
@@ -157,8 +156,8 @@ bool oopDesc::is_objArray_noinline()    const { return is_objArray();    }
 bool oopDesc::is_typeArray_noinline()   const { return is_typeArray();   }
 
 bool oopDesc::has_klass_gap() {
-  // Only has a klass gap when compressed class pointers are used, but
-  // only if not using compact headers..
+  // Only has a klass gap when compressed class pointers are used.
+  // Except when using compact headers.
   return UseCompressedClassPointers && !UseCompactObjectHeaders;
 }
 
@@ -166,23 +165,20 @@ bool oopDesc::has_klass_gap() {
 void oopDesc::set_narrow_klass(narrowKlass nk) {
   assert(DumpSharedSpaces, "Used by CDS only. Do not abuse!");
   assert(UseCompressedClassPointers, "must be");
-  if (UseCompactObjectHeaders) {
-    set_mark(mark().set_narrow_klass(nk));
-  } else {
-    _metadata._compressed_klass = nk;
-  }
+  _metadata._compressed_klass = nk;
 }
 #endif
 
 void* oopDesc::load_klass_raw(oop obj) {
-  // TODO: Remove method altogether and replace with calls to obj->klass() ?
-  // OTOH, we may eventually get rid of locking in header, and then no
-  // longer have to deal with that anymore.
-#ifdef _LP64
-  return obj->klass();
-#else
-  return obj->_metadata._klass;
-#endif
+  if (UseCompactObjectHeaders) {
+    return obj->klass();
+  } else if (UseCompressedClassPointers) {
+    narrowKlass narrow_klass = obj->_metadata._compressed_klass;
+    if (narrow_klass == 0) return nullptr;
+    return (void*)CompressedKlassPointers::decode_raw(narrow_klass);
+  } else {
+    return obj->_metadata._klass;
+  }
 }
 
 void* oopDesc::load_oop_raw(oop obj, int offset) {

@@ -26,7 +26,6 @@
 #include "classfile/vmSymbols.hpp"
 #include "gc/shared/suspendibleThreadSet.hpp"
 #include "jfr/jfrEvents.hpp"
-#include "gc/shared/suspendibleThreadSet.hpp"
 #include "logging/log.hpp"
 #include "logging/logStream.hpp"
 #include "memory/allocation.inline.hpp"
@@ -1710,9 +1709,6 @@ size_t ObjectSynchronizer::deflate_idle_monitors(ObjectMonitorsHashtable* table)
 
       // A JavaThread needs to handshake in order to safely free the
       // ObjectMonitors that were deflated in this cycle.
-      // Also, we sync and desync GC threads around the handshake, so that they can
-      // safely read the mark-word and look-through to the object-monitor, without
-      // being afraid that the object-monitor is going away.
       HandshakeForDeflation hfd_hc;
       Handshake::execute(&hfd_hc);
       // Also, we sync and desync GC threads around the handshake, so that they can

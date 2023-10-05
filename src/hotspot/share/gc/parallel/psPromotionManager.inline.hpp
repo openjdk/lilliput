@@ -63,7 +63,7 @@ inline void PSPromotionManager::claim_or_forward_depth(T* p) {
   push_depth(ScannerTask(p));
 }
 
-inline void PSPromotionManager::promotion_trace_event(oop new_obj, oop old_obj, Klass* klass,
+inline void PSPromotionManager::promotion_trace_event(oop new_obj, Klass* klass,
                                                       size_t obj_size,
                                                       uint age, bool tenured,
                                                       const PSPromotionLAB* lab) {
@@ -163,15 +163,13 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
 
   oop new_obj = nullptr;
   bool new_obj_is_tenured = false;
-  Klass* klass;
-#ifdef _LP64
-  if (UseCompactObjectHeaders) {
-    klass = test_mark.safe_klass();
-  } else
-#endif
-  {
-    klass = o->klass();
-  }
+  // NOTE: With compact headers, it is not safe to load the Klass* from o, because
+  // that would access the mark-word, and the mark-word might change at any time by
+  // concurrent promotion. The promoted mark-word would point to the forwardee, which
+  // may not yet have completed copying. Therefore we must load the Klass* from
+  // the mark-word that we have already loaded. This is safe, because we have checked
+  // that this is not yet forwarded in the caller.
+  Klass* klass = o->forward_safe_klass(test_mark);
   size_t new_obj_size = o->size_given_klass(klass);
 
   // Find the objects age, MT safe.
@@ -187,7 +185,7 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
         if (new_obj_size > (YoungPLABSize / 2)) {
           // Allocate this object directly
           new_obj = cast_to_oop(young_space()->cas_allocate(new_obj_size));
-          promotion_trace_event(new_obj, o, klass, new_obj_size, age, false, nullptr);
+          promotion_trace_event(new_obj, klass, new_obj_size, age, false, nullptr);
         } else {
           // Flush and fill
           _young_lab.flush();
@@ -197,7 +195,7 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
             _young_lab.initialize(MemRegion(lab_base, YoungPLABSize));
             // Try the young lab allocation again.
             new_obj = cast_to_oop(_young_lab.allocate(new_obj_size));
-            promotion_trace_event(new_obj, o, klass, new_obj_size, age, false, &_young_lab);
+            promotion_trace_event(new_obj, klass, new_obj_size, age, false, &_young_lab);
           } else {
             _young_gen_is_full = true;
           }
@@ -223,7 +221,7 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
         if (new_obj_size > (OldPLABSize / 2)) {
           // Allocate this object directly
           new_obj = cast_to_oop(old_gen()->allocate(new_obj_size));
-          promotion_trace_event(new_obj, o, klass, new_obj_size, age, true, nullptr);
+          promotion_trace_event(new_obj, klass, new_obj_size, age, true, nullptr);
         } else {
           // Flush and fill
           _old_lab.flush();
@@ -233,7 +231,7 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
             _old_lab.initialize(MemRegion(lab_base, OldPLABSize));
             // Try the old lab allocation again.
             new_obj = cast_to_oop(_old_lab.allocate(new_obj_size));
-            promotion_trace_event(new_obj, o, klass, new_obj_size, age, true, &_old_lab);
+            promotion_trace_event(new_obj, klass, new_obj_size, age, true, &_old_lab);
           }
         }
       }
@@ -256,9 +254,19 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
   // Copy obj
   Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(o), cast_from_oop<HeapWord*>(new_obj), new_obj_size);
 
-  if (!new_obj->mark().is_marked()) {
-    // Parallel GC claims with a release - so other threads might access this object
-    // after claiming and they should see the "completed" object.
+  if (UseCompactObjectHeaders) {
+    // The copy above is not atomic. Make sure we have seen the proper mark
+    // and re-install it into the copy, so that Klass* is guaranteed to be correct.
+    markWord mark = o->mark();
+    if (!mark.is_marked()) {
+      new_obj->set_mark(mark);
+      ContinuationGCSupport::transform_stack_chunk(new_obj);
+    } else {
+      // If we copied a mark-word that indicates 'forwarded' state, the object
+      // installation would not succeed. We cannot access Klass* anymore either.
+      // Skip the transformation.
+    }
+  } else {
     ContinuationGCSupport::transform_stack_chunk(new_obj);
   }
 

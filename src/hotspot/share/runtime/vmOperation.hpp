@@ -91,7 +91,6 @@
   template(SetNotifyJvmtiEventsMode)              \
   template(HeapWalkOperation)                     \
   template(HeapIterateOperation)                  \
-  template(HeapObjectStatistics)                  \
   template(ReportJavaOutOfMemory)                 \
   template(JFRCheckpoint)                         \
   template(ShenandoahFullGC)                      \

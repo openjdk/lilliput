@@ -226,6 +226,7 @@ void G1ParScanThreadState::do_partial_array(PartialArrayScanTask task) {
   oop from_obj = task.to_source_array();
 
   assert(_g1h->is_in_reserved(from_obj), "must be in heap.");
+  assert(from_obj->forward_safe_klass()->is_objArray_klass(), "must be obj array");
   assert(from_obj->is_forwarded(), "must be forwarded");
 
   oop to_obj = from_obj->forwardee();
@@ -255,6 +256,7 @@ MAYBE_INLINE_EVACUATION
 void G1ParScanThreadState::start_partial_objarray(G1HeapRegionAttr dest_attr,
                                                   oop from_obj,
                                                   oop to_obj) {
+  assert(from_obj->forward_safe_klass()->is_objArray_klass(), "precondition");
   assert(from_obj->is_forwarded(), "precondition");
   assert(from_obj->forwardee() == to_obj, "precondition");
   assert(from_obj != to_obj, "should not be scanning self-forwarded objects");
@@ -381,7 +383,7 @@ G1HeapRegionAttr G1ParScanThreadState::next_region_attr(G1HeapRegionAttr const r
 }
 
 void G1ParScanThreadState::report_promotion_event(G1HeapRegionAttr const dest_attr,
-                                                  oop const old, Klass* klass, size_t word_sz, uint age,
+                                                  Klass* klass, size_t word_sz, uint age,
                                                   HeapWord * const obj_ptr, uint node_index) const {
   PLAB* alloc_buf = _plab_allocator->alloc_buffer(dest_attr, node_index);
   if (alloc_buf->contains(obj_ptr)) {
@@ -396,7 +398,6 @@ void G1ParScanThreadState::report_promotion_event(G1HeapRegionAttr const dest_at
 
 NOINLINE
 HeapWord* G1ParScanThreadState::allocate_copy_slow(G1HeapRegionAttr* dest_attr,
-                                                   oop old,
                                                    Klass* klass,
                                                    size_t word_sz,
                                                    uint age,
@@ -420,7 +421,7 @@ HeapWord* G1ParScanThreadState::allocate_copy_slow(G1HeapRegionAttr* dest_attr,
     update_numa_stats(node_index);
     if (_g1h->gc_tracer_stw()->should_report_promotion_events()) {
       // The events are checked individually as part of the actual commit
-      report_promotion_event(*dest_attr, old, klass, word_sz, age, obj_ptr, node_index);
+      report_promotion_event(*dest_attr, klass, word_sz, age, obj_ptr, node_index);
     }
   }
   return obj_ptr;
@@ -455,21 +456,15 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
   assert(region_attr.is_in_cset(),
          "Unexpected region attr type: %s", region_attr.get_type_str());
 
-  if (old_mark.is_marked()) {
-    // Already forwarded by somebody else, return forwardee.
-    return old->forwardee(old_mark);
-  }
   // Get the klass once.  We'll need it again later, and this avoids
   // re-decoding when it's compressed.
-  Klass* klass;
-#ifdef _LP64
-  if (UseCompactObjectHeaders) {
-    klass = old_mark.safe_klass();
-  } else
-#endif
-  {
-    klass = old->klass();
-  }
+  // NOTE: With compact headers, it is not safe to load the Klass* from o, because
+  // that would access the mark-word, and the mark-word might change at any time by
+  // concurrent promotion. The promoted mark-word would point to the forwardee, which
+  // may not yet have completed copying. Therefore we must load the Klass* from
+  // the mark-word that we have already loaded. This is safe, because we have checked
+  // that this is not yet forwarded in the caller.
+  Klass* klass = old->forward_safe_klass(old_mark);
   const size_t word_sz = old->size_given_klass(klass);
 
   uint age = 0;
@@ -482,7 +477,7 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
   // PLAB allocations should succeed most of the time, so we'll
   // normally check against null once and that's it.
   if (obj_ptr == nullptr) {
-    obj_ptr = allocate_copy_slow(&dest_attr, old, klass, word_sz, age, node_index);
+    obj_ptr = allocate_copy_slow(&dest_attr, klass, word_sz, age, node_index);
     if (obj_ptr == nullptr) {
       // This will either forward-to-self, or detect that someone else has
       // installed a forwarding pointer.

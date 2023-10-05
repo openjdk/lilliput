@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,8 +23,8 @@
  */
 
 #include "precompiled.hpp"
-#include "gc/shared/gcForwarding.inline.hpp"
 #include "gc/shared/preservedMarks.inline.hpp"
+#include "gc/shared/slidingForwarding.inline.hpp"
 #include "gc/shared/workerThread.hpp"
 #include "gc/shared/workerUtils.hpp"
 #include "memory/allocation.inline.hpp"
@@ -41,18 +41,20 @@ void PreservedMarks::restore() {
   assert_empty();
 }
 
-void PreservedMarks::adjust_preserved_mark(PreservedMark* elem) {
-  oop obj = elem->get_oop();
-  if (GCForwarding::is_forwarded(obj)) {
-    elem->set_oop(GCForwarding::forwardee(obj));
+template <bool ALT_FWD>
+void PreservedMarks::adjust_during_full_gc_impl() {
+  StackIterator<PreservedMark, mtGC> iter(_stack);
+  while (!iter.is_empty()) {
+    PreservedMark* elem = iter.next_addr();
+    adjust_preserved_mark<ALT_FWD>(elem);
   }
 }
 
 void PreservedMarks::adjust_during_full_gc() {
-  StackIterator<PreservedMark, mtGC> iter(_stack);
-  while (!iter.is_empty()) {
-    PreservedMark* elem = iter.next_addr();
-    adjust_preserved_mark(elem);
+  if (UseAltGCForwarding) {
+    adjust_during_full_gc_impl<true>();
+  } else {
+    adjust_during_full_gc_impl<false>();
   }
 }
 

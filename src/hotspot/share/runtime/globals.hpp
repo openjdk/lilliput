@@ -131,7 +131,7 @@ const size_t minimumSymbolTableSize = 1024;
           "lp64_product means flag is always constant in 32 bit VM")        \
                                                                             \
   product(bool, UseCompactObjectHeaders, false, EXPERIMENTAL,               \
-          "Use 64-bit object headers instead of 96-bit headers")            \
+          "Use compact 64-bit object headers in 64-bit VM")                 \
                                                                             \
   product(int, ObjectAlignmentInBytes, 8,                                   \
           "Default object alignment in bytes, 8 is minimum")                \
@@ -1059,7 +1059,7 @@ const int ObjectAlignmentInBytes = 8;
   product(bool, ErrorFileToStdout, false,                                   \
           "If true, error data is printed to stdout instead of a file")     \
                                                                             \
-  product(bool, UseHeavyMonitors, false, DIAGNOSTIC,                        \
+  develop(bool, UseHeavyMonitors, false,                                    \
           "(Deprecated) Use heavyweight instead of lightweight Java "       \
           "monitors")                                                       \
                                                                             \
@@ -1982,12 +1982,6 @@ const int ObjectAlignmentInBytes = 8;
           false AARCH64_ONLY(DEBUG_ONLY(||true)),                           \
              "Mark all threads after a safepoint, and clear on a modify "   \
              "fence. Add cleanliness checks.")                              \
-                                                                            \
-  product(bool, HeapObjectStats, false, DIAGNOSTIC,                         \
-             "Enable gathering of heap object statistics")                  \
-                                                                            \
-  product(size_t, HeapObjectStatsSamplingInterval, 500, DIAGNOSTIC,         \
-             "Heap object statistics sampling interval (ms)")               \
                                                                             \
   product(int, LockingMode, LM_LEGACY, EXPERIMENTAL,                        \
           "Select locking mode: "                                           \
