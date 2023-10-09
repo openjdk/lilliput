@@ -424,7 +424,7 @@ size_t CollectedHeap::max_tlab_size() const {
   return align_down(max_int_size, MinObjAlignment);
 }
 
-size_t CollectedHeap::filler_array_hdr_size() { 
+size_t CollectedHeap::filler_array_hdr_size() {
   return align_object_offset(int_array_header_size()); // align to Long
 }
 
