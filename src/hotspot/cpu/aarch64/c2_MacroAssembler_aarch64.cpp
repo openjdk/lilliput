@@ -2071,7 +2071,7 @@ void C2_MacroAssembler::load_nklass_compact(Register dst, Register obj, Register
   // emits code that pre-computes obj-start + klass_offset_in_bytes into a register, and
   // then passes that register as obj and 0 in disp. The following code extracts the base
   // and offset to load the mark-word.
-  int offset = oopDesc::mark_offset_in_bytes() + disp - TypeOopPtr::klass_offset_in_bytes();
+  int offset = oopDesc::mark_offset_in_bytes() + disp - oopDesc::klass_offset_in_bytes();
   if (index == noreg) {
     ldr(dst, Address(obj, offset));
   } else {
