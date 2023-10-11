@@ -30,7 +30,6 @@
 #include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "oops/markWord.hpp"
 #include "runtime/javaThread.hpp"
-#include "runtime/synchronizer.hpp"
 
 inline oop ShenandoahForwarding::get_forwardee_raw(oop obj) {
   shenandoah_assert_in_heap(nullptr, obj);
@@ -87,7 +86,6 @@ inline oop ShenandoahForwarding::try_update_forwardee(oop obj, oop update) {
   if (prev_mark == old_mark) {
     return update;
   } else {
-    assert(prev_mark.is_marked(), "must be forwarded");
     return cast_to_oop(prev_mark.clear_lock_bits().to_pointer());
   }
 }

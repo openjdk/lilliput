@@ -843,16 +843,7 @@ void DefNewGeneration::collect(bool   full,
     // as a result of a partial evacuation of eden
     // and from-space.
     swap_spaces();   // For uniformity wrt ParNewGeneration.
-    // Ensure that compaction spaces are in address-order.
-    if (from()->bottom() < to()->bottom()) {
-      eden()->set_next_compaction_space(from());
-      from()->set_next_compaction_space(to());
-      to()->set_next_compaction_space(nullptr);
-    } else {
-      eden()->set_next_compaction_space(to());
-      to()->set_next_compaction_space(from());
-      from()->set_next_compaction_space(nullptr);
-    }
+    from()->set_next_compaction_space(to());
     heap->set_incremental_collection_failed();
 
     // Inform the next generation that a promotion failure occurred.
@@ -887,21 +878,7 @@ void DefNewGeneration::remove_forwarding_pointers() {
   struct ResetForwardedMarkWord : ObjectClosure {
     void do_object(oop obj) override {
       if (obj->is_forwarded()) {
-#ifdef _LP64
-        if (UseCompactObjectHeaders) {
-          oop forwardee = obj->forwardee();
-          markWord header = forwardee->mark();
-          if (header.has_displaced_mark_helper()) {
-            header = header.displaced_mark_helper();
-          }
-          assert(UseCompressedClassPointers, "assume +UseCompressedClassPointers");
-          narrowKlass nklass = header.narrow_klass();
-          obj->set_mark(markWord::prototype().set_narrow_klass(nklass));
-        } else
-#endif
-        {
-          obj->init_mark();
-        }
+        obj->forward_safe_init_mark();
       }
     }
   } cl;

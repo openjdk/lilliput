@@ -55,6 +55,7 @@ class VM_ShenandoahFullGC;
 class ShenandoahDegenGC;
 
 class ShenandoahFullGC : public ShenandoahGC {
+  template <bool ALT_FWD>
   friend class ShenandoahPrepareForCompactionObjectClosure;
   friend class VM_ShenandoahFullGC;
   friend class ShenandoahDegenGC;
@@ -82,8 +83,12 @@ private:
   void phase3_update_references();
   void phase4_compact_objects(ShenandoahHeapRegionSet** worker_slices);
 
+  template <bool ALT_FWD>
+  void calculate_target_humongous_objects_impl();
   void distribute_slices(ShenandoahHeapRegionSet** worker_slices);
   void calculate_target_humongous_objects();
+  template <bool ALT_FWD>
+  void compact_humongous_objects_impl();
   void compact_humongous_objects();
 };
 

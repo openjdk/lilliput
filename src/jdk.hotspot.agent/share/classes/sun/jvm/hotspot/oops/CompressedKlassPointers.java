@@ -69,14 +69,11 @@ public class CompressedKlassPointers {
     if (baseField.getValue() == null) {
       return 0;
     } else {
-        System.out.println("base: " + baseField.getValue().minus(null));
       return baseField.getValue().minus(null);
     }
   }
 
   public static int getShift() {
-
-      System.out.println("shift: " + (int)shiftField.getValue());
-      return (int)shiftField.getValue();
+    return (int)shiftField.getValue();
   }
 }

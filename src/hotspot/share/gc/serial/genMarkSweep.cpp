@@ -37,7 +37,6 @@
 #include "gc/serial/genMarkSweep.hpp"
 #include "gc/serial/serialGcRefProcProxyTask.hpp"
 #include "gc/shared/collectedHeap.inline.hpp"
-#include "gc/shared/gcForwarding.hpp"
 #include "gc/shared/gcHeapSummary.hpp"
 #include "gc/shared/gcTimer.hpp"
 #include "gc/shared/gcTrace.hpp"
@@ -48,6 +47,7 @@
 #include "gc/shared/preservedMarks.inline.hpp"
 #include "gc/shared/referencePolicy.hpp"
 #include "gc/shared/referenceProcessorPhaseTimes.hpp"
+#include "gc/shared/slidingForwarding.hpp"
 #include "gc/shared/space.hpp"
 #include "gc/shared/strongRootsScope.hpp"
 #include "gc/shared/weakProcessor.hpp"
@@ -90,7 +90,7 @@ void GenMarkSweep::invoke_at_safepoint(bool clear_all_softrefs) {
 
   mark_sweep_phase1(clear_all_softrefs);
 
-  GCForwarding::begin();
+  SlidingForwarding::begin();
 
   mark_sweep_phase2();
 
@@ -104,7 +104,7 @@ void GenMarkSweep::invoke_at_safepoint(bool clear_all_softrefs) {
 
   mark_sweep_phase4();
 
-  GCForwarding::end();
+  SlidingForwarding::end();
 
   restore_marks();
 
@@ -166,9 +166,6 @@ void GenMarkSweep::mark_sweep_phase1(bool clear_all_softrefs) {
   GCTraceTime(Info, gc, phases) tm("Phase 1: Mark live objects", _gc_timer);
 
   GenCollectedHeap* gch = GenCollectedHeap::heap();
-
-  _young_marked_objects = 0;
-  _old_marked_objects = 0;
 
   ClassLoaderDataGraph::verify_claimed_marks_cleared(ClassLoaderData::_claim_stw_fullgc_mark);
 
@@ -251,15 +248,29 @@ void GenMarkSweep::mark_sweep_phase3() {
 
   ClassLoaderDataGraph::verify_claimed_marks_cleared(ClassLoaderData::_claim_stw_fullgc_adjust);
 
-  CodeBlobToOopClosure code_closure(&adjust_pointer_closure, CodeBlobToOopClosure::FixRelocations);
-  gch->process_roots(GenCollectedHeap::SO_AllCodeCache,
-                     &adjust_pointer_closure,
-                     &adjust_cld_closure,
-                     &adjust_cld_closure,
-                     &code_closure);
+  if (UseAltGCForwarding) {
+    AdjustPointerClosure<true> adjust_pointer_closure;
+    CLDToOopClosure adjust_cld_closure(&adjust_pointer_closure, ClassLoaderData::_claim_stw_fullgc_adjust);
+    CodeBlobToOopClosure code_closure(&adjust_pointer_closure, CodeBlobToOopClosure::FixRelocations);
+    gch->process_roots(GenCollectedHeap::SO_AllCodeCache,
+                       &adjust_pointer_closure,
+                       &adjust_cld_closure,
+                       &adjust_cld_closure,
+                       &code_closure);
 
-  gch->gen_process_weak_roots(&adjust_pointer_closure);
+    gch->gen_process_weak_roots(&adjust_pointer_closure);
+  } else {
+    AdjustPointerClosure<false> adjust_pointer_closure;
+    CLDToOopClosure adjust_cld_closure(&adjust_pointer_closure, ClassLoaderData::_claim_stw_fullgc_adjust);
+    CodeBlobToOopClosure code_closure(&adjust_pointer_closure, CodeBlobToOopClosure::FixRelocations);
+    gch->process_roots(GenCollectedHeap::SO_AllCodeCache,
+                       &adjust_pointer_closure,
+                       &adjust_cld_closure,
+                       &adjust_cld_closure,
+                       &code_closure);
 
+    gch->gen_process_weak_roots(&adjust_pointer_closure);
+  }
   adjust_marks();
   GenAdjustPointersClosure blk;
   gch->generation_iterate(&blk, true);

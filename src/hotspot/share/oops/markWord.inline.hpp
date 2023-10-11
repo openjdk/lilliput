@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,13 +25,17 @@
 #ifndef SHARE_OOPS_MARKWORD_INLINE_HPP
 #define SHARE_OOPS_MARKWORD_INLINE_HPP
 
-#include "oops/compressedOops.inline.hpp"
 #include "oops/markWord.hpp"
-#include "runtime/safepoint.hpp"
+#include "oops/compressedOops.inline.hpp"
 
 #ifdef _LP64
-narrowKlass markWord::narrow_klass() const {
-  return narrowKlass(value() >> klass_shift);
+markWord markWord::actual_mark() const {
+  assert(UseCompactObjectHeaders, "only safe when using compact headers");
+  if (has_displaced_mark_helper()) {
+    return displaced_mark_helper();
+  } else {
+    return *this;
+  }
 }
 
 Klass* markWord::klass() const {
@@ -45,28 +49,22 @@ Klass* markWord::klass_or_null() const {
   return CompressedKlassPointers::decode(narrow_klass());
 }
 
-markWord markWord::set_narrow_klass(const narrowKlass nklass) const {
+narrowKlass markWord::narrow_klass() const {
+  assert(UseCompactObjectHeaders, "only used with compact object headers");
+  return narrowKlass(value() >> klass_shift);
+}
+
+markWord markWord::set_narrow_klass(narrowKlass nklass) const {
   assert(UseCompactObjectHeaders, "only used with compact object headers");
   return markWord((value() & ~klass_mask_in_place) | ((uintptr_t) nklass << klass_shift));
 }
 
-Klass* markWord::safe_klass() const {
-  assert(UseCompactObjectHeaders, "only used with compact object headers");
-  assert(SafepointSynchronize::is_at_safepoint(), "only call at safepoint");
-  markWord m = *this;
-  if (m.has_displaced_mark_helper()) {
-    m = m.displaced_mark_helper();
-  }
-  return CompressedKlassPointers::decode_not_null(m.narrow_klass());
-}
-
-markWord markWord::set_klass(const Klass* klass) const {
+markWord markWord::set_klass(Klass* klass) const {
   assert(UseCompactObjectHeaders, "only used with compact object headers");
   assert(UseCompressedClassPointers, "expect compressed klass pointers");
-  // TODO: Don't cast to non-const, change CKP::encode() to accept const Klass* instead.
   narrowKlass nklass = CompressedKlassPointers::encode(const_cast<Klass*>(klass));
   return set_narrow_klass(nklass);
 }
-#endif
+#endif // _LP64
 
 #endif // SHARE_OOPS_MARKWORD_INLINE_HPP

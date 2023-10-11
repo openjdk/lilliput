@@ -50,9 +50,9 @@ oop XObjArrayAllocator::initialize(HeapWord* mem) const {
   // time and time-to-safepoint
   const size_t segment_max = XUtils::bytes_to_words(64 * K);
   const BasicType element_type = ArrayKlass::cast(_klass)->element_type();
-int base_offset = arrayOopDesc::base_offset_in_bytes(element_type);
 
-  // Clear leading 32 bit, if necessary.
+  // Clear leading 32 bits, if necessary.
+  int base_offset = arrayOopDesc::base_offset_in_bytes(element_type);
   if (!is_aligned(base_offset, HeapWordSize)) {
     assert(is_aligned(base_offset, BytesPerInt), "array base must be 32 bit aligned");
     *reinterpret_cast<jint*>(reinterpret_cast<char*>(mem) + base_offset) = 0;

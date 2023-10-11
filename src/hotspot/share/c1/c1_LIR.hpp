@@ -1908,7 +1908,8 @@ class LIR_OpLoadKlass: public LIR_Op {
   LIR_OpLoadKlass(LIR_Opr obj, LIR_Opr result, CodeEmitInfo* info, CodeStub* stub)
     : LIR_Op(lir_load_klass, result, info)
     , _obj(obj)
-    , _stub(stub) {}
+    , _stub(stub)
+    {}
 
   LIR_Opr obj()        const { return _obj;  }
   CodeStub* stub()     const { return _stub; }

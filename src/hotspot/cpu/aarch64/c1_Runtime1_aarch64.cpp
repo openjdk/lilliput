@@ -288,6 +288,7 @@ static OopMap* save_live_registers(StubAssembler* sasm,
   } else {
     __ add(sp, sp, -32 * wordSize);
   }
+
   return generate_oop_map(sasm, save_fpu_registers);
 }
 

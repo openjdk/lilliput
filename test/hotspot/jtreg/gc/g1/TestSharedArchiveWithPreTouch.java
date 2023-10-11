@@ -57,11 +57,10 @@ public class TestSharedArchiveWithPreTouch {
         if (Platform.is64bit()) {
           dump_args.addAll(0, Arrays.asList(new String[] { "-XX:+UseCompressedClassPointers", "-XX:+UseCompressedOops" }));
         }
-        dump_args.addAll(Arrays.asList(new String[] { "-Xshare:dump", "-Xlog:cds*", "-Xlog:metaspace*" }));
+        dump_args.addAll(Arrays.asList(new String[] { "-Xshare:dump", "-Xlog:cds" }));
 
         pb = ProcessTools.createJavaProcessBuilder(dump_args);
         OutputAnalyzer output = new OutputAnalyzer(pb.start());
-        output.reportDiagnosticSummary();
         try {
             output.shouldContain("Loading classes to share");
             output.shouldHaveExitValue(0);
@@ -71,11 +70,10 @@ public class TestSharedArchiveWithPreTouch {
             if (Platform.is64bit()) {
                 load_args.addAll(0, Arrays.asList(new String[] { "-XX:+UseCompressedClassPointers", "-XX:+UseCompressedOops" }));
             }
-            load_args.addAll(Arrays.asList(new String[] { "-Xshare:on", "-Xlog:cds*", "-Xlog:metaspace*", "-version" }));
+            load_args.addAll(Arrays.asList(new String[] { "-Xshare:on", "-version" }));
 
             pb = ProcessTools.createJavaProcessBuilder(load_args.toArray(new String[0]));
             output = new OutputAnalyzer(pb.start());
-            output.reportDiagnosticSummary();
             output.shouldContain("sharing");
             output.shouldHaveExitValue(0);
         } catch (RuntimeException e) {

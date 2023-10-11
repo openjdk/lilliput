@@ -56,7 +56,6 @@
 #include "runtime/fieldDescriptor.inline.hpp"
 #include "runtime/init.hpp"
 #include "runtime/javaCalls.hpp"
-#include "runtime/safepoint.hpp"
 #include "runtime/mutexLocker.hpp"
 #include "runtime/safepointVerifiers.hpp"
 #include "utilities/bitMap.inline.hpp"
