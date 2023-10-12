@@ -5325,7 +5325,7 @@ instruct loadNKlass(rRegN dst, memory mem)
   ins_pipe(ialu_reg_mem); // XXX
 %}
 
-instruct loadNKlassCompactHeaders(rRegN dst, indOffset8 mem, rFlagsReg cr)
+instruct loadNKlassCompactHeaders(rRegN dst, memory mem, rFlagsReg cr)
 %{
   predicate(UseCompactObjectHeaders);
   match(Set dst (LoadNKlass mem));
