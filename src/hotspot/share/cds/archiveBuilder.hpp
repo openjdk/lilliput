@@ -91,8 +91,10 @@ const int SharedSpaceObjectAlignment = KlassAlignmentInBytes;
 //
 class ArchiveBuilder : public StackObj {
 public:
-  // Archived heap object headers carry pre-computed narrow Klass ids calculated with the
-  // following scheme:
+  // The archive contains pre-computed narrow Klass IDs in two places:
+  // - in the header of archived java objects (only if the archive contains java heap portions)
+  // - within the prototype markword of archived Klass structures.
+  // These narrow Klass ids have been computed at dump time with the following scheme:
   // 1) the encoding base must be the mapping start address.
   // 2) shift must be large enough to result in an encoding range that covers the runtime Klass range.
   //    That Klass range is defined by CDS archive size and runtime class space size. Luckily, the maximum
