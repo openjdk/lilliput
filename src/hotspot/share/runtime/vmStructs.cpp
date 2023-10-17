@@ -190,7 +190,7 @@ private:
 
 #define VM_STRUCTS(nonstatic_field,                                                                                                  \
                    static_field,                                                                                                     \
-                   static_ptr_volatile_field,                                                                                        \
+                   volatile_static_field,                                                                                            \
                    unchecked_nonstatic_field,                                                                                        \
                    volatile_nonstatic_field,                                                                                         \
                    nonproduct_nonstatic_field,                                                                                       \
@@ -204,6 +204,7 @@ private:
   /*************/                                                                                                                    \
                                                                                                                                      \
   VM_STRUCTS_GC(nonstatic_field,                                                                                                     \
+                volatile_static_field,                                                                                               \
                 volatile_nonstatic_field,                                                                                            \
                 static_field,                                                                                                        \
                 unchecked_nonstatic_field)                                                                                           \
@@ -457,7 +458,7 @@ private:
      static_field(PerfMemory,                  _top,                                          char*)                                 \
      static_field(PerfMemory,                  _capacity,                                     size_t)                                \
      static_field(PerfMemory,                  _prologue,                                     PerfDataPrologue*)                     \
-     static_field(PerfMemory,                  _initialized,                                  int)                                   \
+     volatile_static_field(PerfMemory,         _initialized,                                  int)                                   \
                                                                                                                                      \
   /********************/                                                                                                             \
   /* SystemDictionary */                                                                                                             \
@@ -487,7 +488,7 @@ private:
   volatile_nonstatic_field(ClassLoaderData,    _klasses,                                      Klass*)                                \
   nonstatic_field(ClassLoaderData,             _has_class_mirror_holder,                      bool)                                  \
                                                                                                                                      \
-  static_ptr_volatile_field(ClassLoaderDataGraph, _head,                                      ClassLoaderData*)                      \
+  volatile_static_field(ClassLoaderDataGraph, _head,                                          ClassLoaderData*)                      \
                                                                                                                                      \
   /**********/                                                                                                                       \
   /* Arrays */                                                                                                                       \
@@ -648,7 +649,7 @@ private:
   static_field(Threads,                     _number_of_non_daemon_threads,                    int)                                   \
   static_field(Threads,                     _return_code,                                     int)                                   \
                                                                                                                                      \
-  static_ptr_volatile_field(ThreadsSMRSupport, _java_thread_list,                             ThreadsList*)                          \
+  volatile_static_field(ThreadsSMRSupport, _java_thread_list,                                 ThreadsList*)                          \
   nonstatic_field(ThreadsList,                 _length,                                       const uint)                            \
   nonstatic_field(ThreadsList,                 _threads,                                      JavaThread *const *const)              \
                                                                                                                                      \
@@ -2702,7 +2703,7 @@ VMStructEntry VMStructs::localHotSpotVMStructs[] = {
 
   VM_STRUCTS(GENERATE_NONSTATIC_VM_STRUCT_ENTRY,
              GENERATE_STATIC_VM_STRUCT_ENTRY,
-             GENERATE_STATIC_PTR_VOLATILE_VM_STRUCT_ENTRY,
+             GENERATE_VOLATILE_STATIC_VM_STRUCT_ENTRY,
              GENERATE_UNCHECKED_NONSTATIC_VM_STRUCT_ENTRY,
              GENERATE_NONSTATIC_VM_STRUCT_ENTRY,
              GENERATE_NONPRODUCT_NONSTATIC_VM_STRUCT_ENTRY,
@@ -2904,7 +2905,7 @@ JNIEXPORT uint64_t gHotSpotVMLongConstantEntryArrayStride = STRIDE(gHotSpotVMLon
 void VMStructs::init() {
   VM_STRUCTS(CHECK_NONSTATIC_VM_STRUCT_ENTRY,
              CHECK_STATIC_VM_STRUCT_ENTRY,
-             CHECK_STATIC_PTR_VOLATILE_VM_STRUCT_ENTRY,
+             CHECK_VOLATILE_STATIC_VM_STRUCT_ENTRY,
              CHECK_NO_OP,
              CHECK_VOLATILE_NONSTATIC_VM_STRUCT_ENTRY,
              CHECK_NONPRODUCT_NONSTATIC_VM_STRUCT_ENTRY,
