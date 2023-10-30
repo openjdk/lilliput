@@ -57,9 +57,9 @@ TEST_VM(objArrayOop, osize) {
     { 256,        true,   false,    true,   32 }, // 16 byte header, 8 byte oops, 256-byte align
     { 256,        true,   true,     true,   32 }, // 16 byte header, 4 byte oops, 256-byte align
 #else
-    { 8,          false,  false,    4 }, // 12 byte header, 4 byte oops, wordsize 4
+    { 8,          false,  false,    false,  4 }, // 12 byte header, 4 byte oops, wordsize 4
 #endif
-    { -1,         false,  false,   -1 }
+    { -1,         false,  false,    false, -1 }
   };
   for (int i = 0; x[i].result != -1; i++) {
     if (x[i].objal == (int)ObjectAlignmentInBytes && x[i].ccp == UseCompressedClassPointers && x[i].coops == UseCompressedOops && x[i].coh == UseCompactObjectHeaders) {
