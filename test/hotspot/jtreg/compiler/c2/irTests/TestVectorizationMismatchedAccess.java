@@ -134,7 +134,7 @@ public class TestVectorizationMismatchedAccess {
             }
         }
         // Check the copied body bytes.
-        // 
+        //
         // When the offset is negative (i.e. backwarts-copy within the array),
         // the elements at i in byteArray must match the elements at i + offset
         // in the verifyByteArray.
