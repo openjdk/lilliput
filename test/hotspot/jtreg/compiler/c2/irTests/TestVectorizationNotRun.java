@@ -41,12 +41,15 @@ import java.util.Random;
 public class TestVectorizationNotRun {
     private static final Unsafe UNSAFE = Unsafe.getUnsafe();
 
+    // The unsafe offset of the first long-aligned array element in a byte array.
+    private static final int ALIGNED_BASE_OFFSET = UNSAFE.ARRAY_BYTE_BASE_OFFSET + UNSAFE.ARRAY_BYTE_BASE_OFFSET % Long.BYTES;
+
     public static void main(String[] args) {
         TestFramework.runWithFlags("--add-modules", "java.base", "--add-exports", "java.base/jdk.internal.misc=ALL-UNNAMED");
     }
 
     static int size = 1024;
-    static int sizeBytes = 8 * size;
+    static int sizeBytes = 8 * size + 8;
     static byte[] byteArray = new byte[sizeBytes];
     static long[] longArray = new long[size];
 
@@ -57,7 +60,7 @@ public class TestVectorizationNotRun {
             if ((i < 0) || (8 > sizeBytes - i)) {
                 throw new IndexOutOfBoundsException();
             }
-            UNSAFE.putLongUnaligned(dest, UNSAFE.ARRAY_BYTE_BASE_OFFSET + i * 8, src[i]);
+            UNSAFE.putLongUnaligned(dest, ALIGNED_BASE_OFFSET + i * 8, src[i]);
         }
     }
 
