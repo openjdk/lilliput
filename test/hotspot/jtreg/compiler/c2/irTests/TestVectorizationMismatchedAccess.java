@@ -102,20 +102,20 @@ public class TestVectorizationMismatchedAccess {
         Arrays.fill(byteArray, (byte)0);
         test.run();
         int i;
-	// Check head (including possibly unaligned part). Those elements must be zero.
+        // Check head (including possibly unaligned part). Those elements must be zero.
         for (i = 0; i < Math.max(offset, 0) + ALIGNED_BASE_INDEX; i++) {
             if (byteArray[i] != 0) {
                 throw new RuntimeException("Incorrect result at " + i + " " + byteArray[i] + " != 0");
             }
         }
-	// Check the copied body bytes.
-	int alignedArrayEnd = byteArray.length - ALIGNED_END_OFFSET;
+        // Check the copied body bytes.
+        int alignedArrayEnd = byteArray.length - ALIGNED_END_OFFSET;
         for (; i < Math.min(alignedArrayEnd + offset, alignedArrayEnd); i++) {
             if (byteArray[i] != verifyByteArray[i - offset]) {
                 throw new RuntimeException("Incorrect result at " + i + " " + byteArray[i] + " != " + verifyByteArray[i-offset]);
             }
         }
-	// Check the tail (including possibly unaligned part). Those elements must be zero.
+        // Check the tail (including possibly unaligned part). Those elements must be zero.
         for (; i < byteArray.length; i++) {
             if (byteArray[i] != 0) {
                 throw new RuntimeException("Incorrect result at " + i + " " + byteArray[i] + " != 0");
@@ -127,33 +127,33 @@ public class TestVectorizationMismatchedAccess {
         System.arraycopy(verifyByteArray, 0, byteArray, 0, byteArray.length);
         test.run();
         int i;
-	// Check head (including possibly unaligned part). Those elements must be equal.
+        // Check head (including possibly unaligned part). Those elements must be equal.
         for (i = 0; i < Math.max(offset, 0) + ALIGNED_BASE_INDEX; i++) {
             if (byteArray[i] != verifyByteArray[i]) {
                 throw new RuntimeException("Incorrect result at " + i + " " + byteArray[i] + " != " + verifyByteArray[i]);
             }
         }
-	// Check the copied body bytes.
-	// 
-	// When the offset is negative (i.e. backwarts-copy within the array),
-	// the elements at i in byteArray must match the elements at i + offset
-	// in the verifyByteArray.
-	//
-	// When the offset is positive (i.e. forward-copy within the array),
-	// the same 8 elements would have been copied over and over again, and
-	// thus every 8-bytes-block must match the first 8 bytes.
-	int alignedArrayEnd = byteArray.length - ALIGNED_END_OFFSET;
+        // Check the copied body bytes.
+        // 
+        // When the offset is negative (i.e. backwarts-copy within the array),
+        // the elements at i in byteArray must match the elements at i + offset
+        // in the verifyByteArray.
+        //
+        // When the offset is positive (i.e. forward-copy within the array),
+        // the same 8 elements would have been copied over and over again, and
+        // thus every 8-bytes-block must match the first 8 bytes.
+        int alignedArrayEnd = byteArray.length - ALIGNED_END_OFFSET;
         for (; i < Math.min(alignedArrayEnd + offset, alignedArrayEnd); i++) {
-	    int idx = i - offset;
-	    if (offset > 0) {
-		idx = (idx - ALIGNED_BASE_INDEX) % 8 + ALIGNED_BASE_INDEX;
-	    }
-	    int val = verifyByteArray[idx];
+            int idx = i - offset;
+            if (offset > 0) {
+                idx = (idx - ALIGNED_BASE_INDEX) % 8 + ALIGNED_BASE_INDEX;
+            }
+            int val = verifyByteArray[idx];
             if (byteArray[i] != val) {
                 throw new RuntimeException("Incorrect result at " + i + " " + byteArray[i] + " != " + verifyByteArray[i-offset]);
             }
-	}
-	// Check the tail (including possibly unaligned part). Those elements must be equal.
+        }
+        // Check the tail (including possibly unaligned part). Those elements must be equal.
         for (; i < byteArray.length; i++) {
             if (byteArray[i] != verifyByteArray[i]) {
                 throw new RuntimeException("Incorrect result at " + i + " " + byteArray[i] + " != " + verifyByteArray[i]);
@@ -254,19 +254,19 @@ public class TestVectorizationMismatchedAccess {
     }
 
     static int alignedStartOffset() {
-	int unitSize = 8;
-	return UNSAFE.ARRAY_BYTE_BASE_OFFSET % unitSize;
+        int unitSize = 8;
+        return UNSAFE.ARRAY_BYTE_BASE_OFFSET % unitSize;
     }
 
     static int alignedEndOffset() {
-	int unitSize = 8;
-	return (unitSize - alignedStartOffset()) % unitSize;
+        int unitSize = 8;
+        return (unitSize - alignedStartOffset()) % unitSize;
     }
 
     @Test
     @IR(counts = { IRNode.LOAD_VECTOR_L, ">=1", IRNode.STORE_VECTOR, ">=1" })
     public static void testByteByte1(byte[] dest, byte[] src) {
-	int offset = ALIGNED_BASE_OFFSET;
+        int offset = ALIGNED_BASE_OFFSET;
         for (int i = 0; i < size; i++) {
             UNSAFE.putLongUnaligned(dest, offset + 8 * i, UNSAFE.getLongUnaligned(src, offset + 8 * i));
         }
@@ -280,7 +280,7 @@ public class TestVectorizationMismatchedAccess {
     @Test
     @IR(counts = { IRNode.LOAD_VECTOR_L, ">=1", IRNode.STORE_VECTOR, ">=1" })
     public static void testByteByte2(byte[] dest, byte[] src) {
-	int offset = ALIGNED_BASE_OFFSET;
+        int offset = ALIGNED_BASE_OFFSET;
         for (int i = 1; i < size; i++) {
             UNSAFE.putLongUnaligned(dest, offset + 8 * (i - 1), UNSAFE.getLongUnaligned(src, offset + 8 * i));
         }
@@ -294,7 +294,7 @@ public class TestVectorizationMismatchedAccess {
     @Test
     @IR(failOn = { IRNode.LOAD_VECTOR_L, IRNode.STORE_VECTOR })
     public static void testByteByte3(byte[] dest, byte[] src) {
-	int offset = ALIGNED_BASE_OFFSET;
+        int offset = ALIGNED_BASE_OFFSET;
         for (int i = 0; i < size - 1; i++) {
             UNSAFE.putLongUnaligned(dest, offset + 8 * (i + 1), UNSAFE.getLongUnaligned(src, offset + 8 * i));
         }
