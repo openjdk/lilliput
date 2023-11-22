@@ -251,7 +251,6 @@ public:
   };
 
 private:
-  bool is_dumping_full_module_graph();
   FollowMode get_follow_mode(MetaspaceClosure::Ref *ref);
 
   void iterate_sorted_roots(MetaspaceClosure* it);
@@ -387,6 +386,8 @@ public:
     size_t byte_size = Array<T>::byte_sizeof(length, sizeof(T));
     return align_up(byte_size, SharedSpaceObjectAlignment);
   }
+
+  char* ro_strdup(const char* s);
 
   void dump_rw_metadata();
   void dump_ro_metadata();
