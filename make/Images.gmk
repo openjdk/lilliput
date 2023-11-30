@@ -130,7 +130,7 @@ CDS_DUMP_FLAGS = -Xmx128M -Xms128M
 # Helper function for creating the CDS archives for the JDK and JRE
 #
 # Param1 - VM variant (e.g., server, client, zero, ...)
-# Param2 - _nocoops, _coh, _nocoops_coh, or empty
+# Param2 - _nocoops, or empty
 define CreateCDSArchive
   $1_$2_COOPS_OPTION := $(if $(findstring _nocoops, $2),-XX:-UseCompressedOops)
   # enable and also explicitly disable coh as needed.
@@ -186,14 +186,6 @@ ifeq ($(BUILD_CDS_ARCHIVE), true)
     $(foreach v, $(JVM_VARIANTS), \
       $(eval $(call CreateCDSArchive,$v,_nocoops)) \
     )
-    ifeq ($(BUILD_CDS_ARCHIVE_COH), true)
-      $(foreach v, $(JVM_VARIANTS), \
-        $(eval $(call CreateCDSArchive,$v,_coh)) \
-      )
-      $(foreach v, $(JVM_VARIANTS), \
-        $(eval $(call CreateCDSArchive,$v,_nocoops_coh)) \
-      )
-    endif
   endif
 endif
 
