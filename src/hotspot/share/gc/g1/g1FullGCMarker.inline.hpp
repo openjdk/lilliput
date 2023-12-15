@@ -37,7 +37,6 @@
 #include "gc/g1/g1RegionMarkStatsCache.hpp"
 #include "gc/g1/g1StringDedup.hpp"
 #include "gc/shared/continuationGCSupport.inline.hpp"
-#include "gc/shared/preservedMarks.inline.hpp"
 #include "gc/shared/stringdedup/stringDedup.hpp"
 #include "oops/access.inline.hpp"
 #include "oops/compressedOops.inline.hpp"
@@ -49,13 +48,6 @@ inline bool G1FullGCMarker::mark_object(oop obj) {
   if (!_bitmap->par_mark(obj)) {
     // Lost mark race.
     return false;
-  }
-
-  // Marked by us, preserve if needed.
-  if (_collector->is_compacting(obj)) {
-    // It is not necessary to preserve marks for objects in regions we do not
-    // compact because we do not change their headers (i.e. forward them).
-    preserved_stack()->push_if_necessary(obj, obj->mark());
   }
 
   // Check if deduplicatable string.

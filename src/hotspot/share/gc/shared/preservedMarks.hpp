@@ -43,8 +43,11 @@ class PreservedMark {
   PreservedMark(oop obj, markWord m) : _o(obj), _m(m) { }
 
   oop get_oop() { return _o; }
-  inline void set_mark() const;
   void set_oop(oop obj) { _o = obj; }
+
+  inline void restore_mark() const;
+  markWord get_mark() const { return _m; }
+  void set_mark(markWord mark) { _m = mark; }
 };
 
 class PreservedMarks {

@@ -57,16 +57,21 @@ inline PreservedMarks::PreservedMarks()
              // cache size to 0.
              0 /* max_cache_size */) { }
 
-void PreservedMark::set_mark() const {
+void PreservedMark::restore_mark() const {
   _o->set_mark(_m);
 }
 
 template <bool ALT_FWD>
 inline void PreservedMarks::adjust_preserved_mark(PreservedMark* elem) {
   oop obj = elem->get_oop();
-  if (obj->is_forwarded()) {
-    elem->set_oop(SlidingForwarding::forwardee<ALT_FWD>(obj));
+  assert(obj->is_forwarded(), "preserve only forwarded object");
+  oop forwardee = SlidingForwarding::forwardee<ALT_FWD>(obj);
+  markWord old_mark = elem->get_mark();
+  markWord new_mark = forwardee->initialize_hash_if_necessary(obj, elem->get_mark());
+  if (new_mark != old_mark) {
+    elem->set_mark(new_mark);
   }
+  elem->set_oop(forwardee);
 }
 
 #endif // SHARE_GC_SHARED_PRESERVEDMARKS_INLINE_HPP

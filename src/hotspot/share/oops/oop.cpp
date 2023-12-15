@@ -37,6 +37,7 @@
 #include "oops/verifyOopClosure.hpp"
 #include "runtime/handles.inline.hpp"
 #include "runtime/javaThread.hpp"
+#include "runtime/objectMonitor.inline.hpp"
 #include "runtime/synchronizer.hpp"
 #include "utilities/macros.hpp"
 
@@ -131,6 +132,31 @@ bool oopDesc::is_oop(oop obj, bool ignore_mark_word) {
     return true;
   }
   return LockingMode == LM_LIGHTWEIGHT || !SafepointSynchronize::is_at_safepoint();
+}
+
+markWord oopDesc::initialize_hash_if_necessary(oop obj, markWord m) {
+  if (!UseCompactObjectHeaders) {
+    return m;
+  }
+  markWord orig_mark = m;
+  if (m.has_displaced_mark_helper()) {
+    m = m.displaced_mark_helper();
+  }
+  if (m.hash_is_hashed()) {
+    assert(!m.hash_is_copied(), "must not be installed");
+    uint32_t hash = static_cast<uint32_t>(ObjectSynchronizer::get_next_hash(nullptr, obj));
+    Klass* k = m.klass();
+    log_info(gc)("Initializing hash for " PTR_FORMAT ", old: " PTR_FORMAT ", hash: %d, offset: %d", p2i(this), p2i(obj), hash, k->hash_offset_in_bytes(cast_to_oop(this)));
+    int_field_put(k->hash_offset_in_bytes(cast_to_oop(this)), (jint)hash);
+    m = m.hash_set_copied();
+    if (orig_mark.has_monitor()) {
+      ObjectMonitor* mon = orig_mark.monitor();
+      log_info(gc)("initializing hash in displaced location (monitor): " PTR_FORMAT ", new mark: " PTR_FORMAT, p2i(mon), m.value());
+      mon->set_header(m);
+      return orig_mark;
+    }
+  }
+  return m;
 }
 
 // used only for asserts and guarantees

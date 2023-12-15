@@ -36,7 +36,7 @@
 void PreservedMarks::restore() {
   while (!_stack.is_empty()) {
     const PreservedMark elem = _stack.pop();
-    elem.set_mark();
+    elem.restore_mark();
   }
   assert_empty();
 }

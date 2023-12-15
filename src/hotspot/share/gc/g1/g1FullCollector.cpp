@@ -123,8 +123,8 @@ G1FullCollector::G1FullCollector(G1CollectedHeap* heap,
     _oop_queue_set(_num_workers),
     _array_queue_set(_num_workers),
     _preserved_marks_set(true),
-    _serial_compaction_point(this),
-    _humongous_compaction_point(this),
+    _serial_compaction_point(this, nullptr /*_preserved_marks_set.get(0) -- set below*/),
+    _humongous_compaction_point(this, nullptr /*_preserved_marks_set.get(0) -- set below*/),
     _is_alive(this, heap->concurrent_mark()->mark_bitmap()),
     _is_alive_mutator(heap->ref_processor_stw(), &_is_alive),
     _humongous_compaction_regions(8),
@@ -134,6 +134,8 @@ G1FullCollector::G1FullCollector(G1CollectedHeap* heap,
   assert(SafepointSynchronize::is_at_safepoint(), "must be at a safepoint");
 
   _preserved_marks_set.init(_num_workers);
+  _serial_compaction_point.set_preserved_stack(_preserved_marks_set.get(0));
+  _humongous_compaction_point.set_preserved_stack(_preserved_marks_set.get(0));
   _markers = NEW_C_HEAP_ARRAY(G1FullGCMarker*, _num_workers, mtGC);
   _compaction_points = NEW_C_HEAP_ARRAY(G1FullGCCompactionPoint*, _num_workers, mtGC);
 
@@ -145,8 +147,8 @@ G1FullCollector::G1FullCollector(G1CollectedHeap* heap,
   }
 
   for (uint i = 0; i < _num_workers; i++) {
-    _markers[i] = new G1FullGCMarker(this, i, _preserved_marks_set.get(i), _live_stats);
-    _compaction_points[i] = new G1FullGCCompactionPoint(this);
+    _markers[i] = new G1FullGCMarker(this, i, _live_stats);
+    _compaction_points[i] = new G1FullGCCompactionPoint(this, _preserved_marks_set.get(i));
     _oop_queue_set.register_queue(i, marker(i)->oop_stack());
     _array_queue_set.register_queue(i, marker(i)->objarray_stack());
   }

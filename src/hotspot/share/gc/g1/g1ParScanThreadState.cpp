@@ -465,23 +465,24 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
   // the mark-word that we have already loaded. This is safe, because we have checked
   // that this is not yet forwarded in the caller.
   Klass* klass = old->forward_safe_klass(old_mark);
-  const size_t word_sz = old->size_given_klass(klass);
+  const size_t old_size = old->size_given_mark_and_klass(old_mark, klass);
+  const size_t new_size = old->copy_size(old_size, old_mark);
 
   uint age = 0;
   G1HeapRegionAttr dest_attr = next_region_attr(region_attr, old_mark, age);
   HeapRegion* const from_region = _g1h->heap_region_containing(old);
   uint node_index = from_region->node_index();
 
-  HeapWord* obj_ptr = _plab_allocator->plab_allocate(dest_attr, word_sz, node_index);
+  HeapWord* obj_ptr = _plab_allocator->plab_allocate(dest_attr, new_size, node_index);
 
   // PLAB allocations should succeed most of the time, so we'll
   // normally check against null once and that's it.
   if (obj_ptr == nullptr) {
-    obj_ptr = allocate_copy_slow(&dest_attr, klass, word_sz, age, node_index);
+    obj_ptr = allocate_copy_slow(&dest_attr, klass, new_size, age, node_index);
     if (obj_ptr == nullptr) {
       // This will either forward-to-self, or detect that someone else has
       // installed a forwarding pointer.
-      return handle_evacuation_failure_par(old, old_mark, word_sz);
+      return handle_evacuation_failure_par(old, old_mark, new_size);
     }
   }
 
@@ -492,13 +493,17 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
   if (inject_evacuation_failure(from_region->hrm_index())) {
     // Doing this after all the allocation attempts also tests the
     // undo_allocation() method too.
-    undo_allocation(dest_attr, obj_ptr, word_sz, node_index);
-    return handle_evacuation_failure_par(old, old_mark, word_sz);
+    undo_allocation(dest_attr, obj_ptr, new_size, node_index);
+    return handle_evacuation_failure_par(old, old_mark, new_size);
+  }
+
+  if (old_size != new_size) {
+    log_info(gc)("expanding obj: " PTR_FORMAT ", old_size: " SIZE_FORMAT ", new object: " PTR_FORMAT ", new_size: " SIZE_FORMAT, p2i(old), old_size, p2i(obj_ptr), new_size);
   }
 
   // We're going to allocate linearly, so might as well prefetch ahead.
   Prefetch::write(obj_ptr, PrefetchCopyIntervalInBytes);
-  Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(old), obj_ptr, word_sz);
+  Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(old), obj_ptr, old_size);
 
   const oop obj = cast_to_oop(obj_ptr);
   // Because the forwarding is done with memory_order_relaxed there is no
@@ -512,17 +517,21 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
       const uint young_index = from_region->young_index_in_cset();
       assert((from_region->is_young() && young_index >  0) ||
              (!from_region->is_young() && young_index == 0), "invariant" );
-      _surviving_young_words[young_index] += word_sz;
+      _surviving_young_words[young_index] += new_size;
     }
+
+    // Initialize i-hash if necessary
+    markWord new_mark = obj->initialize_hash_if_necessary(old, old_mark);
+    obj->set_mark(new_mark);
 
     if (dest_attr.is_young()) {
       if (age < markWord::max_age) {
         age++;
         obj->incr_age();
       }
-      _age_table.add(age, word_sz);
+      _age_table.add(age, new_size);
     } else {
-      update_bot_after_copying(obj, word_sz);
+      update_bot_after_copying(obj, new_size);
     }
 
     // Most objects are not arrays, so do one array check rather than
@@ -560,7 +569,7 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
     obj->oop_iterate_backwards(&_scanner, klass);
     return obj;
   } else {
-    _plab_allocator->undo_allocation(dest_attr, obj_ptr, word_sz, node_index);
+    _plab_allocator->undo_allocation(dest_attr, obj_ptr, new_size, node_index);
     return forward_ptr;
   }
 }

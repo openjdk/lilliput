@@ -60,6 +60,7 @@
 #include "utilities/align.hpp"
 #include "utilities/dtrace.hpp"
 #include "utilities/events.hpp"
+#include "utilities/fastHash.hpp"
 #include "utilities/linkedlist.hpp"
 #include "utilities/preserveException.hpp"
 
@@ -474,16 +475,18 @@ void ObjectSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* current)
       LockStack& lock_stack = current->lock_stack();
       if (lock_stack.can_push()) {
         markWord mark = obj()->mark_acquire();
-        if (mark.is_neutral()) {
-          assert(!lock_stack.contains(obj()), "thread must not already hold the lock");
+        while (mark.is_neutral()) {
+          // Retry until a lock state change has been observed.  cas_set_mark() may collide with non lock bits modifications.
           // Try to swing into 'fast-locked' state.
-          markWord locked_mark = mark.set_fast_locked();
-          markWord old_mark = obj()->cas_set_mark(locked_mark, mark);
+          assert(!lock_stack.contains(obj()), "thread must not already hold the lock");
+          const markWord locked_mark = mark.set_fast_locked();
+          const markWord old_mark = obj()->cas_set_mark(locked_mark, mark);
           if (old_mark == mark) {
             // Successfully fast-locked, push object to lock-stack and return.
             lock_stack.push(obj());
             return;
           }
+          mark = old_mark;
         }
       }
       // All other paths fall-through to inflate-enter.
@@ -533,23 +536,15 @@ void ObjectSynchronizer::exit(oop object, BasicLock* lock, JavaThread* current) 
     markWord mark = object->mark();
     if (LockingMode == LM_LIGHTWEIGHT) {
       // Fast-locking does not use the 'lock' argument.
-      if (mark.is_fast_locked()) {
-        markWord unlocked_mark = mark.set_unlocked();
-        markWord old_mark = object->cas_set_mark(unlocked_mark, mark);
-        if (old_mark != mark) {
-          // Another thread won the CAS, it must have inflated the monitor.
-          // It can only have installed an anonymously locked monitor at this point.
-          // Fetch that monitor, set owner correctly to this thread, and
-          // exit it (allowing waiting threads to enter).
-          assert(old_mark.has_monitor(), "must have monitor");
-          ObjectMonitor* monitor = old_mark.monitor();
-          assert(monitor->is_owner_anonymous(), "must be anonymous owner");
-          monitor->set_owner_from_anonymous(current);
-          monitor->exit(current);
+      while (mark.is_fast_locked()) {
+        // Retry until a lock state change has been observed.  cas_set_mark() may collide with non lock bits modifications.
+        const markWord unlocked_mark = mark.set_unlocked();
+        const markWord old_mark = object->cas_set_mark(unlocked_mark, mark);
+        if (old_mark == mark) {
+          current->lock_stack().remove(object);
+          return;
         }
-        LockStack& lock_stack = current->lock_stack();
-        lock_stack.remove(object);
-        return;
+        mark = old_mark;
       }
     } else if (LockingMode == LM_LEGACY) {
       markWord dhw = lock->displaced_header();
@@ -599,13 +594,7 @@ void ObjectSynchronizer::exit(oop object, BasicLock* lock, JavaThread* current) 
   // The ObjectMonitor* can't be async deflated until ownership is
   // dropped inside exit() and the ObjectMonitor* must be !is_busy().
   ObjectMonitor* monitor = inflate(current, object, inflate_cause_vm_internal);
-  if (LockingMode == LM_LIGHTWEIGHT && monitor->is_owner_anonymous()) {
-    // It must be owned by us. Pop lock object from lock stack.
-    LockStack& lock_stack = current->lock_stack();
-    oop popped = lock_stack.pop();
-    assert(popped == object, "must be owned by this thread");
-    monitor->set_owner_from_anonymous(current);
-  }
+  assert(!monitor->is_owner_anonymous(), "must not be");
   monitor->exit(current);
 }
 
@@ -829,7 +818,7 @@ static markWord read_stable_mark(oop obj) {
 //   There are simple ways to "diffuse" the middle address bits over the
 //   generated hashCode values:
 
-static inline intptr_t get_next_hash(Thread* current, oop obj) {
+intptr_t ObjectSynchronizer::get_next_hash(Thread* current, oop obj) {
   intptr_t value = 0;
   if (hashCode == 0) {
     // This form uses global Park-Miller RNG.
@@ -848,7 +837,7 @@ static inline intptr_t get_next_hash(Thread* current, oop obj) {
     value = ++GVars.hc_sequence;
   } else if (hashCode == 4) {
     value = cast_from_oop<intptr_t>(obj);
-  } else {
+  } else if (hashCode == 5) {
     // Marsaglia's xor-shift scheme with thread-specific state
     // This is probably the best overall implementation -- we'll
     // likely make this the default in future releases.
@@ -861,19 +850,33 @@ static inline intptr_t get_next_hash(Thread* current, oop obj) {
     v = (v ^ (v >> 19)) ^ (t ^ (t >> 8));
     current->_hashStateW = v;
     value = v;
+  } else {
+#ifdef _LP64
+    uint64_t val = cast_from_oop<uint64_t>(obj);
+    uint64_t hash = FastHash::get_hash64(val, UCONST64(0xAAAAAAAAAAAAAAAA));
+#else
+    uint32_t val = cast_from_oop<uint32_t>(obj);
+    uint32_t hash = FastHash::get_hash32(val, UCONST64(0xAAAAAAAA));
+#endif
+    value= static_cast<intptr_t>(hash);
   }
-
-  value &= UseCompactObjectHeaders ? markWord::hash_mask_compact : markWord::hash_mask;
+  value &= markWord::hash_mask;
   if (value == 0) value = 0xBAD;
   assert(value != markWord::no_hash, "invariant");
   return value;
 }
 
-// Can be called from non JavaThreads (e.g., VMThread) for FastHashCode
-// calculations as part of JVM/TI tagging.
-static bool is_lock_owned(Thread* thread, oop obj) {
-  assert(LockingMode == LM_LIGHTWEIGHT, "only call this with new lightweight locking enabled");
-  return thread->is_Java_thread() ? JavaThread::cast(thread)->lock_stack().contains(obj) : false;
+static uint32_t get_hash(markWord mark, oop obj) {
+  assert(mark.is_neutral() | mark.is_fast_locked(), "only from neutral or fast-locked mark");
+  assert(mark.hash_is_hashed_or_copied(), "only from hashed or copied object");
+  if (mark.hash_is_copied()) {
+    Klass* klass = mark.klass();
+    return obj->int_field(klass->hash_offset_in_bytes(obj));
+  } else {
+    assert(mark.hash_is_hashed(), "must be hashed");
+    // Already marked as hashed, but not yet copied. Recompute hash and return it.
+    return ObjectSynchronizer::get_next_hash(nullptr, obj); // recompute hash
+  }
 }
 
 intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {
@@ -887,17 +890,29 @@ intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {
       assert(LockingMode == LM_MONITOR, "+VerifyHeavyMonitors requires LockingMode == 0 (LM_MONITOR)");
       guarantee((obj->mark().value() & markWord::lock_mask_in_place) != markWord::locked_value, "must not be lightweight/stack-locked");
     }
-    if (mark.is_neutral()) {               // if this is a normal header
-      hash = mark.hash();
-      if (hash != 0) {                     // if it has a hash, just return it
-        return hash;
+    if (mark.is_neutral() || (LockingMode == LM_LIGHTWEIGHT && mark.is_fast_locked())) {
+      if (UseCompactObjectHeaders) {
+        if (mark.hash_is_hashed_or_copied()) {
+          return get_hash(mark, obj);
+        }
+	hash = get_next_hash(current, obj);  // get a new hash
+	temp = mark.hash_set_hashed();
+      } else {
+	hash = mark.hash();
+	if (hash != 0) {                     // if it has a hash, just return it
+	  return hash;
+	}
+	hash = get_next_hash(current, obj);  // get a new hash
+	temp = mark.copy_set_hash(hash);     // merge the hash into header
       }
-      hash = get_next_hash(current, obj);  // get a new hash
-      temp = mark.copy_set_hash(hash);     // merge the hash into header
-                                           // try to install the hash
+      // try to install the hash
       test = obj->cas_set_mark(temp, mark);
       if (test == mark) {                  // if the hash was installed, return it
         return hash;
+      }
+      if (LockingMode == LM_LIGHTWEIGHT) {
+        // CAS failed, retry
+        continue;
       }
       // Failed to install the hash. It could be that another thread
       // installed the hash just before our attempt or inflation has
@@ -907,9 +922,13 @@ intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {
       monitor = mark.monitor();
       temp = monitor->header();
       assert(temp.is_neutral(), "invariant: header=" INTPTR_FORMAT, temp.value());
-      hash = temp.hash();
-      if (hash != 0) {
+      if (!temp.has_no_hash()) {
         // It has a hash.
+        if (UseCompactObjectHeaders) {
+          return get_hash(temp, obj);
+        } else {
+          hash = temp.hash();
+        }
 
         // Separate load of dmw/header above from the loads in
         // is_being_async_deflated().
@@ -930,13 +949,6 @@ intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {
       }
       // Fall thru so we only have one place that installs the hash in
       // the ObjectMonitor.
-    } else if (LockingMode == LM_LIGHTWEIGHT && mark.is_fast_locked() && is_lock_owned(current, obj)) {
-      // This is a fast-lock owned by the calling thread so use the
-      // markWord from the object.
-      hash = mark.hash();
-      if (hash != 0) {                  // if it has a hash, just return it
-        return hash;
-      }
     } else if (LockingMode == LM_LEGACY && mark.has_locker() && current->is_lock_owned((address)mark.locker())) {
       // This is a stack-lock owned by the calling thread so fetch the
       // displaced markWord from the BasicLock on the stack.
@@ -964,10 +976,13 @@ intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {
     // Load ObjectMonitor's header/dmw field and see if it has a hash.
     mark = monitor->header();
     assert(mark.is_neutral(), "invariant: header=" INTPTR_FORMAT, mark.value());
-    hash = mark.hash();
-    if (hash == 0) {                       // if it does not have a hash
+    if (mark.has_no_hash()) {                       // if it does not have a hash
       hash = get_next_hash(current, obj);  // get a new hash
-      temp = mark.copy_set_hash(hash)   ;  // merge the hash into header
+      if (UseCompactObjectHeaders) {
+        temp = mark.hash_set_hashed();
+       } else {
+        temp = mark.copy_set_hash(hash)   ;  // merge the hash into header
+      }
       assert(temp.is_neutral(), "invariant: header=" INTPTR_FORMAT, temp.value());
       uintptr_t v = Atomic::cmpxchg((volatile uintptr_t*)monitor->header_addr(), mark.value(), temp.value());
       test = markWord(v);
@@ -988,6 +1003,12 @@ intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {
         // to be slow.
         monitor->install_displaced_markword_in_object(obj);
         continue;
+      }
+    } else {
+      if (UseCompactObjectHeaders) {
+          return get_hash(mark, obj);
+      } else {
+        hash = mark.hash();
       }
     }
     // We finally get the hash.
@@ -1265,6 +1286,13 @@ void ObjectSynchronizer::inflate_helper(oop obj) {
     return;
   }
   (void)inflate(Thread::current(), obj, inflate_cause_vm_internal);
+}
+
+// Can be called from non JavaThreads (e.g., VMThread) for FastHashCode
+// calculations as part of JVM/TI tagging.
+static bool is_lock_owned(Thread* thread, oop obj) {
+  assert(LockingMode == LM_LIGHTWEIGHT, "only call this with new lightweight locking enabled");
+  return thread->is_Java_thread() ? JavaThread::cast(thread)->lock_stack().contains(obj) : false;
 }
 
 ObjectMonitor* ObjectSynchronizer::inflate(Thread* current, oop object,

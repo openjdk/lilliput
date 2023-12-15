@@ -43,6 +43,7 @@
 #include "utilities/debug.hpp"
 #include "utilities/macros.hpp"
 #include "utilities/globalDefinitions.hpp"
+#include "logging/log.hpp"
 
 // Implementation of all inlined member functions defined in oop.hpp
 // We need a separate file to avoid circular references
@@ -198,10 +199,11 @@ bool oopDesc::is_a(Klass* k) const {
 }
 
 size_t oopDesc::size()  {
-  return size_given_klass(klass());
+  markWord m = UseCompactObjectHeaders ? resolve_mark() : markWord::unused_mark();;
+  return size_given_mark_and_klass(m, klass());
 }
 
-size_t oopDesc::size_given_klass(Klass* klass)  {
+size_t oopDesc::base_size_given_klass(const Klass* klass)  {
   int lh = klass->layout_helper();
   size_t s;
 
@@ -250,7 +252,48 @@ size_t oopDesc::size_given_klass(Klass* klass)  {
   return s;
 }
 
+size_t oopDesc::size_given_mark_and_klass(markWord mrk, const Klass* kls) {
+  size_t sz = base_size_given_klass(kls);
+  if (UseCompactObjectHeaders) {
+    if (mrk.has_displaced_mark_helper()) {
+      mrk = mrk.displaced_mark_helper();
+    }
+    if (mrk.hash_is_copied() && kls->hash_requires_reallocation(cast_to_oop(this))) {
+      assert(!mrk.has_monitor(), "no displaced mark");
+      log_info(gc)("Extended size for object: " PTR_FORMAT " base-size: " SIZE_FORMAT ", mark: " PTR_FORMAT, p2i(this), sz, mrk.value());
+      sz = align_object_size(sz + 1);
+    }
+  }
+  return sz;
+}
+
+size_t oopDesc::copy_size(size_t size, markWord mark) const {
+  if (UseCompactObjectHeaders) {
+    if (mark.has_displaced_mark_helper()) {
+      mark = mark.displaced_mark_helper();
+    }
+    Klass* klass = mark.klass();
+    if (mark.hash_is_hashed() && klass->hash_requires_reallocation(cast_to_oop(this))) {
+      size = align_object_size(size + 1);
+    }
+  }
+  assert(is_object_aligned(size), "Oop size is not properly aligned: " SIZE_FORMAT, size);
+  return size;
+}
+
 #ifdef _LP64
+markWord oopDesc::forward_safe_mark() const {
+  assert(UseCompactObjectHeaders, "Only get here with compact headers");
+  markWord m = mark();
+  if (m.is_marked()) {
+    oop fwd = forwardee(m);
+    markWord m2 = fwd->mark();
+    assert(!m2.is_marked() || m2.self_forwarded(), "no double forwarding: this: " PTR_FORMAT " (" INTPTR_FORMAT "), fwd: " PTR_FORMAT " (" INTPTR_FORMAT ")", p2i(this), m.value(), p2i(fwd), m2.value());
+    m = m2;
+  }
+  return m.actual_mark();
+}
+
 Klass* oopDesc::forward_safe_klass_impl(markWord m) const {
   assert(UseCompactObjectHeaders, "Only get here with compact headers");
   if (m.is_marked()) {
@@ -286,7 +329,13 @@ Klass* oopDesc::forward_safe_klass() const {
 }
 
 size_t oopDesc::forward_safe_size() {
-  return size_given_klass(forward_safe_klass());
+  if (UseCompactObjectHeaders) {
+    markWord mark = forward_safe_mark();
+    Klass* klass = forward_safe_klass();
+    return size_given_mark_and_klass(mark, klass);
+  } else {
+    return size_given_mark_and_klass(markWord::unused_mark(), klass());
+  }
 }
 
 void oopDesc::forward_safe_init_mark() {
@@ -481,16 +530,18 @@ void oopDesc::oop_iterate(OopClosureType* cl, MemRegion mr) {
 
 template <typename OopClosureType>
 size_t oopDesc::oop_iterate_size(OopClosureType* cl) {
+  markWord mark = UseCompactObjectHeaders ? resolve_mark() : markWord::unused_mark();
   Klass* k = klass();
-  size_t size = size_given_klass(k);
+  size_t size = size_given_mark_and_klass(mark, k);
   OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k);
   return size;
 }
 
 template <typename OopClosureType>
 size_t oopDesc::oop_iterate_size(OopClosureType* cl, MemRegion mr) {
+  markWord mark = UseCompactObjectHeaders ? resolve_mark() : markWord::unused_mark();
   Klass* k = klass();
-  size_t size = size_given_klass(k);
+  size_t size = size_given_mark_and_klass(mark, k);
   OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k, mr);
   return size;
 }
@@ -514,14 +565,24 @@ bool oopDesc::is_instanceof_or_null(oop obj, Klass* klass) {
 intptr_t oopDesc::identity_hash() {
   // Fast case; if the object is unlocked and the hash value is set, no locking is needed
   // Note: The mark must be read into local variable to avoid concurrent updates.
-  markWord mrk = mark();
-  if (mrk.is_unlocked() && !mrk.has_no_hash()) {
-    return mrk.hash();
-  } else if (mrk.is_marked()) {
-    return mrk.hash();
+  if (UseCompactObjectHeaders) {
+    markWord mrk = resolve_mark();
+    assert(mrk.is_neutral(), "must get neutral mark");
+    if (mrk.hash_is_copied()) {
+      Klass* klass = mrk.klass();
+      return int_field(klass->hash_offset_in_bytes(cast_to_oop(this)));
+    }
+    // Fall-through to slow-case.
   } else {
-    return slow_identity_hash();
+    markWord mrk = mark();
+    if (mrk.is_unlocked() && !mrk.has_no_hash()) {
+      return mrk.hash();
+    } else if (mrk.is_marked()) {
+      return mrk.hash();
+    }
+    // Fall-through to slow-case.
   }
+  return slow_identity_hash();
 }
 
 // This checks fast simple case of whether the oop has_no_hash,

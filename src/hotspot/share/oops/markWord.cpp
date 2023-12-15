@@ -35,7 +35,7 @@ markWord markWord::displaced_mark_helper() const {
     ObjectMonitor* monitor = this->monitor();
     return monitor->header();
   }
-  if (has_locker()) {  // has a stack lock
+  if (LockingMode == LM_LEGACY && has_locker()) {  // has a stack lock
     BasicLock* locker = this->locker();
     return locker->displaced_header();
   }
@@ -52,7 +52,7 @@ void markWord::set_displaced_mark_helper(markWord m) const {
     monitor->set_header(m);
     return;
   }
-  if (has_locker()) {  // has a stack lock
+  if (LockingMode == LM_LEGACY && has_locker()) {  // has a stack lock
     BasicLock* locker = this->locker();
     locker->set_displaced_header(m);
     return;

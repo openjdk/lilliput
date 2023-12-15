@@ -217,7 +217,7 @@ void MarkSweep::restore_marks() {
 
   // restore the marks we saved earlier
   for (size_t i = 0; i < _preserved_count; i++) {
-    _preserved_marks[i].set_mark();
+    _preserved_marks[i].restore_mark();
   }
 
   // deal with the overflow

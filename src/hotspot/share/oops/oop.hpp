@@ -116,10 +116,13 @@ class oopDesc {
 
   // Returns the actual oop size of the object in machine words
   inline size_t size();
+  inline size_t copy_size(size_t size, markWord mark) const;
 
   // Sometimes (for complicated concurrency-related reasons), it is useful
   // to be able to figure out the size of an object knowing its klass.
-  inline size_t size_given_klass(Klass* klass);
+  inline size_t base_size_given_klass(const Klass* klass);
+
+  inline size_t size_given_mark_and_klass(markWord mrk, const Klass* kls);
 
   // The following set of methods is used to access the mark-word and related
   // properties when the object may be forwarded. Be careful where and when
@@ -128,6 +131,7 @@ class oopDesc {
   // those methods can not deal with the sliding-forwarding that is used
   // in Serial, G1 and Shenandoah full-GCs.
 private:
+  inline markWord forward_safe_mark() const;
   inline Klass*   forward_safe_klass_impl(markWord m) const;
 public:
   inline Klass*   forward_safe_klass() const;
@@ -321,10 +325,18 @@ public:
 
   inline static bool is_instanceof_or_null(oop obj, Klass* klass);
 
+private:
+  inline intptr_t hash_from_field() const;
+  size_t hash_offset_in_bytes() const;
+
+public:
   // identity hash; returns the identity hash key (computes it if necessary)
   inline intptr_t identity_hash();
   intptr_t slow_identity_hash();
   inline bool fast_no_hash_check();
+
+  // Initialize identity hash code in hash word of object copy from original object.
+  markWord initialize_hash_if_necessary(oop obj, markWord mark);
 
   // marks are forwarded to stack when object is locked
   inline bool     has_displaced_mark() const;
