@@ -696,6 +696,9 @@
                                                                             \
   product(bool, UseAltGCForwarding, false, EXPERIMENTAL,                    \
           "Use alternative GC forwarding that preserves object headers")    \
+                                                                            \
+  product(bool, UseCompressorFullGC, false, EXPERIMENTAL,                   \
+          "Use compressor-style full GC")                                   \
 
 // end of GC_FLAGS
 
