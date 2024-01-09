@@ -8,6 +8,7 @@
 #include "memory/iterator.hpp"
 #include "utilities/stack.hpp"
 
+class ContiguousSpace;
 class Generation;
 class Space;
 class STWGCTimer;
