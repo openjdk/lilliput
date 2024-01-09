@@ -193,8 +193,7 @@ private:
 
   template<class T>
   void follow_root(T* p) {
-    assert(!Universe::heap()->is_in(p),
-	   "roots shouldn't be things within the heap");
+    assert(!Universe::heap()->is_in(p), "roots shouldn't be things within the heap");
     _compressor.mark_and_push(p);
     _compressor.follow_stack();
   }
