@@ -6,6 +6,7 @@
 #include "gc/shared/markBitMap.hpp"
 #include "gc/shared/space.hpp"
 #include "gc/shared/stringdedup/stringDedup.hpp"
+#include "gc/shared/taskqueue.hpp"
 #include "memory/allocation.hpp"
 #include "memory/iterator.hpp"
 #include "utilities/stack.hpp"
@@ -45,6 +46,7 @@ private:
   MemRegion  _mark_bitmap_region;
   MarkBitMap _mark_bitmap;
   Stack<oop,mtGC> _marking_stack;
+  Stack<ObjArrayTask, mtGC> _objarray_stack;
 
   SCBlockOffsetTable _bot;
 
@@ -59,7 +61,10 @@ private:
   void phase3_compact_and_update();
 
   bool mark_object(oop obj);
+  void follow_array(objArrayOop array);
+  void follow_array_chunk(objArrayOop array, int index);
   void follow_object(oop obj);
+  void push_objarray(objArrayOop array, size_t index);
 
   void update_roots();
   void compact_and_update_space(ContiguousSpace* space);
@@ -69,11 +74,13 @@ public:
   SerialCompressor(STWGCTimer* gc_timer);
   ~SerialCompressor();
 
-  // TODO: better scoping?
+  ReferenceProcessor* ref_processor() {
+    return _ref_processor;
+  }
+
   void follow_stack();
   template<class T>
   void mark_and_push(T* p);
-
   void invoke_at_safepoint(bool clear_all_softrefs);
 };
 

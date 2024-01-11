@@ -19,6 +19,7 @@
 #include "gc/shared/referenceProcessorPhaseTimes.hpp"
 #include "gc/shared/space.hpp"
 #include "gc/shared/strongRootsScope.hpp"
+#include "gc/shared/taskqueue.hpp"
 #include "gc/shared/weakProcessor.hpp"
 #include "memory/iterator.hpp"
 #include "memory/universe.hpp"
@@ -142,6 +143,7 @@ inline HeapWord* SCBlockOffsetTable::forwardee(HeapWord* addr) const {
 SerialCompressor::SerialCompressor(STWGCTimer* gc_timer):
   _mark_bitmap(),
   _marking_stack(),
+  _objarray_stack(),
   _bot(_mark_bitmap),
   _string_dedup_requests(),
   _gc_timer(gc_timer),
@@ -235,11 +237,12 @@ private:
 public:
   SCMarkAndPushClosure(int claim, SerialCompressor& compressor) :
     ClaimMetadataVisitingOopIterateClosure(claim),
-    _compressor(compressor) { }
+    _compressor(compressor) {
+    set_ref_discoverer_internal(compressor.ref_processor());
+  }
 
   void do_oop(oop* p)       { do_oop_work(p); }
   void do_oop(narrowOop* p) { do_oop_work(p); }
-  void set_ref_discoverer(ReferenceDiscoverer* rd) { set_ref_discoverer_internal(rd); }
 };
 
 class SCFollowRootClosure: public BasicOopIterateClosure {
@@ -316,11 +319,45 @@ bool SerialCompressor::mark_object(oop obj) {
   }
 }
 
+void SerialCompressor::push_objarray(objArrayOop array, size_t index) {
+  ObjArrayTask task(array, index);
+  assert(task.is_valid(), "bad ObjArrayTask");
+  _objarray_stack.push(task);
+}
+
+void SerialCompressor::follow_array(objArrayOop array) {
+  SCMarkAndPushClosure mark_and_push_closure(ClassLoaderData::_claim_stw_fullgc_mark, *this);
+  mark_and_push_closure.do_klass(array->klass());
+
+  if (array->length() > 0) {
+    push_objarray(array, 0);
+  }
+}
+
 void SerialCompressor::follow_object(oop obj) {
   assert(_mark_bitmap.is_marked(obj), "p must be marked");
+  if (obj->is_objArray()) {
+    follow_array((objArrayOop)obj);
+  } else {
+    SCMarkAndPushClosure mark_and_push_closure(ClassLoaderData::_claim_stw_fullgc_mark, *this);
+    obj->oop_iterate(&mark_and_push_closure);
+  }
+}
+
+void SerialCompressor::follow_array_chunk(objArrayOop array, int index) {
+  const int len = array->length();
+  const int beg_index = index;
+  assert(beg_index < len || len == 0, "index too large");
+
+  const int stride = MIN2(len - beg_index, (int) ObjArrayMarkingStride);
+  const int end_index = beg_index + stride;
+
   SCMarkAndPushClosure mark_and_push_closure(ClassLoaderData::_claim_stw_fullgc_mark, *this);
-  mark_and_push_closure.set_ref_discoverer(_ref_processor);
-  obj->oop_iterate(&mark_and_push_closure);
+  array->oop_iterate_range(&mark_and_push_closure, beg_index, end_index);
+
+  if (end_index < len) {
+    push_objarray(array, end_index); // Push the continuation.
+  }
 }
 
 void SerialCompressor::follow_stack() {
@@ -330,7 +367,12 @@ void SerialCompressor::follow_stack() {
       assert(_mark_bitmap.is_marked(obj), "p must be marked");
       follow_object(obj);
     }
-  } while (!_marking_stack.is_empty());
+    // Process ObjArrays one at a time to avoid marking stack bloat.
+    if (!_objarray_stack.is_empty()) {
+      ObjArrayTask task = _objarray_stack.pop();
+      follow_array_chunk(objArrayOop(task.obj()), task.index());
+    }
+  } while (!_marking_stack.is_empty() || !_objarray_stack.is_empty());
 }
 
 void SerialCompressor::phase1_mark(bool clear_all_softrefs) {
@@ -348,7 +390,6 @@ void SerialCompressor::phase1_mark(bool clear_all_softrefs) {
   {
     StrongRootsScope srs(0);
     SCMarkAndPushClosure mark_and_push_closure(ClassLoaderData::_claim_stw_fullgc_mark, *this);
-    mark_and_push_closure.set_ref_discoverer(_ref_processor);
     CLDToOopClosure follow_cld_closure(&mark_and_push_closure, ClassLoaderData::_claim_stw_fullgc_mark);
     SCFollowRootClosure follow_root_closure(*this);
 
