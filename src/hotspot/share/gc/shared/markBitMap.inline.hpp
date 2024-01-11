@@ -81,11 +81,11 @@ inline void MarkBitMap::clear(oop obj) {
 }
 
 inline size_t MarkBitMap::count_marked_words_64(HeapWord* start) const {
-  return _bm.count_one_bits_within_aligned_word(addr_to_offset(start));
+  return _bm.count_one_bits_within_aligned_word(addr_to_offset(start)) << LogMinObjAlignment;
 }
 
 inline size_t MarkBitMap::count_marked_words(HeapWord* start, HeapWord* end) const {
-  return _bm.count_one_bits_within_word(addr_to_offset(start), addr_to_offset(end));
+  return _bm.count_one_bits_within_word(addr_to_offset(start), addr_to_offset(end)) << LogMinObjAlignment;
 }
 
 #endif // SHARE_GC_SHARED_MARKBITMAP_INLINE_HPP

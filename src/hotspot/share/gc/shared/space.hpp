@@ -242,10 +242,6 @@ protected:
   HeapWord* _first_dead;
   HeapWord* _end_of_live;
 
-  // This the function to invoke when an allocation of an object covering
-  // "start" to "end" occurs to update other internal data structures.
-  virtual void update_for_block(HeapWord* start, HeapWord* the_end) { }
-
   GenSpaceMangler* mangler() { return _mangler; }
 
   // Allocation helpers (return null if full).
@@ -401,6 +397,10 @@ protected:
   // Addresses for inlined allocation
   HeapWord** top_addr() { return &_top; }
   HeapWord** end_addr() { return &_end; }
+
+  // This the function to invoke when an allocation of an object covering
+  // "start" to "end" occurs to update other internal data structures.
+  virtual void update_for_block(HeapWord* start, HeapWord* the_end) { }
 
   void print_on(outputStream* st) const override;
 

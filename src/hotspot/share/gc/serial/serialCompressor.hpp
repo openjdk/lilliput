@@ -4,6 +4,8 @@
 
 #include "gc/shared/gcTrace.hpp"
 #include "gc/shared/markBitMap.hpp"
+#include "gc/shared/space.hpp"
+#include "gc/shared/stringdedup/stringDedup.hpp"
 #include "memory/allocation.hpp"
 #include "memory/iterator.hpp"
 #include "utilities/stack.hpp"
@@ -15,18 +17,20 @@ class STWGCTimer;
 
 class SCBlockOffsetTable {
 private:
-  static const int WORDS_PER_BLOCK = 64;
-
   HeapWord** _table;
   MarkBitMap& _mark_bitmap;
   MemRegion _covered;
 
   inline size_t addr_to_block_idx(HeapWord* addr) const;
 
-  void build_table_for_space(ContiguousSpace* space);
-  void build_table_for_generation(Generation* generation);
+  void build_table_for_space(CompactPoint& cp, ContiguousSpace* space);
+  void build_table_for_generation(CompactPoint& cp, Generation* generation);
 
 public:
+  static int words_per_block() {
+    return BitsPerWord << LogMinObjAlignment;
+  }
+
   SCBlockOffsetTable(MarkBitMap& mark_bitmap);
   ~SCBlockOffsetTable();
 
@@ -44,8 +48,11 @@ private:
 
   SCBlockOffsetTable _bot;
 
+  StringDedup::Requests _string_dedup_requests;
+
   STWGCTimer* _gc_timer;
   SerialOldTracer _gc_tracer;
+  ReferenceProcessor* _ref_processor;
 
   void phase1_mark(bool clear_all_softrefs);
   void phase2_build_bot();
