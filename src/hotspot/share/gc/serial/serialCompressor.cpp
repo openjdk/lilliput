@@ -12,6 +12,7 @@
 #include "gc/serial/serialHeap.hpp"
 #include "gc/serial/serialStringDedup.hpp"
 #include "gc/shared/classUnloadingContext.hpp"
+#include "gc/shared/continuationGCSupport.hpp"
 #include "gc/shared/gcTrace.hpp"
 #include "gc/shared/gcTraceTime.inline.hpp"
 #include "gc/shared/markBitMap.inline.hpp"
