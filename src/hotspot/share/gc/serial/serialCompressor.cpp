@@ -32,8 +32,17 @@
 #include "jvmci/jvmci.hpp"
 #endif
 
+static HeapWord** allocate_table() {
+  MemRegion covered = SerialHeap::heap()->reserved_region();
+  HeapWord* start = covered.start();
+  HeapWord* end = covered.end();
+  int words_per_block = SCBlockOffsetTable::words_per_block();
+  size_t num_blocks = align_up(end - start, words_per_block) / words_per_block;
+  return NEW_C_HEAP_ARRAY(HeapWord*, num_blocks, mtGC);
+}
+
 SCBlockOffsetTable::SCBlockOffsetTable(MarkBitMap& mark_bitmap) :
-  _table(nullptr),
+  _table(allocate_table()),
   _mark_bitmap(mark_bitmap),
   _covered(SerialHeap::heap()->reserved_region()) { }
 
@@ -46,7 +55,7 @@ inline size_t SCBlockOffsetTable::addr_to_block_idx(HeapWord* addr) const {
   return (addr - _covered.start()) / words_per_block();
 }
 
-void SCBlockOffsetTable::build_table_for_space(CompactPoint& cp, ContiguousSpace* space) {
+void SCBlockOffsetTable::build_table_for_space(ContiguousSpace* space, CompactPoint& cp) {
   HeapWord* bottom = space->bottom();
   HeapWord* top = space->top();
 
@@ -110,26 +119,6 @@ void SCBlockOffsetTable::build_table_for_space(CompactPoint& cp, ContiguousSpace
     compact_top += live_in_block;
   }
   cp.space->set_compaction_top(compact_top);
-}
-
-void SCBlockOffsetTable::build_table_for_generation(CompactPoint& cp, Generation* generation) {
-  ContiguousSpace* space = generation->first_compaction_space();
-  while (space != nullptr) {
-    build_table_for_space(cp, space);
-    space = space->next_compaction_space();
-  }
-}
-
-void SCBlockOffsetTable::build_table() {
-  SerialHeap* heap = SerialHeap::heap();
-  HeapWord* start = _covered.start();
-  HeapWord* end = _covered.end();
-  size_t num_blocks = align_up(end - start, words_per_block()) / words_per_block();
-  _table = NEW_C_HEAP_ARRAY(HeapWord*, num_blocks, mtGC);
-
-  CompactPoint cp(heap->old_gen());
-  build_table_for_generation(cp, heap->old_gen());
-  build_table_for_generation(cp, heap->young_gen());
 }
 
 inline HeapWord* SCBlockOffsetTable::forwardee(HeapWord* addr) const {
@@ -464,14 +453,43 @@ void SerialCompressor::phase1_mark(bool clear_all_softrefs) {
   }
 }
 
+void SerialCompressor::iterate_spaces_of_generation(CSpaceClosure& cl, Generation* gen) const {
+  ContiguousSpace* space = gen->first_compaction_space();
+  while (space != nullptr) {
+    cl.do_space(space);
+    space = space->next_compaction_space();
+  }
+}
+
+void SerialCompressor::iterate_spaces(CSpaceClosure& cl) const {
+  SerialHeap* heap = SerialHeap::heap();
+  iterate_spaces_of_generation(cl, heap->old_gen());
+  iterate_spaces_of_generation(cl, heap->young_gen());
+}
+
+class BuildBOTClosure : public CSpaceClosure {
+private:
+  SCBlockOffsetTable& _bot;
+  CompactPoint _compact_point;
+public:
+  BuildBOTClosure(SCBlockOffsetTable& bot) :
+    _bot(bot),
+    _compact_point(SerialHeap::heap()->old_gen()) { }
+
+  void do_space(ContiguousSpace* space) override {
+    _bot.build_table_for_space(space, _compact_point);
+  }
+};
+
 void SerialCompressor::phase2_build_bot() {
   GCTraceTime(Info, gc, phases) tm("Phase 2: Build block-offset-table", _gc_timer);
-  _bot.build_table();
+  BuildBOTClosure cl(_bot);
+  iterate_spaces(cl);
 }
 
 class SCUpdateRefsClosure : public BasicOopIterateClosure {
 private:
-  SCBlockOffsetTable& _bot;
+  const SCBlockOffsetTable& _bot;
 
   template<class T>
   void do_oop_work(T* p) {
@@ -480,11 +498,13 @@ private:
       oop obj = CompressedOops::decode_raw_not_null(heap_oop);
       assert(SerialHeap::heap()->is_in_reserved(obj), "should be in heap");
       oop forwardee = cast_to_oop(_bot.forwardee(cast_from_oop<HeapWord*>(obj)));
-      RawAccess<IS_NOT_NULL>::oop_store(p, forwardee);
+      if (forwardee != obj) {
+        RawAccess<IS_NOT_NULL>::oop_store(p, forwardee);
+      }
     }
   }
 public:
-  SCUpdateRefsClosure(SCBlockOffsetTable& bot) :
+  SCUpdateRefsClosure(const SCBlockOffsetTable& bot) :
     _bot(bot) {}
 
   void do_oop(oop* p) {
@@ -512,7 +532,7 @@ static void clear_empty_region(ContiguousSpace* space) {
   }
 }
 
-ContiguousSpace* space_containing(HeapWord* addr) {
+static ContiguousSpace* space_containing(HeapWord* addr) {
   SerialHeap* heap = SerialHeap::heap();
   Generation* gen = heap->old_gen();
   if (!gen->is_in_reserved(addr)) {
@@ -527,21 +547,21 @@ ContiguousSpace* space_containing(HeapWord* addr) {
   return space;
 }
 
-void SerialCompressor::compact_and_update_space(ContiguousSpace* space) {
-  HeapWord* start = space->bottom();
-  HeapWord* end = space->top();
-  HeapWord* current = _mark_bitmap.get_next_marked_addr(start, end);
-  HeapWord* new_top = start;
+void SerialCompressor::compact_space(ContiguousSpace* space) const {
+  HeapWord* bottom = space->bottom();
+  HeapWord* top = space->top();
+  HeapWord* current = _mark_bitmap.get_next_marked_addr(bottom, top);
   SCUpdateRefsClosure cl(_bot);
-  //HeapWord* next_fwd = start;
-  while (current < end) {
+  while (current < top) {
     oop obj = cast_to_oop(current);
     assert(oopDesc::is_oop(obj), "must be oop");
     size_t size_in_words = obj->size();
+
+    // Update references of object.
     obj->oop_iterate(&cl);
+
+    // Copy object itself.
     HeapWord* forwardee = _bot.forwardee(current);
-    //assert(next_fwd == forwardee, "incorrect forwarwdee");
-    //next_fwd = align_up(forwardee + size_in_words, MinObjAlignment);
     if (current != forwardee) {
       Copy::aligned_conjoint_words(current, forwardee, size_in_words);
     }
@@ -551,21 +571,14 @@ void SerialCompressor::compact_and_update_space(ContiguousSpace* space) {
     // where the object will be once the compaction phase finishes.
     space_containing(forwardee)->update_for_block(forwardee, forwardee + size_in_words);
 
-    current = _mark_bitmap.get_next_marked_addr(current + size_in_words, end);
-    new_top += size_in_words;
+    // Advance to next live object.
+    current = _mark_bitmap.get_next_marked_addr(current + size_in_words, top);
   }
   clear_empty_region(space);
 }
 
-void SerialCompressor::compact_and_update_generation(Generation* generation) {
-  ContiguousSpace* space = generation->first_compaction_space();
-  while (space != nullptr) {
-    compact_and_update_space(space);
-    space = space->next_compaction_space();
-  }
-}
-
 void SerialCompressor::update_roots() {
+  ClassLoaderDataGraph::verify_claimed_marks_cleared(ClassLoaderData::_claim_stw_fullgc_adjust);
   SerialHeap* heap = SerialHeap::heap();
   SCUpdateRefsClosure adjust_pointer_closure(_bot);
   CLDToOopClosure adjust_cld_closure(&adjust_pointer_closure, ClassLoaderData::_claim_stw_fullgc_adjust);
@@ -579,11 +592,21 @@ void SerialCompressor::update_roots() {
   heap->gen_process_weak_roots(&adjust_pointer_closure);
 }
 
+class SCCompactClosure : public CSpaceClosure {
+private:
+  const SerialCompressor& _compressor;
+public:
+  SCCompactClosure(const SerialCompressor& compressor) :
+    _compressor(compressor) {}
+
+  void do_space(ContiguousSpace* space) override {
+    _compressor.compact_space(space);
+  }
+};
+
 void SerialCompressor::phase3_compact_and_update() {
   GCTraceTime(Info, gc, phases) tm("Phase 3: Compact heap", _gc_timer);
-  ClassLoaderDataGraph::verify_claimed_marks_cleared(ClassLoaderData::_claim_stw_fullgc_adjust);
   update_roots();
-  SerialHeap* heap = SerialHeap::heap();
-  compact_and_update_generation(heap->old_gen());
-  compact_and_update_generation(heap->young_gen());
+  SCCompactClosure compact(*this);
+  iterate_spaces(compact);
 }
