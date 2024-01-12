@@ -13,6 +13,11 @@
 
 class ContiguousSpace;
 class Generation;
+class SCCompactClosure;
+class SCFollowRootClosure;
+class SCFollowStackClosure;
+class SCKeepAliveClosure;
+class SCMarkAndPushClosure;
 class Space;
 class STWGCTimer;
 
@@ -109,49 +114,63 @@ public:
 };
 
 class SerialCompressor : public StackObj {
+  friend class SCCompactClosure;
+  friend class SCFollowRootClosure;
+  friend class SCFollowStackClosure;
+  friend class SCKeepAliveClosure;
+  friend class SCMarkAndPushClosure;
 private:
 
+  // Memory area of the underlying marking bitmap.
   MemRegion  _mark_bitmap_region;
+  // The marking bitmap.
   MarkBitMap _mark_bitmap;
+  // The marking stack.
   Stack<oop,mtGC> _marking_stack;
+  // Separate marking stack for object-array-chunks.
   Stack<ObjArrayTask, mtGC> _objarray_stack;
 
+  // The block-offset table.
   SCBlockOffsetTable _bot;
 
+  // String-dedup support.
   StringDedup::Requests _string_dedup_requests;
 
   STWGCTimer* _gc_timer;
   SerialOldTracer _gc_tracer;
   ReferenceProcessor* _ref_processor;
 
+  // Space iteration support.
   void iterate_spaces_of_generation(CSpaceClosure& cl, Generation* gen) const;
   void iterate_spaces(CSpaceClosure& cl) const;
 
+  // Phase 1: Marking.
   void phase1_mark(bool clear_all_softrefs);
+  // Phase 2: Building the block-offset-table.
   void phase2_build_bot();
+  // Phase 3: Compacting and updating references.
   void phase3_compact_and_update();
 
+  // Various markingsupport methods.
   bool mark_object(oop obj);
   void follow_array(objArrayOop array);
   void follow_array_chunk(objArrayOop array, int index);
   void follow_object(oop obj);
   void push_objarray(objArrayOop array, size_t index);
+  ReferenceProcessor* ref_processor() const { return _ref_processor; }
+  void follow_stack();
+  template<class T>
+  void mark_and_push(T* p);
 
+  // Update GC roots.
   void update_roots();
+  void compact_space(ContiguousSpace* space) const;
 
 public:
   SerialCompressor(STWGCTimer* gc_timer);
   ~SerialCompressor();
 
-  ReferenceProcessor* ref_processor() {
-    return _ref_processor;
-  }
-
-  void compact_space(ContiguousSpace* space) const;
-
-  void follow_stack();
-  template<class T>
-  void mark_and_push(T* p);
+  // Entry point.
   void invoke_at_safepoint(bool clear_all_softrefs);
 };
 
