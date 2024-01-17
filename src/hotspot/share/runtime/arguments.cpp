@@ -1423,13 +1423,6 @@ void Arguments::set_use_compressed_oops() {
 #endif // _LP64
 }
 
-void Arguments::set_use_compressed_klass_ptrs() {
-#ifdef _LP64
-  assert(!UseCompressedClassPointers || CompressedClassSpaceSize <= KlassEncodingMetaspaceMax,
-         "CompressedClassSpaceSize is too large for UseCompressedClassPointers");
-#endif // _LP64
-}
-
 void Arguments::set_conservative_max_heap_alignment() {
   // The conservative maximum required alignment for the heap is the maximum of
   // the alignments imposed by several sources: any requirements from the heap
@@ -1448,7 +1441,6 @@ jint Arguments::set_ergonomics_flags() {
 
 #ifdef _LP64
   set_use_compressed_oops();
-  set_use_compressed_klass_ptrs();
 
   // Also checks that certain machines are slower with compressed oops
   // in vm_version initialization code.
@@ -3703,6 +3695,10 @@ jint Arguments::apply_ergo() {
   set_heap_size();
 
   GCConfig::arguments()->initialize();
+
+  if (UseCompressedClassPointers) {
+    CompressedKlassPointers::pre_initialize();
+  }
 
   CDSConfig::initialize();
 

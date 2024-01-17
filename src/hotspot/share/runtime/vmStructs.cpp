@@ -2019,8 +2019,6 @@ private:
   declare_constant(BytesPerWord)                                          \
   declare_constant(BytesPerLong)                                          \
                                                                           \
-  declare_constant(LogKlassAlignmentInBytes)                              \
-                                                                          \
   declare_constant(HeapWordSize)                                          \
   declare_constant(LogHeapWordSize)                                       \
                                                                           \
