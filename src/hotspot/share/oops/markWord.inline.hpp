@@ -51,12 +51,24 @@ Klass* markWord::klass_or_null() const {
 
 narrowKlass markWord::narrow_klass() const {
   assert(UseCompactObjectHeaders, "only used with compact object headers");
+  // Make sure we don't need to zero any upper bits
+  STATIC_ASSERT(klass_shift + klass_bits == 64);
+  DEBUG_ONLY(check_klass_shadow_bits_tainted();)
   return narrowKlass(value() >> klass_shift);
 }
 
 markWord markWord::set_narrow_klass(narrowKlass nklass) const {
   assert(UseCompactObjectHeaders, "only used with compact object headers");
-  return markWord((value() & ~klass_mask_in_place) | ((uintptr_t) nklass << klass_shift));
+  markWord mw((value() & ~klass_mask_in_place) | ((uintptr_t) nklass << klass_shift));
+#ifdef ASSERT
+  // Sanity:
+  // Shadow bits and real nKlass bits must not intersect, but both should be contained
+  // in the klass load mask
+  STATIC_ASSERT((klass_shadow_mask_inplace & klass_mask_in_place) == 0);
+  STATIC_ASSERT((klass_load_shift + klass_shadow_bits) == klass_shift);
+  mw = mw.taint_klass_shadow_bits();
+#endif
+  return mw;
 }
 
 markWord markWord::set_klass(Klass* klass) const {
@@ -65,6 +77,18 @@ markWord markWord::set_klass(Klass* klass) const {
   narrowKlass nklass = CompressedKlassPointers::encode(const_cast<Klass*>(klass));
   return set_narrow_klass(nklass);
 }
+
+#ifdef ASSERT
+inline markWord markWord::taint_klass_shadow_bits() const {
+  return markWord(value() | klass_shadow_mask_inplace);
+}
+
+inline void markWord::check_klass_shadow_bits_tainted() const {
+  assert((value() & klass_shadow_mask_inplace) == klass_shadow_mask_inplace,
+      "Lost Taint: " PTR_FORMAT, value());
+}
+#endif // ASSERT
+
 #endif // _LP64
 
 #endif // SHARE_OOPS_MARKWORD_INLINE_HPP
