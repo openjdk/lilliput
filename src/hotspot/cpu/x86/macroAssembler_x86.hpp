@@ -2033,6 +2033,9 @@ public:
 
   void lightweight_lock(Register obj, Register hdr, Register thread, Register tmp, Label& slow);
   void lightweight_unlock(Register obj, Register hdr, Register tmp, Label& slow);
+
+  void placeholder_lock(Register obj, Register reg_rax, Register thread, Register tmp, Label& slow);
+  void placeholder_unlock(Register obj, Register reg_rax, Register thread, Register tmp, Label& slow);
 };
 
 /**
