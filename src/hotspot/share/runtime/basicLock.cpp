@@ -26,6 +26,7 @@
 #include "oops/oop.inline.hpp"
 #include "runtime/basicLock.hpp"
 #include "runtime/synchronizer.hpp"
+#include "utilities/globalDefinitions.hpp"
 
 void BasicLock::print_on(outputStream* st, oop owner) const {
   st->print("monitor");
@@ -81,6 +82,8 @@ void BasicLock::move_to(oop obj, BasicLock* dest) {
       // store-before-CAS avoidance in fast_lock/compiler_lock_object
       // we can find any flavor mark in the displaced mark.
     }
+    dest->set_displaced_header(displaced_header());
+  } else if (LockingMode == LM_PLACEHOLDER) {
     dest->set_displaced_header(displaced_header());
   }
 #ifdef ASSERT

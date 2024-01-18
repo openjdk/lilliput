@@ -73,6 +73,8 @@
 #include "runtime/vm_version.hpp"
 #include "utilities/copy.hpp"
 #include "utilities/events.hpp"
+#include "utilities/globalDefinitions.hpp"
+#include "utilities/macros.hpp"
 
 
 // Implementation of StubAssembler
@@ -757,8 +759,8 @@ JRT_BLOCK_ENTRY(void, Runtime1::monitorenter(JavaThread* current, oopDesc* obj, 
   if (LockingMode == LM_MONITOR) {
     lock->set_obj(obj);
   }
-  assert(LockingMode == LM_LIGHTWEIGHT || obj == lock->obj(), "must match");
-  SharedRuntime::monitor_enter_helper(obj, LockingMode == LM_LIGHTWEIGHT ? nullptr : lock->lock(), current);
+  assert(LockingMode == LM_LIGHTWEIGHT NOT_LP64(|| LockingMode == LM_PLACEHOLDER) || obj == lock->obj(), "must match");
+  SharedRuntime::monitor_enter_helper(obj, LockingMode == LM_LIGHTWEIGHT NOT_LP64(|| LockingMode == LM_PLACEHOLDER) ? nullptr : lock->lock(), current);
 JRT_END
 
 
