@@ -5307,6 +5307,7 @@ void MacroAssembler::load_nklass_compact(Register dst, Register src) {
 #endif
 
 void MacroAssembler::load_klass(Register dst, Register src, Register tmp) {
+  BLOCK_COMMENT("load_klass");
   assert_different_registers(src, tmp);
   assert_different_registers(dst, tmp);
 #ifdef _LP64
@@ -5337,6 +5338,7 @@ void MacroAssembler::store_klass(Register dst, Register src, Register tmp) {
 }
 
 void MacroAssembler::cmp_klass(Register klass, Register obj, Register tmp) {
+  BLOCK_COMMENT("cmp_klass 1");
 #ifdef _LP64
   if (UseCompactObjectHeaders) {
     load_nklass_compact(tmp, obj);
@@ -5351,6 +5353,7 @@ void MacroAssembler::cmp_klass(Register klass, Register obj, Register tmp) {
 }
 
 void MacroAssembler::cmp_klass(Register src, Register dst, Register tmp1, Register tmp2) {
+  BLOCK_COMMENT("cmp_klass 2");
 #ifdef _LP64
   if (UseCompactObjectHeaders) {
     assert(tmp2 != noreg, "need tmp2");

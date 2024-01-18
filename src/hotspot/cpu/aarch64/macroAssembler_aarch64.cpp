@@ -4423,7 +4423,6 @@ void MacroAssembler::load_method_holder(Register holder, Register method) {
 // Preserves all registers (incl src, rscratch1 and rscratch2).
 void MacroAssembler::load_nklass(Register dst, Register src) {
   assert(UseCompactObjectHeaders, "expects UseCompactObjectHeaders");
-
   Label fast;
 
   // Check if we can take the (common) fast path, if obj is unlocked.
