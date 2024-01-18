@@ -69,6 +69,7 @@ void SharedRuntime::inline_check_hashcode_from_object_header(MacroAssembler* mas
   // Depend on hash_mask being at most 32 bits and avoid the use of hash_mask_in_place
   // because it could be larger than 32 bits in a 64-bit vm. See markWord.hpp.
   if (UseCompactObjectHeaders) {
+    STATIC_ASSERT(markWord::hash_mask_compact < nth_bit(32));
     __ shrptr(result, markWord::hash_shift_compact);
     __ andptr(result, markWord::hash_mask_compact);
   } else {
