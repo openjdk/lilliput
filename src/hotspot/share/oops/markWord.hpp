@@ -112,7 +112,7 @@ class markWord {
   static const int self_forwarded_bits            = 1;
   static const int max_hash_bits                  = BitsPerWord - age_bits - lock_bits - self_forwarded_bits;
   static const int hash_bits                      = max_hash_bits > 31 ? 31 : max_hash_bits;
-  static const int hash_bits_compact              = max_hash_bits > 25 ? 25 : max_hash_bits;
+  static const int hash_bits_compact              = hash_bits;
   // Used only without compact headers.
   static const int unused_gap_bits                = LP64_ONLY(1) NOT_LP64(0);
 
@@ -120,7 +120,7 @@ class markWord {
   static const int self_forwarded_shift           = lock_shift + lock_bits;
   static const int age_shift                      = self_forwarded_shift + self_forwarded_bits;
   static const int hash_shift                     = age_shift + age_bits + unused_gap_bits;
-  static const int hash_shift_compact             = age_shift + age_bits;
+  static const int hash_shift_compact             = 11;
 
   static const uintptr_t lock_mask                = right_n_bits(lock_bits);
   static const uintptr_t lock_mask_in_place       = lock_mask << lock_shift;
@@ -298,12 +298,6 @@ class markWord {
   inline narrowKlass narrow_klass() const;
   inline markWord set_narrow_klass(narrowKlass nklass) const;
   inline markWord set_klass(Klass* klass) const;
-#ifdef ASSERT
-  // As long as we don't use the lower nKlass shadow bits,
-  // we pollute them and assert said pollution.
-  inline markWord taint_klass_shadow_bits() const;
-  inline void check_klass_shadow_bits_tainted() const;
-#endif
 #endif
 
   // Prototype mark for initialization
