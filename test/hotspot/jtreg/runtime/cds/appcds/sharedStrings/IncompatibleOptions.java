@@ -87,7 +87,7 @@ public class IncompatibleOptions {
     static final String COMPACT_STRING_MISMATCH =
         "The shared archive file's CompactStrings setting .* does not equal the current CompactStrings setting";
     static final String COMPRESSED_OOPS_NOT_CONSISTENT =
-        "The saved state of UseCompressedOops and UseCompressedClassPointers is different from runtime, CDS will be disabled.";
+        "The saved state of .* is different from runtime, CDS will be disabled.";
     static String appJar;
     static String[] vmOptionsPrefix = {};
 
