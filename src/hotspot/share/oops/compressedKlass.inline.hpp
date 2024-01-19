@@ -80,6 +80,7 @@ inline void CompressedKlassPointers::check_valid_klass(const Klass* k, address n
 }
 
 inline void CompressedKlassPointers::check_valid_klass(const Klass* k) {
+  assert(UseCompressedClassPointers, "Only call for +UseCCP");
   check_valid_klass(k, base(), shift());
   // Also assert that k falls into what we know is the valid Klass range. This is usually smaller
   // than the encoding range (e.g. encoding range covers 4G, but we only have 1G class space and a
@@ -90,6 +91,7 @@ inline void CompressedKlassPointers::check_valid_klass(const Klass* k) {
       p2i(k), p2i(base()), p2i(klassrange_end));
 }
 inline void CompressedKlassPointers::check_valid_narrow_klass_id(narrowKlass nk) {
+  assert(UseCompressedClassPointers, "Only call for +UseCCP");
   const uint64_t nk_mask = ~right_n_bits(narrow_klass_pointer_bits());
   assert(((uint64_t)nk & nk_mask) == 0, "narrow klass id bit spillover (%u)", nk);
   assert(nk >= _lowest_valid_narrow_klass_id &&
