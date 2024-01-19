@@ -1339,7 +1339,9 @@ InstanceKlass* SystemDictionaryShared::find_builtin_class(Symbol* name) {
   if (record != nullptr) {
     assert(!record->_klass->is_hidden(), "hidden class cannot be looked up by name");
 #ifdef _LP64
-    DEBUG_ONLY(CompressedKlassPointers::check_valid_klass(record->_klass);)
+    if (UseCompressedClassPointers) {
+      DEBUG_ONLY(CompressedKlassPointers::check_valid_klass(record->_klass);)
+    }
 #endif
     // We did not save the classfile data of the generated LambdaForm invoker classes,
     // so we cannot support CLFH for such classes.
