@@ -2417,6 +2417,14 @@ bool FileMapHeader::validate() {
             "for testing purposes only and should not be used in a production environment");
   }
 
+  if (compact_headers() != UseCompactObjectHeaders) {
+    log_info(cds)("The shared archive file's UseCompactObjectHeaders setting (%s)"
+                  " does not equal the current UseCompactObjectHeaders setting (%s).",
+                  _compact_headers          ? "enabled" : "disabled",
+                  UseCompactObjectHeaders   ? "enabled" : "disabled");
+    return false;
+  }
+
   log_info(cds)("Archive was created with UseCompressedOops = %d, UseCompressedClassPointers = %d,"
                 " UseTinyClassPointers = %d",
                 compressed_oops(), compressed_class_pointers(), tiny_class_pointers());
@@ -2424,14 +2432,6 @@ bool FileMapHeader::validate() {
       || tiny_class_pointers() != UseTinyClassPointers) {
     log_info(cds)("Unable to use shared archive.\nThe saved state of UseCompressedOops + UseCompressedClassPointers + UseTinyClassPointers is "
                                "different from runtime, CDS will be disabled.");
-    return false;
-  }
-
-  if (compact_headers() != UseCompactObjectHeaders) {
-    log_info(cds)("The shared archive file's UseCompactObjectHeaders setting (%s)"
-                  " does not equal the current UseCompactObjectHeaders setting (%s).",
-                  _compact_headers          ? "enabled" : "disabled",
-                  UseCompactObjectHeaders   ? "enabled" : "disabled");
     return false;
   }
 
