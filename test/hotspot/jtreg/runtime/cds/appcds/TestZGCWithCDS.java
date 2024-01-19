@@ -53,7 +53,8 @@ import jdk.test.lib.process.OutputAnalyzer;
 public class TestZGCWithCDS {
     public final static String HELLO = "Hello World";
     public final static String UNABLE_TO_USE_ARCHIVE = "Unable to use shared archive.";
-    public final static String ERR_MSG = "The saved state of UseCompressedOops and UseCompressedClassPointers is different from runtime, CDS will be disabled.";
+    public final static String ERR_MSG = "The saved state of .* is different from runtime, CDS will be disabled.";
+
     public static void main(String... args) throws Exception {
          String zGenerational = args[0];
          String compactHeaders = "-XX:" + (zGenerational.equals("-XX:+ZGenerational") ? "+" : "-") + "UseCompactObjectHeaders";
@@ -93,7 +94,7 @@ public class TestZGCWithCDS {
                          "-Xlog:cds",
                          "Hello");
          out.shouldContain(UNABLE_TO_USE_ARCHIVE);
-         out.shouldContain(ERR_MSG);
+         out.shouldMatch(ERR_MSG);
          out.shouldHaveExitValue(1);
 
          System.out.println("3. Run with -UseCompressedOops -UseCompressedClassPointers");
@@ -107,7 +108,7 @@ public class TestZGCWithCDS {
                          "-Xlog:cds",
                          "Hello");
          out.shouldContain(UNABLE_TO_USE_ARCHIVE);
-         out.shouldContain(ERR_MSG);
+         out.shouldMatch(ERR_MSG);
          out.shouldHaveExitValue(1);
 
          System.out.println("4. Run with -UseCompressedOops +UseCompressedClassPointers");
@@ -134,7 +135,7 @@ public class TestZGCWithCDS {
                          "-Xlog:cds",
                          "Hello");
          out.shouldContain(UNABLE_TO_USE_ARCHIVE);
-         out.shouldContain(ERR_MSG);
+         out.shouldMatch(ERR_MSG);
          out.shouldHaveExitValue(1);
 
          System.out.println("6. Run with +UseCompressedOops +UseCompressedClassPointers");
@@ -148,7 +149,7 @@ public class TestZGCWithCDS {
                          "-Xlog:cds",
                          "Hello");
          out.shouldContain(UNABLE_TO_USE_ARCHIVE);
-         out.shouldContain(ERR_MSG);
+         out.shouldMatch(ERR_MSG);
          out.shouldHaveExitValue(1);
 
          System.out.println("7. Dump with -UseCompressedOops -UseCompressedClassPointers");
