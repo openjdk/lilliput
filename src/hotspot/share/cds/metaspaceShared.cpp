@@ -86,6 +86,7 @@
 #include "utilities/align.hpp"
 #include "utilities/bitMap.inline.hpp"
 #include "utilities/defaultStream.hpp"
+#include "utilities/macros.hpp"
 #include "utilities/ostream.hpp"
 #include "utilities/resourceHash.hpp"
 
