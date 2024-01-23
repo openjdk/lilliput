@@ -213,7 +213,6 @@ void FileMapHeader::populate(FileMapInfo *info, size_t core_region_alignment,
   }
   _compressed_oops = UseCompressedOops;
   _compressed_class_ptrs = UseCompressedClassPointers;
-  _tiny_class_ptrs = UseTinyClassPointers;
   if (UseCompressedClassPointers) {
 #ifdef _LP64
     _narrow_klass_pointer_bits = CompressedKlassPointers::narrow_klass_pointer_bits();
@@ -286,7 +285,6 @@ void FileMapHeader::print(outputStream* st) {
   st->print_cr("- narrow_oop_mode:                %d", _narrow_oop_mode);
   st->print_cr("- compressed_oops:                %d", _compressed_oops);
   st->print_cr("- compressed_class_ptrs:          %d", _compressed_class_ptrs);
-  st->print_cr("- tiny_class_ptrs:                %d", _tiny_class_ptrs);
   st->print_cr("- narrow_klass_pointer_bits:      %d", _narrow_klass_pointer_bits);
   st->print_cr("- narrow_klass_shift:             %d", _narrow_klass_shift);
   st->print_cr("- cloned_vtables_offset:          " SIZE_FORMAT_X, _cloned_vtables_offset);
@@ -2422,12 +2420,10 @@ bool FileMapHeader::validate() {
             "for testing purposes only and should not be used in a production environment");
   }
 
-  log_info(cds)("Archive was created with UseCompressedOops = %d, UseCompressedClassPointers = %d,"
-                " UseTinyClassPointers = %d",
-                compressed_oops(), compressed_class_pointers(), tiny_class_pointers());
-  if (compressed_oops() != UseCompressedOops || compressed_class_pointers() != UseCompressedClassPointers
-      || tiny_class_pointers() != UseTinyClassPointers) {
-    log_info(cds)("Unable to use shared archive.\nThe saved state of UseCompressedOops + UseCompressedClassPointers + UseTinyClassPointers is "
+  log_info(cds)("Archive was created with UseCompressedOops = %d, UseCompressedClassPointers = %d",
+                          compressed_oops(), compressed_class_pointers());
+  if (compressed_oops() != UseCompressedOops || compressed_class_pointers() != UseCompressedClassPointers) {
+    log_info(cds)("Unable to use shared archive.\nThe saved state of UseCompressedOops and UseCompressedClassPointers is "
                                "different from runtime, CDS will be disabled.");
     return false;
   }

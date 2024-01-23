@@ -740,8 +740,8 @@ void ArchiveBuilder::make_klasses_shareable() {
     if (UseCompactObjectHeaders) {
       Klass* requested_k = to_requested(k);
       address narrow_klass_base = _requested_static_archive_bottom; // runtime encoding base == runtime mapping start
-      const int narrow_klass_shift = precomputed_narrow_klass_shift;
-      narrowKlass nk = CompressedKlassPointers::encode_not_null(requested_k, narrow_klass_base, narrow_klass_shift);
+      const int narrow_klass_shift = precomputed_narrow_klass_shift();
+      narrowKlass nk = CompressedKlassPointers::encode_raw(requested_k, narrow_klass_base, narrow_klass_shift);
       k->set_prototype_header(markWord::prototype().set_narrow_klass(nk));
     }
 #endif //_LP64
@@ -1386,16 +1386,11 @@ void ArchiveBuilder::report_out_of_space(const char* name, size_t needed_bytes) 
 
 #ifdef _LP64
 int ArchiveBuilder::precomputed_narrow_klass_shift() {
-  // We assume the future Klass range will not exceed 32bit. We plan for the max. possible
-  // CompressedClassSpaceSize of 3GB and the max. possible CDS archive size of 1GB.
-  //
-  // We also will, at runtime, set the encoding base directly to the start of the Klass range,
-  // therefore using the full extend of the encoding range.
-  //
   // Legacy Mode:
-  //    We use 32 bits for narrowKlass, which should covere the full 4G Klass range. Shift can be 0.
-  // TinyClassPointer Mode:
-  //    narrowKlass is much smaller, and we need the highest possible shift value.
+  //    We use 32 bits for narrowKlass, which should cover the full 4G Klass range. Shift can be 0.
+  // CompactObjectHeader Mode:
+  //    narrowKlass is much smaller, and we use the highest possible shift value to later get the maximum
+  //    Klass encoding range.
   //
   // Note that all of this may change in the future, if we decide to correct the pre-calculated
   // narrow Klass IDs at archive load time.
