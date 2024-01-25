@@ -1167,7 +1167,7 @@ MapArchiveResult MetaspaceShared::map_archives(FileMapInfo* static_mapinfo, File
             // In order for those IDs to still be valid, we need to dictate base and shift: base should be the
             // mapping start, shift the shift used at archive generation time.
             address precomputed_narrow_klass_base = cds_base;
-            const int precomputed_narrow_klass_shift = ArchiveBuilder::precomputed_narrow_klass_shift;
+            const int precomputed_narrow_klass_shift = ArchiveBuilder::precomputed_narrow_klass_shift();
             CompressedKlassPointers::initialize_for_given_encoding(
               cds_base, ccs_end - cds_base, // Klass range
               precomputed_narrow_klass_base, precomputed_narrow_klass_shift // precomputed encoding, see ArchiveBuilder
