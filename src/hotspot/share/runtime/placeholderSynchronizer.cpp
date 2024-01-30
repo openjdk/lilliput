@@ -499,10 +499,31 @@ void PlaceholderSynchronizer::ensure_lock_stack_space(JavaThread* locking_thread
   }
 }
 
+class VerifyThreadState {
+  bool _no_safepoint;
+  union {
+    struct {} _dummy;
+    NoSafepointVerifier _nsv;
+  };
+
+public:
+  VerifyThreadState(JavaThread* locking_thread, JavaThread* current) : _no_safepoint(locking_thread != current) {
+    assert(current == Thread::current(), "must be");
+    assert(locking_thread == current || locking_thread->is_obj_deopt_suspend(), "locking_thread may not run concurrently");
+    if (_no_safepoint) {
+      ::new (&_nsv) NoSafepointVerifier();
+    }
+  }
+  ~VerifyThreadState() {
+    if (_no_safepoint){
+      _nsv.~NoSafepointVerifier();
+    }
+  }
+};
+
 void PlaceholderSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* locking_thread, JavaThread* current) {
   assert(LockingMode == LM_PLACEHOLDER, "must be");
-  assert(current == Thread::current(), "must be");
-  assert(locking_thread == current || true /* TODO: What to assert here */, "");
+  VerifyThreadState vts(locking_thread, current);
 
   if (lock != nullptr) {
     // This is cleared in the interpreter
@@ -701,7 +722,7 @@ ObjectMonitor* PlaceholderSynchronizer::inflate_locked_or_imse(oop obj, const Ob
 
 ObjectMonitor* PlaceholderSynchronizer::inflate_fast_locked_object(oop object, JavaThread* locking_thread, JavaThread* current, const ObjectSynchronizer::InflateCause cause) {
   assert(LockingMode == LM_PLACEHOLDER, "only used for lightweight");
-  assert(current == JavaThread::current(), "must be");
+  VerifyThreadState vts(locking_thread, current);
   assert(locking_thread->lock_stack().contains(object), "locking_thread must have object on its lock stack");
 
   // Inflating requires a hash code
@@ -753,7 +774,7 @@ ObjectMonitor* PlaceholderSynchronizer::inflate_fast_locked_object(oop object, J
 
 bool PlaceholderSynchronizer::inflate_and_enter(oop object, BasicLock* lock, JavaThread* locking_thread, JavaThread* current, const ObjectSynchronizer::InflateCause cause) {
   assert(LockingMode == LM_PLACEHOLDER, "only used for lightweight");
-  assert(current == Thread::current(), "must be");
+  VerifyThreadState vts(locking_thread, current);
   NoSafepointVerifier nsv;
 
   // Note: In some paths (deoptimization) the 'current' thread inflates and

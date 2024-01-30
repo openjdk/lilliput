@@ -326,7 +326,6 @@ bool ObjectMonitor::try_enter(JavaThread* current) {
   }
 
   if (cur == current) {
-    // TODO-FIXME: check for integer overflow!  BUGID 6557169.
     _recursions++;
     return true;
   }
@@ -622,18 +621,12 @@ bool ObjectMonitor::deflate_anon_monitor(JavaThread* current) {
 
   LockStack& lock_stack = current->lock_stack();
 
-  if (_recursions > 0) {
-    // LockingMode == LM_PLACEHOLDER assumes recursion support for now.
-    // !VM_Version::supports_recursive_lightweight_locking(), lightweight locking cannot handle recursive locks.
-    return false;
-  }
-
   if (!lock_stack.can_push(1 + _recursions)) {
     // Will not be able to push the oop on the lock stack.
     return false;
   }
 
-  if (is_busy_anon()) {
+  if (is_contended()) {
     // Easy checks are first - the ObjectMonitor is busy so no deflation.
     return false;
   }
@@ -642,7 +635,7 @@ bool ObjectMonitor::deflate_anon_monitor(JavaThread* current) {
   set_owner_from(current, reinterpret_cast<void*>(ANONYMOUS_OWNER));
 
     // Recheck after setting owner
-  bool cleanup = is_busy_anon();
+  bool cleanup = is_contended();
 
 
   if (!cleanup) {

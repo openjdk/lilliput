@@ -263,10 +263,9 @@ private:
     }
     return ret_code != 0;
   }
-  bool is_busy_anon() const {
-    // precond (uintptr_t)owner_raw() == ANONYMOUS_OWNER
+  bool is_contended() const {
     intptr_t ret_code = intptr_t(_waiters) | intptr_t(_cxq) | intptr_t(_EntryList);
-    int cnts = contentions(); // read once
+    int cnts = contentions();
     if (cnts > 0) {
       ret_code |= intptr_t(cnts);
     }
