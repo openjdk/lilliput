@@ -122,7 +122,6 @@ public:
 };
 #endif
 
-
 class C2FastUnlockPlaceholderStub : public C2CodeStub {
 private:
   Register _obj;

@@ -34,6 +34,7 @@
 #include "runtime/mutexLocker.hpp"
 #include "runtime/synchronizer.hpp"
 #include "runtime/placeholderSynchronizer.hpp"
+#include "utilities/checkedCast.hpp"
 
 void MonitorDeflationThread::initialize() {
   EXCEPTION_MARK;
@@ -81,8 +82,9 @@ void MonitorDeflationThread::monitor_deflation_thread_entry(JavaThread* jt, TRAP
     return;
   }
 
-  while (true) {
     intx time_to_wait = deflation_interval;
+  while (true) {
+    bool resize = false;
     {
       // Need state transition ThreadBlockInVM so that this thread
       // will be handled by safepoint correctly when this thread is
@@ -96,23 +98,36 @@ void MonitorDeflationThread::monitor_deflation_thread_entry(JavaThread* jt, TRAP
         ml.wait(time_to_wait);
 
         // Handle LightweightSynchronizer Hash Table Resizing
-        // TODO: Maybe should not be done in TBIVM.
         if (PlaceholderSynchronizer::needs_resize(jt)) {
-          if (PlaceholderSynchronizer::resize_table(jt)) {
-            if (ObjectSynchronizer::time_since_last_async_deflation_ms() < (jlong)deflation_interval) {
-              // Still time left on the clock and the resize was successful
-              time_to_wait = deflation_interval - checked_cast<intx>(ObjectSynchronizer::time_since_last_async_deflation_ms());
-            } else {
-              // Timer is passed, reset to deflation_interval
-              time_to_wait = deflation_interval;
-            }
-          } else {
-            // Resize failed, try again in 250 ms
-            time_to_wait = 250;
-          }
+          resize = true;
+          break;
         }
       }
     }
+
+    if (resize) {
+      // TODO: Recheck this logic, especially !resize_successful and PlaceholderSynchronizer::needs_resize when is_max_size_reached == true
+      const intx time_since_last_deflation = checked_cast<intx>(ObjectSynchronizer::time_since_last_async_deflation_ms());
+      const bool resize_successful = PlaceholderSynchronizer::resize_table(jt);
+      const bool deflation_interval_passed = time_since_last_deflation >= deflation_interval;
+      const bool deflation_needed = deflation_interval_passed && ObjectSynchronizer::is_async_deflation_needed();
+
+      if (!resize_successful) {
+        // Resize failed, try again in 250 ms
+        time_to_wait = 250;
+      } else if (deflation_interval_passed) {
+        time_to_wait = deflation_interval;
+      } else {
+        time_to_wait = deflation_interval - time_since_last_deflation;
+      }
+
+      if (!deflation_needed) {
+        continue;
+      }
+    } else {
+      time_to_wait = deflation_interval;
+    }
+
 
     (void)ObjectSynchronizer::deflate_idle_monitors();
   }

@@ -255,7 +255,6 @@ inline void JavaThread::om_set_monitor_cache(ObjectMonitor* monitor) {
 
 inline void JavaThread::om_clear_monitor_cache() {
   if (LockingMode != LM_PLACEHOLDER) {
-    // OMCache not used.
     return;
   }
 
