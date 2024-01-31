@@ -39,10 +39,12 @@
 #include "gc/shared/c1/barrierSetC1.hpp"
 #include "oops/klass.inline.hpp"
 #include "oops/methodCounters.hpp"
+#include "runtime/globals.hpp"
 #include "runtime/sharedRuntime.hpp"
 #include "runtime/stubRoutines.hpp"
 #include "runtime/vm_version.hpp"
 #include "utilities/bitMap.inline.hpp"
+#include "utilities/globalDefinitions.hpp"
 #include "utilities/macros.hpp"
 #include "utilities/powerOfTwo.hpp"
 
@@ -1256,7 +1258,8 @@ void LIRGenerator::do_isInstance(Intrinsic* x) {
 }
 
 void LIRGenerator::load_klass(LIR_Opr obj, LIR_Opr klass, CodeEmitInfo* null_check_info) {
-  CodeStub* slow_path = UseCompactObjectHeaders ? new LoadKlassStub(klass) : nullptr;
+  CodeStub* slow_path = UseCompactObjectHeaders && LockingMode != LM_PLACEHOLDER
+                      ? new LoadKlassStub(klass) : nullptr;
   __ load_klass(obj, klass, null_check_info, slow_path);
 }
 

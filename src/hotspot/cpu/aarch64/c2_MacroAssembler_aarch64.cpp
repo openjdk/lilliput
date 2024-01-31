@@ -31,6 +31,7 @@
 #include "opto/matcher.hpp"
 #include "opto/output.hpp"
 #include "opto/subnode.hpp"
+#include "runtime/globals.hpp"
 #include "runtime/stubRoutines.hpp"
 #include "utilities/globalDefinitions.hpp"
 
@@ -2593,9 +2594,6 @@ bool C2_MacroAssembler::in_scratch_emit_size() {
 }
 
 void C2_MacroAssembler::load_nklass_compact(Register dst, Register obj, Register index, int scale, int disp) {
-  C2LoadNKlassStub* stub = new (Compile::current()->comp_arena()) C2LoadNKlassStub(dst);
-  Compile::current()->output()->add_stub(stub);
-
   // Note: Don't clobber obj anywhere in that method!
 
   // The incoming address is pointing into obj-start + klass_offset_in_bytes. We need to extract
@@ -2611,10 +2609,17 @@ void C2_MacroAssembler::load_nklass_compact(Register dst, Register obj, Register
     lea(dst, Address(obj, index, Address::lsl(scale)));
     ldr(dst, Address(dst, offset));
   }
-  // NOTE: We can't use tbnz here, because the target is sometimes too far away
-  // and cannot be encoded.
-  tst(dst, markWord::monitor_value);
-  br(Assembler::NE, stub->entry());
-  bind(stub->continuation());
+
+  if (LockingMode != LM_PLACEHOLDER) {
+    C2LoadNKlassStub* stub = new (Compile::current()->comp_arena()) C2LoadNKlassStub(dst);
+    Compile::current()->output()->add_stub(stub);
+
+    // NOTE: We can't use tbnz here, because the target is sometimes too far away
+    // and cannot be encoded.
+    tst(dst, markWord::monitor_value);
+    br(Assembler::NE, stub->entry());
+    bind(stub->continuation());
+  }
+
   lsr(dst, dst, markWord::klass_shift);
 }

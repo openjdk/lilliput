@@ -3526,9 +3526,11 @@ void LIR_Assembler::emit_load_klass(LIR_OpLoadKlass* op) {
 
     // Check if we can take the (common) fast path, if obj is unlocked.
     __ movq(result, Address(obj, oopDesc::mark_offset_in_bytes()));
-    __ testb(result, markWord::monitor_value);
-    __ jcc(Assembler::notZero, *op->stub()->entry());
-    __ bind(*op->stub()->continuation());
+    if (LockingMode != LM_PLACEHOLDER) {
+      __ testb(result, markWord::monitor_value);
+      __ jcc(Assembler::notZero, *op->stub()->entry());
+      __ bind(*op->stub()->continuation());
+    }
     // Fast-path: shift and decode Klass*.
     __ shrq(result, markWord::klass_shift);
     __ decode_klass_not_null(result, tmp);

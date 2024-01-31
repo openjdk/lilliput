@@ -83,7 +83,7 @@ public class Oop {
 
   private static Klass getKlass(Mark mark) {
     assert(VM.getVM().isCompactObjectHeadersEnabled());
-    if (mark.hasMonitor()) {
+    if (mark.hasMonitor() && VM.getVM().getCommandLineFlag("LockingMode").getInt() != LockingMode.getPlaceholder()) {
       ObjectMonitor mon = mark.monitor();
       mark = mon.header();
     }

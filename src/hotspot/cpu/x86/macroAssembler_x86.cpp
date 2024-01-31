@@ -5295,13 +5295,15 @@ void MacroAssembler::load_nklass_compact(Register dst, Register src) {
 
   Label fast;
   movq(dst, Address(src, oopDesc::mark_offset_in_bytes()));
-  testb(dst, markWord::monitor_value);
-  jccb(Assembler::zero, fast);
+  if (LockingMode != LM_PLACEHOLDER) {
+    testb(dst, markWord::monitor_value);
+    jccb(Assembler::zero, fast);
 
-  // Fetch displaced header
-  movq(dst, Address(dst, OM_OFFSET_NO_MONITOR_VALUE_TAG(header)));
+    // Fetch displaced header
+    movq(dst, Address(dst, OM_OFFSET_NO_MONITOR_VALUE_TAG(header)));
 
-  bind(fast);
+    bind(fast);
+  }
   shrq(dst, markWord::klass_shift);
 }
 #endif

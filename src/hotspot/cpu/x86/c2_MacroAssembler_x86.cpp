@@ -6594,9 +6594,6 @@ void C2_MacroAssembler::vector_rearrange_int_float(BasicType bt, XMMRegister dst
 
 #ifdef _LP64
 void C2_MacroAssembler::load_nklass_compact_c2(Register dst, Register obj, Register index, Address::ScaleFactor scale, int disp) {
-  C2LoadNKlassStub* stub = new (Compile::current()->comp_arena()) C2LoadNKlassStub(dst);
-  Compile::current()->output()->add_stub(stub);
-
   // Note: Don't clobber obj anywhere in that method!
 
   // The incoming address is pointing into obj-start + klass_offset_in_bytes. We need to extract
@@ -6607,9 +6604,15 @@ void C2_MacroAssembler::load_nklass_compact_c2(Register dst, Register obj, Regis
   // and offset to load the mark-word.
   int offset = oopDesc::mark_offset_in_bytes() + disp - oopDesc::klass_offset_in_bytes();
   movq(dst, Address(obj, index, scale, offset));
-  testb(dst, markWord::monitor_value);
-  jcc(Assembler::notZero, stub->entry());
-  bind(stub->continuation());
+
+  if (LockingMode != LM_PLACEHOLDER) {
+    C2LoadNKlassStub* stub = new (Compile::current()->comp_arena()) C2LoadNKlassStub(dst);
+    Compile::current()->output()->add_stub(stub);
+
+    testb(dst, markWord::monitor_value);
+    jcc(Assembler::notZero, stub->entry());
+    bind(stub->continuation());
+  }
   shrq(dst, markWord::klass_shift);
 }
 #endif
