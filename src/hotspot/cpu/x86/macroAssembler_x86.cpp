@@ -5292,18 +5292,7 @@ void MacroAssembler::load_method_holder(Register holder, Register method) {
 #ifdef _LP64
 void MacroAssembler::load_nklass_compact(Register dst, Register src) {
   assert(UseCompactObjectHeaders, "expect compact object headers");
-
-  Label fast;
   movq(dst, Address(src, oopDesc::mark_offset_in_bytes()));
-  if (LockingMode != LM_PLACEHOLDER) {
-    testb(dst, markWord::monitor_value);
-    jccb(Assembler::zero, fast);
-
-    // Fetch displaced header
-    movq(dst, Address(dst, OM_OFFSET_NO_MONITOR_VALUE_TAG(header)));
-
-    bind(fast);
-  }
   shrq(dst, markWord::klass_shift);
 }
 #endif

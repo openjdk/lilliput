@@ -2979,8 +2979,8 @@ jint Arguments::finalize_vm_init_args(bool patch_mod_javabase) {
     warning("Compact object headers require compressed class pointers. Disabling compact object headers.");
     FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
   }
-  if (UseCompactObjectHeaders && LockingMode == LM_LEGACY) {
-    FLAG_SET_DEFAULT(LockingMode, LM_LIGHTWEIGHT);
+  if (UseCompactObjectHeaders && LockingMode != LM_PLACEHOLDER) {
+    FLAG_SET_DEFAULT(LockingMode, LM_PLACEHOLDER);
   }
   if (UseCompactObjectHeaders && !UseAltGCForwarding) {
     FLAG_SET_DEFAULT(UseAltGCForwarding, true);
