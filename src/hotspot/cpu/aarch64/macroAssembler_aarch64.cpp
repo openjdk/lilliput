@@ -4424,20 +4424,7 @@ void MacroAssembler::load_method_holder(Register holder, Register method) {
 // Preserves all registers (incl src, rscratch1 and rscratch2).
 void MacroAssembler::load_nklass(Register dst, Register src) {
   assert(UseCompactObjectHeaders, "expects UseCompactObjectHeaders");
-
-
-  // Check if we can take the (common) fast path, if obj is unlocked.
   ldr(dst, Address(src, oopDesc::mark_offset_in_bytes()));
-  if (LockingMode != LM_PLACEHOLDER) {
-    Label fast;
-    tbz(dst, exact_log2(markWord::monitor_value), fast);
-
-    // Fetch displaced header
-    ldr(dst, Address(dst, OM_OFFSET_NO_MONITOR_VALUE_TAG(header)));
-
-    // Fast-path: shift and decode Klass*.
-    bind(fast);
-  }
   lsr(dst, dst, markWord::klass_shift);
 }
 

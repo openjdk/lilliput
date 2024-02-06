@@ -2609,17 +2609,5 @@ void C2_MacroAssembler::load_nklass_compact(Register dst, Register obj, Register
     lea(dst, Address(obj, index, Address::lsl(scale)));
     ldr(dst, Address(dst, offset));
   }
-
-  if (LockingMode != LM_PLACEHOLDER) {
-    C2LoadNKlassStub* stub = new (Compile::current()->comp_arena()) C2LoadNKlassStub(dst);
-    Compile::current()->output()->add_stub(stub);
-
-    // NOTE: We can't use tbnz here, because the target is sometimes too far away
-    // and cannot be encoded.
-    tst(dst, markWord::monitor_value);
-    br(Assembler::NE, stub->entry());
-    bind(stub->continuation());
-  }
-
   lsr(dst, dst, markWord::klass_shift);
 }
