@@ -39,6 +39,7 @@
 #include "oops/compiledICHolder.hpp"
 #include "oops/klass.inline.hpp"
 #include "prims/methodHandles.hpp"
+#include "runtime/globals.hpp"
 #include "runtime/jniHandles.hpp"
 #include "runtime/safepointMechanism.hpp"
 #include "runtime/sharedRuntime.hpp"
@@ -47,6 +48,7 @@
 #include "runtime/vframeArray.hpp"
 #include "runtime/vm_version.hpp"
 #include "utilities/align.hpp"
+#include "utilities/globalDefinitions.hpp"
 #include "vmreg_x86.inline.hpp"
 #ifdef COMPILER1
 #include "c1/c1_Runtime1.hpp"
@@ -1711,6 +1713,9 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
       // Save the test result, for recursive case, the result is zero
       __ movptr(Address(lock_reg, mark_word_offset), swap_reg);
       __ jcc(Assembler::notEqual, slow_path_lock);
+    } else if (LockingMode == LM_PLACEHOLDER){
+      __ movptr(Address(lock_reg, mark_word_offset), 0);
+      __ placeholder_lock(obj_reg, swap_reg, thread, lock_reg, slow_path_lock);
     } else {
       assert(LockingMode == LM_LIGHTWEIGHT, "must be");
       // Load object header
@@ -1870,6 +1875,9 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
       __ cmpxchgptr(rbx, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
       __ jcc(Assembler::notEqual, slow_path_unlock);
       __ dec_held_monitor_count();
+    } else if (LockingMode == LM_PLACEHOLDER) {
+      __ placeholder_unlock(obj_reg, swap_reg, thread, lock_reg, slow_path_unlock);
+      __ dec_held_monitor_count();
     } else {
       assert(LockingMode == LM_LIGHTWEIGHT, "must be");
       __ movptr(swap_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
@@ -1955,6 +1963,11 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     // BEGIN Slow path lock
 
     __ bind(slow_path_lock);
+
+    if (LockingMode == LM_PLACEHOLDER) {
+      // Reload the lock addr. Clobbered by lightweight_lock.
+      __ lea(lock_reg, Address(rbp, lock_slot_rbp_offset));
+    }
 
     // has last_Java_frame setup. No exceptions so do vanilla call not call_VM
     // args are (oop obj, BasicLock* lock, JavaThread* thread)

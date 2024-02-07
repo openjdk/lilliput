@@ -39,6 +39,9 @@
   // See full description in macroAssembler_aarch64.cpp.
   void fast_lock(Register object, Register box, Register tmp, Register tmp2, Register tmp3);
   void fast_unlock(Register object, Register box, Register tmp, Register tmp2);
+  // Code used by cmpFastLockPlaceholder and cmpFastUnlockPlaceholder mach instructions in .ad file.
+  void fast_lock_placeholder(Register object, Register box, Register t1, Register t2, Register t3);
+  void fast_unlock_placeholder(Register object, Register box, Register t1, Register t2);
 
   void string_compare(Register str1, Register str2,
                       Register cnt1, Register cnt2, Register result,

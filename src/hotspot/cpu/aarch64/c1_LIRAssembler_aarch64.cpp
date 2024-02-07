@@ -40,8 +40,10 @@
 #include "nativeInst_aarch64.hpp"
 #include "oops/objArrayKlass.hpp"
 #include "runtime/frame.inline.hpp"
+#include "runtime/globals.hpp"
 #include "runtime/sharedRuntime.hpp"
 #include "runtime/stubRoutines.hpp"
+#include "utilities/globalDefinitions.hpp"
 #include "utilities/powerOfTwo.hpp"
 #include "vmreg_aarch64.inline.hpp"
 
@@ -2540,9 +2542,11 @@ void LIR_Assembler::emit_load_klass(LIR_OpLoadKlass* op) {
     if (UseCompactObjectHeaders) {
       // Check if we can take the (common) fast path, if obj is unlocked.
       __ ldr(result, Address(obj, oopDesc::mark_offset_in_bytes()));
-      __ tst(result, markWord::monitor_value);
-      __ br(Assembler::NE, *op->stub()->entry());
-      __ bind(*op->stub()->continuation());
+      if (LockingMode != LM_PLACEHOLDER) {
+        __ tst(result, markWord::monitor_value);
+        __ br(Assembler::NE, *op->stub()->entry());
+        __ bind(*op->stub()->continuation());
+      }
 
       // Shift to get proper narrow Klass*.
       __ lsr(result, result, markWord::klass_shift);

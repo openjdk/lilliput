@@ -29,6 +29,7 @@
 #include "oops/markWord.hpp"
 #include "runtime/basicLock.hpp"
 #include "runtime/handles.hpp"
+#include "runtime/javaThread.hpp"
 #include "utilities/resourceHash.hpp"
 
 template <typename T> class GrowableArray;
@@ -92,7 +93,8 @@ class ObjectSynchronizer : AllStatic {
   // deoptimization at monitor exit. Hence, it does not take a Handle argument.
 
   // This is the "slow path" version of monitor enter and exit.
-  static void enter(Handle obj, BasicLock* lock, JavaThread* current);
+  static void enter(Handle obj, BasicLock* lock, JavaThread* locking_thread, JavaThread* current);
+  static void enter(Handle obj, BasicLock* lock, JavaThread* current) { enter(obj, lock, current, current); }
   static void exit(oop obj, BasicLock* lock, JavaThread* current);
 
   // Used only to handle jni locks or other unmatched monitor enter/exit
@@ -113,6 +115,9 @@ class ObjectSynchronizer : AllStatic {
   // This version is only for internal use
   static void inflate_helper(oop obj);
   static const char* inflate_cause_name(const InflateCause cause);
+
+  static ObjectMonitor* read_monitor(markWord mark);
+  static ObjectMonitor* read_monitor(Thread* current, oop obj, markWord mark);
 
   // Returns the identity hash value for an oop
   // NOTE: It may cause monitor inflation
@@ -175,6 +180,9 @@ class ObjectSynchronizer : AllStatic {
 
  private:
   friend class SynchronizerTest;
+  friend class PlaceholderSynchronizer;
+
+  static intptr_t get_next_hash(Thread* current, oop obj);
 
   static MonitorList _in_use_list;
   static volatile bool _is_async_deflation_requested;
