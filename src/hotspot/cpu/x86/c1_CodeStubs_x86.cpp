@@ -30,7 +30,6 @@
 #include "c1/c1_Runtime1.hpp"
 #include "classfile/javaClasses.hpp"
 #include "nativeInst_x86.hpp"
-#include "runtime/objectMonitor.hpp"
 #include "runtime/sharedRuntime.hpp"
 #include "utilities/align.hpp"
 #include "utilities/macros.hpp"
@@ -277,18 +276,6 @@ void MonitorExitStub::emit_code(LIR_Assembler* ce) {
   }
   __ call(RuntimeAddress(Runtime1::entry_for(exit_id)));
   __ jmp(_continuation);
-}
-
-void LoadKlassStub::emit_code(LIR_Assembler* ce) {
-  assert(UseCompactObjectHeaders, "only with compact headers");
-  __ bind(_entry);
-#ifdef _LP64
-  Register d = _result->as_register();
-  __ movq(d, Address(d, OM_OFFSET_NO_MONITOR_VALUE_TAG(header)));
-  __ jmp(_continuation);
-#else
-  __ should_not_reach_here();
-#endif
 }
 
 // Implementation of patching:

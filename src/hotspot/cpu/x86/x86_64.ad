@@ -4451,7 +4451,7 @@ instruct loadNKlassCompactHeaders(rRegN dst, memory mem, rFlagsReg cr)
     Address::ScaleFactor sf = (index != noreg) ? static_cast<Address::ScaleFactor>($mem$$scale) : Address::no_scale;
     __ load_nklass_compact_c2($dst$$Register, $mem$$base$$Register, index, sf, $mem$$disp);
   %}
-  ins_pipe(pipe_slow); // XXX
+  ins_pipe(ialu_reg_mem); // XXX
 %}
 
 // Load Float
