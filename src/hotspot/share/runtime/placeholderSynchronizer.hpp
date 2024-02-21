@@ -53,6 +53,7 @@ private:
   static bool resize_table(JavaThread* current);
   static void set_table_max(JavaThread* current);
 
+  static void enter_for(Handle obj, BasicLock* lock, JavaThread* locking_thread);
   static void enter(Handle obj, BasicLock* lock,  JavaThread* locking_thread, JavaThread* current);
   static void exit(oop object, JavaThread* current);
 
