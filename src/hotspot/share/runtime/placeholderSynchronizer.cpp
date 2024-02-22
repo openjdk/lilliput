@@ -32,6 +32,7 @@
 #include "memory/resourceArea.hpp"
 #include "oops/oop.inline.hpp"
 #include "runtime/globals_extension.hpp"
+#include "runtime/javaThread.hpp"
 #include "runtime/lockStack.inline.hpp"
 #include "runtime/mutexLocker.hpp"
 #include "runtime/objectMonitor.inline.hpp"
@@ -521,9 +522,19 @@ public:
   }
 };
 
+void PlaceholderSynchronizer::enter_for(Handle obj, BasicLock* lock, JavaThread* locking_thread) {
+  enter(obj, lock, locking_thread, JavaThread::current());
+}
+
 void PlaceholderSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* locking_thread, JavaThread* current) {
   assert(LockingMode == LM_PLACEHOLDER, "must be");
   VerifyThreadState vts(locking_thread, current);
+
+  if (obj->klass()->is_value_based()) {
+    ObjectSynchronizer::handle_sync_on_value_based_class(obj, locking_thread);
+  }
+
+  locking_thread->inc_held_monitor_count();
 
   if (lock != nullptr) {
     // This is cleared in the interpreter

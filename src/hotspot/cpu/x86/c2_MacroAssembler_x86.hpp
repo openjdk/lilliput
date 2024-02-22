@@ -43,6 +43,10 @@ public:
                  bool use_rtm, bool profile_rtm);
   void fast_unlock(Register obj, Register box, Register tmp, bool use_rtm);
 
+  void fast_lock_lightweight(Register obj, Register box, Register rax_reg,
+                             Register t, Register thread);
+  void fast_unlock_lightweight(Register obj, Register reg_rax, Register t, Register thread);
+
   void fast_lock_placeholder(Register obj, Register box, Register rax_reg,
                              Register t, Register thread);
   void fast_unlock_placeholder(Register obj, Register reg_rax, Register t, Register thread);

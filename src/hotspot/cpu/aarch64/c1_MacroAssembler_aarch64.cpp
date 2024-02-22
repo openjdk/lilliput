@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2024, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, 2021, Red Hat Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -85,11 +85,6 @@ int C1_MacroAssembler::lock_object(Register hdr, Register obj, Register disp_hdr
     ldr(hdr, Address(obj));
   }
 
-  if (LockingMode != LM_PLACEHOLDER) {
-    // Load object header
-    ldr(hdr, Address(obj, hdr_offset));
-  }
-
   if (LockingMode == LM_PLACEHOLDER) {
     str(zr, Address(disp_hdr, BasicObjectLock::lock_offset() + in_ByteSize((BasicLock::displaced_header_offset_in_bytes()))));
     placeholder_lock(obj, hdr, temp, rscratch2, slow_case);
@@ -97,6 +92,8 @@ int C1_MacroAssembler::lock_object(Register hdr, Register obj, Register disp_hdr
     lightweight_lock(obj, hdr, temp, rscratch2, slow_case);
   } else if (LockingMode == LM_LEGACY) {
     Label done;
+    // Load object header
+    ldr(hdr, Address(obj, hdr_offset));
     // and mark it as unlocked
     orr(hdr, hdr, markWord::unlocked_value);
     // save unlocked object header into the displaced header location on the stack
@@ -157,11 +154,6 @@ void C1_MacroAssembler::unlock_object(Register hdr, Register obj, Register disp_
   if (LockingMode == LM_PLACEHOLDER) {
     placeholder_unlock(obj, hdr, temp, rscratch2, slow_case);
   } else if (LockingMode == LM_LIGHTWEIGHT) {
-    ldr(hdr, Address(obj, oopDesc::mark_offset_in_bytes()));
-    // We cannot use tbnz here, the target might be too far away and cannot
-    // be encoded.
-    tst(hdr, markWord::monitor_value);
-    br(Assembler::NE, slow_case);
     lightweight_unlock(obj, hdr, temp, rscratch2, slow_case);
   } else if (LockingMode == LM_LEGACY) {
     // test if object header is pointing to the displaced header, and if so, restore
@@ -336,21 +328,6 @@ void C1_MacroAssembler::allocate_array(Register obj, Register len, Register t1, 
 
   verify_oop(obj);
 }
-
-
-void C1_MacroAssembler::inline_cache_check(Register receiver, Register iCache) {
-  verify_oop(receiver);
-  // explicit null check not needed since load from [klass_offset] causes a trap
-  // check against inline cache
-  if (UseCompactObjectHeaders) {
-    assert(!MacroAssembler::needs_explicit_null_check(oopDesc::mark_offset_in_bytes()), "must add explicit null check");
-  } else {
-    assert(!MacroAssembler::needs_explicit_null_check(oopDesc::klass_offset_in_bytes()), "must add explicit null check");
-  }
-
-  cmp_klass(receiver, iCache, rscratch1);
-}
-
 
 void C1_MacroAssembler::build_frame(int framesize, int bang_size_in_bytes) {
   assert(bang_size_in_bytes >= framesize, "stack bang size incorrect");
