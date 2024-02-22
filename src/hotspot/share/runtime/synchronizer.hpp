@@ -93,8 +93,7 @@ class ObjectSynchronizer : AllStatic {
   // deoptimization at monitor exit. Hence, it does not take a Handle argument.
 
   // This is the "slow path" version of monitor enter and exit.
-  static void enter(Handle obj, BasicLock* lock, JavaThread* locking_thread, JavaThread* current);
-  static void enter(Handle obj, BasicLock* lock, JavaThread* current) { enter(obj, lock, current, current); }
+  static void enter(Handle obj, BasicLock* lock, JavaThread* current);
   static void exit(oop obj, BasicLock* lock, JavaThread* current);
   // Used to enter a monitor for another thread. This requires that the
   // locking_thread is suspended, and that entering on a potential

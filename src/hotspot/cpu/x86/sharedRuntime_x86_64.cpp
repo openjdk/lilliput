@@ -2321,10 +2321,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
       assert(LockingMode == LM_PLACEHOLDER, "must be");
       __ placeholder_unlock(obj_reg, swap_reg, r15_thread, lock_reg, slow_path_unlock);
       __ dec_held_monitor_count();
-    } else {
-      assert(LockingMode == LM_PLACEHOLDER, "must be");
-      __ placeholder_unlock(obj_reg, swap_reg, r15_thread, lock_reg, slow_path_unlock);
-      __ dec_held_monitor_count();
     }
 
     // slow path re-enters here
