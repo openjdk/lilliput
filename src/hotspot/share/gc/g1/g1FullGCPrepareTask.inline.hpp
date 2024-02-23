@@ -125,10 +125,11 @@ inline size_t G1SerialRePrepareClosure<ALT_FWD>::apply(oop obj) {
   }
 
   // Get size and forward.
-  size_t size = obj->size();
-  _cp->forward<ALT_FWD>(obj, size);
+  size_t old_size = obj->size();
+  size_t new_size = obj->copy_size(old_size, obj->mark());
+  _cp->forward<ALT_FWD>(obj, old_size, new_size);
 
-  return size;
+  return old_size;
 }
 
 #endif // SHARE_GC_G1_G1FULLGCPREPARETASK_INLINE_HPP

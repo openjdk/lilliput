@@ -178,11 +178,11 @@ class ObjectSynchronizer : AllStatic {
   static void do_final_audit_and_print_stats();
   static void log_in_use_monitor_details(outputStream* out, bool log_all);
 
+  static intptr_t get_next_hash(Thread* current, oop obj);
+
  private:
   friend class SynchronizerTest;
   friend class PlaceholderSynchronizer;
-
-  static intptr_t get_next_hash(Thread* current, oop obj);
 
   static MonitorList _in_use_list;
   static volatile bool _is_async_deflation_requested;

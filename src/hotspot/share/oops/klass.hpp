@@ -734,6 +734,10 @@ protected:
 
   // for error reporting
   static bool is_valid(Klass* k);
+
+  virtual int hash_offset_in_bytes(oop obj) const = 0;
+
+  bool hash_requires_reallocation(oop obj) const;
 };
 
 #endif // SHARE_OOPS_KLASS_HPP

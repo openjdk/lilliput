@@ -5114,6 +5114,11 @@ jint ClassFileParser::layout_size() const {
   return _field_info->_instance_size;
 }
 
+int ClassFileParser::hash_offset() const {
+  assert(UseCompactObjectHeaders, "only with compact headers");
+  return _field_info->_hash_offset;
+}
+
 static void check_methods_for_intrinsics(const InstanceKlass* ik,
                                          const Array<Method*>* methods) {
   assert(ik != nullptr, "invariant");

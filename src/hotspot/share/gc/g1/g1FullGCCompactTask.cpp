@@ -66,7 +66,9 @@ void G1FullGCCompactTask::copy_object_to_new_location(oop obj) {
   Copy::aligned_conjoint_words(obj_addr, destination, size);
 
   // There is no need to transform stack chunks - marking already did that.
-  cast_to_oop(destination)->init_mark();
+  if (!UseCompactObjectHeaders) {
+    cast_to_oop(destination)->init_mark();
+  }
   assert(cast_to_oop(destination)->klass() != nullptr, "should have a class");
 }
 

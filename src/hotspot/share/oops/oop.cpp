@@ -133,6 +133,22 @@ bool oopDesc::is_oop(oop obj, bool ignore_mark_word) {
   return LockingMode == LM_LIGHTWEIGHT || LockingMode == LM_PLACEHOLDER || !SafepointSynchronize::is_at_safepoint();
 }
 
+markWord oopDesc::initialize_hash_if_necessary(oop obj, markWord m) {
+  if (!UseCompactObjectHeaders) {
+    return m;
+  }
+  assert(!m.has_displaced_mark_helper(), "must not be displaced header");
+  if (m.hash_is_hashed()) {
+    assert(!m.hash_is_copied(), "must not be installed");
+    uint32_t hash = static_cast<uint32_t>(ObjectSynchronizer::get_next_hash(nullptr, obj));
+    Klass* k = m.klass();
+    log_info(gc)("Initializing hash for " PTR_FORMAT ", old: " PTR_FORMAT ", hash: %d, offset: %d", p2i(this), p2i(obj), hash, k->hash_offset_in_bytes(cast_to_oop(this)));
+    int_field_put(k->hash_offset_in_bytes(cast_to_oop(this)), (jint)hash);
+    m = m.hash_set_copied();
+  }
+  return m;
+}
+
 // used only for asserts and guarantees
 bool oopDesc::is_oop_or_null(oop obj, bool ignore_mark_word) {
   return obj == nullptr ? true : is_oop(obj, ignore_mark_word);

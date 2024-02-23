@@ -971,19 +971,41 @@ bool PlaceholderSynchronizer::contains_monitor(Thread* current, ObjectMonitor* m
   return _omworld->contains_monitor(current, monitor);
 }
 
+static uint32_t get_hash(markWord mark, oop obj) {
+  assert(mark.is_neutral() | mark.is_fast_locked(), "only from neutral or fast-locked mark");
+  assert(mark.hash_is_hashed_or_copied(), "only from hashed or copied object");
+  if (mark.hash_is_copied()) {
+    Klass* klass = mark.klass();
+    return obj->int_field(klass->hash_offset_in_bytes(obj));
+  } else {
+    assert(mark.hash_is_hashed(), "must be hashed");
+    // Already marked as hashed, but not yet copied. Recompute hash and return it.
+    return ObjectSynchronizer::get_next_hash(nullptr, obj); // recompute hash
+  }
+}
+
 intptr_t PlaceholderSynchronizer::FastHashCode(Thread* current, oop obj) {
   assert(LockingMode == LM_PLACEHOLDER, "must be");
 
   markWord mark = obj->mark_acquire();
   for(;;) {
-    intptr_t hash = mark.hash();
-    if (hash != 0) {
-      return hash;
+    intptr_t hash;
+    markWord old_mark = mark;
+    markWord new_mark;
+    if (UseCompactObjectHeaders) {
+      if (mark.hash_is_hashed_or_copied()) {
+        return get_hash(mark, obj);
+      }
+      hash = ObjectSynchronizer::get_next_hash(current, obj);  // get a new hash
+      new_mark = mark.hash_set_hashed();
+    } else {
+      hash = mark.hash();
+      if (hash != 0) {
+        return hash;
+      }
+      hash = ObjectSynchronizer::get_next_hash(current, obj);
+      new_mark = old_mark.copy_set_hash(hash);
     }
-
-    hash = ObjectSynchronizer::get_next_hash(current, obj);
-    const markWord old_mark = mark;
-    const markWord new_mark = old_mark.copy_set_hash(hash);
 
     mark = obj->cas_set_mark(new_mark, old_mark);
     if (old_mark == mark) {
