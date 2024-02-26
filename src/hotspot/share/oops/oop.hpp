@@ -294,6 +294,7 @@ public:
   // value of the forwarding pointer returned and does not modify "this".
   inline oop forward_to_atomic(oop p, markWord compare, atomic_memory_order order = memory_order_conservative);
   inline oop forward_to_self_atomic(markWord compare, atomic_memory_order order = memory_order_conservative);
+  inline void clear_self_forwarded();
 
   inline oop forwardee() const;
   inline oop forwardee(markWord header) const;
@@ -333,7 +334,7 @@ public:
   inline bool fast_no_hash_check();
 
   // Initialize identity hash code in hash word of object copy from original object.
-  markWord initialize_hash_if_necessary(oop obj, markWord mark);
+  void initialize_hash_if_necessary(oop obj, markWord mark);
 
   // marks are forwarded to stack when object is locked
   inline bool     has_displaced_mark() const;

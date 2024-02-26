@@ -210,7 +210,7 @@ inline void OMCache::set_monitor(ObjectMonitor *monitor) {
 
   oop obj = monitor->object_peek();
   assert(obj != nullptr, "must be alive");
-  assert(monitor == PlaceholderSynchronizer::read_monitor(JavaThread::current(), obj), "must be exist in table");
+  assert(monitor == PlaceholderSynchronizer::read_monitor(JavaThread::current(), obj), "must exist in table: obj: " PTR_FORMAT ", mark: " INTPTR_FORMAT ", hash: " INTPTR_FORMAT, p2i(obj), obj->mark().value(), ObjectSynchronizer::FastHashCode(JavaThread::current(), obj));
 
   oop cmp_obj = obj;
   for (int i = 0; i < end; ++i) {

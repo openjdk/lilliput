@@ -4548,23 +4548,7 @@ bool LibraryCallKit::inline_native_hashcode(bool is_virtual, bool is_static) {
     return true;
   }
 
-  // We only go to the fast case code if we pass a number of guards.  The
-  // paths which do not pass are accumulated in the slow_region.
-  RegionNode* slow_region = new RegionNode(1);
-  record_for_igvn(slow_region);
-
-  // If this is a virtual call, we generate a funny guard.  We pull out
-  // the vtable entry corresponding to hashCode() from the target object.
-  // If the target method which we are calling happens to be the native
-  // Object hashCode() method, we pass the guard.  We do not need this
-  // guard for non-virtual calls -- the caller is known to be the native
-  // Object hashCode().
-  if (is_virtual) {
-    // After null check, get the object's klass.
-    Node* obj_klass = load_object_klass(obj);
-    generate_virtual_guard(obj_klass, slow_region);
-  }
-
+  RegionNode* slow_region = nullptr;
   if (UseCompactObjectHeaders) {
     // TODO: We could generate a fast case here under the following conditions:
     // - The hashctrl is set to hash_is_copied (see markWord::hash_is_copied())
@@ -4575,6 +4559,23 @@ bool LibraryCallKit::inline_native_hashcode(bool is_virtual, bool is_static) {
     result_io ->del_req(_fast_path);
     result_mem->del_req(_fast_path);
   } else {
+    // We only go to the fast case code if we pass a number of guards.  The
+    // paths which do not pass are accumulated in the slow_region.
+    slow_region = new RegionNode(1);
+    record_for_igvn(slow_region);
+
+    // If this is a virtual call, we generate a funny guard.  We pull out
+    // the vtable entry corresponding to hashCode() from the target object.
+    // If the target method which we are calling happens to be the native
+    // Object hashCode() method, we pass the guard.  We do not need this
+    // guard for non-virtual calls -- the caller is known to be the native
+    // Object hashCode().
+    if (is_virtual) {
+      // After null check, get the object's klass.
+      Node* obj_klass = load_object_klass(obj);
+      generate_virtual_guard(obj_klass, slow_region);
+    }
+
     // Get the header out of the object, use LoadMarkNode when available
     Node* header_addr = basic_plus_adr(obj, oopDesc::mark_offset_in_bytes());
     // The control of the load must be null. Otherwise, the load can move before
@@ -4634,7 +4635,9 @@ bool LibraryCallKit::inline_native_hashcode(bool is_virtual, bool is_static) {
   }
 
   // Generate code for the slow case.  We make a call to hashCode().
-  set_control(_gvn.transform(slow_region));
+  if (slow_region != nullptr) {
+    set_control(_gvn.transform(slow_region));
+  }
   if (!stopped()) {
     // No need for PreserveJVMState, because we're using up the present state.
     set_all_memory(init_mem);

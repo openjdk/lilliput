@@ -191,7 +191,7 @@ class markWord {
     return (mask_bits(value(), lock_mask_in_place) == unlocked_value);
   }
   bool is_marked()   const {
-    return (mask_bits(value(), lock_mask_in_place) == marked_value);
+    return (mask_bits(value() + 1, self_forwarded_mask_in_place) != 0);
   }
   bool is_neutral()  const {
     return (mask_bits(value(), lock_mask_in_place) == unlocked_value);
@@ -351,8 +351,12 @@ inline bool hash_is_hashed() const {
   }
 
   inline markWord hash_copy_hashctrl_from(markWord m) const {
-    assert(UseCompactObjectHeaders, "only with compact headers");
-    return markWord((value() & ~hashctrl_mask_in_place) | (m.value() & hashctrl_mask_in_place));
+    if (UseCompactObjectHeaders) {
+      assert(UseCompactObjectHeaders, "only with compact headers");
+      return markWord((value() & ~hashctrl_mask_in_place) | (m.value() & hashctrl_mask_in_place));
+    } else {
+      return markWord(value());
+    }
   }
 
 #ifdef _LP64
@@ -391,7 +395,12 @@ inline bool hash_is_hashed() const {
 
   inline markWord set_self_forwarded() const {
     assert(UseAltGCForwarding, "Only call this with alt GC forwarding");
-    return markWord(value() | self_forwarded_mask_in_place | marked_value);
+    return markWord(value() | self_forwarded_mask_in_place);
+  }
+
+  inline markWord clear_self_forwarded() const {
+    assert(UseAltGCForwarding, "Only call this with alt GC forwarding");
+    return markWord(value() & ~self_forwarded_mask_in_place);
   }
 #endif
 };

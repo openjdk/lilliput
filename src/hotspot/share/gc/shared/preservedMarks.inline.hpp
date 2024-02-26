@@ -58,7 +58,7 @@ inline PreservedMarks::PreservedMarks()
              0 /* max_cache_size */) { }
 
 void PreservedMark::set_mark() const {
-  _o->set_mark(_m);
+  _o->set_mark(_m.hash_copy_hashctrl_from(_o->mark()));
 }
 
 template <bool ALT_FWD>

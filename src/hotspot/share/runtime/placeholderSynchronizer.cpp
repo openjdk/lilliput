@@ -51,6 +51,18 @@
 // the mark word from the synchronization code.
 //
 
+static uintx objhash(oop obj) {
+  if (UseCompactObjectHeaders) {
+    uintx hash = PlaceholderSynchronizer::get_hash(obj->mark(), obj);
+    assert(hash != 0, "should have a hash");
+    return hash;
+  } else {
+    uintx hash = obj->mark().hash();
+    assert(hash != 0, "should have a hash");
+    return hash;
+  }
+}
+
 // ConcurrentHashTable storing links from objects to ObjectMonitors
 class ObjectMonitorWorld : public CHeapObj<mtThread> {
   struct Config {
@@ -78,9 +90,7 @@ class ObjectMonitorWorld : public CHeapObj<mtThread> {
     Lookup(oop obj) : _obj(obj) {}
 
     uintx get_hash() const {
-      uintx hash = _obj->mark().hash();
-      assert(hash != 0, "should have a hash");
-      return hash;
+      return objhash(_obj);
     }
 
     bool equals(ObjectMonitor** value) {
@@ -266,6 +276,7 @@ public:
     Lookup lookup_f(obj);
     auto found_f = [&](ObjectMonitor** found) {
       assert((*found)->object_peek() == obj, "must be");
+      assert(objhash(obj) == (uintx)(*found)->hash_placeholder(), "hash must match");
       result = *found;
     };
     bool grow;
@@ -298,7 +309,7 @@ public:
        oop obj = om->object_peek();
        st->print("monitor " PTR_FORMAT " ", p2i(om));
        st->print("object " PTR_FORMAT, p2i(obj));
-       assert(obj->mark().hash() == om->hash_placeholder(), "hash must match");
+       assert(objhash(obj) == (uintx)om->hash_placeholder(), "hash must match");
        st->cr();
        return true;
     };
@@ -386,7 +397,7 @@ ObjectMonitor* PlaceholderSynchronizer::add_monitor(JavaThread* current, ObjectM
   assert(LockingMode == LM_PLACEHOLDER, "must be");
   assert(obj == monitor->object(), "must be");
 
-  intptr_t hash = obj->mark().hash();
+  intptr_t hash = objhash(obj);
   assert(hash != 0, "must be set when claiming the object monitor");
   monitor->set_hash_placeholder(hash);
 
@@ -971,14 +982,15 @@ bool PlaceholderSynchronizer::contains_monitor(Thread* current, ObjectMonitor* m
   return _omworld->contains_monitor(current, monitor);
 }
 
-static uint32_t get_hash(markWord mark, oop obj) {
-  assert(mark.is_neutral() | mark.is_fast_locked(), "only from neutral or fast-locked mark");
+uint32_t PlaceholderSynchronizer::get_hash(markWord mark, oop obj) {
+  //assert(mark.is_neutral() | mark.is_fast_locked(), "only from neutral or fast-locked mark: " INTPTR_FORMAT, mark.value());
   assert(mark.hash_is_hashed_or_copied(), "only from hashed or copied object");
   if (mark.hash_is_copied()) {
     Klass* klass = mark.klass();
     return obj->int_field(klass->hash_offset_in_bytes(obj));
   } else {
     assert(mark.hash_is_hashed(), "must be hashed");
+    assert(hashCode == 6, "must have idempotent hashCode");
     // Already marked as hashed, but not yet copied. Recompute hash and return it.
     return ObjectSynchronizer::get_next_hash(nullptr, obj); // recompute hash
   }

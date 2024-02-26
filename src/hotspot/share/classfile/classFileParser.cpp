@@ -5115,7 +5115,6 @@ jint ClassFileParser::layout_size() const {
 }
 
 int ClassFileParser::hash_offset() const {
-  assert(UseCompactObjectHeaders, "only with compact headers");
   return _field_info->_hash_offset;
 }
 

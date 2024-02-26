@@ -60,7 +60,18 @@ markWord* oopDesc::mark_addr() const {
   return (markWord*) &_mark;
 }
 
+static void assert_correct_hash_transition(markWord old_mark, markWord new_mark) {
+#ifdef ASSERT
+  if (UseCompactObjectHeaders) {
+    if (new_mark.is_marked()) return; // Install forwardee.
+    if (old_mark.hash_is_hashed()) assert(new_mark.hash_is_hashed_or_copied(), "incorrect hash state transition");
+    if (old_mark.hash_is_copied()) assert(new_mark.hash_is_copied(), "incorrect hash state transition");
+  }
+#endif
+}
+
 void oopDesc::set_mark(markWord m) {
+  assert_correct_hash_transition(mark(), m);
   Atomic::store(&_mark, m);
 }
 
@@ -73,14 +84,17 @@ void oopDesc::release_set_mark(HeapWord* mem, markWord m) {
 }
 
 void oopDesc::release_set_mark(markWord m) {
+  assert_correct_hash_transition(mark(), m);
   Atomic::release_store(&_mark, m);
 }
 
 markWord oopDesc::cas_set_mark(markWord new_mark, markWord old_mark) {
+  assert_correct_hash_transition(old_mark, new_mark);
   return Atomic::cmpxchg(&_mark, old_mark, new_mark);
 }
 
 markWord oopDesc::cas_set_mark(markWord new_mark, markWord old_mark, atomic_memory_order order) {
+  assert_correct_hash_transition(old_mark, new_mark);
   return Atomic::cmpxchg(&_mark, old_mark, new_mark, order);
 }
 
@@ -103,7 +117,7 @@ markWord oopDesc::prototype_mark() const {
 
 void oopDesc::init_mark() {
   if (UseCompactObjectHeaders) {
-    set_mark(prototype_mark());
+    set_mark(prototype_mark().hash_copy_hashctrl_from(mark()));
   } else {
     set_mark(markWord::prototype());
   }
@@ -255,11 +269,8 @@ size_t oopDesc::base_size_given_klass(const Klass* klass)  {
 size_t oopDesc::size_given_mark_and_klass(markWord mrk, const Klass* kls) {
   size_t sz = base_size_given_klass(kls);
   if (UseCompactObjectHeaders) {
-    if (mrk.has_displaced_mark_helper()) {
-      mrk = mrk.displaced_mark_helper();
-    }
+    assert(!mrk.has_displaced_mark_helper(), "must not be displaced");
     if (mrk.hash_is_copied() && kls->hash_requires_reallocation(cast_to_oop(this))) {
-      assert(!mrk.has_monitor(), "no displaced mark");
       log_info(gc)("Extended size for object: " PTR_FORMAT " base-size: " SIZE_FORMAT ", mark: " PTR_FORMAT, p2i(this), sz, mrk.value());
       sz = align_object_size(sz + 1);
     }
@@ -269,9 +280,7 @@ size_t oopDesc::size_given_mark_and_klass(markWord mrk, const Klass* kls) {
 
 size_t oopDesc::copy_size(size_t size, markWord mark) const {
   if (UseCompactObjectHeaders) {
-    if (mark.has_displaced_mark_helper()) {
-      mark = mark.displaced_mark_helper();
-    }
+    assert(!mark.has_displaced_mark_helper(), "must not be displaced");
     Klass* klass = mark.klass();
     if (mark.hash_is_hashed() && klass->hash_requires_reallocation(cast_to_oop(this))) {
       size = align_object_size(size + 1);
@@ -418,6 +427,13 @@ void oopDesc::forward_to(oop p) {
   markWord m = markWord::encode_pointer_as_mark(p);
   assert(forwardee(m) == p, "encoding must be reversable");
   set_mark(m);
+}
+
+void oopDesc::clear_self_forwarded() {
+  assert(UseAltGCForwarding, "only with alt GC forwarding");
+  markWord m = mark();
+  assert(m.self_forwarded(), "must be self forwarded");
+  set_mark(m.clear_self_forwarded());
 }
 
 void oopDesc::forward_to_self() {

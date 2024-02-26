@@ -492,8 +492,7 @@ void ArchiveHeapWriter::update_header_for_requested_obj(oop requested_obj, oop s
   if (src_obj != nullptr) {
     if (UseCompactObjectHeaders) {
       fake_oop->set_mark(markWord::prototype().set_narrow_klass(nk));
-      markWord new_mark = fake_oop->initialize_hash_if_necessary(src_obj, src_obj->mark());
-      fake_oop->set_mark(new_mark);
+      fake_oop->initialize_hash_if_necessary(src_obj, src_obj->mark());
     } else {
       intptr_t src_hash = src_obj->identity_hash();
       fake_oop->set_mark(markWord::prototype().copy_set_hash(src_hash));

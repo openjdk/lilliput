@@ -38,6 +38,7 @@
 #include "runtime/handles.inline.hpp"
 #include "runtime/javaThread.hpp"
 #include "runtime/synchronizer.hpp"
+#include "runtime/placeholderSynchronizer.hpp"
 #include "utilities/macros.hpp"
 
 void oopDesc::print_on(outputStream* st) const {
@@ -133,20 +134,23 @@ bool oopDesc::is_oop(oop obj, bool ignore_mark_word) {
   return LockingMode == LM_LIGHTWEIGHT || LockingMode == LM_PLACEHOLDER || !SafepointSynchronize::is_at_safepoint();
 }
 
-markWord oopDesc::initialize_hash_if_necessary(oop obj, markWord m) {
+void oopDesc::initialize_hash_if_necessary(oop obj, markWord m) {
   if (!UseCompactObjectHeaders) {
-    return m;
+    return;
   }
   assert(!m.has_displaced_mark_helper(), "must not be displaced header");
   if (m.hash_is_hashed()) {
     assert(!m.hash_is_copied(), "must not be installed");
     uint32_t hash = static_cast<uint32_t>(ObjectSynchronizer::get_next_hash(nullptr, obj));
     Klass* k = m.klass();
-    log_info(gc)("Initializing hash for " PTR_FORMAT ", old: " PTR_FORMAT ", hash: %d, offset: %d", p2i(this), p2i(obj), hash, k->hash_offset_in_bytes(cast_to_oop(this)));
-    int_field_put(k->hash_offset_in_bytes(cast_to_oop(this)), (jint)hash);
+    int offset = k->hash_offset_in_bytes(cast_to_oop(this));
+    assert(offset >= 8, "hash offset must not be in header");
+    log_info(gc)("Initializing hash for " PTR_FORMAT ", old: " PTR_FORMAT ", hash: %d, offset: %d", p2i(this), p2i(obj), hash, offset);
+    int_field_put(offset, (jint)hash);
     m = m.hash_set_copied();
+    assert(static_cast<uint32_t>(PlaceholderSynchronizer::get_hash(m, cast_to_oop(this))) == hash, "hash must remain the same");
+    set_mark(m);
   }
-  return m;
 }
 
 // used only for asserts and guarantees

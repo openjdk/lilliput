@@ -251,7 +251,11 @@ class G1PostEvacuateCollectionSetCleanupTask1::RestoreEvacFailureRegionsTask : p
       {
         // Process marked object.
         assert(obj->is_forwarded() && obj->forwardee() == obj, "must be self-forwarded");
-        obj->init_mark();
+        if (UseAltGCForwarding) {
+          obj->clear_self_forwarded();
+        } else {
+          obj->init_mark();
+        }
         hr->update_bot_for_block(obj_addr, obj_end_addr);
 
         // Statistics

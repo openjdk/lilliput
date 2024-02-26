@@ -456,6 +456,8 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
   assert(region_attr.is_in_cset(),
          "Unexpected region attr type: %s", region_attr.get_type_str());
 
+  assert(!old_mark.is_marked(), "must not yet be forwarded");
+
   // Get the klass once.  We'll need it again later, and this avoids
   // re-decoding when it's compressed.
   // NOTE: With compact headers, it is not safe to load the Klass* from o, because
@@ -526,8 +528,7 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
     }
 
     // Initialize i-hash if necessary
-    markWord new_mark = obj->initialize_hash_if_necessary(old, old_mark);
-    obj->set_mark(new_mark);
+    obj->initialize_hash_if_necessary(old, old_mark);
 
     if (dest_attr.is_young()) {
       if (age < markWord::max_age) {
