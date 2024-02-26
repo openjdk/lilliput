@@ -247,27 +247,20 @@ inline void OMCache::set_monitor(ObjectMonitor *monitor) {
   assert(obj != nullptr, "must be alive");
   assert(monitor == PlaceholderSynchronizer::read_monitor(JavaThread::current(), obj), "must be exist in table");
 
-  oop cmp_obj = obj;
+  OMCacheEntry to_insert = {obj, monitor};
+
   for (int i = 0; i < end; ++i) {
-    if (_entries[i]._oop == cmp_obj ||
+    if (_entries[i]._oop == obj ||
         _entries[i]._monitor == nullptr ||
         _entries[i]._monitor->is_being_async_deflated()) {
-      _entries[i]._oop = obj;
-      _entries[i]._monitor = monitor;
+      // Use stale slot.
+      _entries[i] = to_insert;
       return;
     }
-    // Remember Most Recent Values
-    oop tmp_oop = obj;
-    ObjectMonitor* tmp_mon = monitor;
-    // Set next pair to the next most recent
-    obj = _entries[i]._oop;
-    monitor = _entries[i]._monitor;
-    // Store most recent values
-    _entries[i]._oop = tmp_oop;
-    _entries[i]._monitor = tmp_mon;
+    // Swap with the most recent value.
+    ::swap(to_insert, _entries[i]);
   }
-  _entries[end]._oop = obj;
-  _entries[end]._monitor = monitor;
+  _entries[end] = to_insert;
 }
 
 inline ObjectMonitor* OMCache::get_monitor(oop o) {
@@ -278,12 +271,10 @@ inline ObjectMonitor* OMCache::get_monitor(oop o) {
         // Bad monitor
         // Shift down rest
         for (; i < OMCacheSize - 1; ++i) {
-          _entries[i]._oop = _entries[i + 1]._oop;
-          _entries[i]._monitor =  _entries[i + 1]._monitor;
+          _entries[i] = _entries[i + 1];
         }
-        // i == CAPACITY - 1
-        _entries[i]._oop = nullptr;
-        _entries[i]._monitor = nullptr;
+        // Clear end
+        _entries[i] = {};
         return nullptr;
       }
       return _entries[i]._monitor;
@@ -294,8 +285,8 @@ inline ObjectMonitor* OMCache::get_monitor(oop o) {
 
 inline void OMCache::clear() {
   for (size_t i = 0 , r = 0; i < CAPACITY; ++i) {
-    _entries[i]._oop = nullptr;
-    _entries[i]._monitor = nullptr;
+    // Clear
+    _entries[i] = {};
   }
 }
 
