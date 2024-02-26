@@ -828,16 +828,8 @@ bool PlaceholderSynchronizer::inflate_and_enter(oop object, BasicLock* lock, Jav
     const markWord mark = object->mark_acquire();
 
     if (mark.has_monitor()) {
-      if (monitor->owner_is_DEFLATER_MARKER()) {
-        // Only help the monitor deflation thread transition to unlocked.
-        // If owner is anonymous then a java thread deflated, and only they
-        // may transition the mark word directly to fast_locked
-
-        // Let this thread help update the mark word to unlocked.
-        const markWord new_mark = mark.clear_lock_bits().set_unlocked();
-        (void)object->cas_set_mark(new_mark, mark);
-        // Retry immediately
-      }
+      // Waiting on the deflation thread to remove the deflated monitor from the table.
+      os::naked_yield();
 
     } else if (mark.is_fast_locked()) {
       // Some other thread managed to fast-lock the lock, or this is a
