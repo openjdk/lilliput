@@ -1258,22 +1258,44 @@ void C2_MacroAssembler::fast_lock_placeholder(Register obj, Register box, Regist
       if (OMCacheHitRate) increment(Address(thread, JavaThread::lock_lookup_offset()));
 
       // Fetch ObjectMonitor* from the cache or take the slow-path.
-      Label monitor_found, loop;
+      Label monitor_found;
+
       // Load cache address
       lea(t, Address(thread, JavaThread::om_cache_oops_offset()));
 
-      // Search for obj in cache.
-      bind(loop);
+      const int num_unrolled = OMC2UnrollCacheLookup ? MIN2(OMC2UnrollCacheEntires, OMCacheSize) : 0;
+      if (OMC2UnrollCacheLookup) {
+        for (int i = 0; i < num_unrolled; i++) {
+          cmpptr(obj, Address(t));
+          jccb(Assembler::equal, monitor_found);
+          if (i + 1 != num_unrolled) {
+            increment(t, in_bytes(OMCache::oop_to_oop_difference()));
+          }
+        }
+      }
+      if (!OMC2UnrollCacheLookup || (OMC2UnrollCacheLookupLoopTail && num_unrolled != OMCacheSize)) {
+        if (num_unrolled != 0) {
+          // Loop after unrolling, advance iterator.
+          increment(t, in_bytes(OMCache::oop_to_oop_difference()));
+        }
 
-      // Check for match.
-      cmpptr(obj, Address(t));
-      jccb(Assembler::equal, monitor_found);
+        Label loop;
 
-      // Search until null encountered, guaranteed _null_sentinel at end.
-      cmpptr(Address(t), 1);
-      jcc(Assembler::below, slow_path); // 0 check, but with ZF=0 when *t == 0
-      increment(t, oopSize);
-      jmpb(loop);
+        // Search for obj in cache.
+        bind(loop);
+
+        // Check for match.
+        cmpptr(obj, Address(t));
+        jccb(Assembler::equal, monitor_found);
+
+        // Search until null encountered, guaranteed _null_sentinel at end.
+        cmpptr(Address(t), 1);
+        jcc(Assembler::below, slow_path); // 0 check, but with ZF=0 when *t == 0
+        increment(t, in_bytes(OMCache::oop_to_oop_difference()));
+        jmpb(loop);
+      } else {
+        jmp(slow_path);
+      }
 
       // Cache hit.
       bind(monitor_found);
