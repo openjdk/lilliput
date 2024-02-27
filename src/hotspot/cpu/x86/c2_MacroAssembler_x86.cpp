@@ -1263,17 +1263,16 @@ void C2_MacroAssembler::fast_lock_placeholder(Register obj, Register box, Regist
       // Load cache address
       lea(t, Address(thread, JavaThread::om_cache_oops_offset()));
 
-      const int num_unrolled = OMC2UnrollCacheLookup ? MIN2(OMC2UnrollCacheEntries, OMCacheSize) : 0;
-      if (OMC2UnrollCacheLookup) {
-        for (int i = 0; i < num_unrolled; i++) {
-          cmpptr(obj, Address(t));
-          jccb(Assembler::equal, monitor_found);
-          if (i + 1 != num_unrolled) {
-            increment(t, in_bytes(OMCache::oop_to_oop_difference()));
-          }
+      const int num_unrolled = MIN2(OMC2UnrollCacheEntries, OMCacheSize);
+      for (int i = 0; i < num_unrolled; i++) {
+        cmpptr(obj, Address(t));
+        jccb(Assembler::equal, monitor_found);
+        if (i + 1 != num_unrolled) {
+          increment(t, in_bytes(OMCache::oop_to_oop_difference()));
         }
       }
-      if (!OMC2UnrollCacheLookup || (OMC2UnrollCacheLookupLoopTail && num_unrolled != OMCacheSize)) {
+
+      if (num_unrolled == 0 || (OMC2UnrollCacheLookupLoopTail && num_unrolled != OMCacheSize)) {
         if (num_unrolled != 0) {
           // Loop after unrolling, advance iterator.
           increment(t, in_bytes(OMCache::oop_to_oop_difference()));
