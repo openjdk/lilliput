@@ -1994,7 +1994,7 @@ const int ObjectAlignmentInBytes = 8;
                                                                             \
   product(bool, OMC2UnrollCacheLookupLoopTail, true, "")                    \
                                                                             \
-  product(int, OMC2UnrollCacheEntires, 8, "")                               \
+  product(int, OMC2UnrollCacheEntries, 8, "")                               \
           range(0, OMCache::CAPACITY)                                       \
                                                                             \
   product(int, OMCacheSize, 8, "")                                          \

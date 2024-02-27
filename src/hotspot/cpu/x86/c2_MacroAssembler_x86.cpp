@@ -1263,7 +1263,7 @@ void C2_MacroAssembler::fast_lock_placeholder(Register obj, Register box, Regist
       // Load cache address
       lea(t, Address(thread, JavaThread::om_cache_oops_offset()));
 
-      const int num_unrolled = OMC2UnrollCacheLookup ? MIN2(OMC2UnrollCacheEntires, OMCacheSize) : 0;
+      const int num_unrolled = OMC2UnrollCacheLookup ? MIN2(OMC2UnrollCacheEntries, OMCacheSize) : 0;
       if (OMC2UnrollCacheLookup) {
         for (int i = 0; i < num_unrolled; i++) {
           cmpptr(obj, Address(t));
