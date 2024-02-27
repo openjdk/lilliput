@@ -114,7 +114,7 @@ private:
                             1024 /* size */, AnyObj::C_HEAP /* alloc-type */, mtGC,
                             SlidingForwarding::hash, SlidingForwarding::equals> FallbackTable;
 
-  static const uintptr_t MARK_LOWER_HALF_MASK = right_n_bits(32);
+  static const uintptr_t MARK_LOWER_HALF_MASK = right_n_bits(30);
 
   // We need the lowest two bits to indicate a forwarded object.
   // The next bit indicates that the forwardee should be looked-up in a fallback-table.
@@ -132,7 +132,7 @@ private:
   static const int OFFSET_BITS_SHIFT = ALT_REGION_SHIFT + ALT_REGION_BITS;
 
   // How many bits we use for the offset
-  static const int NUM_OFFSET_BITS = 32 - OFFSET_BITS_SHIFT;
+  static const int NUM_OFFSET_BITS = 30 - OFFSET_BITS_SHIFT;
 
   // Indicates an unused base address in the target base table.
   static HeapWord* const UNUSED_BASE;

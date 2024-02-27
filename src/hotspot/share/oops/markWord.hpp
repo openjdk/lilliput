@@ -52,7 +52,7 @@
 //
 //  64 bits (with compact headers):
 //  -------------------------------
-//  nklass:32 hash:25 -->| unused_gap:1  age:4  self-fwded:1  lock:2 (normal object)
+//  nklass:32 hash:2 unused_gap:24 -->  age:4  self-fwded:1  lock:2 (normal object)
 //
 //  - hash contains the identity hash value: largest value is
 //    31 bits, see os::random().  Also, 64-bit vm's require
@@ -146,10 +146,10 @@ class markWord {
   static const int age_shift                      = self_forwarded_shift + self_forwarded_bits;
   static const int hash_shift                     = age_shift + age_bits + unused_gap_bits;
   // Used only with compact headers.
-  static const int hashctrl_shift                 = age_shift + age_bits;
+  static const int hashctrl_shift                 = age_shift + age_bits + unused_gap_bits_compact;
 #ifdef _LP64
   // Used only with compact headers.
-  static const int klass_shift                    = hashctrl_shift + hashctrl_bits + unused_gap_bits_compact;
+  static const int klass_shift                    = hashctrl_shift + hashctrl_bits;
 #endif
 
   static const uintptr_t lock_mask                = right_n_bits(lock_bits);
@@ -191,7 +191,7 @@ class markWord {
     return (mask_bits(value(), lock_mask_in_place) == unlocked_value);
   }
   bool is_marked()   const {
-    return (mask_bits(value() + 1, self_forwarded_mask_in_place) != 0);
+    return (value() & (self_forwarded_mask_in_place | lock_mask_in_place)) > monitor_value;
   }
   bool is_neutral()  const {
     return (mask_bits(value(), lock_mask_in_place) == unlocked_value);

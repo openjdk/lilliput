@@ -60,15 +60,17 @@ void G1FullGCCompactTask::copy_object_to_new_location(oop obj) {
   assert(SlidingForwarding::forwardee<ALT_FWD>(obj) != obj, "Object must have a new location");
 
   size_t size = obj->size();
+  markWord old_mark = obj->mark();
+
   // Copy object and reinit its mark.
   HeapWord* obj_addr = cast_from_oop<HeapWord*>(obj);
   HeapWord* destination = cast_from_oop<HeapWord*>(SlidingForwarding::forwardee<ALT_FWD>(obj));
+  assert(obj_addr != destination, "only copy actually-moving objects");
   Copy::aligned_conjoint_words(obj_addr, destination, size);
 
   // There is no need to transform stack chunks - marking already did that.
-  if (!UseCompactObjectHeaders) {
-    cast_to_oop(destination)->init_mark();
-  }
+  cast_to_oop(destination)->initialize_hash_if_necessary(obj, old_mark);
+  cast_to_oop(destination)->init_mark();
   assert(cast_to_oop(destination)->klass() != nullptr, "should have a class");
 }
 
