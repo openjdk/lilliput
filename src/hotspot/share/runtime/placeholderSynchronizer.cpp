@@ -53,20 +53,20 @@
 //
 
 // ConcurrentHashTable storing links from objects to ObjectMonitors
-class ObjectMonitorWorld : public CHeapObj<mtThread> {
+class ObjectMonitorWorld : public CHeapObj<mtOMWorld> {
   struct Config {
     using Value = ObjectMonitor*;
     static uintx get_hash(Value const& value, bool* is_dead) {
       return (uintx)value->hash_placeholder();
     }
     static void* allocate_node(void* context, size_t size, Value const& value) {
-      return AllocateHeap(size, mtThread);
+      return AllocateHeap(size, mtOMWorld);
     };
     static void free_node(void* context, void* memory, Value const& value) {
       FreeHeap(memory);
     }
   };
-  using ConcurrentTable = ConcurrentHashTable<Config, mtThread>;
+  using ConcurrentTable = ConcurrentHashTable<Config, mtOMWorld>;
 
   ConcurrentTable* _table;
   volatile bool _resize;
