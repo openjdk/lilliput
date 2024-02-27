@@ -561,73 +561,95 @@ void C2_MacroAssembler::fast_lock_placeholder(Register obj, Register box, Regist
   { // Handle inflated monitor.
     bind(inflated);
 
-  if (!OMUseC2Cache) {
-    // Set Flags == NE
-    cmp(zr, obj);
-    b(slow_path);
-  } else {
-
-    if (OMCacheHitRate) increment(Address(rthread, JavaThread::lock_lookup_offset()));
-
-    Label monitor_found, loop;
-    // Load cache address
-    lea(t, Address(rthread, JavaThread::om_cache_oops_offset()));
-
-    // Search for obj in cache.
-    bind(loop);
-
-    // Check for match.
-    ldr(t1, Address(t));
-    cmp(obj, t1);
-    br(Assembler::EQ, monitor_found);
-
-    // Search until null encountered, guaranteed _null_sentinel at end.
-    increment(t, oopSize);
-    cbnz(t1, loop);
-    // Cache Miss, NE set from cmp above, cbnz does not set flags
-    b(slow_path);
-
-    bind(monitor_found);
-    ldr(t1, Address(t, OMCache::oop_to_monitor_difference()));
-    if (OMCacheHitRate) increment(Address(rthread, JavaThread::lock_hit_offset()));
-
-    // ObjectMonitor* is in t1
-    const Register monitor = t1;
-    const Register owner_addr = t2;
-    const Register owner = t3;
-
-    Label recursive;
-    Label monitor_locked;
-
-    // Compute owner address.
-    lea(owner_addr, Address(monitor, ObjectMonitor::owner_offset()));
-
-    if (OMRecursiveFastPath) {
-      ldr(owner, Address(owner_addr));
-      cmp(owner, rthread);
-      br(Assembler::EQ, recursive);
-    }
-
-    // CAS owner (null => current thread).
-    cmpxchg(owner_addr, zr, rthread, Assembler::xword, /*acquire*/ true,
-            /*release*/ false, /*weak*/ false, owner);
-    br(Assembler::EQ, monitor_locked);
-
-    if (OMRecursiveFastPath) {
+    if (!OMUseC2Cache) {
+      // Set Flags == NE
+      cmp(zr, obj);
       b(slow_path);
     } else {
-      // Check if recursive.
-      cmp(owner, rthread);
-      br(Assembler::NE, slow_path);
+
+      if (OMCacheHitRate) increment(Address(rthread, JavaThread::lock_lookup_offset()));
+
+      Label monitor_found;
+
+      // Load cache address
+      lea(t, Address(rthread, JavaThread::om_cache_oops_offset()));
+
+      const int num_unrolled = MIN2(OMC2UnrollCacheEntries, OMCacheSize);
+      for (int i = 0; i < num_unrolled; i++) {
+        ldr(t1, Address(t));
+        cmp(obj, t1);
+        br(Assembler::EQ, monitor_found);
+        if (i + 1 != num_unrolled) {
+          increment(t, in_bytes(OMCache::oop_to_oop_difference()));
+        }
+      }
+
+      if (num_unrolled == 0 || (OMC2UnrollCacheLookupLoopTail && num_unrolled != OMCacheSize)) {
+        if (num_unrolled != 0) {
+          // Loop after unrolling, advance iterator.
+          increment(t, in_bytes(OMCache::oop_to_oop_difference()));
+        }
+
+        Label loop;
+
+        // Search for obj in cache.
+        bind(loop);
+
+        // Check for match.
+        ldr(t1, Address(t));
+        cmp(obj, t1);
+        br(Assembler::EQ, monitor_found);
+
+        // Search until null encountered, guaranteed _null_sentinel at end.
+        increment(t, in_bytes(OMCache::oop_to_oop_difference()));
+        cbnz(t1, loop);
+        // Cache Miss, NE set from cmp above, cbnz does not set flags
+        b(slow_path);
+      } else {
+        b(slow_path);
+      }
+
+      bind(monitor_found);
+      ldr(t1, Address(t, OMCache::oop_to_monitor_difference()));
+      if (OMCacheHitRate) increment(Address(rthread, JavaThread::lock_hit_offset()));
+
+      // ObjectMonitor* is in t1
+      const Register monitor = t1;
+      const Register owner_addr = t2;
+      const Register owner = t3;
+
+      Label recursive;
+      Label monitor_locked;
+
+      // Compute owner address.
+      lea(owner_addr, Address(monitor, ObjectMonitor::owner_offset()));
+
+      if (OMRecursiveFastPath) {
+        ldr(owner, Address(owner_addr));
+        cmp(owner, rthread);
+        br(Assembler::EQ, recursive);
+      }
+
+      // CAS owner (null => current thread).
+      cmpxchg(owner_addr, zr, rthread, Assembler::xword, /*acquire*/ true,
+              /*release*/ false, /*weak*/ false, owner);
+      br(Assembler::EQ, monitor_locked);
+
+      if (OMRecursiveFastPath) {
+        b(slow_path);
+      } else {
+        // Check if recursive.
+        cmp(owner, rthread);
+        br(Assembler::NE, slow_path);
+      }
+
+      // Recursive.
+      bind(recursive);
+      increment(Address(monitor, ObjectMonitor::recursions_offset()), 1);
+
+      bind(monitor_locked);
+      str(monitor, Address(box, BasicLock::displaced_header_offset_in_bytes()));
     }
-
-    // Recursive.
-    bind(recursive);
-    increment(Address(monitor, ObjectMonitor::recursions_offset()), 1);
-
-    bind(monitor_locked);
-    str(monitor, Address(box, BasicLock::displaced_header_offset_in_bytes()));
-  }
 
   }
 

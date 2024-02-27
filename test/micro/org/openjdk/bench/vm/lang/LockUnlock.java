@@ -55,6 +55,7 @@ public class LockUnlock {
     public Object lockObject1;
     public Object lockObject2;
     public volatile Object lockObject3Inflated;
+    public volatile Object lockObject4Inflated;
     public int factorial;
     public int dummyInt1;
     public int dummyInt2;
@@ -64,11 +65,15 @@ public class LockUnlock {
         lockObject1 = new Object();
         lockObject2 = new Object();
         lockObject3Inflated = new Object();
+        lockObject4Inflated = new Object();
 
         // Inflate the lock to use an ObjectMonitor
         try {
           synchronized (lockObject3Inflated) {
             lockObject3Inflated.wait(1);
+          }
+          synchronized (lockObject4Inflated) {
+            lockObject4Inflated.wait(1);
           }
         } catch (InterruptedException e) {
           throw new RuntimeException(e);
@@ -201,6 +206,32 @@ public class LockUnlock {
             }
             synchronized (lockObject3Inflated) {
                 dummyInt2++;
+            }
+        }
+    }
+
+    /** Perform two synchronized after each other on the same object. */
+    @Benchmark
+    public void testInflatedMultipleSerialLockUnlock() {
+        for (int i = 0; i < innerCount; i++) {
+            synchronized (lockObject3Inflated) {
+                dummyInt1++;
+            }
+            synchronized (lockObject4Inflated) {
+                dummyInt2++;
+            }
+        }
+    }
+
+    /** Perform two synchronized after each other on the same object. */
+    @Benchmark
+    public void testInflatedMultipleRecursiveLockUnlock() {
+        for (int i = 0; i < innerCount; i++) {
+            synchronized (lockObject3Inflated) {
+                dummyInt1++;
+                synchronized (lockObject4Inflated) {
+                    dummyInt2++;
+                }
             }
         }
     }

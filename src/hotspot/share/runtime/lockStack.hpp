@@ -147,6 +147,7 @@ private:
 public:
   static ByteSize oops_offset() { return byte_offset_of(OMCache, _oops); }
   static ByteSize monitors_offset() { return byte_offset_of(OMCache, _monitors); }
+  static ByteSize oop_to_oop_difference() { return in_ByteSize(sizeof(oop)); }
   static ByteSize oop_to_monitor_difference() { return monitors_offset() - oops_offset(); }
 
   explicit OMCache(JavaThread* jt) : _oops(), _null_sentinel(nullptr), _monitors() {};
