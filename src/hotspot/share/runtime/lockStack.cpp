@@ -36,6 +36,7 @@
 #include "utilities/debug.hpp"
 #include "utilities/globalDefinitions.hpp"
 #include "utilities/ostream.hpp"
+#include "utilities/sizes.hpp"
 
 #include <type_traits>
 
@@ -109,4 +110,12 @@ void LockStack::print_on(outputStream* st) {
       st->print_cr("not an oop: " PTR_FORMAT, p2i(o));
     }
   }
+}
+
+OMCache::OMCache(JavaThread* jt) : _entries() {
+  STATIC_ASSERT(std::is_standard_layout<OMCache>::value);
+  STATIC_ASSERT(std::is_standard_layout<OMCache::OMCacheEntry>::value);
+  STATIC_ASSERT(offsetof(OMCache, _null_sentinel) == offsetof(OMCache, _entries) +
+                offsetof(OMCache::OMCacheEntry, _oop) +
+                OMCache::CAPACITY * in_bytes(oop_to_oop_difference()));
 }

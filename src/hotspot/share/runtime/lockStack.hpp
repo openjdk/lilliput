@@ -140,17 +140,18 @@ public:
   static constexpr int CAPACITY = 8;
 
 private:
-  oop _oops[CAPACITY];
-  const oop _null_sentinel;
-  ObjectMonitor* _monitors[CAPACITY];
+  struct OMCacheEntry {
+    oop _oop = nullptr;
+    ObjectMonitor* _monitor = nullptr;
+  } _entries[CAPACITY];
+  const oop _null_sentinel = nullptr;
 
 public:
-  static ByteSize oops_offset() { return byte_offset_of(OMCache, _oops); }
-  static ByteSize monitors_offset() { return byte_offset_of(OMCache, _monitors); }
-  static ByteSize oop_to_oop_difference() { return in_ByteSize(sizeof(oop)); }
-  static ByteSize oop_to_monitor_difference() { return monitors_offset() - oops_offset(); }
+  static ByteSize entries() { return byte_offset_of(OMCache, _entries); }
+  static constexpr ByteSize oop_to_oop_difference() { return in_ByteSize(sizeof(OMCacheEntry)); }
+  static constexpr ByteSize oop_to_monitor_difference() { return in_ByteSize(sizeof(oop)); }
 
-  explicit OMCache(JavaThread* jt) : _oops(), _null_sentinel(nullptr), _monitors() {};
+  explicit OMCache(JavaThread* jt);
 
   inline ObjectMonitor* get_monitor(oop o);
   inline void set_monitor(ObjectMonitor* monitor);

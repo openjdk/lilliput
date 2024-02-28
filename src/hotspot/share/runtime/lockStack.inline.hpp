@@ -247,46 +247,37 @@ inline void OMCache::set_monitor(ObjectMonitor *monitor) {
   assert(obj != nullptr, "must be alive");
   assert(monitor == PlaceholderSynchronizer::read_monitor(JavaThread::current(), obj), "must be exist in table");
 
-  oop cmp_obj = obj;
+  OMCacheEntry to_insert = {obj, monitor};
+
   for (int i = 0; i < end; ++i) {
-    if (_oops[i] == cmp_obj ||
-        _monitors[i] == nullptr ||
-        _monitors[i]->is_being_async_deflated()) {
-      _oops[i] = obj;
-      _monitors[i] = monitor;
+    if (_entries[i]._oop == obj ||
+        _entries[i]._monitor == nullptr ||
+        _entries[i]._monitor->is_being_async_deflated()) {
+      // Use stale slot.
+      _entries[i] = to_insert;
       return;
     }
-    // Remember Most Recent Values
-    oop tmp_oop = obj;
-    ObjectMonitor* tmp_mon = monitor;
-    // Set next pair to the next most recent
-    obj = _oops[i];
-    monitor = _monitors[i];
-    // Store most recent values
-    _oops[i] = tmp_oop;
-    _monitors[i] = tmp_mon;
+    // Swap with the most recent value.
+    ::swap(to_insert, _entries[i]);
   }
-  _oops[end] = obj;
-  _monitors[end] = monitor;
+  _entries[end] = to_insert;
 }
 
 inline ObjectMonitor* OMCache::get_monitor(oop o) {
   for (int i = 0; i < OMCacheSize; ++i) {
-    if (_oops[i] == o) {
-      assert(_monitors[i] != nullptr, "monitor must exist");
-      if (_monitors[i]->is_being_async_deflated()) {
+    if (_entries[i]._oop == o) {
+      assert(_entries[i]._monitor != nullptr, "monitor must exist");
+      if (_entries[i]._monitor->is_being_async_deflated()) {
         // Bad monitor
         // Shift down rest
         for (; i < OMCacheSize - 1; ++i) {
-          _oops[i] = _oops[i + 1];
-          _monitors[i] =  _monitors[i + 1];
+          _entries[i] = _entries[i + 1];
         }
-        // i == CAPACITY - 1
-        _oops[i] = nullptr;
-        _monitors[i] = nullptr;
+        // Clear end
+        _entries[i] = {};
         return nullptr;
       }
-      return _monitors[i];
+      return _entries[i]._monitor;
     }
   }
   return nullptr;
@@ -294,8 +285,8 @@ inline ObjectMonitor* OMCache::get_monitor(oop o) {
 
 inline void OMCache::clear() {
   for (size_t i = 0 , r = 0; i < CAPACITY; ++i) {
-    _oops[i] = nullptr;
-    _monitors[i] = nullptr;
+    // Clear
+    _entries[i] = {};
   }
 }
 
