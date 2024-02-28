@@ -336,16 +336,17 @@ void update_buffered_object_field(address buffered_obj, int field_offset, T valu
 
 size_t ArchiveHeapWriter::copy_one_source_obj_to_buffer(oop src_obj) {
   assert(!is_too_large_to_archive(src_obj), "already checked");
-  size_t old_size = src_obj->size() * HeapWordSize;
+  size_t old_size = src_obj->size();
   size_t new_size = src_obj->copy_size(old_size, src_obj->mark());
-  assert(new_size > 0, "no zero-size objects");
+  size_t byte_size = new_size * HeapWordSize;
+  assert(byte_size > 0, "no zero-size objects");
 
   // For region-based collectors such as G1, the archive heap may be mapped into
   // multiple regions. We need to make sure that we don't have an object that can possible
   // span across two regions.
-  maybe_fill_gc_region_gap(new_size);
+  maybe_fill_gc_region_gap(byte_size);
 
-  size_t new_used = _buffer_used + new_size;
+  size_t new_used = _buffer_used + byte_size;
   assert(new_used > _buffer_used, "no wrap around");
 
   size_t cur_min_region_bottom = align_down(_buffer_used, MIN_GC_REGION_ALIGNMENT);
@@ -357,8 +358,8 @@ size_t ArchiveHeapWriter::copy_one_source_obj_to_buffer(oop src_obj) {
   address from = cast_from_oop<address>(src_obj);
   address to = offset_to_buffered_address<address>(_buffer_used);
   assert(is_object_aligned(_buffer_used), "sanity");
-  assert(is_object_aligned(new_size), "sanity");
-  memcpy(to, from, new_size);
+  assert(is_object_aligned(byte_size), "sanity");
+  memcpy(to, from, byte_size);
 
   // These native pointers will be restored explicitly at run time.
   if (java_lang_Module::is_instance(src_obj)) {

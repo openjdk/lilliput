@@ -472,7 +472,7 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
 
   // JNI only allows pinning of typeArrays, so we only need to keep those in place.
   if (region_attr.is_pinned() && klass->is_typeArray_klass()) {
-    return handle_evacuation_failure_par(old, old_mark, new_size, true /* cause_pinned */);
+    return handle_evacuation_failure_par(old, old_mark, word_sz, true /* cause_pinned */);
   }
 
   uint age = 0;
@@ -480,16 +480,16 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
   HeapRegion* const from_region = _g1h->heap_region_containing(old);
   uint node_index = from_region->node_index();
 
-  HeapWord* obj_ptr = _plab_allocator->plab_allocate(dest_attr, new_size, node_index);
+  HeapWord* obj_ptr = _plab_allocator->plab_allocate(dest_attr, word_sz, node_index);
 
   // PLAB allocations should succeed most of the time, so we'll
   // normally check against null once and that's it.
   if (obj_ptr == nullptr) {
-    obj_ptr = allocate_copy_slow(&dest_attr, klass, new_size, age, node_index);
+    obj_ptr = allocate_copy_slow(&dest_attr, klass, word_sz, age, node_index);
     if (obj_ptr == nullptr) {
       // This will either forward-to-self, or detect that someone else has
       // installed a forwarding pointer.
-      return handle_evacuation_failure_par(old, old_mark, new_size, false /* cause_pinned */);
+      return handle_evacuation_failure_par(old, old_mark, word_sz, false /* cause_pinned */);
     }
   }
 
@@ -500,12 +500,12 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
   if (inject_allocation_failure(from_region->hrm_index())) {
     // Doing this after all the allocation attempts also tests the
     // undo_allocation() method too.
-    undo_allocation(dest_attr, obj_ptr, new_size, node_index);
-    return handle_evacuation_failure_par(old, old_mark, new_size, false /* cause_pinned */);
+    undo_allocation(dest_attr, obj_ptr, word_sz, node_index);
+    return handle_evacuation_failure_par(old, old_mark, word_sz, false /* cause_pinned */);
   }
 
-  if (old_size != new_size) {
-    log_trace(gc)("expanding obj: " PTR_FORMAT ", old_size: " SIZE_FORMAT ", new object: " PTR_FORMAT ", new_size: " SIZE_FORMAT, p2i(old), old_size, p2i(obj_ptr), new_size);
+  if (old_size != word_sz) {
+    log_trace(gc)("expanding obj: " PTR_FORMAT ", old_size: " SIZE_FORMAT ", new object: " PTR_FORMAT ", word_sz: " SIZE_FORMAT, p2i(old), old_size, p2i(obj_ptr), word_sz);
   }
 
   // We're going to allocate linearly, so might as well prefetch ahead.
@@ -524,7 +524,7 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
       const uint young_index = from_region->young_index_in_cset();
       assert((from_region->is_young() && young_index >  0) ||
              (!from_region->is_young() && young_index == 0), "invariant" );
-      _surviving_young_words[young_index] += new_size;
+      _surviving_young_words[young_index] += word_sz;
     }
 
     // Initialize i-hash if necessary
@@ -535,9 +535,9 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
         age++;
         obj->incr_age();
       }
-      _age_table.add(age, new_size);
+      _age_table.add(age, word_sz);
     } else {
-      update_bot_after_copying(obj, new_size);
+      update_bot_after_copying(obj, word_sz);
     }
 
     // Most objects are not arrays, so do one array check rather than
@@ -575,7 +575,7 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
     obj->oop_iterate_backwards(&_scanner, klass);
     return obj;
   } else {
-    _plab_allocator->undo_allocation(dest_attr, obj_ptr, new_size, node_index);
+    _plab_allocator->undo_allocation(dest_attr, obj_ptr, word_sz, node_index);
     return forward_ptr;
   }
 }
