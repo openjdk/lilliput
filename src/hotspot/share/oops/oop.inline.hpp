@@ -271,7 +271,7 @@ size_t oopDesc::size_given_mark_and_klass(markWord mrk, const Klass* kls) {
   if (UseCompactObjectHeaders) {
     assert(!mrk.has_displaced_mark_helper(), "must not be displaced");
     if (mrk.hash_is_copied() && kls->hash_requires_reallocation(cast_to_oop(this))) {
-      log_info(gc)("Extended size for object: " PTR_FORMAT " base-size: " SIZE_FORMAT ", mark: " PTR_FORMAT, p2i(this), sz, mrk.value());
+      log_trace(gc)("Extended size for object: " PTR_FORMAT " base-size: " SIZE_FORMAT ", mark: " PTR_FORMAT, p2i(this), sz, mrk.value());
       sz = align_object_size(sz + 1);
     }
   }

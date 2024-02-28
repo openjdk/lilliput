@@ -1010,6 +1010,9 @@ intptr_t PlaceholderSynchronizer::FastHashCode(Thread* current, oop obj) {
       }
       hash = ObjectSynchronizer::get_next_hash(current, obj);  // get a new hash
       new_mark = mark.hash_set_hashed();
+      // Let i-hashed objects promote immediately, to avoid young-gen overflow
+      // through i-hash expansion.
+      //new_mark = new_mark.set_age(markWord::max_age);
     } else {
       hash = mark.hash();
       if (hash != 0) {

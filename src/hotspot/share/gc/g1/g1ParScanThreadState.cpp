@@ -468,7 +468,7 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
   // that this is not yet forwarded in the caller.
   Klass* klass = old->forward_safe_klass(old_mark);
   const size_t old_size = old->size_given_mark_and_klass(old_mark, klass);
-  const size_t new_size = old->copy_size(old_size, old_mark);
+  const size_t word_sz = old->copy_size(old_size, old_mark);
 
   // JNI only allows pinning of typeArrays, so we only need to keep those in place.
   if (region_attr.is_pinned() && klass->is_typeArray_klass()) {
@@ -505,7 +505,7 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
   }
 
   if (old_size != new_size) {
-    log_info(gc)("expanding obj: " PTR_FORMAT ", old_size: " SIZE_FORMAT ", new object: " PTR_FORMAT ", new_size: " SIZE_FORMAT, p2i(old), old_size, p2i(obj_ptr), new_size);
+    log_trace(gc)("expanding obj: " PTR_FORMAT ", old_size: " SIZE_FORMAT ", new object: " PTR_FORMAT ", new_size: " SIZE_FORMAT, p2i(old), old_size, p2i(obj_ptr), new_size);
   }
 
   // We're going to allocate linearly, so might as well prefetch ahead.
@@ -661,7 +661,9 @@ oop G1ParScanThreadState::handle_evacuation_failure_par(oop old, markWord m, siz
     // evacuation failure recovery.
     _g1h->mark_evac_failure_object(_worker_id, old, word_sz);
 
-    _preserved_marks->push_if_necessary(old, m);
+    if (!UseAltGCForwarding) {
+      _preserved_marks->push_if_necessary(old, m);
+    }
 
     ContinuationGCSupport::transform_stack_chunk(old);
 

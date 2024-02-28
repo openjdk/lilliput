@@ -98,14 +98,12 @@ template <bool ALT_FWD>
 void G1FullGCCompactionPoint::forward(oop object, size_t old_size, size_t new_size) {
   assert(_current_region != nullptr, "Must have been initialized");
 
-  size_t req_size = old_size;
-  if (cast_from_oop<HeapWord*>(object) != _compaction_top) {
-    req_size = new_size;
-  }
+  size_t size = cast_from_oop<HeapWord*>(object) != _compaction_top ? new_size : old_size;
 
   // Ensure the object fit in the current region.
-  while (!object_will_fit(req_size)) {
+  while (!object_will_fit(size)) {
     switch_region();
+    size = cast_from_oop<HeapWord*>(object) != _compaction_top ? new_size : old_size;
   }
 
   // Store a forwarding pointer if the object should be moved.
@@ -120,8 +118,8 @@ void G1FullGCCompactionPoint::forward(oop object, size_t old_size, size_t new_si
   }
 
   // Update compaction values.
-  _compaction_top += req_size;
-  _current_region->update_bot_for_block(_compaction_top - req_size, _compaction_top);
+  _compaction_top += size;
+  _current_region->update_bot_for_block(_compaction_top - size, _compaction_top);
 }
 
 template void G1FullGCCompactionPoint::forward<true>(oop object, size_t old_size, size_t new_size);
