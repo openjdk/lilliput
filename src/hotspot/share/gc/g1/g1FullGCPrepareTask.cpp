@@ -110,10 +110,9 @@ G1FullGCPrepareTask::G1PrepareCompactLiveClosure<ALT_FWD>::G1PrepareCompactLiveC
 
 template <bool ALT_FWD>
 size_t G1FullGCPrepareTask::G1PrepareCompactLiveClosure<ALT_FWD>::apply(oop object) {
-  size_t old_size = object->size();
-  size_t new_size = object->copy_size(old_size, object->mark());
-  _cp->forward<ALT_FWD>(object, old_size, new_size);
-  return old_size;
+  size_t size = object->size();
+  _cp->forward<ALT_FWD>(object, size);
+  return size;
 }
 
 void G1FullGCPrepareTask::G1CalculatePointersClosure::prepare_for_compaction(HeapRegion* hr) {

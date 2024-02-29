@@ -964,7 +964,7 @@ public:
   }
 
   virtual int hash_offset_in_bytes(oop obj) const override {
-    assert(UseCompactObjectHeaders, "only with compact headers");
+    assert(UseCompactIHash, "only with compact i-hash");
     return _hash_offset;
   }
 

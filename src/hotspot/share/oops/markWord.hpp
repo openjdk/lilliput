@@ -132,6 +132,7 @@ class markWord {
   static const int self_forwarded_bits            = 1;
   static const int max_hash_bits                  = BitsPerWord - age_bits - lock_bits - self_forwarded_bits;
   static const int hash_bits                      = max_hash_bits > 31 ? 31 : max_hash_bits;
+  static const int hash_bits_compact              = max_hash_bits > 25 ? 25 : max_hash_bits;
   // Used only without compact headers.
   static const int unused_gap_bits                = LP64_ONLY(1) NOT_LP64(0);
 #ifdef _LP64
@@ -145,6 +146,7 @@ class markWord {
   static const int self_forwarded_shift           = lock_shift + lock_bits;
   static const int age_shift                      = self_forwarded_shift + self_forwarded_bits;
   static const int hash_shift                     = age_shift + age_bits + unused_gap_bits;
+  static const int hash_shift_compact             = age_shift + age_bits;
   // Used only with compact headers.
   static const int hashctrl_shift                 = age_shift + age_bits + unused_gap_bits_compact;
 #ifdef _LP64
@@ -160,6 +162,8 @@ class markWord {
   static const uintptr_t age_mask_in_place        = age_mask << age_shift;
   static const uintptr_t hash_mask                = right_n_bits(hash_bits);
   static const uintptr_t hash_mask_in_place       = hash_mask << hash_shift;
+  static const uintptr_t hash_mask_compact        = right_n_bits(hash_bits_compact);
+  static const uintptr_t hash_mask_compact_in_place = hash_mask_compact << hash_shift_compact;
   static const uintptr_t hashctrl_mask            = right_n_bits(hashctrl_bits);
   static const uintptr_t hashctrl_mask_in_place   = hashctrl_mask << hashctrl_shift;
   static const uintptr_t hashctrl_hashed_mask_in_place = ((uintptr_t)1) << hashctrl_shift;
@@ -212,7 +216,7 @@ class markWord {
 
   // Should this header be preserved during GC?
   bool must_be_preserved(const oopDesc* obj) const {
-    return UseCompactObjectHeaders ? !is_unlocked() : (!is_unlocked() || !has_no_hash());
+    return UseCompactIHash ? !is_unlocked() : (!is_unlocked() || !has_no_hash());
   }
 
   // WARNING: The following routines are used EXCLUSIVELY by
@@ -257,10 +261,16 @@ class markWord {
   markWord displaced_mark_helper() const;
   void set_displaced_mark_helper(markWord m) const;
   markWord copy_set_hash(intptr_t hash) const {
-    assert(!UseCompactObjectHeaders, "only without compact headers");
-    uintptr_t tmp = value() & (~hash_mask_in_place);
-    tmp |= ((hash & hash_mask) << hash_shift);
-    return markWord(tmp);
+    assert(!UseCompactIHash, "Do not use with compact i-hash");
+    if (UseCompactObjectHeaders) {
+      uintptr_t tmp = value() & (~hash_mask_compact_in_place);
+      tmp |= ((hash & hash_mask_compact) << hash_shift_compact);
+      return markWord(tmp);
+    } else {
+      uintptr_t tmp = value() & (~hash_mask_in_place);
+      tmp |= ((hash & hash_mask) << hash_shift);
+      return markWord(tmp);
+    }
   }
   // it is only used to be stored into BasicLock as the
   // indicator that the lock is using heavyweight monitor
@@ -298,60 +308,64 @@ class markWord {
 
   // hash operations
   intptr_t hash() const {
-    assert(!UseCompactObjectHeaders, "only without compact headers");
-    return mask_bits(value() >> hash_shift, hash_mask);
+    assert(!UseCompactIHash, "only without compact i-hash");
+    if (UseCompactObjectHeaders) {
+      return mask_bits(value() >> hash_shift_compact, hash_mask_compact);
+    } else {
+      return mask_bits(value() >> hash_shift, hash_mask);
+    }
   }
 
   bool has_no_hash() const {
-    if (UseCompactObjectHeaders) {
+    if (UseCompactIHash) {
       return (value() & hashctrl_mask_in_place) == 0;
     } else {
       return hash() == no_hash;
     }
   }
 
-inline bool hash_is_hashed() const {
-    assert(UseCompactObjectHeaders, "only with compact headers");
+  inline bool hash_is_hashed() const {
+    assert(UseCompactIHash, "only with compact i-hash");
     return (value() & hashctrl_hashed_mask_in_place) != 0;
   }
 
   inline markWord hash_set_hashed() const {
-    assert(UseCompactObjectHeaders, "only with compact headers");
+    assert(UseCompactIHash, "only with compact i-hash");
     return markWord((value() & ~hashctrl_mask_in_place) | hashctrl_hashed_mask_in_place);
   }
 
   inline markWord hash_clear_hashed() const {
-    assert(UseCompactObjectHeaders, "only with compact headers");
+    assert(UseCompactIHash, "only with compact i-hash");
     return markWord(value() & ~hashctrl_mask_in_place);
   }
 
   inline bool hash_is_copied() const {
-    assert(UseCompactObjectHeaders, "only with compact headers");
+    assert(UseCompactIHash, "only with compact i-hash");
     return (value() & hashctrl_copied_mask_in_place) != 0;
   }
 
   inline markWord hash_set_copied() const {
-    assert(UseCompactObjectHeaders, "only with compact headers");
+    assert(UseCompactIHash, "only with compact i-hash");
     return markWord((value() & ~hashctrl_mask_in_place) | hashctrl_copied_mask_in_place);
   }
 
   inline markWord hash_clear_copied() const {
-    assert(UseCompactObjectHeaders, "only with compact headers");
+    assert(UseCompactIHash, "only with compact i-hash");
     return markWord(value() & ~hashctrl_mask_in_place);
   }
 
   inline bool hash_is_hashed_or_copied() const {
-    assert(UseCompactObjectHeaders, "only with compact headers");
+    assert(UseCompactIHash, "only with compact i-hash");
     return (value() & hashctrl_mask_in_place) != 0;
   }
 
   int hashctrl() const {
-    assert(UseCompactObjectHeaders, "only with compact headers");
+    assert(UseCompactIHash, "only with compact i-hash");
     return (int)((value() & hashctrl_mask_in_place) >> hashctrl_shift);
   }
 
   inline markWord hash_copy_hashctrl_from(markWord m) const {
-    if (UseCompactObjectHeaders) {
+    if (UseCompactIHash) {
       assert(UseCompactObjectHeaders, "only with compact headers");
       return markWord((value() & ~hashctrl_mask_in_place) | (m.value() & hashctrl_mask_in_place));
     } else {
@@ -370,7 +384,7 @@ inline bool hash_is_hashed() const {
 
   // Prototype mark for initialization
   static markWord prototype() {
-    if (UseCompactObjectHeaders) {
+    if (UseCompactIHash) {
       return markWord(no_lock_in_place);
     } else {
       return markWord(no_hash_in_place | no_lock_in_place);

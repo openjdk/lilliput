@@ -134,10 +134,11 @@ bool oopDesc::is_oop(oop obj, bool ignore_mark_word) {
   return LockingMode == LM_LIGHTWEIGHT || LockingMode == LM_PLACEHOLDER || !SafepointSynchronize::is_at_safepoint();
 }
 
-void oopDesc::initialize_hash_if_necessary(oop obj, markWord m) {
-  if (!UseCompactObjectHeaders) {
+void oopDesc::initialize_hash_if_necessary(oop obj) {
+  if (!UseCompactIHash) {
     return;
   }
+  markWord m = mark();
   assert(!m.has_displaced_mark_helper(), "must not be displaced header");
   if (m.hash_is_hashed()) {
     assert(!m.hash_is_copied(), "must not be installed");

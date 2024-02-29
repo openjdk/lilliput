@@ -307,7 +307,7 @@ void ArrayKlass::oop_verify_on(oop obj, outputStream* st) {
 }
 
 int ArrayKlass::hash_offset_in_bytes(oop obj) const {
-  assert(UseCompactObjectHeaders, "only with compact headers");
+  assert(UseCompactIHash, "only with compact i-hash");
   arrayOop ary = arrayOop(obj);
   BasicType type = element_type();
   return ary->base_offset_in_bytes(type) + (ary->length() << log2_element_size());

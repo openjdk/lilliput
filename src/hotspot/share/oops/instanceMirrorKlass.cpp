@@ -74,7 +74,7 @@ int InstanceMirrorKlass::compute_static_oop_field_count(oop obj) {
 }
 
 int InstanceMirrorKlass::hash_offset_in_bytes(oop obj) const {
-  assert(UseCompactObjectHeaders, "only with compact headers");
+  assert(UseCompactIHash, "only with compact i-hash");
   // TODO: we could be more clever here and try to use gaps that are
   // left after the static fields.
   return obj->base_size_given_klass(this) * BytesPerWord;

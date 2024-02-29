@@ -528,7 +528,7 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
     }
 
     // Initialize i-hash if necessary
-    obj->initialize_hash_if_necessary(old, old_mark);
+    obj->initialize_hash_if_necessary(old);
 
     if (dest_attr.is_young()) {
       if (age < markWord::max_age) {

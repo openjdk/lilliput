@@ -57,7 +57,7 @@ public:
   void initialize(HeapRegion* hr);
   void update();
   template <bool ALT_FWD>
-  void forward(oop object, size_t old_size, size_t new_size);
+  void forward(oop object, size_t size);
   template <bool ALT_FWD>
   void forward_humongous(HeapRegion* hr);
   void add(HeapRegion* hr);

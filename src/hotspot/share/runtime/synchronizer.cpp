@@ -965,6 +965,7 @@ intptr_t get_next_hash(Thread* current, oop obj) {
     current->_hashStateW = v;
     value = v;
   } else {
+    assert(UseCompactIHash, "Only with compact i-hash");
 #ifdef _LP64
     uint64_t val = cast_from_oop<uint64_t>(obj);
     uint64_t hash = FastHash::get_hash64(val, UCONST64(0xAAAAAAAAAAAAAAAA));
@@ -975,7 +976,11 @@ intptr_t get_next_hash(Thread* current, oop obj) {
     value= static_cast<intptr_t>(hash);
   }
 
-  value &= markWord::hash_mask;
+  if (UseCompactObjectHeaders && !UseCompactIHash) {
+    value &= markWord::hash_mask_compact;
+  } else {
+    value &= markWord::hash_mask;
+  }
   if (value == 0) value = 0xBAD;
   assert(value != markWord::no_hash, "invariant");
   return value;

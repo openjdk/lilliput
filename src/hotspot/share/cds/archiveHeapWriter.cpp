@@ -492,8 +492,15 @@ void ArchiveHeapWriter::update_header_for_requested_obj(oop requested_obj, oop s
   // into during run time, increasing the potential of memory sharing.
   if (src_obj != nullptr) {
     if (UseCompactObjectHeaders) {
-      fake_oop->set_mark(markWord::prototype().set_narrow_klass(nk));
-      fake_oop->initialize_hash_if_necessary(src_obj, src_obj->mark());
+      markWord m = markWord::prototype().set_narrow_klass(nk);
+      if (!UseCompactIHash) {
+        intptr_t src_hash = src_obj->identity_hash();
+        m = m.copy_set_hash(src_hash);
+      } else {
+        m = m.hash_copy_hashctrl_from(src_obj->mark());
+      }
+      fake_oop->set_mark(m);
+      fake_oop->initialize_hash_if_necessary(src_obj);
     } else {
       intptr_t src_hash = src_obj->identity_hash();
       fake_oop->set_mark(markWord::prototype().copy_set_hash(src_hash));

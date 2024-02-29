@@ -334,7 +334,7 @@ public:
   inline bool fast_no_hash_check();
 
   // Initialize identity hash code in hash word of object copy from original object.
-  void initialize_hash_if_necessary(oop obj, markWord mark);
+  void initialize_hash_if_necessary(oop obj);
 
   // marks are forwarded to stack when object is locked
   inline bool     has_displaced_mark() const;

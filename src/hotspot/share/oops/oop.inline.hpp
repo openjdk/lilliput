@@ -62,7 +62,7 @@ markWord* oopDesc::mark_addr() const {
 
 static void assert_correct_hash_transition(markWord old_mark, markWord new_mark) {
 #ifdef ASSERT
-  if (UseCompactObjectHeaders) {
+  if (UseCompactIHash) {
     if (new_mark.is_marked()) return; // Install forwardee.
     if (old_mark.hash_is_hashed()) assert(new_mark.hash_is_hashed_or_copied(), "incorrect hash state transition");
     if (old_mark.hash_is_copied()) assert(new_mark.hash_is_copied(), "incorrect hash state transition");
@@ -116,8 +116,10 @@ markWord oopDesc::prototype_mark() const {
 }
 
 void oopDesc::init_mark() {
-  if (UseCompactObjectHeaders) {
+  if (UseCompactIHash) {
     set_mark(prototype_mark().hash_copy_hashctrl_from(mark()));
+  } else if (UseCompactObjectHeaders) {
+    set_mark(prototype_mark());
   } else {
     set_mark(markWord::prototype());
   }
@@ -213,7 +215,7 @@ bool oopDesc::is_a(Klass* k) const {
 }
 
 size_t oopDesc::size()  {
-  markWord m = UseCompactObjectHeaders ? mark() : markWord::unused_mark();;
+  markWord m = UseCompactIHash ? mark() : markWord::unused_mark();;
   return size_given_mark_and_klass(m, klass());
 }
 
@@ -268,7 +270,7 @@ size_t oopDesc::base_size_given_klass(const Klass* klass)  {
 
 size_t oopDesc::size_given_mark_and_klass(markWord mrk, const Klass* kls) {
   size_t sz = base_size_given_klass(kls);
-  if (UseCompactObjectHeaders) {
+  if (UseCompactIHash) {
     assert(!mrk.has_displaced_mark_helper(), "must not be displaced");
     if (mrk.hash_is_copied() && kls->hash_requires_reallocation(cast_to_oop(this))) {
       log_trace(gc)("Extended size for object: " PTR_FORMAT " base-size: " SIZE_FORMAT ", mark: " PTR_FORMAT, p2i(this), sz, mrk.value());
@@ -279,7 +281,7 @@ size_t oopDesc::size_given_mark_and_klass(markWord mrk, const Klass* kls) {
 }
 
 size_t oopDesc::copy_size(size_t size, markWord mark) const {
-  if (UseCompactObjectHeaders) {
+  if (UseCompactIHash) {
     assert(!mark.has_displaced_mark_helper(), "must not be displaced");
     Klass* klass = mark.klass();
     if (mark.hash_is_hashed() && klass->hash_requires_reallocation(cast_to_oop(this))) {
@@ -546,7 +548,7 @@ void oopDesc::oop_iterate(OopClosureType* cl, MemRegion mr) {
 
 template <typename OopClosureType>
 size_t oopDesc::oop_iterate_size(OopClosureType* cl) {
-  markWord m = UseCompactObjectHeaders ? mark() : markWord::unused_mark();
+  markWord m = UseCompactIHash ? mark() : markWord::unused_mark();
   Klass* k = klass();
   size_t size = size_given_mark_and_klass(m, k);
   OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k);
@@ -555,7 +557,7 @@ size_t oopDesc::oop_iterate_size(OopClosureType* cl) {
 
 template <typename OopClosureType>
 size_t oopDesc::oop_iterate_size(OopClosureType* cl, MemRegion mr) {
-  markWord m = UseCompactObjectHeaders ? mark() : markWord::unused_mark();
+  markWord m = UseCompactIHash ? mark() : markWord::unused_mark();
   Klass* k = klass();
   size_t size = size_given_mark_and_klass(m, k);
   OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k, mr);
@@ -581,8 +583,8 @@ bool oopDesc::is_instanceof_or_null(oop obj, Klass* klass) {
 intptr_t oopDesc::identity_hash() {
   // Fast case; if the object is unlocked and the hash value is set, no locking is needed
   // Note: The mark must be read into local variable to avoid concurrent updates.
-  if (UseCompactObjectHeaders) {
-    markWord mrk = resolve_mark();
+  if (UseCompactIHash) {
+    markWord mrk = mark();
     assert(mrk.is_neutral(), "must get neutral mark");
     if (mrk.hash_is_copied()) {
       Klass* klass = mrk.klass();

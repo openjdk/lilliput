@@ -52,7 +52,7 @@
 //
 
 static uintx objhash(oop obj) {
-  if (UseCompactObjectHeaders) {
+  if (UseCompactIHash) {
     uintx hash = PlaceholderSynchronizer::get_hash(obj->mark(), obj);
     assert(hash != 0, "should have a hash");
     return hash;
@@ -983,6 +983,7 @@ bool PlaceholderSynchronizer::contains_monitor(Thread* current, ObjectMonitor* m
 }
 
 uint32_t PlaceholderSynchronizer::get_hash(markWord mark, oop obj) {
+  assert(UseCompactIHash, "Only with compact i-hash");
   //assert(mark.is_neutral() | mark.is_fast_locked(), "only from neutral or fast-locked mark: " INTPTR_FORMAT, mark.value());
   assert(mark.hash_is_hashed_or_copied(), "only from hashed or copied object");
   if (mark.hash_is_copied()) {
@@ -1004,7 +1005,7 @@ intptr_t PlaceholderSynchronizer::FastHashCode(Thread* current, oop obj) {
     intptr_t hash;
     markWord old_mark = mark;
     markWord new_mark;
-    if (UseCompactObjectHeaders) {
+    if (UseCompactIHash) {
       if (mark.hash_is_hashed_or_copied()) {
         return get_hash(mark, obj);
       }

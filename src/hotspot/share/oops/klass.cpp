@@ -974,7 +974,7 @@ const char* Klass::class_in_module_of_loader(bool use_are, bool include_parent_l
 }
 
 bool Klass::hash_requires_reallocation(oop obj) const {
-  assert(UseCompactObjectHeaders, "only with compact headers");
+  assert(UseCompactIHash, "only with compact i-hash");
   assert((size_t)hash_offset_in_bytes(obj) <= (obj->base_size_given_klass(this) * HeapWordSize), "hash offset must be eq or lt base size: hash offset: %d, base size: " SIZE_FORMAT, hash_offset_in_bytes(obj), obj->base_size_given_klass(this) * HeapWordSize);
   return obj->base_size_given_klass(this) * HeapWordSize - hash_offset_in_bytes(obj) < (int)sizeof(uint32_t);
 }
