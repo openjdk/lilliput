@@ -3770,7 +3770,7 @@ jint Arguments::apply_ergo() {
   if (UseCompactIHash && LockingMode != LM_PLACEHOLDER) {
     FLAG_SET_DEFAULT(UseCompactIHash, false);
   }    
-  if (UseCompactIHash) {
+  if (UseCompactIHash && FLAG_IS_DEFAULT(hashCode)) {
     hashCode = 6;
   }
 #endif
