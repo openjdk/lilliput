@@ -335,6 +335,8 @@ public:
 
   // Initialize identity hash code in hash word of object copy from original object.
   void initialize_hash_if_necessary(oop obj);
+  // For CDS only.
+  markWord initialize_hash_if_necessary(oop obj, Klass* k, markWord m);
 
   // marks are forwarded to stack when object is locked
   inline bool     has_displaced_mark() const;

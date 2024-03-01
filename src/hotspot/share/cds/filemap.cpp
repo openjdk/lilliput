@@ -205,6 +205,7 @@ void FileMapHeader::populate(FileMapInfo *info, size_t core_region_alignment,
   _obj_alignment = ObjectAlignmentInBytes;
   _compact_strings = CompactStrings;
   _compact_headers = UseCompactObjectHeaders;
+  _compact_ihash = UseCompactIHash;
   if (CDSConfig::is_dumping_heap()) {
     _narrow_oop_mode = CompressedOops::mode();
     _narrow_oop_base = CompressedOops::base();
@@ -272,6 +273,7 @@ void FileMapHeader::print(outputStream* st) {
   st->print_cr("- narrow_oop_shift                %d", _narrow_oop_shift);
   st->print_cr("- compact_strings:                %d", _compact_strings);
   st->print_cr("- compact_headers:                %d", _compact_headers);
+  st->print_cr("- compact_ihash:                  %d", _compact_ihash);  
   st->print_cr("- max_heap_size:                  " UINTX_FORMAT, _max_heap_size);
   st->print_cr("- narrow_oop_mode:                %d", _narrow_oop_mode);
   st->print_cr("- compressed_oops:                %d", _compressed_oops);
@@ -2396,6 +2398,14 @@ bool FileMapHeader::validate() {
                   " does not equal the current UseCompactObjectHeaders setting (%s).",
                   _compact_headers          ? "enabled" : "disabled",
                   UseCompactObjectHeaders   ? "enabled" : "disabled");
+    return false;
+  }
+
+  if (compact_ihash() != UseCompactIHash) {
+    log_info(cds)("The shared archive file's UseCompactIHash setting (%s)"
+                  " does not equal the current UseCompactIHash setting (%s).",
+                  _compact_ihash          ? "enabled" : "disabled",
+                  UseCompactIHash         ? "enabled" : "disabled");
     return false;
   }
 

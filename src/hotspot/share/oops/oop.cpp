@@ -134,6 +134,24 @@ bool oopDesc::is_oop(oop obj, bool ignore_mark_word) {
   return LockingMode == LM_LIGHTWEIGHT || LockingMode == LM_PLACEHOLDER || !SafepointSynchronize::is_at_safepoint();
 }
 
+markWord oopDesc::initialize_hash_if_necessary(oop obj, Klass* k, markWord m) {
+  if (!UseCompactIHash) {
+    return m;
+  }
+  assert(!m.has_displaced_mark_helper(), "must not be displaced header");
+  if (m.hash_is_hashed()) {
+    assert(!m.hash_is_copied(), "must not be installed");
+    uint32_t hash = static_cast<uint32_t>(ObjectSynchronizer::get_next_hash(nullptr, obj));
+    int offset = k->hash_offset_in_bytes(cast_to_oop(this));
+    assert(offset >= 8, "hash offset must not be in header");
+    log_info(gc)("Initializing hash for " PTR_FORMAT ", old: " PTR_FORMAT ", hash: %d, offset: %d", p2i(this), p2i(obj), hash, offset);
+    int_field_put(offset, (jint)hash);
+    m = m.hash_set_copied();
+    assert(static_cast<uint32_t>(PlaceholderSynchronizer::get_hash(m, cast_to_oop(this), k)) == hash, "hash must remain the same");
+  }
+  return m;
+}
+
 void oopDesc::initialize_hash_if_necessary(oop obj) {
   if (!UseCompactIHash) {
     return;
@@ -146,7 +164,7 @@ void oopDesc::initialize_hash_if_necessary(oop obj) {
     Klass* k = m.klass();
     int offset = k->hash_offset_in_bytes(cast_to_oop(this));
     assert(offset >= 8, "hash offset must not be in header");
-    log_trace(gc)("Initializing hash for " PTR_FORMAT ", old: " PTR_FORMAT ", hash: %d, offset: %d", p2i(this), p2i(obj), hash, offset);
+    log_info(gc)("Initializing hash for " PTR_FORMAT ", old: " PTR_FORMAT ", hash: %d, offset: %d", p2i(this), p2i(obj), hash, offset);
     int_field_put(offset, (jint)hash);
     m = m.hash_set_copied();
     assert(static_cast<uint32_t>(PlaceholderSynchronizer::get_hash(m, cast_to_oop(this))) == hash, "hash must remain the same");

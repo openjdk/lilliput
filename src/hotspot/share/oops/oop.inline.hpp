@@ -585,7 +585,6 @@ intptr_t oopDesc::identity_hash() {
   // Note: The mark must be read into local variable to avoid concurrent updates.
   if (UseCompactIHash) {
     markWord mrk = mark();
-    assert(mrk.is_neutral(), "must get neutral mark");
     if (mrk.hash_is_copied()) {
       Klass* klass = mrk.klass();
       return int_field(klass->hash_offset_in_bytes(cast_to_oop(this)));

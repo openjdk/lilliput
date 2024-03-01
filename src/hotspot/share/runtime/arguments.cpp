@@ -3761,7 +3761,16 @@ jint Arguments::apply_ergo() {
   if (UseCompactObjectHeaders && !UseCompressedClassPointers) {
     FLAG_SET_DEFAULT(UseCompressedClassPointers, true);
   }
-  if (UseCompactObjectHeaders && UseG1GC && UseCompactIHash) {
+  if (UseCompactIHash && !UseG1GC) {
+    FLAG_SET_DEFAULT(UseCompactIHash, false);
+  }
+  if (UseCompactIHash && !UseCompactObjectHeaders) {
+    FLAG_SET_DEFAULT(UseCompactIHash, false);
+  }
+  if (UseCompactIHash && LockingMode != LM_PLACEHOLDER) {
+    FLAG_SET_DEFAULT(UseCompactIHash, false);
+  }    
+  if (UseCompactIHash) {
     hashCode = 6;
   }
 #endif

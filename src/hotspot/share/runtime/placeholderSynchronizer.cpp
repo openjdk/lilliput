@@ -982,12 +982,11 @@ bool PlaceholderSynchronizer::contains_monitor(Thread* current, ObjectMonitor* m
   return _omworld->contains_monitor(current, monitor);
 }
 
-uint32_t PlaceholderSynchronizer::get_hash(markWord mark, oop obj) {
+uint32_t PlaceholderSynchronizer::get_hash(markWord mark, oop obj, Klass* klass) {
   assert(UseCompactIHash, "Only with compact i-hash");
   //assert(mark.is_neutral() | mark.is_fast_locked(), "only from neutral or fast-locked mark: " INTPTR_FORMAT, mark.value());
   assert(mark.hash_is_hashed_or_copied(), "only from hashed or copied object");
   if (mark.hash_is_copied()) {
-    Klass* klass = mark.klass();
     return obj->int_field(klass->hash_offset_in_bytes(obj));
   } else {
     assert(mark.hash_is_hashed(), "must be hashed");
@@ -995,6 +994,10 @@ uint32_t PlaceholderSynchronizer::get_hash(markWord mark, oop obj) {
     // Already marked as hashed, but not yet copied. Recompute hash and return it.
     return ObjectSynchronizer::get_next_hash(nullptr, obj); // recompute hash
   }
+}
+
+uint32_t PlaceholderSynchronizer::get_hash(markWord mark, oop obj) {
+  return get_hash(mark, obj, mark.klass());
 }
 
 intptr_t PlaceholderSynchronizer::FastHashCode(Thread* current, oop obj) {

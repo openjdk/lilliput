@@ -357,9 +357,11 @@ size_t ArchiveHeapWriter::copy_one_source_obj_to_buffer(oop src_obj) {
 
   address from = cast_from_oop<address>(src_obj);
   address to = offset_to_buffered_address<address>(_buffer_used);
+  log_info(gc)("Copying obj: " PTR_FORMAT ", to: " PTR_FORMAT ", old_size: " SIZE_FORMAT ", new_size: " SIZE_FORMAT, p2i(src_obj), p2i(to), old_size, new_size);
+
   assert(is_object_aligned(_buffer_used), "sanity");
   assert(is_object_aligned(byte_size), "sanity");
-  memcpy(to, from, byte_size);
+  memcpy(to, from, old_size * HeapWordSize);
 
   // These native pointers will be restored explicitly at run time.
   if (java_lang_Module::is_instance(src_obj)) {
@@ -498,9 +500,10 @@ void ArchiveHeapWriter::update_header_for_requested_obj(oop requested_obj, oop s
         m = m.copy_set_hash(src_hash);
       } else {
         m = m.hash_copy_hashctrl_from(src_obj->mark());
+        log_info(gc)("init_hash: old: " PTR_FORMAT ", new: " PTR_FORMAT, p2i(src_obj), p2i(fake_oop));
+        m = fake_oop->initialize_hash_if_necessary(src_obj, src_klass, m);
       }
       fake_oop->set_mark(m);
-      fake_oop->initialize_hash_if_necessary(src_obj);
     } else {
       intptr_t src_hash = src_obj->identity_hash();
       fake_oop->set_mark(markWord::prototype().copy_set_hash(src_hash));
