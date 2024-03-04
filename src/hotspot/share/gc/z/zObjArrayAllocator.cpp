@@ -62,6 +62,7 @@ oop ZObjArrayAllocator::initialize(HeapWord* mem) const {
 
   const size_t header = heap_word_size(base_offset);
   const size_t payload_size = _word_size - header;
+
   if (payload_size <= segment_max) {
     // To small to use segmented clearing
     return ObjArrayAllocator::initialize(mem);
