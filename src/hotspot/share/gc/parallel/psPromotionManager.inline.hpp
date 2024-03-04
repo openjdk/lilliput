@@ -176,7 +176,7 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
   // the mark-word that we have already loaded. This is safe, because we have checked
   // that this is not yet forwarded in the caller.
   Klass* klass = o->forward_safe_klass(test_mark);
-  size_t new_obj_size = o->size_given_klass(klass);
+  size_t new_obj_size = o->size_given_mark_and_klass(test_mark, klass);
 
   // Find the objects age, MT safe.
   uint age = (test_mark.has_displaced_mark_helper() /* o->has_displaced_mark() */) ?

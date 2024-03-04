@@ -73,12 +73,12 @@ inline void ObjectMonitor::set_header(markWord hdr) {
 
 inline intptr_t ObjectMonitor::hash_placeholder() const {
   assert(LockingMode == LM_PLACEHOLDER, "Only used by placeholder locking");
-  return Atomic::load(&_header).hash();
+  return Atomic::load(&_header).value();
 }
 
 inline void ObjectMonitor::set_hash_placeholder(intptr_t hash) {
   assert(LockingMode == LM_PLACEHOLDER, "Only used by placeholder locking");
-  Atomic::store(&_header, markWord::zero().copy_set_hash(hash));
+  Atomic::store(&_header, markWord(hash));
 }
 
 inline int ObjectMonitor::waiters() const {

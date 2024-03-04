@@ -120,6 +120,8 @@ class ArrayKlass: public Klass {
   // jvm support
   jint compute_modifier_flags() const;
 
+  int hash_offset_in_bytes(oop obj) const override;
+
   // JVMTI support
   jint jvmti_class_status() const;
 

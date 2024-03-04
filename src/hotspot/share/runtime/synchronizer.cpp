@@ -63,6 +63,7 @@
 #include "utilities/dtrace.hpp"
 #include "utilities/events.hpp"
 #include "utilities/globalDefinitions.hpp"
+#include "utilities/fastHash.hpp"
 #include "utilities/linkedlist.hpp"
 #include "utilities/preserveException.hpp"
 
@@ -1030,7 +1031,7 @@ static markWord read_stable_mark(oop obj) {
 //   There are simple ways to "diffuse" the middle address bits over the
 //   generated hashCode values:
 
-static inline intptr_t get_next_hash(Thread* current, oop obj) {
+intptr_t get_next_hash(Thread* current, oop obj) {
   intptr_t value = 0;
   if (hashCode == 0) {
     // This form uses global Park-Miller RNG.
@@ -1049,7 +1050,7 @@ static inline intptr_t get_next_hash(Thread* current, oop obj) {
     value = ++GVars.hc_sequence;
   } else if (hashCode == 4) {
     value = cast_from_oop<intptr_t>(obj);
-  } else {
+  } else if (hashCode == 5) {
     // Marsaglia's xor-shift scheme with thread-specific state
     // This is probably the best overall implementation -- we'll
     // likely make this the default in future releases.
@@ -1062,9 +1063,23 @@ static inline intptr_t get_next_hash(Thread* current, oop obj) {
     v = (v ^ (v >> 19)) ^ (t ^ (t >> 8));
     current->_hashStateW = v;
     value = v;
+  } else {
+    assert(UseCompactIHash, "Only with compact i-hash");
+#ifdef _LP64
+    uint64_t val = cast_from_oop<uint64_t>(obj);
+    uint64_t hash = FastHash::get_hash64(val, UCONST64(0xAAAAAAAAAAAAAAAA));
+#else
+    uint32_t val = cast_from_oop<uint32_t>(obj);
+    uint32_t hash = FastHash::get_hash32(val, UCONST64(0xAAAAAAAA));
+#endif
+    value= static_cast<intptr_t>(hash);
   }
 
-  value &= UseCompactObjectHeaders ? markWord::hash_mask_compact : markWord::hash_mask;
+  if (UseCompactObjectHeaders && !UseCompactIHash) {
+    value &= markWord::hash_mask_compact;
+  } else {
+    value &= markWord::hash_mask;
+  }
   if (value == 0) value = 0xBAD;
   assert(value != markWord::no_hash, "invariant");
   return value;
