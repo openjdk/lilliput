@@ -1206,7 +1206,7 @@ GrowableArray<JavaThread*>* Threads::get_pending_threads(ThreadsList * t_list,
 
 JavaThread *Threads::owning_thread_from_monitor_owner(ThreadsList * t_list,
                                                       address owner) {
-  assert(LockingMode != LM_LIGHTWEIGHT, "Not with new lightweight locking");
+  assert(LockingMode != LM_LIGHTWEIGHT && LockingMode != LM_PLACEHOLDER, "Not with new lightweight locking");
   // null owner means not locked so we can skip the search
   if (owner == nullptr) return nullptr;
 
@@ -1237,7 +1237,7 @@ JavaThread *Threads::owning_thread_from_monitor_owner(ThreadsList * t_list,
 }
 
 JavaThread* Threads::owning_thread_from_object(ThreadsList * t_list, oop obj) {
-  assert(LockingMode == LM_LIGHTWEIGHT, "Only with new lightweight locking");
+  assert(LockingMode == LM_LIGHTWEIGHT || LockingMode == LM_PLACEHOLDER, "Only with new lightweight locking");
   for (JavaThread* q : *t_list) {
     // Need to start processing before accessing oops in the thread.
     StackWatermark* watermark = StackWatermarkSet::get(q, StackWatermarkKind::gc);
@@ -1253,7 +1253,7 @@ JavaThread* Threads::owning_thread_from_object(ThreadsList * t_list, oop obj) {
 }
 
 JavaThread* Threads::owning_thread_from_monitor(ThreadsList* t_list, ObjectMonitor* monitor) {
-  if (LockingMode == LM_LIGHTWEIGHT) {
+  if (LockingMode == LM_LIGHTWEIGHT || LockingMode == LM_PLACEHOLDER) {
     if (monitor->is_owner_anonymous()) {
       return owning_thread_from_object(t_list, monitor->object());
     } else {

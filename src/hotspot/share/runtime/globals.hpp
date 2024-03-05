@@ -1980,12 +1980,37 @@ const int ObjectAlignmentInBytes = 8;
              "Mark all threads after a safepoint, and clear on a modify "   \
              "fence. Add cleanliness checks.")                              \
                                                                             \
-  product(int, LockingMode, LM_LEGACY,                                      \
+  product(int, LockingMode, LM_PLACEHOLDER,                                 \
           "Select locking mode: "                                           \
           "0: monitors only (LM_MONITOR), "                                 \
           "1: monitors & legacy stack-locking (LM_LEGACY, default), "       \
-          "2: monitors & new lightweight locking (LM_LIGHTWEIGHT)")         \
-          range(0, 2)                                                       \
+          "2: monitors & new lightweight locking (LM_LIGHTWEIGHT), "        \
+          "3: placeholder (LM_PLACEHOLDER)")                                \
+          range(0, 3)                                                       \
+                                                                            \
+  product(bool, OMUseC2Cache, true, "")                                     \
+                                                                            \
+  product(bool, OMC2UnrollCacheLookupLoopTail, true, "")                    \
+                                                                            \
+  product(int, OMC2UnrollCacheEntries, 0, "")                               \
+          range(0, OMCache::CAPACITY)                                       \
+                                                                            \
+  product(int, OMCacheSize, 8, "")                                          \
+          range(0, OMCache::CAPACITY)                                       \
+                                                                            \
+  product(bool, OMShrinkCHT, false, "")                                     \
+                                                                            \
+  product(int, OMSpins, 20, "")                                             \
+                                                                            \
+  product(int, OMYields, 5, "")                                             \
+                                                                            \
+  product(bool, OMDeflateAfterWait, false, "")                              \
+                                                                            \
+  product(bool, OMDeflateBeforeExit, false, "")                             \
+                                                                            \
+  product(bool, OMCacheHitRate, false, "")                                  \
+                                                                            \
+  product(bool, OMRecursiveFastPath, true, "Inflated recursion check first")\
                                                                             \
   product(uint, TrimNativeHeapInterval, 0,                                  \
           "Interval, in ms, at which the JVM will trim the native heap if " \

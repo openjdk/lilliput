@@ -12383,7 +12383,7 @@ instruct cmpFastLockRTM(rFlagsReg cr, rRegP object, rbx_RegP box, rax_RegI tmp, 
 %}
 
 instruct cmpFastLock(rFlagsReg cr, rRegP object, rbx_RegP box, rax_RegI tmp, rRegP scr) %{
-  predicate(LockingMode != LM_LIGHTWEIGHT && !Compile::current()->use_rtm());
+  predicate(LockingMode != LM_LIGHTWEIGHT && LockingMode != LM_PLACEHOLDER && !Compile::current()->use_rtm());
   match(Set cr (FastLock object box));
   effect(TEMP tmp, TEMP scr, USE_KILL box);
   ins_cost(300);
@@ -12396,7 +12396,7 @@ instruct cmpFastLock(rFlagsReg cr, rRegP object, rbx_RegP box, rax_RegI tmp, rRe
 %}
 
 instruct cmpFastUnlock(rFlagsReg cr, rRegP object, rax_RegP box, rRegP tmp) %{
-  predicate(LockingMode != LM_LIGHTWEIGHT);
+  predicate(LockingMode != LM_LIGHTWEIGHT && LockingMode != LM_PLACEHOLDER);
   match(Set cr (FastUnlock object box));
   effect(TEMP tmp, USE_KILL box);
   ins_cost(300);
@@ -12427,6 +12427,30 @@ instruct cmpFastUnlockLightweight(rFlagsReg cr, rRegP object, rax_RegP rax_reg, 
   format %{ "fastunlock $object,$rax_reg\t! kills $rax_reg,$tmp" %}
   ins_encode %{
     __ fast_unlock_lightweight($object$$Register, $rax_reg$$Register, $tmp$$Register, r15_thread);
+  %}
+  ins_pipe(pipe_slow);
+%}
+
+instruct cmpFastLockPlaceholder(rFlagsReg cr, rRegP object, rbx_RegP box, rax_RegI tmp, rRegP scr) %{
+  predicate(LockingMode == LM_PLACEHOLDER);
+  match(Set cr (FastLock object box));
+  effect(TEMP tmp, TEMP scr, USE_KILL box);
+  ins_cost(300);
+  format %{ "fastlock $object,$box\t! kills $box,$tmp,$scr" %}
+  ins_encode %{
+    __ fast_lock_placeholder($object$$Register, $box$$Register, $tmp$$Register, $scr$$Register, r15_thread);
+  %}
+  ins_pipe(pipe_slow);
+%}
+
+instruct cmpFastUnlockPlaceholder(rFlagsReg cr, rRegP object, rax_RegP box, rRegP tmp) %{
+  predicate(LockingMode == LM_PLACEHOLDER);
+  match(Set cr (FastUnlock object box));
+  effect(TEMP tmp, USE_KILL box);
+  ins_cost(300);
+  format %{ "fastunlock $object,$box\t! kills $box,$tmp" %}
+  ins_encode %{
+    __ fast_unlock_placeholder($object$$Register, $box$$Register, $tmp$$Register, r15_thread);
   %}
   ins_pipe(pipe_slow);
 %}

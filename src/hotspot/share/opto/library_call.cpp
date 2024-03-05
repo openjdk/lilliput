@@ -4574,7 +4574,7 @@ bool LibraryCallKit::inline_native_hashcode(bool is_virtual, bool is_static) {
   // Test the header to see if it is safe to read w.r.t. locking.
   Node *lock_mask      = _gvn.MakeConX(markWord::lock_mask_in_place);
   Node *lmasked_header = _gvn.transform(new AndXNode(header, lock_mask));
-  if (LockingMode == LM_LIGHTWEIGHT) {
+  if (LockingMode == LM_LIGHTWEIGHT || LockingMode == LM_PLACEHOLDER) {
     Node *monitor_val   = _gvn.MakeConX(markWord::monitor_value);
     Node *chk_monitor   = _gvn.transform(new CmpXNode(lmasked_header, monitor_val));
     Node *test_monitor  = _gvn.transform(new BoolNode(chk_monitor, BoolTest::eq));

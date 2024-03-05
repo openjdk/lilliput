@@ -47,6 +47,10 @@ public:
                              Register t, Register thread);
   void fast_unlock_lightweight(Register obj, Register reg_rax, Register t, Register thread);
 
+  void fast_lock_placeholder(Register obj, Register box, Register rax_reg,
+                             Register t, Register thread);
+  void fast_unlock_placeholder(Register obj, Register reg_rax, Register t, Register thread);
+
 #if INCLUDE_RTM_OPT
   void rtm_counters_update(Register abort_status, Register rtm_counters);
   void branch_on_random_using_rdtsc(Register tmp, Register scr, int count, Label& brLabel);

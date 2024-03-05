@@ -42,6 +42,7 @@
 #include "runtime/javaThread.hpp"
 #include "runtime/safepointMechanism.hpp"
 #include "runtime/sharedRuntime.hpp"
+#include "utilities/globalDefinitions.hpp"
 #include "utilities/powerOfTwo.hpp"
 
 // Implementation of InterpreterMacroAssembler
@@ -1185,7 +1186,16 @@ void InterpreterMacroAssembler::lock_object(Register lock_reg) {
       jcc(Assembler::notZero, slow_case);
     }
 
-    if (LockingMode == LM_LIGHTWEIGHT) {
+    if (LockingMode == LM_PLACEHOLDER) {
+      movptr(Address(lock_reg, mark_offset), 0);
+#ifdef _LP64
+      const Register thread = r15_thread;
+#else
+      const Register thread = lock_reg;
+      get_thread(thread);
+#endif
+      placeholder_lock(obj_reg, swap_reg, thread, tmp_reg, slow_case);
+    } else if (LockingMode == LM_LIGHTWEIGHT) {
 #ifdef _LP64
       const Register thread = r15_thread;
 #else
@@ -1254,7 +1264,7 @@ void InterpreterMacroAssembler::lock_object(Register lock_reg) {
     bind(slow_case);
 
     // Call the runtime routine for slow case
-    if (LockingMode == LM_LIGHTWEIGHT) {
+    if (LockingMode == LM_LIGHTWEIGHT || LockingMode == LM_PLACEHOLDER) {
       call_VM(noreg,
               CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorenter_obj),
               obj_reg);
@@ -1307,7 +1317,16 @@ void InterpreterMacroAssembler::unlock_object(Register lock_reg) {
     // Free entry
     movptr(Address(lock_reg, BasicObjectLock::obj_offset()), NULL_WORD);
 
-    if (LockingMode == LM_LIGHTWEIGHT) {
+    if (LockingMode == LM_PLACEHOLDER) {
+#ifdef _LP64
+      placeholder_unlock(obj_reg, swap_reg, r15_thread, header_reg, slow_case);
+#else
+      // This relies on the implementation of placeholder_unlock knowing that it
+      // will clobber its thread when using EAX.
+      get_thread(swap_reg);
+      placeholder_unlock(obj_reg, swap_reg, swap_reg, header_reg, slow_case);
+#endif
+    } else if (LockingMode == LM_LIGHTWEIGHT) {
 #ifdef _LP64
       lightweight_unlock(obj_reg, swap_reg, r15_thread, header_reg, slow_case);
 #else

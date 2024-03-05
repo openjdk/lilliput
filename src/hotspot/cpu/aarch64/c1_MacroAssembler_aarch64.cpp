@@ -33,9 +33,11 @@
 #include "oops/arrayOop.hpp"
 #include "oops/markWord.hpp"
 #include "runtime/basicLock.hpp"
+#include "runtime/globals.hpp"
 #include "runtime/os.hpp"
 #include "runtime/sharedRuntime.hpp"
 #include "runtime/stubRoutines.hpp"
+#include "utilities/globalDefinitions.hpp"
 
 void C1_MacroAssembler::float_cmp(bool is_float, int unordered_result,
                                   FloatRegister f0, FloatRegister f1,
@@ -78,9 +80,15 @@ int C1_MacroAssembler::lock_object(Register hdr, Register obj, Register disp_hdr
     ldrw(hdr, Address(hdr, Klass::access_flags_offset()));
     tstw(hdr, JVM_ACC_IS_VALUE_BASED_CLASS);
     br(Assembler::NE, slow_case);
+  } else if (LockingMode == LM_PLACEHOLDER) {
+    // null check obj. load_klass performs load if DiagnoseSyncOnValueBasedClasses != 0.
+    ldr(hdr, Address(obj));
   }
 
-  if (LockingMode == LM_LIGHTWEIGHT) {
+  if (LockingMode == LM_PLACEHOLDER) {
+    str(zr, Address(disp_hdr, BasicObjectLock::lock_offset() + in_ByteSize((BasicLock::displaced_header_offset_in_bytes()))));
+    placeholder_lock(obj, hdr, temp, rscratch2, slow_case);
+  } else if (LockingMode == LM_LIGHTWEIGHT) {
     lightweight_lock(obj, hdr, temp, rscratch2, slow_case);
   } else if (LockingMode == LM_LEGACY) {
     Label done;
@@ -131,7 +139,7 @@ void C1_MacroAssembler::unlock_object(Register hdr, Register obj, Register disp_
   assert_different_registers(hdr, obj, disp_hdr, temp, rscratch2);
   Label done;
 
-  if (LockingMode != LM_LIGHTWEIGHT) {
+  if (LockingMode != LM_LIGHTWEIGHT && LockingMode != LM_PLACEHOLDER) {
     // load displaced header
     ldr(hdr, Address(disp_hdr, 0));
     // if the loaded hdr is null we had recursive locking
@@ -143,7 +151,9 @@ void C1_MacroAssembler::unlock_object(Register hdr, Register obj, Register disp_
   ldr(obj, Address(disp_hdr, BasicObjectLock::obj_offset()));
   verify_oop(obj);
 
-  if (LockingMode == LM_LIGHTWEIGHT) {
+  if (LockingMode == LM_PLACEHOLDER) {
+    placeholder_unlock(obj, hdr, temp, rscratch2, slow_case);
+  } else if (LockingMode == LM_LIGHTWEIGHT) {
     lightweight_unlock(obj, hdr, temp, rscratch2, slow_case);
   } else if (LockingMode == LM_LEGACY) {
     // test if object header is pointing to the displaced header, and if so, restore

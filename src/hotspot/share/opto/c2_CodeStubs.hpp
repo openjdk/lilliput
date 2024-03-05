@@ -132,6 +132,27 @@ public:
 };
 #endif
 
+class C2FastUnlockPlaceholderStub : public C2CodeStub {
+private:
+  Register _obj;
+  Register _monitor;
+  Register _t;
+  Register _thread;
+  Label _slow_path;
+  Label _push_and_slow_path;
+  Label _check_successor;
+  Label _unlocked;
+public:
+  C2FastUnlockPlaceholderStub(Register obj, Register monitor, Register t, Register thread) : C2CodeStub(),
+    _obj(obj), _monitor(monitor), _t(t), _thread(thread) {}
+  int max_size() const;
+  void emit(C2_MacroAssembler& masm);
+  Label& slow_path() { return _slow_path; }
+  Label& push_and_slow_path() { return _push_and_slow_path; }
+  Label& check_successor() { return _check_successor; }
+  Label& unlocked() { return _unlocked; }
+};
+
 //-----------------------------C2GeneralStub-----------------------------------
 // A generalized stub that can be used to implement an arbitrary stub in a
 // type-safe manner. An example:

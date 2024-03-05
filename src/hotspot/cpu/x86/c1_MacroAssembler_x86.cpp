@@ -61,9 +61,21 @@ int C1_MacroAssembler::lock_object(Register hdr, Register obj, Register disp_hdr
     movl(hdr, Address(hdr, Klass::access_flags_offset()));
     testl(hdr, JVM_ACC_IS_VALUE_BASED_CLASS);
     jcc(Assembler::notZero, slow_case);
+  } else if (LockingMode == LM_PLACEHOLDER) {
+    // null check obj. load_klass performs load if DiagnoseSyncOnValueBasedClasses != 0.
+    testptr(hdr, Address(obj));
   }
 
-  if (LockingMode == LM_LIGHTWEIGHT) {
+  if (LockingMode == LM_PLACEHOLDER) {
+    movptr(Address(disp_hdr), 0);
+#ifdef _LP64
+    const Register thread = r15_thread;
+#else
+    const Register thread = disp_hdr;
+    get_thread(thread);
+#endif
+    placeholder_lock(obj, hdr, thread, tmp, slow_case);
+  } else if (LockingMode == LM_LIGHTWEIGHT) {
 #ifdef _LP64
     const Register thread = r15_thread;
 #else
@@ -118,11 +130,12 @@ int C1_MacroAssembler::lock_object(Register hdr, Register obj, Register disp_hdr
 void C1_MacroAssembler::unlock_object(Register hdr, Register obj, Register disp_hdr, Label& slow_case) {
   const int aligned_mask = BytesPerWord -1;
   const int hdr_offset = oopDesc::mark_offset_in_bytes();
+  assert(LockingMode != LM_MONITOR, "not handled");
   assert(disp_hdr == rax, "disp_hdr must be rax, for the cmpxchg instruction");
   assert(hdr != obj && hdr != disp_hdr && obj != disp_hdr, "registers must be different");
   Label done;
 
-  if (LockingMode != LM_LIGHTWEIGHT) {
+  if (LockingMode == LM_LEGACY) {
     // load displaced header
     movptr(hdr, Address(disp_hdr, 0));
     // if the loaded hdr is null we had recursive locking
@@ -135,7 +148,16 @@ void C1_MacroAssembler::unlock_object(Register hdr, Register obj, Register disp_
   movptr(obj, Address(disp_hdr, BasicObjectLock::obj_offset()));
   verify_oop(obj);
 
-  if (LockingMode == LM_LIGHTWEIGHT) {
+  if (LockingMode == LM_PLACEHOLDER) {
+#ifdef _LP64
+    placeholder_unlock(obj, disp_hdr, r15_thread, hdr, slow_case);
+#else
+    // This relies on the implementation of paceholder_unlock knowing that it
+    // will clobber its thread when using EAX.
+    get_thread(disp_hdr);
+    placeholder_unlock(obj, disp_hdr, disp_hdr, hdr, slow_case);
+#endif
+  } else if (LockingMode == LM_LIGHTWEIGHT) {
 #ifdef _LP64
     lightweight_unlock(obj, disp_hdr, r15_thread, hdr, slow_case);
 #else

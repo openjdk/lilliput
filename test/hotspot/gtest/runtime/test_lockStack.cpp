@@ -64,7 +64,7 @@ public:
   } while (false)
 
 TEST_VM_F(LockStackTest, is_recursive) {
-  if (LockingMode != LM_LIGHTWEIGHT || !VM_Version::supports_recursive_lightweight_locking()) {
+  if (LockingMode != LM_PLACEHOLDER) {
     return;
   }
 
@@ -131,7 +131,7 @@ TEST_VM_F(LockStackTest, is_recursive) {
 }
 
 TEST_VM_F(LockStackTest, try_recursive_enter) {
-  if (LockingMode != LM_LIGHTWEIGHT || !VM_Version::supports_recursive_lightweight_locking()) {
+  if (LockingMode != LM_PLACEHOLDER) {
     return;
   }
 
@@ -198,11 +198,11 @@ TEST_VM_F(LockStackTest, try_recursive_enter) {
 }
 
 TEST_VM_F(LockStackTest, contains) {
-  if (LockingMode != LM_LIGHTWEIGHT) {
+  if (LockingMode != LM_LIGHTWEIGHT && LockingMode != LM_PLACEHOLDER) {
     return;
   }
 
-  const bool test_recursive = VM_Version::supports_recursive_lightweight_locking();
+  const bool test_recursive = LockingMode == LM_PLACEHOLDER;
 
   JavaThread* THREAD = JavaThread::current();
   // the thread should be in vm to use locks
@@ -264,11 +264,11 @@ TEST_VM_F(LockStackTest, contains) {
 }
 
 TEST_VM_F(LockStackTest, remove) {
-  if (LockingMode != LM_LIGHTWEIGHT) {
+  if (LockingMode != LM_LIGHTWEIGHT && LockingMode != LM_PLACEHOLDER) {
     return;
   }
 
-  const bool test_recursive = VM_Version::supports_recursive_lightweight_locking();
+  const bool test_recursive = LockingMode == LM_PLACEHOLDER;
 
   JavaThread* THREAD = JavaThread::current();
   // the thread should be in vm to use locks

@@ -46,6 +46,7 @@
 #include "runtime/javaThread.hpp"
 #include "runtime/safepointMechanism.hpp"
 #include "runtime/sharedRuntime.hpp"
+#include "utilities/globalDefinitions.hpp"
 #include "utilities/powerOfTwo.hpp"
 
 void InterpreterMacroAssembler::narrow(Register result) {
@@ -700,7 +701,11 @@ void InterpreterMacroAssembler::lock_object(Register lock_reg)
       br(Assembler::NE, slow_case);
     }
 
-    if (LockingMode == LM_LIGHTWEIGHT) {
+    if (LockingMode == LM_PLACEHOLDER) {
+      str(zr, Address(lock_reg, mark_offset));
+      placeholder_lock(obj_reg, tmp, tmp2, tmp3, slow_case);
+      b(count);
+    } else if (LockingMode == LM_LIGHTWEIGHT) {
       lightweight_lock(obj_reg, tmp, tmp2, tmp3, slow_case);
       b(count);
     } else if (LockingMode == LM_LEGACY) {
@@ -757,7 +762,8 @@ void InterpreterMacroAssembler::lock_object(Register lock_reg)
     bind(slow_case);
 
     // Call the runtime routine for slow case
-    if (LockingMode == LM_LIGHTWEIGHT) {
+    if (LockingMode == LM_LIGHTWEIGHT || LockingMode == LM_PLACEHOLDER) {
+      // TODO: Clean this monitorenter_obj up. We still want to use the lock_reg for placeholder
       call_VM(noreg,
               CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorenter_obj),
               obj_reg);
@@ -803,7 +809,8 @@ void InterpreterMacroAssembler::unlock_object(Register lock_reg)
 
     save_bcp(); // Save in case of exception
 
-    if (LockingMode != LM_LIGHTWEIGHT) {
+    if (LockingMode != LM_LIGHTWEIGHT && LockingMode != LM_PLACEHOLDER) {
+      // TODO: Cleanup lock_reg usage for placeholder
       // Convert from BasicObjectLock structure to object and BasicLock
       // structure Store the BasicLock address into %r0
       lea(swap_reg, Address(lock_reg, BasicObjectLock::lock_offset()));
@@ -815,7 +822,12 @@ void InterpreterMacroAssembler::unlock_object(Register lock_reg)
     // Free entry
     str(zr, Address(lock_reg, BasicObjectLock::obj_offset()));
 
-    if (LockingMode == LM_LIGHTWEIGHT) {
+    if (LockingMode == LM_PLACEHOLDER) {
+      Label slow_case;
+      placeholder_unlock(obj_reg, header_reg, swap_reg, tmp_reg, slow_case);
+      b(count);
+      bind(slow_case);
+    } else if (LockingMode == LM_LIGHTWEIGHT) {
       Label slow_case;
       lightweight_unlock(obj_reg, header_reg, swap_reg, tmp_reg, slow_case);
       b(count);

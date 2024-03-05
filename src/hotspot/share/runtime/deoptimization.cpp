@@ -74,8 +74,10 @@
 #include "runtime/javaThread.hpp"
 #include "runtime/jniHandles.inline.hpp"
 #include "runtime/keepStackGCProcessed.hpp"
+#include "runtime/lockStack.inline.hpp"
 #include "runtime/objectMonitor.inline.hpp"
 #include "runtime/osThread.hpp"
+#include "runtime/placeholderSynchronizer.hpp"
 #include "runtime/safepointVerifiers.hpp"
 #include "runtime/sharedRuntime.hpp"
 #include "runtime/signature.hpp"
@@ -92,6 +94,7 @@
 #include "runtime/vmOperations.hpp"
 #include "utilities/checkedCast.hpp"
 #include "utilities/events.hpp"
+#include "utilities/globalDefinitions.hpp"
 #include "utilities/growableArray.hpp"
 #include "utilities/macros.hpp"
 #include "utilities/preserveException.hpp"
@@ -1642,6 +1645,7 @@ bool Deoptimization::relock_objects(JavaThread* thread, GrowableArray<MonitorInf
             }
           }
         }
+        BasicLock* lock = mon_info->lock();
         if (LockingMode == LM_LIGHTWEIGHT && exec_mode == Unpack_none) {
           // We have lost information about the correct state of the lock stack.
           // Inflate the locks instead. Enter then inflate to avoid races with
@@ -1650,8 +1654,20 @@ bool Deoptimization::relock_objects(JavaThread* thread, GrowableArray<MonitorInf
           assert(mon_info->owner()->is_locked(), "object must be locked now");
           ObjectMonitor* mon = ObjectSynchronizer::inflate_for(deoptee_thread, obj(), ObjectSynchronizer::inflate_cause_vm_internal);
           assert(mon->owner() == deoptee_thread, "must be");
+        } else if (LockingMode == LM_PLACEHOLDER && exec_mode == Unpack_none) {
+          // We have lost information about the correct state of the lock stack.
+          // Entering may create an invalid lock stack. Inflate the lock if it
+          // was fast_locked to restore the valid lock stack.
+          ObjectSynchronizer::enter_for(obj, lock, deoptee_thread);
+          if (obj->mark().is_fast_locked()) {
+            PlaceholderSynchronizer::inflate_fast_locked_object(obj(), deoptee_thread, thread,
+                                                                ObjectSynchronizer::InflateCause::inflate_cause_vm_internal);
+          }
+          assert(mon_info->owner()->is_locked(), "object must be locked now");
+          assert(obj->mark().has_monitor(), "must be");
+          assert(!deoptee_thread->lock_stack().contains(obj()), "must be");
+          assert(PlaceholderSynchronizer::read_monitor(thread, obj())->owner() == deoptee_thread, "must be");
         } else {
-          BasicLock* lock = mon_info->lock();
           ObjectSynchronizer::enter_for(obj, lock, deoptee_thread);
           assert(mon_info->owner()->is_locked(), "object must be locked now");
         }
