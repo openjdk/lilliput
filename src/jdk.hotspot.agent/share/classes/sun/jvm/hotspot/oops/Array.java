@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2024, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -57,8 +57,8 @@ public class Array extends Oop {
   private static long lengthOffsetInBytes=0;
   private static long typeSize;
 
-  // Check whether an element of a typeArrayOop with the given type must be
-  // aligned 0 mod 8.  The typeArrayOop itself must be aligned at least this
+  // Check whether an element of a arrayOop with the given type must be
+  // aligned 0 mod 8.  The arrayOop itself must be aligned at least this
   // strongly.
   private static boolean elementTypeShouldBeAligned(BasicType type) {
     if (VM.getVM().isLP64()) {
@@ -73,14 +73,7 @@ public class Array extends Oop {
     if (headerSize != 0) {
       return headerSize;
     }
-    if (VM.getVM().isCompactObjectHeadersEnabled()) {
-      headerSize = lengthOffsetInBytes() + VM.getVM().getIntSize();
-    } else if (VM.getVM().isCompressedKlassPointersEnabled()) {
-      headerSize = typeSize;
-    } else {
-      headerSize = VM.getVM().alignUp(typeSize + VM.getVM().getIntSize(),
-                                      VM.getVM().getHeapWordSize());
-    }
+    headerSize = lengthOffsetInBytes() + VM.getVM().getIntSize();
     return headerSize;
   }
 
