@@ -95,7 +95,7 @@ size_t Generation::max_contiguous_available() const {
 
 // Ignores "ref" and calls allocate().
 oop Generation::promote(oop obj, size_t obj_size) {
-  assert(obj_size == obj->size(), "bad obj_size passed in");
+  assert(obj_size == obj->size() || UseCompactIHash, "bad obj_size passed in");
 
 #ifndef PRODUCT
   if (SerialHeap::heap()->promotion_should_fail()) {

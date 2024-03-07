@@ -3761,7 +3761,7 @@ jint Arguments::apply_ergo() {
   if (UseCompactObjectHeaders && !UseCompressedClassPointers) {
     FLAG_SET_DEFAULT(UseCompressedClassPointers, true);
   }
-  if (UseCompactIHash && !UseG1GC) {
+  if (UseCompactIHash && !(UseG1GC || UseSerialGC)) {
     FLAG_SET_DEFAULT(UseCompactIHash, false);
   }
   if (UseCompactIHash && !UseCompactObjectHeaders) {
