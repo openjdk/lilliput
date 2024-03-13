@@ -296,8 +296,12 @@ inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
 
   assert(ShenandoahThreadLocalData::is_evac_allowed(thread), "must be enclosed in oom-evac scope");
 
-  size_t size = p->forward_safe_size();
-
+  markWord mark = p->mark();
+  if (ShenandoahForwarding::is_forwarded(mark)) {
+    return ShenandoahForwarding::get_forwardee(p);
+  }
+  size_t old_size = ShenandoahForwarding::object_size(p);
+  size_t size = p->copy_size(old_size, mark);
   assert(!heap_region_containing(p)->is_humongous(), "never evacuate humongous objects");
 
   bool alloc_from_gclab = true;
@@ -330,7 +334,7 @@ inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
   }
 
   // Copy the object:
-  Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(p), copy, size);
+  Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(p), copy, old_size);
   oop copy_val = cast_to_oop(copy);
   if (UseCompactObjectHeaders) {
     // The copy above is not atomic. Make sure we have seen the proper mark
@@ -338,6 +342,7 @@ inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
     markWord mark = copy_val->mark();
     if (!mark.is_marked()) {
       copy_val->set_mark(mark);
+      copy_val->initialize_hash_if_necessary(p);
       ContinuationGCSupport::relativize_stack_chunk(copy_val);
     } else {
       // If we copied a mark-word that indicates 'forwarded' state, the object
@@ -524,7 +529,8 @@ inline void ShenandoahHeap::marked_object_iterate(ShenandoahHeapRegion* region, 
     oop obj = cast_to_oop(cs);
     assert(oopDesc::is_oop(obj), "sanity");
     assert(ctx->is_marked(obj), "object expected to be marked");
-    size_t size = obj->forward_safe_size();
+    assert(!is_full_gc_in_progress(), "No size-based iteration in full-GC");
+    size_t size = ShenandoahForwarding::object_size(obj);
     cl->do_object(obj);
     cs += size;
   }

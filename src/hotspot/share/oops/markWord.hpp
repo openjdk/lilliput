@@ -293,7 +293,7 @@ class markWord {
   }
 
   // used to encode pointers during GC
-  markWord clear_lock_bits() const { return markWord(value() & ~lock_mask_in_place); }
+  markWord clear_lock_bits() const { return markWord(value() & ~(lock_mask_in_place | self_forwarded_mask_in_place)); }
 
   // age operations
   markWord set_marked()   { return markWord((value() & ~lock_mask_in_place) | marked_value); }
@@ -402,7 +402,8 @@ class markWord {
 
 #ifdef _LP64
   inline bool self_forwarded() const {
-    bool self_fwd = mask_bits(value(), self_forwarded_mask_in_place) != 0;
+    // Match 100, 101, 110 but not 111.
+    bool self_fwd = mask_bits(value() + 1, (lock_mask_in_place | self_forwarded_mask_in_place)) > 4;
     assert(!self_fwd || UseAltGCForwarding, "Only set self-fwd bit when using alt GC forwarding");
     return self_fwd;
   }
