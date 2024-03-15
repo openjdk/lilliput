@@ -353,7 +353,8 @@ static zaddress relocate_object_inner(ZForwarding* forwarding, zaddress from_add
   assert(ZHeap::heap()->is_object_live(from_addr), "Should be live");
 
   // Allocate object
-  const size_t size = ZUtils::object_size(from_addr);
+  const size_t old_size = ZUtils::object_size(from_addr);
+  const size_t size = ZUtils::copy_size(from_addr, old_size);
 
   ZAllocatorForRelocation* allocator = ZAllocator::relocation(forwarding->to_age());
 
@@ -363,9 +364,11 @@ static zaddress relocate_object_inner(ZForwarding* forwarding, zaddress from_add
     // Allocation failed
     return zaddress::null;
   }
+  assert(to_addr != from_addr, "addresses must be different");
 
   // Copy object
-  ZUtils::object_copy_disjoint(from_addr, to_addr, size);
+  ZUtils::object_copy_disjoint(from_addr, to_addr, old_size);
+  ZUtils::initialize_hash_if_necessary(to_addr, from_addr);
 
   // Insert forwarding
   const zaddress to_addr_final = forwarding_insert(forwarding, from_addr, to_addr, cursor);
@@ -635,20 +638,24 @@ private:
     }
 
     // Allocate object
-    const size_t size = ZUtils::object_size(from_addr);
+    const size_t old_size = ZUtils::object_size(from_addr);
+    const size_t size = ZUtils::copy_size(from_addr, old_size);
     const zaddress allocated_addr = _allocator->alloc_object(to_page, size);
     if (is_null(allocated_addr)) {
       // Allocation failed
       return zaddress::null;
     }
 
+    assert(allocated_addr != from_addr, "copy must be different address");
+
     // Copy object. Use conjoint copying if we are relocating
     // in-place and the new object overlaps with the old object.
-    if (_forwarding->in_place_relocation() && allocated_addr + size > from_addr) {
-      ZUtils::object_copy_conjoint(from_addr, allocated_addr, size);
+    if (_forwarding->in_place_relocation() && allocated_addr + old_size > from_addr) {
+      ZUtils::object_copy_conjoint(from_addr, allocated_addr, old_size);
     } else {
-      ZUtils::object_copy_disjoint(from_addr, allocated_addr, size);
+      ZUtils::object_copy_disjoint(from_addr, allocated_addr, old_size);
     }
+    ZUtils::initialize_hash_if_necessary(allocated_addr, from_addr);
 
     // Insert forwarding
     const zaddress to_addr = forwarding_insert(_forwarding, from_addr, allocated_addr, &cursor);
