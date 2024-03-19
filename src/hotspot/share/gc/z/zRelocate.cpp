@@ -621,7 +621,7 @@ private:
     }
   }
 
-  zaddress try_relocate_object_inner(zaddress from_addr) {
+  zaddress try_relocate_object_inner(zaddress from_addr, size_t old_size) {
     ZForwardingCursor cursor;
 
     ZPage* const to_page = target(_forwarding->to_age());
@@ -638,15 +638,18 @@ private:
     }
 
     // Allocate object
-    const size_t old_size = ZUtils::object_size(from_addr);
-    const size_t size = ZUtils::copy_size(from_addr, old_size);
+    const size_t new_size = ZUtils::copy_size(from_addr, old_size);
+    const zaddress top = to_page != nullptr ? to_page->top_addr() : zaddress::null;
+    const size_t size = top == from_addr ? old_size : new_size;
     const zaddress allocated_addr = _allocator->alloc_object(to_page, size);
     if (is_null(allocated_addr)) {
       // Allocation failed
       return zaddress::null;
     }
-
-    assert(allocated_addr != from_addr, "copy must be different address");
+    if (old_size != new_size && ((top == from_addr) != (allocated_addr == from_addr))) {
+      _allocator->undo_alloc_object(to_page, allocated_addr, size);
+      return zaddress::null;
+    }
 
     // Copy object. Use conjoint copying if we are relocating
     // in-place and the new object overlaps with the old object.
@@ -655,7 +658,9 @@ private:
     } else {
       ZUtils::object_copy_disjoint(from_addr, allocated_addr, old_size);
     }
-    ZUtils::initialize_hash_if_necessary(allocated_addr, from_addr);
+    if (from_addr != allocated_addr) {
+      ZUtils::initialize_hash_if_necessary(allocated_addr, from_addr);
+    }
 
     // Insert forwarding
     const zaddress to_addr = forwarding_insert(_forwarding, from_addr, allocated_addr, &cursor);
@@ -668,7 +673,7 @@ private:
     return to_addr;
   }
 
-  void update_remset_old_to_old(zaddress from_addr, zaddress to_addr) const {
+  void update_remset_old_to_old(zaddress from_addr, zaddress to_addr, size_t size) const {
     // Old-to-old relocation - move existing remset bits
 
     // If this is called for an in-place relocated page, then this code has the
@@ -690,10 +695,8 @@ private:
     assert(ZHeap::heap()->is_in_page_relaxed(from_page, from_addr), "Must be");
     assert(to_page->is_in(to_addr), "Must be");
 
-
-    // Read the size from the to-object, since the from-object
-    // could have been overwritten during in-place relocation.
-    const size_t size = ZUtils::object_size(to_addr);
+    assert(size <= ZUtils::object_size(to_addr), "old size must be <= new size");
+    assert(size > 0, "size must be set");
 
     // If a young generation collection started while the old generation
     // relocated  objects, the remember set bits were flipped from "current"
@@ -818,7 +821,7 @@ private:
     ZIterator::basic_oop_iterate(to_oop(to_addr), update_remset_promoted_filter_and_remap_per_field);
   }
 
-  void update_remset_for_fields(zaddress from_addr, zaddress to_addr) const {
+  void update_remset_for_fields(zaddress from_addr, zaddress to_addr, size_t size) const {
     if (_forwarding->to_age() != ZPageAge::old) {
       // No remembered set in young pages
       return;
@@ -826,7 +829,7 @@ private:
 
     // Need to deal with remset when moving objects to the old generation
     if (_forwarding->from_age() == ZPageAge::old) {
-      update_remset_old_to_old(from_addr, to_addr);
+      update_remset_old_to_old(from_addr, to_addr, size);
       return;
     }
 
@@ -835,13 +838,14 @@ private:
   }
 
   bool try_relocate_object(zaddress from_addr) {
-    const zaddress to_addr = try_relocate_object_inner(from_addr);
+    size_t size = ZUtils::object_size(from_addr);
+    const zaddress to_addr = try_relocate_object_inner(from_addr, size);
 
     if (is_null(to_addr)) {
       return false;
     }
 
-    update_remset_for_fields(from_addr, to_addr);
+    update_remset_for_fields(from_addr, to_addr, size);
 
     return true;
   }
