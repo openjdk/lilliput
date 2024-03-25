@@ -78,7 +78,6 @@ markWord markWord::set_klass(Klass* klass) const {
   narrowKlass nklass = CompressedKlassPointers::encode(const_cast<Klass*>(klass));
   return set_narrow_klass(nklass);
 }
-
 #endif // _LP64
 
 #endif // SHARE_OOPS_MARKWORD_INLINE_HPP

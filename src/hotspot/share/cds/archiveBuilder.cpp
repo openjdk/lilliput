@@ -638,15 +638,15 @@ void ArchiveBuilder::make_shallow_copy(DumpRegion *dump_region, SourceObjInfo* s
       dump_region->allocate(sizeof(address));
     }
     // Allocate space for the future InstanceKlass with proper alignment
-#ifndef _LP64
-    const size_t al = SharedSpaceObjectAlignment;
+    const size_t alignment =
+#ifdef _LP64
+      UseCompressedClassPointers ?
+        nth_bit(ArchiveBuilder::precomputed_narrow_klass_shift()) :
+        SharedSpaceObjectAlignment;
 #else
-    const size_t al =
-        UseCompressedClassPointers ?
-            nth_bit(ArchiveBuilder::precomputed_narrow_klass_shift()) :
-            SharedSpaceObjectAlignment;
+    SharedSpaceObjectAlignment;
 #endif
-    dest = dump_region->allocate(bytes, al);
+    dest = dump_region->allocate(bytes, alignment);
   } else {
     dest = dump_region->allocate(bytes);
   }

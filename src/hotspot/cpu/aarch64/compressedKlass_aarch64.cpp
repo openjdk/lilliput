@@ -79,7 +79,6 @@ static char* reserve_at_eor_compatible_address(size_t size, bool aslr) {
   }
   return result;
 }
-
 char* CompressedKlassPointers::reserve_address_space_for_compressed_classes(size_t size, bool aslr, bool optimize_for_zero_base) {
 
   char* result = nullptr;
