@@ -28,11 +28,11 @@
 #include "gc/g1/g1FullGCOopClosures.hpp"
 
 #include "gc/g1/g1Allocator.inline.hpp"
-#include "gc/g1/g1FullCollector.inline.hpp"
 #include "gc/g1/g1ConcurrentMarkBitMap.inline.hpp"
+#include "gc/g1/g1FullCollector.inline.hpp"
 #include "gc/g1/g1FullGCMarker.inline.hpp"
-#include "gc/g1/heapRegionRemSet.inline.hpp"
 #include "gc/shared/slidingForwarding.inline.hpp"
+#include "gc/g1/g1HeapRegionRemSet.inline.hpp"
 #include "memory/iterator.inline.hpp"
 #include "memory/universe.hpp"
 #include "oops/access.inline.hpp"

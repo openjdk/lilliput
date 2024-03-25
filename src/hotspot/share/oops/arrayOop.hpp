@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2024, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -53,9 +53,7 @@ private:
     return reinterpret_cast<int*>(ptr + length_offset_in_bytes());
   }
 
-  // Check whether an element of an arrayOop with the given type must be
-  // aligned 0 mod 8.  The arrayOop itself must be aligned at least this
-  // strongly.
+  // Given a type, return true if elements of that type must be aligned to 64-bit.
   static bool element_type_should_be_aligned(BasicType type) {
 #ifdef _LP64
     if (type == T_OBJECT || type == T_ARRAY) {
