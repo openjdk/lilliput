@@ -669,7 +669,7 @@ AC_DEFUN([JDKOPT_ENABLE_DISABLE_CDS_ARCHIVE],
 
 ################################################################################
 #
-# Enable or disable the default CDS archive generation for Compact Object Headers (Lilliput)
+# Enable or disable the default CDS archive generation for Compact Object Headers
 #
 AC_DEFUN([JDKOPT_ENABLE_DISABLE_CDS_ARCHIVE_COH],
 [
@@ -682,8 +682,9 @@ AC_DEFUN([JDKOPT_ENABLE_DISABLE_CDS_ARCHIVE_COH],
         if test "x$BUILD_CDS_ARCHIVE" = "xfalse"; then
           AC_MSG_RESULT([no (CDS default archive generation is disabled)])
           AVAILABLE=false
-        elif test "x$OPENJDK_TARGET_CPU_BITS" = x32; then
-          AC_MSG_RESULT([no (not possible with 32-bit build)])
+        elif test "x$OPENJDK_TARGET_CPU" != "xx86_64" &&
+             test "x$OPENJDK_TARGET_CPU" != "xaarch64"; then
+          AC_MSG_RESULT([no (compact object headers not supported for this platform)])
           AVAILABLE=false
         else
           AC_MSG_RESULT([yes])
