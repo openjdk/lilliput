@@ -26,6 +26,7 @@
  * @test id=nocoops_nocoh
  * @summary Test Loading of default archives in all configurations
  * @requires vm.cds
+ * @requires vm.bits == 64
  * @library /test/lib
  * @modules java.base/jdk.internal.misc
  *          java.management
@@ -48,6 +49,7 @@
  * @test id=coops_nocoh
  * @summary Test Loading of default archives in all configurations
  * @requires vm.cds
+ * @requires vm.bits == 64
  * @library /test/lib
  * @modules java.base/jdk.internal.misc
  *          java.management
