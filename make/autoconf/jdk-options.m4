@@ -644,7 +644,7 @@ AC_DEFUN([JDKOPT_ENABLE_DISABLE_MANPAGES],
 
 ################################################################################
 #
-# Enable or disable the default CDS archive generation
+# Disable the default CDS archive generation
 #
 AC_DEFUN([JDKOPT_ENABLE_DISABLE_CDS_ARCHIVE],
 [
@@ -669,28 +669,20 @@ AC_DEFUN([JDKOPT_ENABLE_DISABLE_CDS_ARCHIVE],
 
 ################################################################################
 #
-# Disable the default CDS archive generation for Compact Object Headers (Lilliput)
+# Enable or disable the default CDS archive generation for Compact Object Headers (Lilliput)
 #
 AC_DEFUN([JDKOPT_ENABLE_DISABLE_CDS_ARCHIVE_COH],
 [
-  IS_64BIT=false
-  if test "x$OPENJDK_TARGET_CPU_BITS" = x64; then
-    IS_64BIT=true
-  fi
-
-  UTIL_ARG_ENABLE(NAME: cds-archive-coh, DEFAULT: $IS_64BIT, RESULT: BUILD_CDS_ARCHIVE_COH,
-      DESC: [enable generation of default CDS archives for compact object headers (Lilliput) in the product image (requires --enable-cds-archive)],
-      DEFAULT_DESC: [disabled],
-      CHECKING_MSG: [if default CDS archives supporting compact object headers (Lilliput) should be generated],
+  UTIL_ARG_ENABLE(NAME: cds-archive-coh, DEFAULT: auto, RESULT: BUILD_CDS_ARCHIVE_COH,
+      DESC: [enable generation of default CDS archives for compact object headers (requires --enable-cds-archive)],
+      DEFAULT_DESC: [auto],
+      CHECKING_MSG: [if default CDS archives for compact object headers should be generated],
       CHECK_AVAILABLE: [
         AC_MSG_CHECKING([if CDS archive with compact object headers is available])
         if test "x$BUILD_CDS_ARCHIVE" = "xfalse"; then
-          AC_MSG_RESULT([no (CDS is disabled or default archive generation is disabled)])
+          AC_MSG_RESULT([no (CDS default archive generation is disabled)])
           AVAILABLE=false
-        elif test "x$COMPILE_TYPE" = "xcross"; then
-          AC_MSG_RESULT([no (not possible with cross compilation)])
-          AVAILABLE=false
-        elif test "x$IS_64BIT" = "xfalse"; then
+        elif test "x$OPENJDK_TARGET_CPU_BITS" = x32; then
           AC_MSG_RESULT([no (not possible with 32-bit build)])
           AVAILABLE=false
         else
