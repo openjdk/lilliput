@@ -51,12 +51,25 @@ Klass* markWord::klass_or_null() const {
 
 narrowKlass markWord::narrow_klass() const {
   assert(UseCompactObjectHeaders, "only used with compact object headers");
+  // Make sure we don't need to zero any upper bits
+  STATIC_ASSERT(klass_shift + klass_bits == 64);
+  // Also, the hash (preceding nKlass) shall be a direct neighbor but
+  // not interleave
+  STATIC_ASSERT(klass_shift == hash_bits_compact + hash_shift_compact);
   return narrowKlass(value() >> klass_shift);
 }
 
 markWord markWord::set_narrow_klass(narrowKlass nklass) const {
   assert(UseCompactObjectHeaders, "only used with compact object headers");
-  return markWord((value() & ~klass_mask_in_place) | ((uintptr_t) nklass << klass_shift));
+  markWord mw((value() & ~klass_mask_in_place) | ((uintptr_t) nklass << klass_shift));
+#ifdef ASSERT
+  // Sanity:
+  // Shadow bits and real nKlass bits must not intersect, but both should be contained
+  // in the klass load mask
+  STATIC_ASSERT((klass_shadow_mask_inplace & klass_mask_in_place) == 0);
+  STATIC_ASSERT((klass_load_shift + klass_shadow_bits) == klass_shift);
+#endif
+  return mw;
 }
 
 markWord markWord::set_klass(Klass* klass) const {

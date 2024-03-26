@@ -86,6 +86,7 @@
 #include "utilities/align.hpp"
 #include "utilities/bitMap.inline.hpp"
 #include "utilities/defaultStream.hpp"
+#include "utilities/macros.hpp"
 #include "utilities/ostream.hpp"
 #include "utilities/resourceHash.hpp"
 
@@ -1166,7 +1167,7 @@ MapArchiveResult MetaspaceShared::map_archives(FileMapInfo* static_mapinfo, File
             // In order for those IDs to still be valid, we need to dictate base and shift: base should be the
             // mapping start, shift the shift used at archive generation time.
             address precomputed_narrow_klass_base = cds_base;
-            const int precomputed_narrow_klass_shift = ArchiveBuilder::precomputed_narrow_klass_shift;
+            const int precomputed_narrow_klass_shift = ArchiveBuilder::precomputed_narrow_klass_shift();
             CompressedKlassPointers::initialize_for_given_encoding(
               cds_base, ccs_end - cds_base, // Klass range
               precomputed_narrow_klass_base, precomputed_narrow_klass_shift // precomputed encoding, see ArchiveBuilder
@@ -1231,7 +1232,7 @@ MapArchiveResult MetaspaceShared::map_archives(FileMapInfo* static_mapinfo, File
 //
 // If UseCompressedClassPointers=1, the range encompassing both spaces will be
 //  suitable to en/decode narrow Klass pointers: the base will be valid for
-//  encoding, the range [Base, End) not surpass KlassEncodingMetaspaceMax.
+//  encoding, the range [Base, End) and not surpass the max. range for that encoding.
 //
 // Return:
 //
