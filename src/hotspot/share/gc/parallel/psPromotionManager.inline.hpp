@@ -153,7 +153,7 @@ inline oop PSPromotionManager::copy_to_survivor_space(oop o) {
     // other thread.
     OrderAccess::acquire();
     // Return the already installed forwardee.
-    return m.forwardee();
+    return o->forwardee(m);
   }
 }
 
