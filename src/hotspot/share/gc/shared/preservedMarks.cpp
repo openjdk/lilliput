@@ -24,6 +24,7 @@
 
 #include "precompiled.hpp"
 #include "gc/shared/preservedMarks.inline.hpp"
+#include "gc/shared/slidingForwarding.inline.hpp"
 #include "gc/shared/workerThread.hpp"
 #include "gc/shared/workerUtils.hpp"
 #include "memory/allocation.inline.hpp"
@@ -42,8 +43,8 @@ void PreservedMarks::restore() {
 
 void PreservedMarks::adjust_preserved_mark(PreservedMark* elem) {
   oop obj = elem->get_oop();
-  if (obj->is_forwarded()) {
-    elem->set_oop(obj->forwardee());
+  if (SlidingForwarding::is_forwarded(obj)) {
+    elem->set_oop(SlidingForwarding::forwardee(obj));
   }
 }
 
