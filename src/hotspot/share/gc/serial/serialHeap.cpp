@@ -54,6 +54,7 @@
 #include "gc/shared/oopStorageParState.inline.hpp"
 #include "gc/shared/oopStorageSet.inline.hpp"
 #include "gc/shared/scavengableNMethods.hpp"
+#include "gc/shared/slidingForwarding.hpp"
 #include "gc/shared/space.hpp"
 #include "gc/shared/strongRootsScope.hpp"
 #include "gc/shared/suspendibleThreadSet.hpp"
@@ -200,6 +201,8 @@ jint SerialHeap::initialize() {
   _old_gen = new TenuredGeneration(old_rs, OldSize, MinOldSize, MaxOldSize, rem_set());
 
   GCInitLogger::print();
+
+  SlidingForwarding::initialize(_reserved, SpaceAlignment / HeapWordSize);
 
   return JNI_OK;
 }
