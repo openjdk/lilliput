@@ -36,8 +36,8 @@ inline Klass* CompressedKlassPointers::decode_raw(narrowKlass v) {
   return decode_raw(v, base(), shift());
 }
 
-inline Klass* CompressedKlassPointers::decode_raw(narrowKlass v, address narrow_base, int narrow_shift) {
-  return (Klass*)((uintptr_t)narrow_base +((uintptr_t)v << narrow_shift));
+inline Klass* CompressedKlassPointers::decode_raw(narrowKlass v, address base, int shift) {
+  return (Klass*)((uintptr_t)base +((uintptr_t)v << shift));
 }
 
 inline Klass* CompressedKlassPointers::decode_not_null(narrowKlass v) {
@@ -51,8 +51,8 @@ inline Klass* CompressedKlassPointers::decode(narrowKlass v) {
   return is_null(v) ? nullptr : decode_not_null(v);
 }
 
-inline narrowKlass CompressedKlassPointers::encode_raw(Klass* k, address narrow_base, int narrow_shift) {
-  return (narrowKlass)(pointer_delta(k, narrow_base, 1) >> narrow_shift);
+inline narrowKlass CompressedKlassPointers::encode_raw(Klass* k, address base, int shift) {
+  return (narrowKlass)(pointer_delta(k, base, 1) >> shift);
 }
 
 inline narrowKlass CompressedKlassPointers::encode_not_null(Klass* k) {
@@ -69,14 +69,14 @@ inline narrowKlass CompressedKlassPointers::encode(Klass* k) {
 }
 
 #ifdef ASSERT
-inline void CompressedKlassPointers::check_valid_klass(const Klass* k, address narrow_base, int narrow_shift) {
-  const int log_alignment = MAX2(3, narrow_shift); // always at least 64-bit aligned
+inline void CompressedKlassPointers::check_valid_klass(const Klass* k, address base, int shift) {
+  const int log_alignment = MAX2(3, shift); // always at least 64-bit aligned
   assert(is_aligned(k, nth_bit(log_alignment)), "Klass (" PTR_FORMAT ") not properly aligned to %zu",
-         p2i(k), nth_bit(narrow_shift));
-  const address encoding_end = narrow_base + nth_bit(narrow_klass_pointer_bits() + narrow_shift);
-  assert((address)k >= narrow_base && (address)k < encoding_end,
+         p2i(k), nth_bit(shift));
+  const address encoding_end = base + nth_bit(narrow_klass_pointer_bits() + shift);
+  assert((address)k >= base && (address)k < encoding_end,
          "Klass (" PTR_FORMAT ") falls outside of the valid encoding range [" PTR_FORMAT "-" PTR_FORMAT ")",
-         p2i(k), p2i(narrow_base), p2i(encoding_end));
+         p2i(k), p2i(base), p2i(encoding_end));
 }
 
 inline void CompressedKlassPointers::check_valid_klass(const Klass* k) {

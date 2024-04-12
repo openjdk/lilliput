@@ -160,18 +160,18 @@ public:
   static bool is_null(Klass* v)      { return v == nullptr; }
   static bool is_null(narrowKlass v) { return v == 0; }
 
-  static inline Klass* decode_raw(narrowKlass v, address narrow_base, int narrow_shift);
+  static inline Klass* decode_raw(narrowKlass v, address base, int shift);
   static inline Klass* decode_raw(narrowKlass v);
   static inline Klass* decode_not_null(narrowKlass v);
   static inline Klass* decode(narrowKlass v);
 
-  static inline narrowKlass encode_raw(Klass* k, address narrow_base, int narrow_shift);
+  static inline narrowKlass encode_raw(Klass* k, address base, int shift);
   static inline narrowKlass encode_not_null(Klass* k);
   static inline narrowKlass encode(Klass* k);
 
 #ifdef ASSERT
   // Given a Klass* k and an encoding (base, shift), check that k can be encoded
-  inline static void check_valid_klass(const Klass* k, address narrow_base, int narrow_shift);
+  inline static void check_valid_klass(const Klass* k, address base, int shift);
   // Given a Klass* k, check that k can be encoded with the current encoding
   inline static void check_valid_klass(const Klass* k);
   // Given a narrow Klass ID, check that it is valid according to current encoding
