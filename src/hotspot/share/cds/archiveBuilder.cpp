@@ -747,7 +747,7 @@ void ArchiveBuilder::make_klasses_shareable() {
       Klass* requested_k = to_requested(k);
       address narrow_klass_base = _requested_static_archive_bottom; // runtime encoding base == runtime mapping start
       const int narrow_klass_shift = precomputed_narrow_klass_shift();
-      narrowKlass nk = CompressedKlassPointers::encode_raw(requested_k, narrow_klass_base, narrow_klass_shift);
+      narrowKlass nk = CompressedKlassPointers::encode_not_null_without_asserts(requested_k, narrow_klass_base, narrow_klass_shift);
       k->set_prototype_header(markWord::prototype().set_narrow_klass(nk));
     }
 #endif //_LP64
@@ -860,7 +860,7 @@ narrowKlass ArchiveBuilder::get_requested_narrow_klass(Klass* k) {
   address narrow_klass_base = _requested_static_archive_bottom; // runtime encoding base == runtime mapping start
   // Note: use the "raw" version of encode that takes explicit narrow klass base and shift. Don't use any
   // of the variants that do sanity checks, nor any of those that use the current - dump - JVM's encoding setting.
-  return CompressedKlassPointers::encode_raw(requested_k, narrow_klass_base, narrow_klass_shift);
+  return CompressedKlassPointers::encode_not_null_without_asserts(requested_k, narrow_klass_base, narrow_klass_shift);
 }
 #endif // INCLUDE_CDS_JAVA_HEAP
 

@@ -158,7 +158,7 @@ Klass* oopDesc::klass_raw() const {
   if (UseCompactObjectHeaders) {
     return klass();
   } else if (UseCompressedClassPointers) {
-    return CompressedKlassPointers::decode_raw(_metadata._compressed_klass);
+    return CompressedKlassPointers::decode_not_null_without_asserts(_metadata._compressed_klass);
   } else {
     return _metadata._klass;
   }

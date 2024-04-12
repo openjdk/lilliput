@@ -160,12 +160,12 @@ public:
   static bool is_null(Klass* v)      { return v == nullptr; }
   static bool is_null(narrowKlass v) { return v == 0; }
 
-  static inline Klass* decode_raw(narrowKlass v, address base, int shift);
-  static inline Klass* decode_raw(narrowKlass v);
+  static inline Klass* decode_not_null_without_asserts(narrowKlass v, address base, int shift);
+  static inline Klass* decode_not_null_without_asserts(narrowKlass v);
   static inline Klass* decode_not_null(narrowKlass v);
   static inline Klass* decode(narrowKlass v);
 
-  static inline narrowKlass encode_raw(Klass* k, address base, int shift);
+  static inline narrowKlass encode_not_null_without_asserts(Klass* k, address base, int shift);
   static inline narrowKlass encode_not_null(Klass* k);
   static inline narrowKlass encode(Klass* k);
 

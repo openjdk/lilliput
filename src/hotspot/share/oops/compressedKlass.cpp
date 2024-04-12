@@ -114,17 +114,17 @@ void CompressedKlassPointers::sanity_check_after_initialization() {
   ASSERT_HERE_2(_lowest_valid_narrow_klass_id > 0, "Null is not a valid narrowKlass");
   ASSERT_HERE(_highest_valid_narrow_klass_id > _lowest_valid_narrow_klass_id);
 
-  Klass* k1 = decode_raw(_lowest_valid_narrow_klass_id, _base, _shift);
+  Klass* k1 = decode_not_null_without_asserts(_lowest_valid_narrow_klass_id, _base, _shift);
   ASSERT_HERE_2((address)k1 == _klass_range_start + klab, "Not lowest");
-  narrowKlass nk1 = encode_raw(k1, _base, _shift);
+  narrowKlass nk1 = encode_not_null_without_asserts(k1, _base, _shift);
   ASSERT_HERE_2(nk1 == _lowest_valid_narrow_klass_id, "not reversible");
 
-  Klass* k2 = decode_raw(_highest_valid_narrow_klass_id, _base, _shift);
+  Klass* k2 = decode_not_null_without_asserts(_highest_valid_narrow_klass_id, _base, _shift);
   // _highest_valid_narrow_klass_id must be decoded to the highest theoretically possible
   // valid Klass* position in range, if we assume minimal Klass size
   ASSERT_HERE((address)k2 < _klass_range_end);
   ASSERT_HERE_2(align_up(((address)k2 + sizeof(Klass)), klab) >= _klass_range_end, "Not highest");
-  narrowKlass nk2 = encode_raw(k2, _base, _shift);
+  narrowKlass nk2 = encode_not_null_without_asserts(k2, _base, _shift);
   ASSERT_HERE_2(nk2 == _highest_valid_narrow_klass_id, "not reversible");
 
 #ifdef AARCH64

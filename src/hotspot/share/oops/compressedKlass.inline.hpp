@@ -32,18 +32,18 @@
 #include "utilities/align.hpp"
 #include "utilities/globalDefinitions.hpp"
 
-inline Klass* CompressedKlassPointers::decode_raw(narrowKlass v) {
-  return decode_raw(v, base(), shift());
+inline Klass* CompressedKlassPointers::decode_not_null_without_asserts(narrowKlass v) {
+  return decode_not_null_without_asserts(v, base(), shift());
 }
 
-inline Klass* CompressedKlassPointers::decode_raw(narrowKlass v, address base, int shift) {
+inline Klass* CompressedKlassPointers::decode_not_null_without_asserts(narrowKlass v, address base, int shift) {
   return (Klass*)((uintptr_t)base +((uintptr_t)v << shift));
 }
 
 inline Klass* CompressedKlassPointers::decode_not_null(narrowKlass v) {
   assert(!is_null(v), "narrow klass value is null");
   DEBUG_ONLY(check_valid_narrow_klass_id(v);)
-  Klass* k = decode_raw(v);
+  Klass* k = decode_not_null_without_asserts(v);
   DEBUG_ONLY(check_valid_klass(k);)
   return k;
 }
@@ -51,16 +51,16 @@ inline Klass* CompressedKlassPointers::decode(narrowKlass v) {
   return is_null(v) ? nullptr : decode_not_null(v);
 }
 
-inline narrowKlass CompressedKlassPointers::encode_raw(Klass* k, address base, int shift) {
+inline narrowKlass CompressedKlassPointers::encode_not_null_without_asserts(Klass* k, address base, int shift) {
   return (narrowKlass)(pointer_delta(k, base, 1) >> shift);
 }
 
 inline narrowKlass CompressedKlassPointers::encode_not_null(Klass* k) {
   assert(!is_null(k), "klass value can never be zero");
   DEBUG_ONLY(check_valid_klass(k);)
-  narrowKlass nk = encode_raw(k, base(), shift());
+  narrowKlass nk = encode_not_null_without_asserts(k, base(), shift());
   DEBUG_ONLY(check_valid_narrow_klass_id(nk);)
-  assert(decode_raw(nk, base(), shift()) == k, "reversibility");
+  assert(decode_not_null_without_asserts(nk, base(), shift()) == k, "reversibility");
   return nk;
 }
 

@@ -172,7 +172,7 @@ void* oopDesc::load_klass_raw(oop obj) {
   } else if (UseCompressedClassPointers) {
     narrowKlass narrow_klass = obj->_metadata._compressed_klass;
     if (narrow_klass == 0) return nullptr;
-    return (void*)CompressedKlassPointers::decode_raw(narrow_klass);
+    return (void*)CompressedKlassPointers::decode_not_null_without_asserts(narrow_klass);
   } else {
     return obj->_metadata._klass;
   }
