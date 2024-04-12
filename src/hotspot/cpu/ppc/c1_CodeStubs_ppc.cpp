@@ -298,7 +298,6 @@ void MonitorExitStub::emit_code(LIR_Assembler* ce) {
   __ b(_continuation);
 }
 
-
 // Implementation of patching:
 // - Copy the code at given offset to an inlined buffer (first the bytes, then the number of bytes).
 // - Replace original code with a call to the stub.
