@@ -149,11 +149,13 @@ public class TestMulAddS2I {
     @Test
     @IR(applyIfCPUFeature = {"sse2", "true"},
         applyIfPlatform = {"64-bit", "true"},
+        applyIf = { "UseCompactObjectHeaders", "false" },
         counts = {IRNode.MUL_ADD_S2I, "> 0", IRNode.MUL_ADD_VS2VI, "> 0"})
     @IR(applyIfCPUFeature = {"asimd", "true"},
-        applyIf = {"MaxVectorSize", "16"}, // AD file requires vector_length = 16
+        applyIfAnd = {"MaxVectorSize", "16", "UseCompactObjectHeaders", "false" }, // AD file requires vector_length = 16
         counts = {IRNode.MUL_ADD_S2I, "> 0", IRNode.MUL_ADD_VS2VI, "> 0"})
     @IR(applyIfCPUFeature = {"avx512_vnni", "true"},
+        applyIf = { "UseCompactObjectHeaders", "false" },
         counts = {IRNode.MUL_ADD_S2I, "> 0", IRNode.MUL_ADD_VS2VI_VNNI, "> 0"})
     public static int[] testd() {
         int[] out = ioutArr;
@@ -168,11 +170,13 @@ public class TestMulAddS2I {
     @Test
     @IR(applyIfCPUFeature = {"sse2", "true"},
         applyIfPlatform = {"64-bit", "true"},
+        applyIf = { "UseCompactObjectHeaders", "false" },
         counts = {IRNode.MUL_ADD_S2I, "> 0", IRNode.MUL_ADD_VS2VI, "> 0"})
     @IR(applyIfCPUFeature = {"asimd", "true"},
-        applyIf = {"MaxVectorSize", "16"}, // AD file requires vector_length = 16
+        applyIfAnd = {"MaxVectorSize", "16", "UseCompactObjectHeaders", "false" }, // AD file requires vector_length = 16
         counts = {IRNode.MUL_ADD_S2I, "> 0", IRNode.MUL_ADD_VS2VI, "> 0"})
     @IR(applyIfCPUFeature = {"avx512_vnni", "true"},
+        applyIf = { "UseCompactObjectHeaders", "false" },
         counts = {IRNode.MUL_ADD_S2I, "> 0", IRNode.MUL_ADD_VS2VI_VNNI, "> 0"})
     public static int[] teste() {
         int[] out = ioutArr;
@@ -187,11 +191,13 @@ public class TestMulAddS2I {
     @Test
     @IR(applyIfCPUFeature = {"sse2", "true"},
         applyIfPlatform = {"64-bit", "true"},
+        applyIf = { "UseCompactObjectHeaders", "false" },
         counts = {IRNode.MUL_ADD_S2I, "> 0", IRNode.MUL_ADD_VS2VI, "> 0"})
     @IR(applyIfCPUFeature = {"asimd", "true"},
-        applyIf = {"MaxVectorSize", "16"}, // AD file requires vector_length = 16
+        applyIfAnd = {"MaxVectorSize", "16", "UseCompactObjectHeaders", "false" }, // AD file requires vector_length = 16
         counts = {IRNode.MUL_ADD_S2I, "> 0", IRNode.MUL_ADD_VS2VI, "> 0"})
     @IR(applyIfCPUFeature = {"avx512_vnni", "true"},
+        applyIf = { "UseCompactObjectHeaders", "false" },
         counts = {IRNode.MUL_ADD_S2I, "> 0", IRNode.MUL_ADD_VS2VI_VNNI, "> 0"})
     public static int[] testf() {
         int[] out = ioutArr;
@@ -206,11 +212,13 @@ public class TestMulAddS2I {
     @Test
     @IR(applyIfCPUFeature = {"sse2", "true"},
         applyIfPlatform = {"64-bit", "true"},
+        applyIf = { "UseCompactObjectHeaders", "false" },
         counts = {IRNode.MUL_ADD_S2I, "> 0", IRNode.MUL_ADD_VS2VI, "> 0"})
     @IR(applyIfCPUFeature = {"asimd", "true"},
-        applyIf = {"MaxVectorSize", "16"}, // AD file requires vector_length = 16
+        applyIfAnd = {"MaxVectorSize", "16", "UseCompactObjectHeaders", "false" }, // AD file requires vector_length = 16
         counts = {IRNode.MUL_ADD_S2I, "> 0", IRNode.MUL_ADD_VS2VI, "> 0"})
     @IR(applyIfCPUFeature = {"avx512_vnni", "true"},
+        applyIf = { "UseCompactObjectHeaders", "false" },
         counts = {IRNode.MUL_ADD_S2I, "> 0", IRNode.MUL_ADD_VS2VI_VNNI, "> 0"})
     public static int[] testg() {
         int[] out = ioutArr;
@@ -225,11 +233,13 @@ public class TestMulAddS2I {
     @Test
     @IR(applyIfCPUFeature = {"sse2", "true"},
         applyIfPlatform = {"64-bit", "true"},
+        applyIf = { "UseCompactObjectHeaders", "false" },
         counts = {IRNode.MUL_ADD_S2I, "> 0", IRNode.MUL_ADD_VS2VI, "> 0"})
     @IR(applyIfCPUFeature = {"asimd", "true"},
-        applyIf = {"MaxVectorSize", "16"}, // AD file requires vector_length = 16
+        applyIfAnd = {"MaxVectorSize", "16", "UseCompactObjectHeaders", "false" }, // AD file requires vector_length = 16
         counts = {IRNode.MUL_ADD_S2I, "> 0", IRNode.MUL_ADD_VS2VI, "> 0"})
     @IR(applyIfCPUFeature = {"avx512_vnni", "true"},
+        applyIf = { "UseCompactObjectHeaders", "false" },
         counts = {IRNode.MUL_ADD_S2I, "> 0", IRNode.MUL_ADD_VS2VI_VNNI, "> 0"})
     public static int[] testh() {
         int[] out = ioutArr;
