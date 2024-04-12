@@ -154,7 +154,8 @@ bool oopDesc::is_typeArray_noinline()   const { return is_typeArray();   }
 
 bool oopDesc::has_klass_gap() {
   // Only has a klass gap when compressed class pointers are used.
-  return UseCompressedClassPointers;
+  // Except when using compact headers.
+  return UseCompressedClassPointers && !UseCompactObjectHeaders;
 }
 
 #if INCLUDE_CDS_JAVA_HEAP

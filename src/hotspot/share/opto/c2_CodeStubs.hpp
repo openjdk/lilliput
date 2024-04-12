@@ -132,7 +132,7 @@ public:
   int max_size() const;
   void emit(C2_MacroAssembler& masm);
 };
-#endif
+#endif // _LP64
 
 //-----------------------------C2GeneralStub-----------------------------------
 // A generalized stub that can be used to implement an arbitrary stub in a
