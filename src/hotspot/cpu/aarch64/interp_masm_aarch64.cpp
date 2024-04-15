@@ -758,16 +758,9 @@ void InterpreterMacroAssembler::lock_object(Register lock_reg)
     bind(slow_case);
 
     // Call the runtime routine for slow case
-    if (LockingMode == LM_LIGHTWEIGHT) {
-      // TODO[OMWorld]: Clean this monitorenter_obj up. We still want to use the lock_reg for lightweight
-      call_VM(noreg,
-              CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorenter_obj),
-              obj_reg);
-    } else {
-      call_VM(noreg,
-              CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorenter),
-              lock_reg);
-    }
+    call_VM(noreg,
+            CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorenter),
+            lock_reg);
     b(done);
 
     bind(count);
