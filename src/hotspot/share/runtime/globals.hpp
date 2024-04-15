@@ -1980,6 +1980,30 @@ const int ObjectAlignmentInBytes = 8;
           "2: monitors & new lightweight locking (LM_LIGHTWEIGHT, default)") \
           range(0, 2)                                                       \
                                                                             \
+  product(bool, OMUseC2Cache, true, "")                                     \
+                                                                            \
+  product(bool, OMC2UnrollCacheLookupLoopTail, true, "")                    \
+                                                                            \
+  product(int, OMC2UnrollCacheEntries, 0, "")                               \
+          range(0, OMCache::CAPACITY)                                       \
+                                                                            \
+  product(int, OMCacheSize, 8, "")                                          \
+          range(0, OMCache::CAPACITY)                                       \
+                                                                            \
+  product(bool, OMShrinkCHT, false, "")                                     \
+                                                                            \
+  product(int, OMSpins, 20, "")                                             \
+                                                                            \
+  product(int, OMYields, 5, "")                                             \
+                                                                            \
+  product(bool, OMDeflateAfterWait, false, "Currently broken due to deflation changes") \
+                                                                            \
+  product(bool, OMDeflateBeforeExit, false, "Currently broken due to deflation changes")\
+                                                                            \
+  product(bool, OMCacheHitRate, false, "")                                  \
+                                                                            \
+  product(bool, OMRecursiveFastPath, true, "Inflated recursion check first")\
+                                                                            \
   product(uint, TrimNativeHeapInterval, 0,                                  \
           "Interval, in ms, at which the JVM will trim the native heap if " \
           "the platform supports that. Lower values will reclaim memory "   \

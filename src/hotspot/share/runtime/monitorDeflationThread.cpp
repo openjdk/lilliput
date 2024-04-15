@@ -32,9 +32,11 @@
 #include "runtime/interfaceSupport.inline.hpp"
 #include "runtime/java.hpp"
 #include "runtime/javaCalls.hpp"
+#include "runtime/lightweightSynchronizer.hpp"
 #include "runtime/monitorDeflationThread.hpp"
 #include "runtime/mutexLocker.hpp"
 #include "runtime/synchronizer.hpp"
+#include "utilities/checkedCast.hpp"
 
 void MonitorDeflationThread::initialize() {
   EXCEPTION_MARK;
@@ -62,27 +64,31 @@ void MonitorDeflationThread::monitor_deflation_thread_entry(JavaThread* jt, TRAP
   //      Backup deflation heuristic checks the conditions at this interval.
   //      See is_async_deflation_needed().
   //
-  intx wait_time = max_intx;
+  intx deflation_interval = max_intx;
   if (GuaranteedSafepointInterval > 0) {
-    wait_time = MIN2(wait_time, GuaranteedSafepointInterval);
+    deflation_interval = MIN2(deflation_interval, GuaranteedSafepointInterval);
   }
   if (AsyncDeflationInterval > 0) {
-    wait_time = MIN2(wait_time, AsyncDeflationInterval);
+    deflation_interval = MIN2(deflation_interval, AsyncDeflationInterval);
   }
   if (GuaranteedAsyncDeflationInterval > 0) {
-    wait_time = MIN2(wait_time, GuaranteedAsyncDeflationInterval);
+    deflation_interval = MIN2(deflation_interval, GuaranteedAsyncDeflationInterval);
   }
 
   // If all options are disabled, then wait time is not defined, and the deflation
   // is effectively disabled. In that case, exit the thread immediately after printing
   // a warning message.
-  if (wait_time == max_intx) {
+  if (deflation_interval == max_intx) {
     warning("Async deflation is disabled");
+    LightweightSynchronizer::set_table_max(jt);
     return;
   }
 
+    intx time_to_wait = deflation_interval;
   while (true) {
+    bool resize = false;
     {
+      // TODO[OMWorld]: This is all being rewritten.
       // Need state transition ThreadBlockInVM so that this thread
       // will be handled by safepoint correctly when this thread is
       // notified at a safepoint.
@@ -92,9 +98,39 @@ void MonitorDeflationThread::monitor_deflation_thread_entry(JavaThread* jt, TRAP
       MonitorLocker ml(MonitorDeflation_lock, Mutex::_no_safepoint_check_flag);
       while (!ObjectSynchronizer::is_async_deflation_needed()) {
         // Wait until notified that there is some work to do.
-        ml.wait(wait_time);
+        ml.wait(time_to_wait);
+
+        // Handle LightweightSynchronizer Hash Table Resizing
+        if (LightweightSynchronizer::needs_resize(jt)) {
+          resize = true;
+          break;
+        }
       }
     }
+
+    if (resize) {
+      // TODO[OMWorld]: Recheck this logic, especially !resize_successful and LightweightSynchronizer::needs_resize when is_max_size_reached == true
+      const intx time_since_last_deflation = checked_cast<intx>(ObjectSynchronizer::time_since_last_async_deflation_ms());
+      const bool resize_successful = LightweightSynchronizer::resize_table(jt);
+      const bool deflation_interval_passed = time_since_last_deflation >= deflation_interval;
+      const bool deflation_needed = deflation_interval_passed && ObjectSynchronizer::is_async_deflation_needed();
+
+      if (!resize_successful) {
+        // Resize failed, try again in 250 ms
+        time_to_wait = 250;
+      } else if (deflation_interval_passed) {
+        time_to_wait = deflation_interval;
+      } else {
+        time_to_wait = deflation_interval - time_since_last_deflation;
+      }
+
+      if (!deflation_needed) {
+        continue;
+      }
+    } else {
+      time_to_wait = deflation_interval;
+    }
+
 
     (void)ObjectSynchronizer::deflate_idle_monitors();
 

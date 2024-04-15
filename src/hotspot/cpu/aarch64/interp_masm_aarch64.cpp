@@ -46,6 +46,7 @@
 #include "runtime/javaThread.hpp"
 #include "runtime/safepointMechanism.hpp"
 #include "runtime/sharedRuntime.hpp"
+#include "utilities/globalDefinitions.hpp"
 #include "utilities/powerOfTwo.hpp"
 
 void InterpreterMacroAssembler::narrow(Register result) {
@@ -701,7 +702,7 @@ void InterpreterMacroAssembler::lock_object(Register lock_reg)
     }
 
     if (LockingMode == LM_LIGHTWEIGHT) {
-      lightweight_lock(obj_reg, tmp, tmp2, tmp3, slow_case);
+      lightweight_lock(lock_reg, obj_reg, tmp, tmp2, tmp3, slow_case);
       b(count);
     } else if (LockingMode == LM_LEGACY) {
       // Load (object->mark() | 1) into swap_reg
@@ -758,6 +759,7 @@ void InterpreterMacroAssembler::lock_object(Register lock_reg)
 
     // Call the runtime routine for slow case
     if (LockingMode == LM_LIGHTWEIGHT) {
+      // TODO[OMWorld]: Clean this monitorenter_obj up. We still want to use the lock_reg for lightweight
       call_VM(noreg,
               CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorenter_obj),
               obj_reg);
@@ -804,6 +806,7 @@ void InterpreterMacroAssembler::unlock_object(Register lock_reg)
     save_bcp(); // Save in case of exception
 
     if (LockingMode != LM_LIGHTWEIGHT) {
+      // TODO[OMWorld]: Cleanup lock_reg usage for placeholder
       // Convert from BasicObjectLock structure to object and BasicLock
       // structure Store the BasicLock address into %r0
       lea(swap_reg, Address(lock_reg, BasicObjectLock::lock_offset()));

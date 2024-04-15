@@ -29,6 +29,7 @@
 #include "oops/markWord.hpp"
 #include "runtime/basicLock.hpp"
 #include "runtime/handles.hpp"
+#include "runtime/javaThread.hpp"
 #include "utilities/resourceHash.hpp"
 
 template <typename T> class GrowableArray;
@@ -133,6 +134,9 @@ public:
   static void inflate_helper(oop obj);
   static const char* inflate_cause_name(const InflateCause cause);
 
+  static ObjectMonitor* read_monitor(markWord mark);
+  static ObjectMonitor* read_monitor(Thread* current, oop obj, markWord mark);
+
   // Returns the identity hash value for an oop
   // NOTE: It may cause monitor inflation
   static intptr_t FastHashCode(Thread* current, oop obj);
@@ -194,6 +198,9 @@ public:
 
  private:
   friend class SynchronizerTest;
+  friend class LightweightSynchronizer;
+
+  static intptr_t get_next_hash(Thread* current, oop obj);
 
   static MonitorList _in_use_list;
   static volatile bool _is_async_deflation_requested;
