@@ -10271,9 +10271,9 @@ void MacroAssembler::check_stack_alignment(Register sp, const char* msg, unsigne
 // reg_rax: rax
 // thread: the thread which attempts to lock obj
 // tmp: a temporary register
-void MacroAssembler::lightweight_lock(Register obj, Register reg_rax, Register thread, Register tmp, Label& slow) {
+void MacroAssembler::lightweight_lock(Register basic_lock, Register obj, Register reg_rax, Register thread, Register tmp, Label& slow) {
   assert(reg_rax == rax, "");
-  assert_different_registers(obj, reg_rax, thread, tmp);
+  assert_different_registers(basic_lock, obj, reg_rax, thread, tmp);
 
   Label push;
   const Register top = tmp;
@@ -10281,6 +10281,9 @@ void MacroAssembler::lightweight_lock(Register obj, Register reg_rax, Register t
   // Preload the markWord. It is important that this is the first
   // instruction emitted as it is part of C1's null check semantics.
   movptr(reg_rax, Address(obj, oopDesc::mark_offset_in_bytes()));
+
+  // Clear cache in case fast locking succeeds.
+  movptr(Address(basic_lock, BasicObjectLock::lock_offset() + in_ByteSize((BasicLock::object_monitor_cache_offset_in_bytes()))), 0);
 
   // Load top.
   movl(top, Address(thread, JavaThread::lock_stack_top_offset()));
@@ -10325,8 +10328,7 @@ void MacroAssembler::lightweight_lock(Register obj, Register reg_rax, Register t
 //              availiability.
 void MacroAssembler::lightweight_unlock(Register obj, Register reg_rax, Register thread, Register tmp, Label& slow) {
   assert(reg_rax == rax, "");
-  assert_different_registers(obj, reg_rax, tmp);
-  LP64_ONLY(assert_different_registers(obj, reg_rax, thread, tmp);)
+  assert_different_registers(obj, reg_rax, thread, tmp);
 
   Label unlocked, push_and_slow;
   const Register top = tmp;
@@ -10366,10 +10368,6 @@ void MacroAssembler::lightweight_unlock(Register obj, Register reg_rax, Register
 
   bind(push_and_slow);
   // Restore lock-stack and handle the unlock in runtime.
-  if (thread == reg_rax) {
-    // On x86_32 we may lose the thread.
-    get_thread(thread);
-  }
 #ifdef ASSERT
   movl(top, Address(thread, JavaThread::lock_stack_top_offset()));
   movptr(Address(thread, top), obj);

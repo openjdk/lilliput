@@ -98,6 +98,7 @@
 #include "utilities/defaultStream.hpp"
 #include "utilities/dtrace.hpp"
 #include "utilities/events.hpp"
+#include "utilities/globalDefinitions.hpp"
 #include "utilities/macros.hpp"
 #include "utilities/preserveException.hpp"
 #include "utilities/spinYield.hpp"
@@ -504,7 +505,8 @@ JavaThread::JavaThread() :
 
   _SleepEvent(ParkEvent::Allocate(this)),
 
-  _lock_stack(this) {
+  _lock_stack(this),
+  _om_cache(this) {
   set_jni_functions(jni_functions());
 
 #if INCLUDE_JVMCI
@@ -804,6 +806,8 @@ void JavaThread::exit(bool destroy_vm, ExitType exit_type) {
   elapsedTimer _timer_exit_phase2;
   elapsedTimer _timer_exit_phase3;
   elapsedTimer _timer_exit_phase4;
+
+  om_clear_monitor_cache();
 
   if (log_is_enabled(Debug, os, thread, timer)) {
     _timer_exit_phase1.start();

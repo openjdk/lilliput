@@ -575,7 +575,7 @@ static void report_vm_version(outputStream* st, char* buf, int buflen) {
                 buf, jdk_debug_level, runtime_version);
 
    // This is the long version with some default settings added
-   st->print_cr("# Java VM: %s%s%s (%s%s, %s%s%s%s%s%s, %s, %s)",
+   st->print_cr("# Java VM: %s%s%s (%s%s, %s%s%s%s%s%s%s, %s, %s)",
                  VM_Version::vm_name(),
                 (*vendor_version != '\0') ? " " : "", vendor_version,
                  jdk_debug_level,
@@ -590,6 +590,9 @@ static void report_vm_version(outputStream* st, char* buf, int buflen) {
 #endif
                  UseCompressedOops ? ", compressed oops" : "",
                  UseCompressedClassPointers ? ", compressed class ptrs" : "",
+                 LockingMode == LM_MONITOR ? ", lm_monitors" :
+                 LockingMode == LM_LEGACY ? ", lm_legacy" :
+                 LockingMode == LM_LIGHTWEIGHT ? ", lm_lightweight" : "",
                  GCConfig::hs_err_name(),
                  VM_Version::vm_platform_string()
                );
@@ -1116,7 +1119,7 @@ void VMError::report(outputStream* st, bool _verbose) {
     print_stack_location(st, _context, continuation);
     st->cr();
 
-  STEP_IF("printing lock stack", _verbose && _thread != nullptr && _thread->is_Java_thread() && LockingMode == LM_LIGHTWEIGHT);
+  STEP_IF("printing lock stack", _verbose && _thread != nullptr && _thread->is_Java_thread() && (LockingMode == LM_LIGHTWEIGHT));
     st->print_cr("Lock stack of current Java thread (top to bottom):");
     JavaThread::cast(_thread)->lock_stack().print_on(st);
     st->cr();
