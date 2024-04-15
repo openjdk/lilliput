@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2024, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -19,28 +19,21 @@
  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
  * or visit www.oracle.com if you need additional information or have any
  * questions.
+ *
  */
 
-#include "precompiled.hpp"
-#include "runtime/objectMonitor.hpp"
-#include "runtime/vm_version.hpp"
-#include "unittest.hpp"
+#include "runtime/synchronizer.hpp"
 
-TEST_VM(ObjectMonitor, sanity) {
-  uint cache_line_size = VM_Version::L1_data_cache_line_size();
+#include "runtime/lightweightSynchronizer.hpp"
 
-  if (cache_line_size != 0) {
+ObjectMonitor* ObjectSynchronizer::read_monitor(markWord mark) {
+  return mark.monitor();
+}
 
-    EXPECT_EQ(in_bytes(ObjectMonitor::metadata_offset()), 0)
-         << "_metadata at a non 0 offset. metadata_offset = "
-         << in_bytes(ObjectMonitor::metadata_offset());
-
-    EXPECT_GE((size_t) in_bytes(ObjectMonitor::owner_offset()), cache_line_size)
-         << "the _metadata and _owner fields are closer "
-         << "than a cache line which permits false sharing.";
-
-    EXPECT_GE((size_t) in_bytes(ObjectMonitor::recursions_offset() - ObjectMonitor::owner_offset()), cache_line_size)
-         << "the _owner and _recursions fields are closer "
-         << "than a cache line which permits false sharing.";
+ObjectMonitor* ObjectSynchronizer::read_monitor(Thread* current, oop obj, markWord mark) {
+  if (!UseObjectMonitorTable) {
+    return read_monitor(mark);
+  } else {
+    return LightweightSynchronizer::get_monitor_from_table(current, obj);
   }
 }
