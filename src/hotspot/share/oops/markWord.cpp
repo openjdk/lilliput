@@ -67,7 +67,8 @@ void markWord::print_on(outputStream* st, bool print_monitor_info) const {
   } else if (has_monitor()) {  // last bits = 10
     // have to check has_monitor() before is_locked()
     st->print(" monitor(" INTPTR_FORMAT ")=", value());
-    if (print_monitor_info) {
+    if (print_monitor_info && LockingMode != LM_LIGHTWEIGHT) {
+      // TODO[OMWorld]: Cleanup, even if the monitor read is racy, something should be printed.
       ObjectMonitor* mon = monitor();
       if (mon == nullptr) {
         st->print("null (this should never be seen!)");
