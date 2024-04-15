@@ -40,6 +40,7 @@
 #include "utilities/globalDefinitions.hpp"
 #include "utilities/growableArray.hpp"
 #include "utilities/ostream.hpp"
+#include "utilities/sizes.hpp"
 
 #include <type_traits>
 
@@ -138,18 +139,24 @@ void LockStack::verify_consistent_lock_order(GrowableArray<oop>& lock_order, boo
     lock_index = lock_order.length();
   }
 
+  JavaThread* thread = get_thread();
+  Thread* current = Thread::current();
   while (lock_index-- > 0) {
     const oop obj = lock_order.at(lock_index);
     const markWord mark = obj->mark_acquire();
     assert(obj->is_locked(), "must be locked");
+    ObjectMonitor* monitor = nullptr;
+    if (mark.has_monitor()) {
+      monitor = LightweightSynchronizer::read_monitor(current, obj);
+    }
     if (top_index > 0 && obj == _base[top_index - 1]) {
-      assert(mark.is_fast_locked() || mark.monitor()->is_owner_anonymous(),
+      assert(mark.is_fast_locked() || monitor->is_owner_anonymous(),
              "must be fast_locked or inflated by other thread");
       top_index--;
     } else {
       assert(!mark.is_fast_locked(), "must be inflated");
-      assert(mark.monitor()->owner_raw() == get_thread() ||
-             (!leaf_frame && get_thread()->current_waiting_monitor() == mark.monitor()),
+      assert(monitor->owner_raw() == thread ||
+             (!leaf_frame && thread->current_waiting_monitor() == monitor),
              "must be owned by (or waited on by) thread");
       assert(!contains(obj), "must not be on lock_stack");
     }
@@ -167,4 +174,12 @@ void LockStack::print_on(outputStream* st) {
       st->print_cr("not an oop: " PTR_FORMAT, p2i(o));
     }
   }
+}
+
+OMCache::OMCache(JavaThread* jt) : _entries() {
+  STATIC_ASSERT(std::is_standard_layout<OMCache>::value);
+  STATIC_ASSERT(std::is_standard_layout<OMCache::OMCacheEntry>::value);
+  STATIC_ASSERT(offsetof(OMCache, _null_sentinel) == offsetof(OMCache, _entries) +
+                offsetof(OMCache::OMCacheEntry, _oop) +
+                OMCache::CAPACITY * in_bytes(oop_to_oop_difference()));
 }

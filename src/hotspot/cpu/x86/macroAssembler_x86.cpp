@@ -9927,7 +9927,10 @@ void MacroAssembler::check_stack_alignment(Register sp, const char* msg, unsigne
 // reg_rax: rax
 // thread: the thread which attempts to lock obj
 // tmp: a temporary register
-void MacroAssembler::lightweight_lock(Register obj, Register reg_rax, Register thread, Register tmp, Label& slow) {
+//
+// x86_32 Note: basic_lock and thread may alias each other due to limited register
+//              availiability.
+void MacroAssembler::lightweight_lock(Register basic_lock, Register obj, Register reg_rax, Register thread, Register tmp, Label& slow) {
   assert(reg_rax == rax, "");
   assert_different_registers(obj, reg_rax, thread, tmp);
 
@@ -9938,6 +9941,13 @@ void MacroAssembler::lightweight_lock(Register obj, Register reg_rax, Register t
   // instruction emitted as it is part of C1's null check semantics.
   movptr(reg_rax, Address(obj, oopDesc::mark_offset_in_bytes()));
 
+  movptr(Address(basic_lock, BasicObjectLock::lock_offset() + in_ByteSize((BasicLock::object_monitor_cache_offset_in_bytes()))), 0);
+
+#ifndef _LP64
+  if (thread == basic_lock) {
+    get_thread(thread);
+  }
+#endif // !_LP64
   // Load top.
   movl(top, Address(thread, JavaThread::lock_stack_top_offset()));
 
