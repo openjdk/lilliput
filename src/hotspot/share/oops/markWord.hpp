@@ -112,23 +112,15 @@ class markWord {
   static const int self_fwd_bits                  = 1;
   static const int max_hash_bits                  = BitsPerWord - age_bits - lock_bits - self_fwd_bits;
   static const int hash_bits                      = max_hash_bits > 31 ? 31 : max_hash_bits;
-  static const int hash_bits_compact              = max_hash_bits > 25 ? 25 : max_hash_bits;
+  static const int hash_bits_compact              = hash_bits;
   // Used only without compact headers.
   static const int unused_gap_bits                = LP64_ONLY(1) NOT_LP64(0);
-#ifdef _LP64
-  // Used only with compact headers.
-  static const int klass_bits                     = 32;
-#endif
 
   static const int lock_shift                     = 0;
   static const int self_fwd_shift                 = lock_shift + lock_bits;
   static const int age_shift                      = self_fwd_shift + self_fwd_bits;
   static const int hash_shift                     = age_shift + age_bits + unused_gap_bits;
-  static const int hash_shift_compact             = age_shift + age_bits;
-#ifdef _LP64
-  // Used only with compact headers.
-  static const int klass_shift                    = hash_shift_compact + hash_bits_compact;
-#endif
+  static const int hash_shift_compact             = 11;
 
   static const uintptr_t lock_mask                = right_n_bits(lock_bits);
   static const uintptr_t lock_mask_in_place       = lock_mask << lock_shift;
@@ -140,10 +132,25 @@ class markWord {
   static const uintptr_t hash_mask_in_place       = hash_mask << hash_shift;
   static const uintptr_t hash_mask_compact        = right_n_bits(hash_bits_compact);
   static const uintptr_t hash_mask_compact_in_place = hash_mask_compact << hash_shift_compact;
+
 #ifdef _LP64
-  // Used only with compact headers.
-  static const uintptr_t klass_mask               = right_n_bits(klass_bits);
-  static const uintptr_t klass_mask_in_place      = klass_mask << klass_shift;
+  // Used only with compact headers:
+  // We store nKlass in the upper 22 bits of the markword. When extracting, we need to read the upper
+  // 32 bits and rightshift by the lower 10 foreign bits.
+
+  // These are for loading the nKlass with a 32-bit load and subsequent masking of the lower
+  // shadow bits
+  static constexpr int klass_load_shift           = 32;
+  static constexpr int klass_load_bits            = 32;
+  static constexpr int klass_shadow_bits          = 10;
+  static constexpr uintptr_t klass_shadow_mask    = right_n_bits(klass_shadow_bits);
+  static constexpr uintptr_t klass_shadow_mask_inplace  = klass_shadow_mask << klass_load_shift;
+
+  // These are for bit-precise extraction of the nKlass from the 64-bit Markword
+  static constexpr int klass_shift                = 42;
+  static constexpr int klass_bits                 = 22;
+  static constexpr uintptr_t klass_mask           = right_n_bits(klass_bits);
+  static constexpr uintptr_t klass_mask_in_place  = klass_mask << klass_shift;
 #endif
 
 

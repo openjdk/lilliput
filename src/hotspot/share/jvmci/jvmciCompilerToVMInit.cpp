@@ -177,8 +177,14 @@ void CompilerToVM::Data::initialize(JVMCI_TRAPS) {
   Universe_base_vtable_size = Universe::base_vtable_size();
   Universe_narrow_oop_base = CompressedOops::base();
   Universe_narrow_oop_shift = CompressedOops::shift();
-  Universe_narrow_klass_base = CompressedKlassPointers::base();
-  Universe_narrow_klass_shift = CompressedKlassPointers::shift();
+  if (UseCompressedClassPointers) {
+    Universe_narrow_klass_base = CompressedKlassPointers::base();
+    Universe_narrow_klass_shift = CompressedKlassPointers::shift();
+  } else {
+    // TODO: Do we need to set these when running without compressed class pointers?
+    Universe_narrow_klass_base = 0;
+    Universe_narrow_klass_shift = 0;
+  }
   Universe_non_oop_bits = Universe::non_oop_word();
   Universe_verify_oop_mask = Universe::verify_oop_mask();
   Universe_verify_oop_bits = Universe::verify_oop_bits();
