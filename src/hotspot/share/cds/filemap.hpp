@@ -192,6 +192,8 @@ private:
   CompressedOops::Mode _narrow_oop_mode;          // compressed oop encoding mode
   bool    _compressed_oops;                       // save the flag UseCompressedOops
   bool    _compressed_class_ptrs;                 // save the flag UseCompressedClassPointers
+  int     _narrow_klass_pointer_bits;             // save number of bits in narrowKlass
+  int     _narrow_klass_shift;                    // save shift width used to pre-compute narrowKlass IDs in archived heap objects
   size_t  _cloned_vtables_offset;                 // The address of the first cloned vtable
   size_t  _serialized_data_offset;                // Data accessed using {ReadClosure,WriteClosure}::serialize()
   bool _has_non_jar_in_classpath;                 // non-jar file entry exists in classpath
@@ -269,6 +271,8 @@ public:
   bool has_non_jar_in_classpath()          const { return _has_non_jar_in_classpath; }
   bool compressed_oops()                   const { return _compressed_oops; }
   bool compressed_class_pointers()         const { return _compressed_class_ptrs; }
+  int narrow_klass_pointer_bits()          const { return _narrow_klass_pointer_bits; }
+  int narrow_klass_shift()                 const { return _narrow_klass_shift; }
   size_t heap_roots_offset()               const { return _heap_roots_offset; }
   size_t heap_oopmap_start_pos()           const { return _heap_oopmap_start_pos;}
   size_t heap_ptrmap_start_pos()           const { return _heap_ptrmap_start_pos;}
