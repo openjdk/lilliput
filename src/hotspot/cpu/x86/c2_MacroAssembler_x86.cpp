@@ -1208,41 +1208,26 @@ void C2_MacroAssembler::fast_unlock_lightweight(Register obj, Register reg_rax, 
       jcc(Assembler::below, slow_path);
 
       if (OMCacheHitRate) increment(Address(thread, JavaThread::unlock_hit_offset()));
-#ifndef _LP64
-        // TODO[OMWorld]: Unify 32 with 64. Should just be a straight up use 64 on 32. We have the registers here.
-        // Check if recursive.
-        xorptr(reg_rax, reg_rax);
-        orptr(reg_rax, Address(monitor, ObjectMonitor::recursions_offset()));
-        jcc(Assembler::notZero, check_successor);
 
-        // Check if the entry lists are empty.
-        movptr(reg_rax, Address(monitor, ObjectMonitor::EntryList_offset()));
-        orptr(reg_rax, Address(monitor, ObjectMonitor::cxq_offset()));
-        jcc(Assembler::notZero, check_successor);
+      Label recursive;
 
-        // Release lock.
-        movptr(Address(monitor, ObjectMonitor::owner_offset()), NULL_WORD);
-#else // _LP64
-        Label recursive;
+      // Check if recursive.
+      cmpptr(Address(monitor,ObjectMonitor::recursions_offset()),0);
+      jccb(Assembler::notEqual, recursive);
 
-        // Check if recursive.
-        cmpptr(Address(monitor,ObjectMonitor::recursions_offset()),0);
-        jccb(Assembler::notEqual, recursive);
+      // Check if the entry lists are empty.
+      movptr(reg_rax, Address(monitor, ObjectMonitor::cxq_offset()));
+      orptr(reg_rax, Address(monitor, ObjectMonitor::EntryList_offset()));
+      jcc(Assembler::notZero, check_successor);
 
-        // Check if the entry lists are empty.
-        movptr(reg_rax, Address(monitor, ObjectMonitor::cxq_offset()));
-        orptr(reg_rax, Address(monitor, ObjectMonitor::EntryList_offset()));
-        jcc(Assembler::notZero, check_successor);
+      // Release lock.
+      movptr(Address(monitor, ObjectMonitor::owner_offset()), NULL_WORD);
+      jmpb(unlocked);
 
-        // Release lock.
-        movptr(Address(monitor, ObjectMonitor::owner_offset()), NULL_WORD);
-        jmpb(unlocked);
-
-        // Recursive unlock.
-        bind(recursive);
-        decrement(Address(monitor, ObjectMonitor::recursions_offset()));
-        xorl(t, t);
-#endif
+      // Recursive unlock.
+      bind(recursive);
+      decrement(Address(monitor, ObjectMonitor::recursions_offset()));
+      xorl(t, t);
     }
   }
 
