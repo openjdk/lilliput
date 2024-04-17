@@ -596,6 +596,7 @@ void ObjectSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* current)
 // of this algorithm. Make sure to update that code if the following function is
 // changed. The implementation is extremely sensitive to race condition. Be careful.
 bool ObjectSynchronizer::enter_fast_impl(Handle obj, BasicLock* lock, JavaThread* locking_thread) {
+  assert(LockingMode != LM_LIGHTWEIGHT, "Use LightweightSynchronizer");
 
   if (obj->klass()->is_value_based()) {
     handle_sync_on_value_based_class(obj, locking_thread);
@@ -604,61 +605,7 @@ bool ObjectSynchronizer::enter_fast_impl(Handle obj, BasicLock* lock, JavaThread
   locking_thread->inc_held_monitor_count();
 
   if (!useHeavyMonitors()) {
-    if (LockingMode == LM_LIGHTWEIGHT) {
-      // Fast-locking does not use the 'lock' argument.
-      LockStack& lock_stack = locking_thread->lock_stack();
-      if (lock_stack.is_full()) {
-        // We unconditionally make room on the lock stack by inflating
-        // the least recently locked object on the lock stack.
-
-        // About the choice to inflate least recently locked object.
-        // First we must chose to inflate a lock, either some lock on
-        // the lock-stack or the lock that is currently being entered
-        // (which may or may not be on the lock-stack).
-        // Second the best lock to inflate is a lock which is entered
-        // in a control flow where there are only a very few locks being
-        // used, as the costly part of inflated locking is inflation,
-        // not locking. But this property is entirely program dependent.
-        // Third inflating the lock currently being entered on when it
-        // is not present on the lock-stack will result in a still full
-        // lock-stack. This creates a scenario where every deeper nested
-        // monitorenter must call into the runtime.
-        // The rational here is as follows:
-        // Because we cannot (currently) figure out the second, and want
-        // to avoid the third, we inflate a lock on the lock-stack.
-        // The least recently locked lock is chosen as it is the lock
-        // with the longest critical section.
-
-        log_info(monitorinflation)("LockStack capacity exceeded, inflating.");
-        ObjectMonitor* monitor = inflate_for(locking_thread, lock_stack.bottom(), inflate_cause_vm_internal);
-        assert(monitor->owner() == Thread::current(), "must be owner=" PTR_FORMAT " current=" PTR_FORMAT " mark=" PTR_FORMAT,
-               p2i(monitor->owner()), p2i(Thread::current()), monitor->object()->mark_acquire().value());
-        assert(!lock_stack.is_full(), "must have made room here");
-      }
-
-      markWord mark = obj()->mark_acquire();
-      while (mark.is_unlocked()) {
-        // Retry until a lock state change has been observed. cas_set_mark() may collide with non lock bits modifications.
-        // Try to swing into 'fast-locked' state.
-        assert(!lock_stack.contains(obj()), "thread must not already hold the lock");
-        const markWord locked_mark = mark.set_fast_locked();
-        const markWord old_mark = obj()->cas_set_mark(locked_mark, mark);
-        if (old_mark == mark) {
-          // Successfully fast-locked, push object to lock-stack and return.
-          lock_stack.push(obj());
-          return true;
-        }
-        mark = old_mark;
-      }
-
-      if (mark.is_fast_locked() && lock_stack.try_recursive_enter(obj())) {
-        // Recursive lock successful.
-        return true;
-      }
-
-      // Failed to fast lock.
-      return false;
-    } else if (LockingMode == LM_LEGACY) {
+    if (LockingMode == LM_LEGACY) {
       markWord mark = obj->mark();
       if (mark.is_unlocked()) {
         // Anticipate successful CAS -- the ST of the displaced mark must
