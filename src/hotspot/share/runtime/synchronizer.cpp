@@ -406,10 +406,6 @@ bool ObjectSynchronizer::quick_notify(oopDesc* obj, JavaThread* current, bool al
 
 bool ObjectSynchronizer::quick_enter(oop obj, JavaThread* current,
                                      BasicLock * lock) {
-  if (LockingMode == LM_LIGHTWEIGHT) {
-    // Not using quick_enter for now.
-    return false;
-  }
   assert(current->thread_state() == _thread_in_Java, "invariant");
   NoSafepointVerifier nsv;
   if (obj == nullptr) return false;       // Need to throw NPE
@@ -434,11 +430,11 @@ bool ObjectSynchronizer::quick_enter(oop obj, JavaThread* current,
   const markWord mark = obj->mark();
 
   if (mark.has_monitor()) {
-    ObjectMonitor* const m = mark.monitor();
+    ObjectMonitor* const m = ObjectSynchronizer::read_monitor(current, obj, mark);
     // An async deflation or GC can race us before we manage to make
     // the ObjectMonitor busy by setting the owner below. If we detect
     // that race we just bail out to the slow-path here.
-    if (m->object_peek() == nullptr) {
+    if (m == nullptr || m->object_peek() == nullptr) {
       return false;
     }
     JavaThread* const owner = static_cast<JavaThread*>(m->owner_raw());
