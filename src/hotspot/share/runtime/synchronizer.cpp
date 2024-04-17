@@ -861,7 +861,6 @@ int ObjectSynchronizer::wait(Handle obj, jlong millis, TRAPS) {
 
   ObjectMonitor* monitor;
   if (LockingMode == LM_LIGHTWEIGHT) {
-    current->lock_stack().clear_wait_was_inflated();
     monitor = LightweightSynchronizer::inflate_locked_or_imse(obj(), inflate_cause_wait, CHECK_0);
   } else {
     // The ObjectMonitor* can't be async deflated because the _waiters

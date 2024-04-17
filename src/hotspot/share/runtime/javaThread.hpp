@@ -1167,9 +1167,6 @@ public:
   size_t _wait_inflation = 0;
   size_t _lock_stack_inflation = 0;
 
-  size_t _wait_deflation = 0;
-  size_t _exit_deflation = 0;
-
   size_t _lock_lookup = 0;
   size_t _lock_hit = 0;
   size_t _unlock_lookup = 0;

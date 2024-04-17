@@ -1996,10 +1996,6 @@ const int ObjectAlignmentInBytes = 8;
                                                                             \
   product(int, OMYields, 5, "")                                             \
                                                                             \
-  product(bool, OMDeflateAfterWait, false, "Currently broken due to deflation changes") \
-                                                                            \
-  product(bool, OMDeflateBeforeExit, false, "Currently broken due to deflation changes")\
-                                                                            \
   product(bool, OMCacheHitRate, false, "")                                  \
                                                                             \
   product(bool, OMRecursiveFastPath, true, "Inflated recursion check first")\
