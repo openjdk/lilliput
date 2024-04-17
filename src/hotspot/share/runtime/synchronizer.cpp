@@ -1498,39 +1498,25 @@ void ObjectSynchronizer::inflate_helper(oop obj) {
 
 ObjectMonitor* ObjectSynchronizer::inflate(Thread* current, oop obj, const InflateCause cause) {
   assert(current == Thread::current(), "must be");
-  if (LockingMode == LM_LIGHTWEIGHT && current->is_Java_thread()) {
-    return inflate_impl(JavaThread::cast(current), obj, cause);
-  }
-  return inflate_impl(nullptr, obj, cause);
+  assert(LockingMode != LM_LIGHTWEIGHT, "LM_LIGHTWEIGHT cannot use inflate");
+  return inflate_impl(obj, cause);
 }
 
 ObjectMonitor* ObjectSynchronizer::inflate_for(JavaThread* thread, oop obj, const InflateCause cause) {
   assert(thread == Thread::current() || thread->is_obj_deopt_suspend(), "must be");
-  return inflate_impl(thread, obj, cause);
+  assert(LockingMode != LM_LIGHTWEIGHT, "LM_LIGHTWEIGHT cannot use inflate_for");
+  return inflate_impl(obj, cause);
 }
 
-ObjectMonitor* ObjectSynchronizer::inflate_impl(JavaThread* inflating_thread, oop object, const InflateCause cause) {
-  // The JavaThread* inflating_thread parameter is only used by LM_LIGHTWEIGHT and requires
-  // that the inflating_thread == Thread::current() or is suspended throughout the call by
-  // some other mechanism.
-  // Even with LM_LIGHTWEIGHT the thread might be nullptr when called from a non
-  // JavaThread. (As may still be the case from FastHashCode). However it is only
-  // important for the correctness of the LM_LIGHTWEIGHT algorithm that the thread
-  // is set when called from ObjectSynchronizer::enter from the owning thread,
-  // ObjectSynchronizer::enter_for from any thread, or ObjectSynchronizer::exit.
+ObjectMonitor* ObjectSynchronizer::inflate_impl(oop object, const InflateCause cause) {
+  assert(LockingMode != LM_LIGHTWEIGHT, "LM_LIGHTWEIGHT cannot use inflate_impl");
   EventJavaMonitorInflate event;
 
   for (;;) {
     const markWord mark = object->mark_acquire();
 
     // The mark can be in one of the following states:
-    // *  inflated     - Just return if using stack-locking.
-    //                   If using fast-locking and the ObjectMonitor owner
-    //                   is anonymous and the inflating_thread owns the
-    //                   object lock, then we make the inflating_thread
-    //                   the ObjectMonitor owner and remove the lock from
-    //                   the inflating_thread's lock stack.
-    // *  fast-locked  - Coerce it to inflated from fast-locked.
+    // *  inflated     - Just return it.
     // *  stack-locked - Coerce it to inflated from stack-locked.
     // *  INFLATING    - Busy wait for conversion from stack-locked to
     //                   inflated.
@@ -1541,80 +1527,18 @@ ObjectMonitor* ObjectSynchronizer::inflate_impl(JavaThread* inflating_thread, oo
       ObjectMonitor* inf = mark.monitor();
       markWord dmw = inf->header();
       assert(dmw.is_neutral(), "invariant: header=" INTPTR_FORMAT, dmw.value());
-      if (LockingMode == LM_LIGHTWEIGHT && inf->is_owner_anonymous() &&
-          inflating_thread != nullptr && inflating_thread->lock_stack().contains(object)) {
-        inf->set_owner_from_anonymous(inflating_thread);
-        size_t removed = inflating_thread->lock_stack().remove(object);
-        inf->set_recursions(removed - 1);
-      }
       return inf;
     }
 
-    if (LockingMode != LM_LIGHTWEIGHT) {
-      // New lightweight locking does not use INFLATING.
-      // CASE: inflation in progress - inflating over a stack-lock.
-      // Some other thread is converting from stack-locked to inflated.
-      // Only that thread can complete inflation -- other threads must wait.
-      // The INFLATING value is transient.
-      // Currently, we spin/yield/park and poll the markword, waiting for inflation to finish.
-      // We could always eliminate polling by parking the thread on some auxiliary list.
-      if (mark == markWord::INFLATING()) {
-        read_stable_mark(object);
-        continue;
-      }
-    }
-
-    // CASE: fast-locked
-    // Could be fast-locked either by the inflating_thread or by some other thread.
-    //
-    // Note that we allocate the ObjectMonitor speculatively, _before_
-    // attempting to set the object's mark to the new ObjectMonitor. If
-    // the inflating_thread owns the monitor, then we set the ObjectMonitor's
-    // owner to the inflating_thread. Otherwise, we set the ObjectMonitor's owner
-    // to anonymous. If we lose the race to set the object's mark to the
-    // new ObjectMonitor, then we just delete it and loop around again.
-    //
-    LogStreamHandle(Trace, monitorinflation) lsh;
-    if (LockingMode == LM_LIGHTWEIGHT && mark.is_fast_locked()) {
-      ObjectMonitor* monitor = new ObjectMonitor(object);
-      monitor->set_header(mark.set_unlocked());
-      bool own = inflating_thread != nullptr && inflating_thread->lock_stack().contains(object);
-      if (own) {
-        // Owned by inflating_thread.
-        monitor->set_owner_from(nullptr, inflating_thread);
-      } else {
-        // Owned by somebody else.
-        monitor->set_owner_anonymous();
-      }
-      markWord monitor_mark = markWord::encode(monitor);
-      markWord old_mark = object->cas_set_mark(monitor_mark, mark);
-      if (old_mark == mark) {
-        // Success! Return inflated monitor.
-        if (own) {
-          size_t removed = inflating_thread->lock_stack().remove(object);
-          monitor->set_recursions(removed - 1);
-        }
-        // Once the ObjectMonitor is configured and object is associated
-        // with the ObjectMonitor, it is safe to allow async deflation:
-        _in_use_list.add(monitor);
-
-        // Hopefully the performance counters are allocated on distinct
-        // cache lines to avoid false sharing on MP systems ...
-        OM_PERFDATA_OP(Inflations, inc());
-        if (log_is_enabled(Trace, monitorinflation)) {
-          ResourceMark rm;
-          lsh.print_cr("inflate(has_locker): object=" INTPTR_FORMAT ", mark="
-                       INTPTR_FORMAT ", type='%s'", p2i(object),
-                       object->mark().value(), object->klass()->external_name());
-        }
-        if (event.should_commit()) {
-          post_monitor_inflate_event(&event, object, cause);
-        }
-        return monitor;
-      } else {
-        delete monitor;
-        continue;  // Interference -- just retry
-      }
+    // CASE: inflation in progress - inflating over a stack-lock.
+    // Some other thread is converting from stack-locked to inflated.
+    // Only that thread can complete inflation -- other threads must wait.
+    // The INFLATING value is transient.
+    // Currently, we spin/yield/park and poll the markword, waiting for inflation to finish.
+    // We could always eliminate polling by parking the thread on some auxiliary list.
+    if (mark == markWord::INFLATING()) {
+      read_stable_mark(object);
+      continue;
     }
 
     // CASE: stack-locked
@@ -1628,8 +1552,8 @@ ObjectMonitor* ObjectSynchronizer::inflate_impl(JavaThread* inflating_thread, oo
     // the odds of inflation contention. If we lose the race to set INFLATING,
     // then we just delete the ObjectMonitor and loop around again.
     //
+    LogStreamHandle(Trace, monitorinflation) lsh;
     if (LockingMode == LM_LEGACY && mark.has_locker()) {
-      assert(LockingMode != LM_LIGHTWEIGHT, "cannot happen with new lightweight locking");
       ObjectMonitor* m = new ObjectMonitor(object);
       // Optimistically prepare the ObjectMonitor - anticipate successful CAS
       // We do this before the CAS in order to minimize the length of time
