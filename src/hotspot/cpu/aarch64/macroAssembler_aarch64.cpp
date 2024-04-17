@@ -1002,10 +1002,11 @@ address MacroAssembler::ic_call(address entry, jint method_index) {
 }
 
 int MacroAssembler::ic_check_size() {
+  int extra_instructions = UseCompactObjectHeaders ? 1 : 0;
   if (target_needs_far_branch(CAST_FROM_FN_PTR(address, SharedRuntime::get_ic_miss_stub()))) {
-    return NativeInstruction::instruction_size * 7;
+    return NativeInstruction::instruction_size * (7 + extra_instructions);
   } else {
-    return NativeInstruction::instruction_size * 5;
+    return NativeInstruction::instruction_size * (5 + extra_instructions);
   }
 }
 
@@ -1024,7 +1025,7 @@ int MacroAssembler::ic_check(int end_alignment) {
   int uep_offset = offset();
 
   if (UseCompactObjectHeaders) {
-    load_nklass_compact(tmp2, receiver);
+    load_nklass_compact(tmp1, receiver);
     ldrw(tmp2, Address(data, CompiledICData::speculated_klass_offset()));
     cmpw(tmp1, tmp2);
   } else if (UseCompressedClassPointers) {
