@@ -1350,7 +1350,8 @@ void MacroAssembler::ic_call(address entry, jint method_index) {
 }
 
 int MacroAssembler::ic_check_size() {
-  return LP64_ONLY(14) NOT_LP64(12);
+  return
+      LP64_ONLY(UseCompactObjectHeaders ? 17 : 14) NOT_LP64(12);
 }
 
 int MacroAssembler::ic_check(int end_alignment) {
@@ -1366,7 +1367,10 @@ int MacroAssembler::ic_check(int end_alignment) {
 
   int uep_offset = offset();
 
-  if (UseCompressedClassPointers) {
+  if (UseCompactObjectHeaders) {
+    load_nklass_compact(temp, receiver);
+    cmpl(temp, Address(data, CompiledICData::speculated_klass_offset()));
+  } else if (UseCompressedClassPointers) {
     movl(temp, Address(receiver, oopDesc::klass_offset_in_bytes()));
     cmpl(temp, Address(data, CompiledICData::speculated_klass_offset()));
   } else {
@@ -1376,7 +1380,7 @@ int MacroAssembler::ic_check(int end_alignment) {
 
   // if inline cache check fails, then jump to runtime routine
   jump_cc(Assembler::notEqual, RuntimeAddress(SharedRuntime::get_ic_miss_stub()));
-  assert((offset() % end_alignment) == 0, "Misaligned verified entry point");
+  assert((offset() % end_alignment) == 0, "Misaligned verified entry point (%d, %d, %d)", uep_offset, offset(), end_alignment);
 
   return uep_offset;
 }

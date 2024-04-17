@@ -1023,7 +1023,11 @@ int MacroAssembler::ic_check(int end_alignment) {
 
   int uep_offset = offset();
 
-  if (UseCompressedClassPointers) {
+  if (UseCompactObjectHeaders) {
+    load_nklass_compact(tmp2, receiver);
+    ldrw(tmp2, Address(data, CompiledICData::speculated_klass_offset()));
+    cmpw(tmp1, tmp2);
+  } else if (UseCompressedClassPointers) {
     ldrw(tmp1, Address(receiver, oopDesc::klass_offset_in_bytes()));
     ldrw(tmp2, Address(data, CompiledICData::speculated_klass_offset()));
     cmpw(tmp1, tmp2);
@@ -4480,6 +4484,9 @@ void MacroAssembler::load_method_holder(Register holder, Register method) {
 
 // Loads the obj's Klass* into dst.
 // Preserves all registers (incl src, rscratch1 and rscratch2).
+// Input:
+// src - the oop we want to load the klass from.
+// dst - output nklass.
 void MacroAssembler::load_nklass_compact(Register dst, Register src) {
   assert(UseCompactObjectHeaders, "expects UseCompactObjectHeaders");
   ldr(dst, Address(src, oopDesc::mark_offset_in_bytes()));
