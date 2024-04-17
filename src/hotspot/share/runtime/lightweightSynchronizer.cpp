@@ -573,16 +573,7 @@ void LightweightSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* cur
 
   current->inc_held_monitor_count();
 
-  if (lock != nullptr) {
-    // This is cleared in the interpreter
-    // TODO[OMWorld]: All paths should have cleared this, assert it is 0
-    //                instead of clearing it here. Should maybe only be for
-    //                c++ ObjectLocks and compiler re-lock (check this)
-    //                Also double check JNI interactions, JNI does not have
-    //                a slot, so no cache, but is there a problem if JNI first
-    //                followed by recursive monitor enter exit
-    lock->clear_displaced_header();
-  }
+  lock->clear_displaced_header();
 
   SpinYield spin_yield(0, 2);
   bool first_time = true;
@@ -604,9 +595,7 @@ void LightweightSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* cur
     bool entered = false;
     entered = mon->enter(current);
     current->om_set_monitor_cache(mon);
-    if (lock != nullptr) {
-      lock->set_displaced_header(mon);
-    }
+    lock->set_displaced_header(mon);
     assert(entered, "recursive ObjectMonitor::enter must succeed");
     return;
   }
@@ -840,9 +829,7 @@ bool LightweightSynchronizer::inflate_and_enter(oop object, BasicLock* lock, Jav
 
   if (monitor->try_enter(locking_thread)) {
     locking_thread->om_set_monitor_cache(monitor);
-    if (lock != nullptr) {
-      lock->set_displaced_header(monitor);
-    }
+    lock->set_displaced_header(monitor);
     return true;
   }
 
@@ -976,9 +963,7 @@ bool LightweightSynchronizer::inflate_and_enter(oop object, BasicLock* lock, Jav
 
   // Update the thread-local cache
   locking_thread->om_set_monitor_cache(monitor);
-  if (lock != nullptr) {
-    lock->set_displaced_header(monitor);
-  }
+  lock->set_displaced_header(monitor);
 
   return true;
 }

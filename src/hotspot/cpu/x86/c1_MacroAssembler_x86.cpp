@@ -41,6 +41,7 @@
 #include "runtime/stubRoutines.hpp"
 #include "utilities/checkedCast.hpp"
 #include "utilities/globalDefinitions.hpp"
+#include "utilities/macros.hpp"
 
 int C1_MacroAssembler::lock_object(Register hdr, Register obj, Register disp_hdr, Register tmp, Label& slow_case) {
   const int aligned_mask = BytesPerWord -1;
@@ -66,10 +67,12 @@ int C1_MacroAssembler::lock_object(Register hdr, Register obj, Register disp_hdr
   if (LockingMode == LM_LIGHTWEIGHT) {
 #ifdef _LP64
     const Register thread = r15_thread;
-#else
-    const Register thread = disp_hdr;
-#endif
     lightweight_lock(disp_hdr, obj, hdr, thread, tmp, slow_case);
+#else
+    movptr(hdr, Address(obj, oopDesc::mark_offset_in_bytes()));
+    // Lacking registers and thread on x86_32. Always take slow path.
+    jmp(slow_case);
+#endif
   } else  if (LockingMode == LM_LEGACY) {
     Label done;
     // Load object header
