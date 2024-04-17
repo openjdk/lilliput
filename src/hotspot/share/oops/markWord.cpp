@@ -24,6 +24,7 @@
 
 #include "precompiled.hpp"
 #include "oops/markWord.hpp"
+#include "runtime/basicLock.inline.hpp"
 #include "runtime/javaThread.hpp"
 #include "runtime/objectMonitor.inline.hpp"
 #include "utilities/ostream.hpp"

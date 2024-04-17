@@ -10007,7 +10007,7 @@ void MacroAssembler::lightweight_lock(Register basic_lock, Register obj, Registe
   // instruction emitted as it is part of C1's null check semantics.
   movptr(reg_rax, Address(obj, oopDesc::mark_offset_in_bytes()));
 
-  movptr(Address(basic_lock, BasicObjectLock::lock_offset() + in_ByteSize((BasicLock::displaced_header_offset_in_bytes()))), 0);
+  movptr(Address(basic_lock, BasicObjectLock::lock_offset() + in_ByteSize((BasicLock::object_monitor_cache_offset_in_bytes()))), 0);
 
 #ifndef _LP64
   if (thread == basic_lock) {
