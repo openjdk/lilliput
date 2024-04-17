@@ -1367,10 +1367,13 @@ int MacroAssembler::ic_check(int end_alignment) {
 
   int uep_offset = offset();
 
+#ifdef _LP64
   if (UseCompactObjectHeaders) {
     load_nklass_compact(temp, receiver);
     cmpl(temp, Address(data, CompiledICData::speculated_klass_offset()));
-  } else if (UseCompressedClassPointers) {
+  } else
+#endif
+  if (UseCompressedClassPointers) {
     movl(temp, Address(receiver, oopDesc::klass_offset_in_bytes()));
     cmpl(temp, Address(data, CompiledICData::speculated_klass_offset()));
   } else {
