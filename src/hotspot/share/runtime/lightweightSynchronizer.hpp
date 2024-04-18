@@ -44,7 +44,7 @@ private:
 
   static void deflate_mark_word(oop object);
 
-  static void ensure_lock_stack_space(JavaThread* locking_thread, JavaThread* current);
+  static void ensure_lock_stack_space(JavaThread* current);
 
  public:
   static void initialize();
@@ -54,7 +54,7 @@ private:
   static void set_table_max(JavaThread* current);
 
   static void enter_for(Handle obj, BasicLock* lock, JavaThread* locking_thread);
-  static void enter(Handle obj, BasicLock* lock,  JavaThread* locking_thread, JavaThread* current);
+  static void enter(Handle obj, BasicLock* lock, JavaThread* locking_thread);
   static void exit(oop object, JavaThread* current);
 
   static ObjectMonitor* inflate_locked_or_imse(oop object, const ObjectSynchronizer::InflateCause cause, TRAPS);

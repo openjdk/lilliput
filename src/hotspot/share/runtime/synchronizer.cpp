@@ -574,7 +574,7 @@ void ObjectSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* current)
   assert(current == Thread::current(), "must be");
 
   if (LockingMode == LM_LIGHTWEIGHT) {
-    return LightweightSynchronizer::enter(obj, lock, current, current);
+    return LightweightSynchronizer::enter(obj, lock, current);
   }
 
   if (!enter_fast_impl(obj, lock, current)) {
