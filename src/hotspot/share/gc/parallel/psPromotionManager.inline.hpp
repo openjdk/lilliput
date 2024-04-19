@@ -145,7 +145,7 @@ inline oop PSPromotionManager::copy_to_survivor_space(oop o) {
   // in o. There may be multiple threads racing on it, and it may be forwarded
   // at any time.
   markWord m = o->mark();
-  if (!m.is_marked()) {
+  if (!m.is_forwarded()) {
     return copy_unmarked_to_survivor_space<promote_immediately>(o, m);
   } else {
     // Ensure any loads from the forwardee follow all changes that precede
@@ -264,7 +264,7 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
     // The copy above is not atomic. Make sure we have seen the proper mark
     // and re-install it into the copy, so that Klass* is guaranteed to be correct.
     markWord mark = o->mark();
-    if (!mark.is_marked()) {
+    if (!mark.is_forwarded()) {
       new_obj->set_mark(mark);
       ContinuationGCSupport::transform_stack_chunk(new_obj);
     } else {
