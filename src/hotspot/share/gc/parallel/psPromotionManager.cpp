@@ -280,34 +280,34 @@ template <class T> void PSPromotionManager::process_array_chunk_work(
 void PSPromotionManager::process_array_chunk(PartialArrayScanTask task) {
   assert(PSChunkLargeArrays, "invariant");
 
-  oop old = task.to_source_array();
-  assert(old->forward_safe_klass()->is_objArray_klass(), "invariant");
-  assert(old->is_forwarded(), "invariant");
+  oop const from_obj = task.to_source_array();
+  assert(from_obj->is_forwarded(), "invariant");
+  assert(from_obj->forwardee()->is_objArray(), "invariant");
+
+  objArrayOop to_obj = objArrayOop(from_obj->forwardee());
 
   TASKQUEUE_STATS_ONLY(++_array_chunks_processed);
 
-  oop const obj = old->forwardee();
-
   int start;
-  int const end = arrayOop(old)->length();
+  int const end = to_obj->length();
   if (end > (int) _min_array_size_for_chunking) {
     // we'll chunk more
     start = end - _array_chunk_size;
     assert(start > 0, "invariant");
-    arrayOop(old)->set_length(start);
-    push_depth(ScannerTask(PartialArrayScanTask(old)));
+    to_obj->set_length(start);
+    push_depth(ScannerTask(PartialArrayScanTask(from_obj)));
     TASKQUEUE_STATS_ONLY(++_array_chunk_pushes);
   } else {
     // this is the final chunk for this array
     start = 0;
-    int const actual_length = arrayOop(obj)->length();
-    arrayOop(old)->set_length(actual_length);
+    int const actual_length = arrayOop(from_obj)->length();
+    arrayOop(to_obj)->set_length(actual_length);
   }
 
   if (UseCompressedOops) {
-    process_array_chunk_work<narrowOop>(obj, start, end);
+    process_array_chunk_work<narrowOop>(to_obj, start, end);
   } else {
-    process_array_chunk_work<oop>(obj, start, end);
+    process_array_chunk_work<oop>(to_obj, start, end);
   }
 }
 
