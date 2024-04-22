@@ -927,9 +927,7 @@ bool LightweightSynchronizer::inflate_and_enter(oop object, BasicLock* lock, Jav
 
     // Update the thread-local cache
     locking_thread->om_set_monitor_cache(monitor);
-    if (lock != nullptr) {
-      lock->set_displaced_header(monitor);
-    }
+    lock->set_displaced_header(monitor);
     locking_thread->_unlocked_inflation++;
 
     return true;
@@ -940,9 +938,7 @@ bool LightweightSynchronizer::inflate_and_enter(oop object, BasicLock* lock, Jav
     if (monitor->spin_enter(locking_thread)) {
       // Update the thread-local cache
       locking_thread->om_set_monitor_cache(monitor);
-      if (lock != nullptr) {
-        lock->set_displaced_header(monitor);
-      }
+      lock->set_displaced_header(monitor);
 
       return true;
     }
