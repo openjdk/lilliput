@@ -69,20 +69,21 @@ class ObjectWaiter : public StackObj {
 //
 // ObjectMonitor Layout Overview/Highlights/Restrictions:
 //
-// - The _header field must be at offset 0 because the displaced header
+// - The _metadata field must be at offset 0 because the displaced header
 //   from markWord is stored there. We do not want markWord.hpp to include
 //   ObjectMonitor.hpp to avoid exposing ObjectMonitor everywhere. This
 //   means that ObjectMonitor cannot inherit from any other class nor can
 //   it use any virtual member functions. This restriction is critical to
 //   the proper functioning of the VM.
-// - The _header and _owner fields should be separated by enough space
+// - The _metadata and _owner fields should be separated by enough space
 //   to avoid false sharing due to parallel access by different threads.
 //   This is an advisory recommendation.
 // - The general layout of the fields in ObjectMonitor is:
-//     _header
+//     _metadata
 //     <lightly_used_fields>
 //     <optional padding>
 //     _owner
+//     <optional padding>
 //     <remaining_fields>
 // - The VM assumes write ordering and machine word alignment with
 //   respect to the _owner field and the <remaining_fields> that can
@@ -106,20 +107,19 @@ class ObjectWaiter : public StackObj {
 //   in synchronizer.cpp. Also see TEST_VM(SynchronizerTest, sanity) gtest.
 //
 // Futures notes:
-//   - Separating _owner from the <remaining_fields> by enough space to
-//     avoid false sharing might be profitable. Given
-//     http://blogs.oracle.com/dave/entry/cas_and_cache_trivia_invalidate
-//     we know that the CAS in monitorenter will invalidate the line
-//     underlying _owner. We want to avoid an L1 data cache miss on that
-//     same line for monitorexit. Putting these <remaining_fields>:
-//     _recursions, _EntryList, _cxq, and _succ, all of which may be
-//     fetched in the inflated unlock path, on a different cache line
-//     would make them immune to CAS-based invalidation from the _owner
-//     field.
+// - Separating _owner from the <remaining_fields> by enough space to
+//   avoid false sharing might be profitable. Given that the CAS in
+//   monitorenter will invalidate the line underlying _owner. We want
+//   to avoid an L1 data cache miss on that same line for monitorexit.
+//   Putting these <remaining_fields>:
+//   _recursions, _EntryList, _cxq, and _succ, all of which may be
+//   fetched in the inflated unlock path, on a different cache line
+//   would make them immune to CAS-based invalidation from the _owner
+//   field.
 //
-//   - The _recursions field should be of type int, or int32_t but not
-//     intptr_t. There's no reason to use a 64-bit type for this field
-//     in a 64-bit JVM.
+// - The _recursions field should be of type int, or int32_t but not
+//   intptr_t. There's no reason to use a 64-bit type for this field
+//   in a 64-bit JVM.
 
 #define OM_CACHE_LINE_SIZE DEFAULT_CACHE_LINE_SIZE
 
@@ -131,15 +131,19 @@ class ObjectMonitor : public CHeapObj<mtObjectMonitor> {
 
   static OopStorage* _oop_storage;
 
-  // The sync code expects the header field to be at offset zero (0).
-  // Enforced by the assert() in header_addr().
-  volatile markWord _header;        // displaced object header word - mark
+  // The sync code expects the metadata field to be at offset zero (0).
+  // Enforced by the assert() in metadata_addr().
+  // * LM_LIGHTWEIGHT
+  // Contains the _objects hashCode.
+  // * LM_LEGACY, LM_MONITOR
+  // Contains the displaced object header word - mark
+  volatile uintptr_t _metadata;     // metadata
   WeakHandle _object;               // backward object pointer
-  // Separate _header and _owner on different cache lines since both can
-  // have busy multi-threaded access. _header and _object are set at initial
+  // Separate _metadata and _owner on different cache lines since both can
+  // have busy multi-threaded access. _metadata and _object are set at initial
   // inflation. The _object does not change, so it is a good choice to share
-  // its cache line with _header.
-  DEFINE_PAD_MINUS_SIZE(0, OM_CACHE_LINE_SIZE, sizeof(volatile markWord) +
+  // its cache line with _metadata.
+  DEFINE_PAD_MINUS_SIZE(0, OM_CACHE_LINE_SIZE, sizeof(volatile uintptr_t) +
                         sizeof(WeakHandle));
   // Used by async deflation as a marker in the _owner field.
   // Note that the choice of the two markers is peculiar:
@@ -183,7 +187,7 @@ private:
                                     // along with other fields to determine if an ObjectMonitor can be
                                     // deflated. It is also used by the async deflation protocol. See
                                     // ObjectMonitor::deflate_monitor().
- protected:
+
   ObjectWaiter* volatile _WaitSet;  // LL of threads wait()ing on the monitor
   volatile int  _waiters;           // number of waiting threads
  private:
@@ -215,6 +219,8 @@ private:
 
   static int Knob_SpinLimit;
 
+  static ByteSize metadata_offset()    { return byte_offset_of(ObjectMonitor, _metadata); }
+  static ByteSize header_offset()      { return metadata_offset(); }
   static ByteSize owner_offset()       { return byte_offset_of(ObjectMonitor, _owner); }
   static ByteSize recursions_offset()  { return byte_offset_of(ObjectMonitor, _recursions); }
   static ByteSize cxq_offset()         { return byte_offset_of(ObjectMonitor, _cxq); }
@@ -238,14 +244,15 @@ private:
   #define OM_OFFSET_NO_MONITOR_VALUE_TAG(f) \
     ((in_bytes(ObjectMonitor::f ## _offset())) - (LockingMode == LM_LIGHTWEIGHT ? 0 : checked_cast<int>(markWord::monitor_value)))
 
-  markWord           header() const;
-  uintptr_t          header_value() const;
-  volatile markWord* header_addr();
-  void               set_header(markWord hdr);
+  uintptr_t           metadata() const;
+  void                set_metadata(uintptr_t value);
+  volatile uintptr_t* metadata_addr();
 
-  // TODO[OMWorld]: Cleanup these names, the storage `_header` usage depends on the locking mode.
-  intptr_t           hash_lightweight_locking() const;
-  void               set_hash_lightweight_locking(intptr_t hash);
+  markWord            header() const;
+  void                set_header(markWord hdr);
+
+  intptr_t            hash() const;
+  void                set_hash(intptr_t hash);
 
   bool is_busy() const {
     // TODO-FIXME: assert _owner == null implies _recursions = 0

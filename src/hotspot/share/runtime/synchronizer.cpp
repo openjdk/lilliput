@@ -1168,7 +1168,7 @@ intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {
       hash = get_next_hash(current, obj);  // get a new hash
       temp = mark.copy_set_hash(hash)   ;  // merge the hash into header
       assert(temp.is_neutral(), "invariant: header=" INTPTR_FORMAT, temp.value());
-      uintptr_t v = Atomic::cmpxchg((volatile uintptr_t*)monitor->header_addr(), mark.value(), temp.value());
+      uintptr_t v = Atomic::cmpxchg(monitor->metadata_addr(), mark.value(), temp.value());
       test = markWord(v);
       if (test != mark) {
         // The attempt to update the ObjectMonitor's header/dmw field
@@ -2154,9 +2154,9 @@ void ObjectSynchronizer::chk_in_use_entry(ObjectMonitor* n, outputStream* out,
   }
 
 
-  if (n->header_value() == 0) {
+  if (n->metadata() == 0) {
     out->print_cr("ERROR: monitor=" INTPTR_FORMAT ": in-use monitor must "
-                  "have non-null _header field.", p2i(n));
+                  "have non-null _metadata (header/hash) field.", p2i(n));
     *error_cnt_p = *error_cnt_p + 1;
   }
 
@@ -2204,7 +2204,7 @@ void ObjectSynchronizer::log_in_use_monitor_details(outputStream* out, bool log_
     monitors_iterate([&](ObjectMonitor* monitor) {
       if (is_interesting(monitor)) {
         const oop obj = monitor->object_peek();
-        const intptr_t hash = LockingMode == LM_LIGHTWEIGHT ? monitor->hash_lightweight_locking() : monitor->header().hash();
+        const intptr_t hash = LockingMode == LM_LIGHTWEIGHT ? monitor->hash() : monitor->header().hash();
         ResourceMark rm;
         out->print(INTPTR_FORMAT "  %d%d%d  " INTPTR_FORMAT "  %s", p2i(monitor),
                    monitor->is_busy(), hash != 0, monitor->owner() != nullptr,

@@ -58,7 +58,7 @@ class ObjectMonitorWorld : public CHeapObj<mtOMWorld> {
   struct Config {
     using Value = ObjectMonitor*;
     static uintx get_hash(Value const& value, bool* is_dead) {
-      return (uintx)value->hash_lightweight_locking();
+      return (uintx)value->hash();
     }
     static void* allocate_node(void* context, size_t size, Value const& value) {
       return AllocateHeap(size, mtOMWorld);
@@ -104,7 +104,7 @@ class ObjectMonitorWorld : public CHeapObj<mtOMWorld> {
     LookupMonitor(ObjectMonitor* monitor) : _monitor(monitor) {}
 
     uintx get_hash() const {
-      return _monitor->hash_lightweight_locking();
+      return _monitor->hash();
     }
 
     bool equals(ObjectMonitor** value) {
@@ -306,7 +306,7 @@ public:
        oop obj = om->object_peek();
        st->print("monitor " PTR_FORMAT " ", p2i(om));
        st->print("object " PTR_FORMAT, p2i(obj));
-       assert(obj->mark().hash() == om->hash_lightweight_locking(), "hash must match");
+       assert(obj->mark().hash() == om->hash(), "hash must match");
        st->cr();
        return true;
     };
@@ -396,7 +396,7 @@ ObjectMonitor* LightweightSynchronizer::add_monitor(JavaThread* current, ObjectM
 
   intptr_t hash = obj->mark().hash();
   assert(hash != 0, "must be set when claiming the object monitor");
-  monitor->set_hash_lightweight_locking(hash);
+  monitor->set_hash(hash);
 
   return _omworld->monitor_put_get(current, monitor, obj);
 }

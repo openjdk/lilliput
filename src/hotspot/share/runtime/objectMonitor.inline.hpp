@@ -53,32 +53,38 @@ inline bool ObjectMonitor::is_entered(JavaThread* current) const {
   return false;
 }
 
+inline uintptr_t ObjectMonitor::metadata() const {
+  return Atomic::load(&_metadata);
+}
+
+inline void ObjectMonitor::set_metadata(uintptr_t value) {
+  Atomic::store(&_metadata, value);
+}
+
+inline volatile uintptr_t* ObjectMonitor::metadata_addr() {
+  STATIC_ASSERT(std::is_standard_layout<ObjectMonitor>::value);
+  STATIC_ASSERT(offsetof(ObjectMonitor, _metadata) == 0);
+  return &_metadata;
+}
+
 inline markWord ObjectMonitor::header() const {
   assert(LockingMode != LM_LIGHTWEIGHT, "Lightweight locking does not use header");
-  return Atomic::load(&_header);
-}
-
-inline uintptr_t ObjectMonitor::header_value() const {
-  return Atomic::load(&_header).value();
-}
-
-inline volatile markWord* ObjectMonitor::header_addr() {
-  return &_header;
+  return markWord(metadata());
 }
 
 inline void ObjectMonitor::set_header(markWord hdr) {
   assert(LockingMode != LM_LIGHTWEIGHT, "Lightweight locking does not use header");
-  Atomic::store(&_header, hdr);
+  set_metadata(hdr.value());
 }
 
-inline intptr_t ObjectMonitor::hash_lightweight_locking() const {
+inline intptr_t ObjectMonitor::hash() const {
   assert(LockingMode == LM_LIGHTWEIGHT, "Only used by lightweight locking");
-  return Atomic::load(&_header).hash();
+  return metadata();
 }
 
-inline void ObjectMonitor::set_hash_lightweight_locking(intptr_t hash) {
+inline void ObjectMonitor::set_hash(intptr_t hash) {
   assert(LockingMode == LM_LIGHTWEIGHT, "Only used by lightweight locking");
-  Atomic::store(&_header, markWord::zero().copy_set_hash(hash));
+  set_metadata(hash);
 }
 
 inline int ObjectMonitor::waiters() const {
