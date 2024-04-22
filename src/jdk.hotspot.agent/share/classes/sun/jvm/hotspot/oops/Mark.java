@@ -213,7 +213,6 @@ public class Mark extends VMObject {
 
   public Klass getKlass() {
     assert(VM.getVM().isCompactObjectHeadersEnabled());
-    assert(!hasMonitor());
     return (Klass)Metadata.instantiateWrapperFor(addr.getCompKlassAddressAt(0));
   }
 
