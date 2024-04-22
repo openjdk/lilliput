@@ -847,7 +847,7 @@ bool LightweightSynchronizer::inflate_and_enter(oop object, BasicLock* lock, Jav
   }
 
   // Holds is_being_async_deflated() stable throughout this function.
-  ObjectMonitorContentionMark mark(monitor);
+  ObjectMonitorContentionMark contention_mark(monitor);
 
   /// First handle the case where the monitor from the table is deflated
   if (monitor->is_being_async_deflated()) {
@@ -940,13 +940,23 @@ bool LightweightSynchronizer::inflate_and_enter(oop object, BasicLock* lock, Jav
 
     // Update the thread-local cache
     locking_thread->om_set_monitor_cache(monitor);
+    lock->set_object_monitor_cache(monitor);
     locking_thread->_unlocked_inflation++;
 
     return true;
   }
 
-  if (current == locking_thread && monitor->has_owner() && monitor->owner_raw() != locking_thread) {
-    // Someone else owns the lock, take the time befor entering to fix the lock stack
+  if (current == locking_thread) {
+    // One round of spinning
+    if (monitor->spin_enter(locking_thread)) {
+      // Update the thread-local cache
+      locking_thread->om_set_monitor_cache(monitor);
+      lock->set_object_monitor_cache(monitor);
+
+      return true;
+    }
+
+    // Monitor is contended, take the time befor entering to fix the lock stack.
     LockStackInflateContendedLocks().inflate(locking_thread, current);
   }
 
@@ -954,18 +964,19 @@ bool LightweightSynchronizer::inflate_and_enter(oop object, BasicLock* lock, Jav
   PauseNoSafepointVerifier pnsv(&nsv);
   object = nullptr;
 
-  bool entered = current == locking_thread ? monitor->enter(locking_thread)
-                                           : monitor->enter_for(locking_thread);
-
-  if (entered) {
-    // Update the thread-local cache
-    locking_thread->om_set_monitor_cache(monitor);
-    if (lock != nullptr) {
-      lock->set_displaced_header(monitor);
-    }
+  if (current == locking_thread) {
+    monitor->enter_with_contention_mark(locking_thread, contention_mark);
+  } else {
+    monitor->enter_for_with_contention_mark(locking_thread, contention_mark);
   }
 
-  return entered;
+  // Update the thread-local cache
+  locking_thread->om_set_monitor_cache(monitor);
+  if (lock != nullptr) {
+    lock->set_displaced_header(monitor);
+  }
+
+  return true;
 }
 
 void LightweightSynchronizer::deflate_monitor(Thread* current, oop obj, ObjectMonitor* monitor) {
