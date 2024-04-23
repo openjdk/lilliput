@@ -524,13 +524,9 @@ public:
   ~CacheSetter() {
     if (_monitor != nullptr) {
       _thread->om_set_monitor_cache(_monitor);
-      if (_lock != nullptr) {
-        _lock->set_displaced_header(_monitor);
-      }
+      _lock->set_displaced_header(_monitor);
     } else {
-      if (_lock != nullptr) {
-        _lock->clear_displaced_header();
-      }
+      _lock->clear_displaced_header();
     }
   }
 
