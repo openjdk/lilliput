@@ -143,7 +143,7 @@ class ObjectMonitor : public CHeapObj<mtObjectMonitor> {
   // have busy multi-threaded access. _metadata and _object are set at initial
   // inflation. The _object does not change, so it is a good choice to share
   // its cache line with _metadata.
-  DEFINE_PAD_MINUS_SIZE(0, OM_CACHE_LINE_SIZE, sizeof(volatile uintptr_t) +
+  DEFINE_PAD_MINUS_SIZE(0, OM_CACHE_LINE_SIZE, sizeof(_metadata) +
                         sizeof(WeakHandle));
   // Used by async deflation as a marker in the _owner field.
   // Note that the choice of the two markers is peculiar:
