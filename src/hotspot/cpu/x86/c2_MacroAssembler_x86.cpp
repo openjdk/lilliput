@@ -1208,41 +1208,26 @@ void C2_MacroAssembler::fast_unlock_lightweight(Register obj, Register reg_rax, 
       jcc(Assembler::below, slow_path);
 
       if (OMCacheHitRate) increment(Address(thread, JavaThread::unlock_hit_offset()));
-#ifndef _LP64
-        // TODO[OMWorld]: Unify 32 with 64. Should just be a straight up use 64 on 32. We have the registers here.
-        // Check if recursive.
-        xorptr(reg_rax, reg_rax);
-        orptr(reg_rax, Address(monitor, ObjectMonitor::recursions_offset()));
-        jcc(Assembler::notZero, check_successor);
 
-        // Check if the entry lists are empty.
-        movptr(reg_rax, Address(monitor, ObjectMonitor::EntryList_offset()));
-        orptr(reg_rax, Address(monitor, ObjectMonitor::cxq_offset()));
-        jcc(Assembler::notZero, check_successor);
+      Label recursive;
 
-        // Release lock.
-        movptr(Address(monitor, ObjectMonitor::owner_offset()), NULL_WORD);
-#else // _LP64
-        Label recursive;
+      // Check if recursive.
+      cmpptr(Address(monitor,ObjectMonitor::recursions_offset()), 0);
+      jccb(Assembler::notEqual, recursive);
 
-        // Check if recursive.
-        cmpptr(Address(monitor,ObjectMonitor::recursions_offset()),0);
-        jccb(Assembler::notEqual, recursive);
+      // Check if the entry lists are empty.
+      movptr(reg_rax, Address(monitor, ObjectMonitor::cxq_offset()));
+      orptr(reg_rax, Address(monitor, ObjectMonitor::EntryList_offset()));
+      jcc(Assembler::notZero, check_successor);
 
-        // Check if the entry lists are empty.
-        movptr(reg_rax, Address(monitor, ObjectMonitor::cxq_offset()));
-        orptr(reg_rax, Address(monitor, ObjectMonitor::EntryList_offset()));
-        jcc(Assembler::notZero, check_successor);
+      // Release lock.
+      movptr(Address(monitor, ObjectMonitor::owner_offset()), NULL_WORD);
+      jmpb(unlocked);
 
-        // Release lock.
-        movptr(Address(monitor, ObjectMonitor::owner_offset()), NULL_WORD);
-        jmpb(unlocked);
-
-        // Recursive unlock.
-        bind(recursive);
-        decrement(Address(monitor, ObjectMonitor::recursions_offset()));
-        xorl(t, t);
-#endif
+      // Recursive unlock.
+      bind(recursive);
+      decrement(Address(monitor, ObjectMonitor::recursions_offset()));
+      xorl(t, t);
     }
   }
 
@@ -6587,3 +6572,19 @@ void C2_MacroAssembler::vector_rearrange_int_float(BasicType bt, XMMRegister dst
     vpermps(dst, shuffle, src, vlen_enc);
   }
 }
+
+#ifdef _LP64
+void C2_MacroAssembler::load_nklass_compact_c2(Register dst, Register obj, Register index, Address::ScaleFactor scale, int disp) {
+  // Note: Don't clobber obj anywhere in that method!
+
+  // The incoming address is pointing into obj-start + klass_offset_in_bytes. We need to extract
+  // obj-start, so that we can load from the object's mark-word instead. Usually the address
+  // comes as obj-start in obj and klass_offset_in_bytes in disp. However, sometimes C2
+  // emits code that pre-computes obj-start + klass_offset_in_bytes into a register, and
+  // then passes that register as obj and 0 in disp. The following code extracts the base
+  // and offset to load the mark-word.
+  int offset = oopDesc::mark_offset_in_bytes() + disp - oopDesc::klass_offset_in_bytes();
+  movq(dst, Address(obj, index, scale, offset));
+  shrq(dst, markWord::klass_shift);
+}
+#endif

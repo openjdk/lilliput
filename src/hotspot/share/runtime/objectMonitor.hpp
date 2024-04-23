@@ -33,6 +33,7 @@
 #include "utilities/checkedCast.hpp"
 
 class ObjectMonitor;
+class ObjectMonitorContentionMark;
 class ParkEvent;
 
 // ObjectWaiter serves as a "proxy" or surrogate thread.
@@ -220,7 +221,6 @@ private:
   static int Knob_SpinLimit;
 
   static ByteSize metadata_offset()    { return byte_offset_of(ObjectMonitor, _metadata); }
-  static ByteSize header_offset()      { return metadata_offset(); }
   static ByteSize owner_offset()       { return byte_offset_of(ObjectMonitor, _owner); }
   static ByteSize recursions_offset()  { return byte_offset_of(ObjectMonitor, _recursions); }
   static ByteSize cxq_offset()         { return byte_offset_of(ObjectMonitor, _cxq); }
@@ -356,10 +356,15 @@ private:
     ClearSuccOnSuspend(ObjectMonitor* om) : _om(om)  {}
     void operator()(JavaThread* current);
   };
+
+  bool      enter_is_async_deflating();
  public:
-  bool      try_enter(JavaThread* current);
+  void      enter_for_with_contention_mark(JavaThread* locking_thread, ObjectMonitorContentionMark& contention_mark);
   bool      enter_for(JavaThread* locking_thread);
   bool      enter(JavaThread* current);
+  bool      try_enter(JavaThread* current);
+  bool      spin_enter(JavaThread* current);
+  void      enter_with_contention_mark(JavaThread* current, ObjectMonitorContentionMark& contention_mark);
   void      exit(JavaThread* current, bool not_suspended = true);
   void      wait(jlong millis, bool interruptible, TRAPS);
   void      notify(TRAPS);
@@ -388,19 +393,21 @@ private:
 
   // Deflation support
   bool      deflate_monitor(Thread* current);
-public:
-  bool      deflate_anon_monitor(JavaThread* current);
 private:
   void      install_displaced_markword_in_object(const oop obj);
 };
 
 // RAII object to ensure that ObjectMonitor::is_being_async_deflated() is
 // stable within the context of this mark.
-class ObjectMonitorContentionMark {
+class ObjectMonitorContentionMark : StackObj {
+  DEBUG_ONLY(friend class ObjectMonitor;)
+
   ObjectMonitor* _monitor;
 
+  NONCOPYABLE(ObjectMonitorContentionMark);
+
 public:
-  ObjectMonitorContentionMark(ObjectMonitor* monitor);
+  explicit ObjectMonitorContentionMark(ObjectMonitor* monitor);
   ~ObjectMonitorContentionMark();
 };
 

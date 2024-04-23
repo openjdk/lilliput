@@ -41,6 +41,7 @@
 #include "runtime/stubRoutines.hpp"
 #include "utilities/checkedCast.hpp"
 #include "utilities/globalDefinitions.hpp"
+#include "utilities/macros.hpp"
 
 int C1_MacroAssembler::lock_object(Register hdr, Register obj, Register disp_hdr, Register tmp, Label& slow_case) {
   const int aligned_mask = BytesPerWord -1;
@@ -66,10 +67,13 @@ int C1_MacroAssembler::lock_object(Register hdr, Register obj, Register disp_hdr
   if (LockingMode == LM_LIGHTWEIGHT) {
 #ifdef _LP64
     const Register thread = r15_thread;
-#else
-    const Register thread = disp_hdr;
-#endif
     lightweight_lock(disp_hdr, obj, hdr, thread, tmp, slow_case);
+#else
+    // Implicit null check.
+    movptr(hdr, Address(obj, oopDesc::mark_offset_in_bytes()));
+    // Lacking registers and thread on x86_32. Always take slow path.
+    jmp(slow_case);
+#endif
   } else  if (LockingMode == LM_LEGACY) {
     Label done;
     // Load object header
@@ -170,16 +174,20 @@ void C1_MacroAssembler::try_allocate(Register obj, Register var_size_in_bytes, i
 
 
 void C1_MacroAssembler::initialize_header(Register obj, Register klass, Register len, Register t1, Register t2) {
-  assert_different_registers(obj, klass, len);
-  movptr(Address(obj, oopDesc::mark_offset_in_bytes()), checked_cast<int32_t>(markWord::prototype().value()));
+  assert_different_registers(obj, klass, len, t1, t2);
 #ifdef _LP64
-  if (UseCompressedClassPointers) { // Take care not to kill klass
+  if (UseCompactObjectHeaders) {
+    movptr(t1, Address(klass, Klass::prototype_header_offset()));
+    movptr(Address(obj, oopDesc::mark_offset_in_bytes()), t1);
+  } else if (UseCompressedClassPointers) { // Take care not to kill klass
+    movptr(Address(obj, oopDesc::mark_offset_in_bytes()), checked_cast<int32_t>(markWord::prototype().value()));
     movptr(t1, klass);
     encode_klass_not_null(t1, rscratch1);
     movl(Address(obj, oopDesc::klass_offset_in_bytes()), t1);
   } else
 #endif
   {
+    movptr(Address(obj, oopDesc::mark_offset_in_bytes()), checked_cast<int32_t>(markWord::prototype().value()));
     movptr(Address(obj, oopDesc::klass_offset_in_bytes()), klass);
   }
 
@@ -196,7 +204,7 @@ void C1_MacroAssembler::initialize_header(Register obj, Register klass, Register
 #endif
   }
 #ifdef _LP64
-  else if (UseCompressedClassPointers) {
+  else if (UseCompressedClassPointers && !UseCompactObjectHeaders) {
     xorptr(t1, t1);
     store_klass_gap(obj, t1);
   }
@@ -230,7 +238,9 @@ void C1_MacroAssembler::initialize_object(Register obj, Register klass, Register
   assert((con_size_in_bytes & MinObjAlignmentInBytesMask) == 0,
          "con_size_in_bytes is not multiple of alignment");
   const int hdr_size_in_bytes = instanceOopDesc::header_size() * HeapWordSize;
-
+  if (UseCompactObjectHeaders) {
+    assert(hdr_size_in_bytes == 8, "check object headers size");
+  }
   initialize_header(obj, klass, noreg, t1, t2);
 
   if (!(UseTLAB && ZeroTLAB && is_tlab_allocated)) {

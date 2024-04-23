@@ -248,7 +248,8 @@ inline InstanceKlass* JavaThread::class_to_be_initialized() const {
 inline void JavaThread::om_set_monitor_cache(ObjectMonitor* monitor) {
   assert(LockingMode == LM_LIGHTWEIGHT, "must be");
   assert(monitor != nullptr, "use om_clear_monitor_cache to clear");
-  assert(this == current(), "only set own thread locals");
+  assert(this == current() || monitor->owner_raw() == this, "only add owned monitors for other threads");
+  assert(this == current() || is_obj_deopt_suspend(), "thread must not run concurrently");
 
   _om_cache.set_monitor(monitor);
 }
@@ -288,16 +289,6 @@ inline void JavaThread::om_clear_monitor_cache() {
   _contended_inflation           = 0;
   _wait_inflation                = 0;
   _lock_stack_inflation          = 0;
-
-  if (_wait_deflation != 0 ||
-      _exit_deflation != 0) {
-    lt.print("Wait: %8zu Exit: %8zu Thread: %s",
-             _wait_deflation,
-             _exit_deflation,
-             name());
-  }
-  _wait_deflation = 0;
-  _exit_deflation = 0;
 
   if (_lock_lookup != 0 ||
       _unlock_lookup != 0) {

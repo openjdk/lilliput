@@ -58,7 +58,6 @@ private:
   // We do this instead of a simple index into the array because this allows for
   // efficient addressing in generated code.
   uint32_t _top;
-  bool _wait_was_inflated;
   // The _bad_oop_sentinel acts as a sentinel value to elide underflow checks in generated code.
   // The correct layout is statically asserted in the constructor.
   const uintptr_t _bad_oop_sentinel = badOopVal;
@@ -127,10 +126,6 @@ public:
 
   // GC support
   inline void oops_do(OopClosure* cl);
-
-  bool wait_was_inflated() const { return _wait_was_inflated; };
-  void set_wait_was_inflated() { _wait_was_inflated = true; };
-  void clear_wait_was_inflated() { _wait_was_inflated = false; };
 
   // Printing
   void print_on(outputStream* st);
