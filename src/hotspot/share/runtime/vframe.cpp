@@ -247,9 +247,10 @@ void javaVFrame::print_lock_info_on(outputStream* st, int frame_count) {
           // The first stage of async deflation does not affect any field
           // used by this comparison so the ObjectMonitor* is usable here.
           if (mark.has_monitor()) {
-            // TODO[OMWorld]: Fix
             ObjectMonitor* mon = ObjectSynchronizer::read_monitor(current, monitor->owner(), mark);
-            if ( // we have marked ourself as pending on this monitor
+            if (// if the monitor is null we must be in the process of locking
+                mon == nullptr ||
+                // we have marked ourself as pending on this monitor
                 mon == thread()->current_pending_monitor() ||
                 // we are not the owner of this monitor
                 !mon->is_entered(thread())) {

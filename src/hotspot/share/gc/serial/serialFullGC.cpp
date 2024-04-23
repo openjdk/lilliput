@@ -51,6 +51,7 @@
 #include "gc/shared/preservedMarks.inline.hpp"
 #include "gc/shared/referencePolicy.hpp"
 #include "gc/shared/referenceProcessorPhaseTimes.hpp"
+#include "gc/shared/slidingForwarding.inline.hpp"
 #include "gc/shared/space.inline.hpp"
 #include "gc/shared/strongRootsScope.hpp"
 #include "gc/shared/weakProcessor.hpp"
@@ -228,7 +229,7 @@ class Compacter {
   static void forward_obj(oop obj, HeapWord* new_addr) {
     prefetch_write_scan(obj);
     if (cast_from_oop<HeapWord*>(obj) != new_addr) {
-      obj->forward_to(cast_to_oop(new_addr));
+      SlidingForwarding::forward_to(obj, cast_to_oop(new_addr));
     } else {
       assert(obj->is_gc_marked(), "inv");
       // This obj will stay in-place. Fix the markword.
@@ -253,7 +254,7 @@ class Compacter {
     prefetch_read_scan(addr);
 
     oop obj = cast_to_oop(addr);
-    oop new_obj = obj->forwardee();
+    oop new_obj = SlidingForwarding::forwardee(obj);
     HeapWord* new_addr = cast_from_oop<HeapWord*>(new_obj);
     assert(addr != new_addr, "inv");
     prefetch_write_copy(new_addr);
@@ -349,13 +350,13 @@ public:
       HeapWord* top = space->top();
 
       // Check if the first obj inside this space is forwarded.
-      if (!cast_to_oop(cur_addr)->is_forwarded()) {
+      if (SlidingForwarding::is_not_forwarded(cast_to_oop(cur_addr))) {
         // Jump over consecutive (in-place) live-objs-chunk
         cur_addr = get_first_dead(i);
       }
 
       while (cur_addr < top) {
-        if (!cast_to_oop(cur_addr)->is_forwarded()) {
+        if (SlidingForwarding::is_not_forwarded(cast_to_oop(cur_addr))) {
           cur_addr = *(HeapWord**) cur_addr;
           continue;
         }
@@ -586,12 +587,14 @@ void SerialFullGC::mark_object(oop obj) {
     _string_dedup_requests->add(obj);
   }
 
+  // Do the transform while we still have the header intact,
+  // which might include important class information.
+  ContinuationGCSupport::transform_stack_chunk(obj);
+
   // some marks may contain information we need to preserve so we store them away
   // and overwrite the mark.  We'll restore it at the end of serial full GC.
   markWord mark = obj->mark();
-  obj->set_mark(markWord::prototype().set_marked());
-
-  ContinuationGCSupport::transform_stack_chunk(obj);
+  obj->set_mark(obj->prototype_mark().set_marked());
 
   if (obj->mark_must_be_preserved(mark)) {
     preserve_mark(obj, mark);
@@ -620,8 +623,8 @@ template <class T> void SerialFullGC::adjust_pointer(T* p) {
     oop obj = CompressedOops::decode_not_null(heap_oop);
     assert(Universe::heap()->is_in(obj), "should be in heap");
 
-    if (obj->is_forwarded()) {
-      oop new_obj = obj->forwardee();
+    if (SlidingForwarding::is_forwarded(obj)) {
+      oop new_obj = SlidingForwarding::forwardee(obj);
       assert(is_object_aligned(new_obj), "oop must be aligned");
       RawAccess<IS_NOT_NULL>::oop_store(p, new_obj);
     }
@@ -700,6 +703,8 @@ void SerialFullGC::invoke_at_safepoint(bool clear_all_softrefs) {
 
   phase1_mark(clear_all_softrefs);
 
+  SlidingForwarding::begin();
+
   Compacter compacter{gch};
 
   {
@@ -746,6 +751,8 @@ void SerialFullGC::invoke_at_safepoint(bool clear_all_softrefs) {
   // Set saved marks for allocation profiler (and other things? -- dld)
   // (Should this be in general part?)
   gch->save_marks();
+
+  SlidingForwarding::end();
 
   deallocate_stacks();
 

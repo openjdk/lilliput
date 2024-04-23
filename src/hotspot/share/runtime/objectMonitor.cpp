@@ -604,14 +604,6 @@ bool ObjectMonitor::deflate_monitor(Thread* current) {
     return false;
   }
 
-  if (LockingMode == LM_LIGHTWEIGHT && is_being_async_deflated()) {
-    // TODO[OMWorld]: Batched deflation exiting early breaks this.
-    // This happens when a locked monitor is deflated by a java thread
-    // returning itself to fast_locked
-    assert(is_owner_anonymous(), "must stay anonymous when the java thread deflates");
-    return true;
-  }
-
   const oop obj = object_peek();
 
   if (obj == nullptr) {
@@ -689,77 +681,6 @@ bool ObjectMonitor::deflate_monitor(Thread* current) {
   }
 
   // We leave owner == DEFLATER_MARKER and contentions < 0
-  // to force any racing threads to retry.
-  return true;  // Success, ObjectMonitor has been deflated.
-}
-
-bool ObjectMonitor::deflate_anon_monitor(JavaThread* current) {
-  assert(owner_raw() == current, "must be");
-  assert(LockingMode == LM_LIGHTWEIGHT, "must be");
-
-  LockStack& lock_stack = current->lock_stack();
-
-  if (!lock_stack.can_push(1 + _recursions)) {
-    // Will not be able to push the oop on the lock stack.
-    return false;
-  }
-
-  if (is_contended()) {
-    // Easy checks are first - the ObjectMonitor is busy so no deflation.
-    return false;
-  }
-
-  // Make sure if a thread sees contentions() < 0 they also see owner == ANONYMOUS_OWNER
-  set_owner_from(current, reinterpret_cast<void*>(ANONYMOUS_OWNER));
-
-    // Recheck after setting owner
-  bool cleanup = is_contended();
-
-
-  if (!cleanup) {
-    // Make a zero contentions field negative to force any contending threads
-    // to retry. Because this is only called while holding the lock, the owner
-    // is anonymous and contentions is held over enter in inflate_and_enter
-    // it means that if the cas succeeds then we can have no other thread
-    // racily inserting themselves on the _waiters or _cxq lists, the
-    // entry list is protected by the lock (_waiter technically too, only
-    // removals are done outside the lock)
-    // TODO: Double check _succ and _responsible invariants
-    if (Atomic::cmpxchg(&_contentions, 0, INT_MIN) != 0) {
-      // Contentions was no longer 0 so we lost the race.
-      cleanup = true;
-    }
-  }
-
-  if (cleanup) {
-    // Could not deflate
-    set_owner_from_anonymous(current);
-    return false;
-  }
-
-  // Sanity checks for the races:
-  guarantee(is_owner_anonymous(), "must be");
-  guarantee(contentions() < 0, "must be negative: contentions=%d",
-            contentions());
-  guarantee(_waiters == 0, "must be 0: waiters=%d", _waiters);
-  guarantee(_cxq == nullptr, "must be no contending threads: cxq="
-            INTPTR_FORMAT, p2i(_cxq));
-  guarantee(_EntryList == nullptr,
-            "must be no entering threads: EntryList=" INTPTR_FORMAT,
-            p2i(_EntryList));
-
-  oop obj = object();
-
-  LightweightSynchronizer::deflate_anon_monitor(current, obj, this);
-
-  // We are deflated, restore the correct lock_stack
-  lock_stack.push(obj);
-  for (int i = 0; i < _recursions; i++) {
-    bool entered = lock_stack.try_recursive_enter(obj);
-    assert(entered, "must have entered here");
-  }
-
-  // We leave owner == ANONYMOUS_OWNER and contentions < 0
   // to force any racing threads to retry.
   return true;  // Success, ObjectMonitor has been deflated.
 }
@@ -1787,17 +1708,8 @@ void ObjectMonitor::wait(jlong millis, bool interruptible, TRAPS) {
   current->inc_held_monitor_count(relock_count); // Deopt never entered these counts.
   _waiters--;             // decrement the number of waiters
 
-  bool deflated = false;
-
-  if (LockingMode == LM_LIGHTWEIGHT && OMDeflateAfterWait && current->lock_stack().wait_was_inflated()) {
-    if (deflate_anon_monitor(current)) {
-      current->_wait_deflation++;
-      deflated = true;
-    }
-  }
-
   // Verify a few postconditions
-  assert(deflated || owner_raw() == current, "invariant");
+  assert(owner_raw() == current, "invariant");
   assert(_succ != current, "invariant");
   assert_mark_word_concistency();
 

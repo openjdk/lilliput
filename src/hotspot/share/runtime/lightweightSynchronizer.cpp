@@ -674,8 +674,6 @@ void LightweightSynchronizer::exit(oop object, JavaThread* current) {
   assert(LockingMode == LM_LIGHTWEIGHT, "must be");
   assert(current == Thread::current(), "must be");
 
-  bool first_try = true;
-
   markWord mark = object->mark();
   assert(!mark.is_unlocked(), "must be unlocked");
 
@@ -693,7 +691,6 @@ void LightweightSynchronizer::exit(oop object, JavaThread* current) {
     }
   }
 
-retry:
   // Fast-locking does not use the 'lock' argument.
   while (mark.is_fast_locked()) {
     markWord unlocked_mark = mark.set_unlocked();
@@ -715,17 +712,6 @@ retry:
     monitor->set_owner_from_anonymous(current);
     monitor->set_recursions(current->lock_stack().remove(object) - 1);
     current->_contended_inflation++;
-  }
-
-  if (OMDeflateBeforeExit && first_try && monitor->recursions() == 0) {
-    // Only deflate if recursions are 0 or the lock stack may become
-    // imbalanced.
-    first_try = false;
-    if (monitor->deflate_anon_monitor(current)) {
-      mark = object->mark();
-      current->_exit_deflation++;
-      goto retry;
-    }
   }
 
   monitor->exit(current);
@@ -820,7 +806,6 @@ ObjectMonitor* LightweightSynchronizer::inflate_fast_locked_object(oop object, J
   }
 
   if (cause == ObjectSynchronizer::inflate_cause_wait) {
-    locking_thread->lock_stack().set_wait_was_inflated();
     locking_thread->_wait_inflation++;
   } else if (cause == ObjectSynchronizer::inflate_cause_monitor_enter) {
     locking_thread->_recursive_inflation++;

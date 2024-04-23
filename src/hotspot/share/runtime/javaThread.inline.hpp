@@ -290,16 +290,6 @@ inline void JavaThread::om_clear_monitor_cache() {
   _wait_inflation                = 0;
   _lock_stack_inflation          = 0;
 
-  if (_wait_deflation != 0 ||
-      _exit_deflation != 0) {
-    lt.print("Wait: %8zu Exit: %8zu Thread: %s",
-             _wait_deflation,
-             _exit_deflation,
-             name());
-  }
-  _wait_deflation = 0;
-  _exit_deflation = 0;
-
   if (_lock_lookup != 0 ||
       _unlock_lookup != 0) {
     const double lock_hit_rate = (double)_lock_hit / (double)_lock_lookup * 100;
