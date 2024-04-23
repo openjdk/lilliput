@@ -647,32 +647,7 @@ void ObjectSynchronizer::exit(oop object, BasicLock* lock, JavaThread* current) 
 
   if (!useHeavyMonitors()) {
     markWord mark = object->mark();
-    if (LockingMode == LM_LIGHTWEIGHT) {
-      // Fast-locking does not use the 'lock' argument.
-      LockStack& lock_stack = current->lock_stack();
-      if (mark.is_fast_locked() && lock_stack.try_recursive_exit(object)) {
-        // Recursively unlocked.
-        return;
-      }
-
-      if (mark.is_fast_locked() && lock_stack.is_recursive(object)) {
-        // This lock is recursive but is not at the top of the lock stack so we're
-        // doing an unbalanced exit. We have to fall thru to inflation below and
-        // let ObjectMonitor::exit() do the unlock.
-      } else {
-        while (mark.is_fast_locked()) {
-          // Retry until a lock state change has been observed. cas_set_mark() may collide with non lock bits modifications.
-          const markWord unlocked_mark = mark.set_unlocked();
-          const markWord old_mark = object->cas_set_mark(unlocked_mark, mark);
-          if (old_mark == mark) {
-            size_t recursions = lock_stack.remove(object) - 1;
-            assert(recursions == 0, "must not be recursive here");
-            return;
-          }
-          mark = old_mark;
-        }
-      }
-    } else if (LockingMode == LM_LEGACY) {
+    if (LockingMode == LM_LEGACY) {
       markWord dhw = lock->displaced_header();
       if (dhw.value() == 0) {
         // If the displaced header is null, then this exit matches up with
