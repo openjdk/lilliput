@@ -54,7 +54,7 @@ private:
   static void set_table_max(JavaThread* current);
 
   static void enter_for(Handle obj, BasicLock* lock, JavaThread* locking_thread);
-  static void enter(Handle obj, BasicLock* lock, JavaThread* locking_thread);
+  static void enter(Handle obj, BasicLock* lock, JavaThread* current);
   static void exit(oop object, JavaThread* current);
 
   static ObjectMonitor* inflate_locked_or_imse(oop object, const ObjectSynchronizer::InflateCause cause, TRAPS);
