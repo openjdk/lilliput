@@ -1212,7 +1212,7 @@ void C2_MacroAssembler::fast_unlock_lightweight(Register obj, Register reg_rax, 
       Label recursive;
 
       // Check if recursive.
-      cmpptr(Address(monitor,ObjectMonitor::recursions_offset()),0);
+      cmpptr(Address(monitor,ObjectMonitor::recursions_offset()), 0);
       jccb(Assembler::notEqual, recursive);
 
       // Check if the entry lists are empty.
