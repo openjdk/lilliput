@@ -5338,22 +5338,41 @@ address MacroAssembler::arrays_equals(Register a1, Register a2, Register tmp3,
   } else {
     Label NEXT_DWORD, SHORT, TAIL, TAIL2, STUB,
         CSET_EQ, LAST_CHECK;
+    // When the base is not aligned to 8 bytes, then we let
+    // the compare loop include the array length, and skip
+    // the explicit comparison of length.
+    bool is_8aligned = is_aligned(base_offset, BytesPerWord);
     mov(result, false);
     cbz(a1, DONE);
     ldrw(cnt1, Address(a1, length_offset));
     cbz(a2, DONE);
     ldrw(cnt2, Address(a2, length_offset));
+    if (!is_8aligned) {
+      // Increase loop counter by size of length field.
+      addw(cnt1, cnt1, BytesPerInt / elem_size);
+      addw(cnt2, cnt2, BytesPerInt / elem_size);
+    }
     // on most CPUs a2 is still "locked"(surprisingly) in ldrw and it's
     // faster to perform another branch before comparing a1 and a2
     cmp(cnt1, (u1)elem_per_word);
     br(LE, SHORT); // short or same
-    ldr(tmp3, Address(pre(a1, base_offset)));
+    if (is_8aligned) {
+      ldr(tmp3, Address(pre(a1, base_offset)));
+    } else {
+      ldr(tmp3, Address(pre(a1, length_offset)));
+    }
     subs(zr, cnt1, stubBytesThreshold);
     br(GE, STUB);
-    ldr(tmp4, Address(pre(a2, base_offset)));
+    if (is_8aligned) {
+      ldr(tmp4, Address(pre(a2, base_offset)));
+    } else {
+      ldr(tmp4, Address(pre(a2, length_offset)));
+    }
     sub(tmp5, zr, cnt1, LSL, 3 + log_elem_size);
-    cmp(cnt2, cnt1);
-    br(NE, DONE);
+    if (is_8aligned) {
+      cmp(cnt2, cnt1);
+      br(NE, DONE);
+    }
 
     // Main 16 byte comparison loop with 2 exits
     bind(NEXT_DWORD); {
@@ -5385,7 +5404,11 @@ address MacroAssembler::arrays_equals(Register a1, Register a2, Register tmp3,
     b(LAST_CHECK);
 
     bind(STUB);
-    ldr(tmp4, Address(pre(a2, base_offset)));
+    if (is_8aligned) {
+      ldr(tmp4, Address(pre(a2, base_offset)));
+    } else {
+      ldr(tmp4, Address(pre(a2, length_offset)));
+    }
     cmp(cnt2, cnt1);
     br(NE, DONE);
     if (elem_size == 2) { // convert to byte counter
@@ -5408,12 +5431,22 @@ address MacroAssembler::arrays_equals(Register a1, Register a2, Register tmp3,
     mov(result, a2);
     b(DONE);
     bind(SHORT);
-    cmp(cnt2, cnt1);
-    br(NE, DONE);
+    if (is_8aligned) {
+      cmp(cnt2, cnt1);
+      br(NE, DONE);
+    }
     cbz(cnt1, SAME);
     sub(tmp5, zr, cnt1, LSL, 3 + log_elem_size);
-    ldr(tmp3, Address(a1, base_offset));
-    ldr(tmp4, Address(a2, base_offset));
+    if (is_8aligned) {
+      ldr(tmp3, Address(pre(a1, base_offset)));
+    } else {
+      ldr(tmp3, Address(pre(a1, length_offset)));
+    }
+    if (is_8aligned) {
+      ldr(tmp4, Address(pre(a2, base_offset)));
+    } else {
+      ldr(tmp4, Address(pre(a2, length_offset)));
+    }
     bind(LAST_CHECK);
     eor(tmp4, tmp3, tmp4);
     lslv(tmp5, tmp4, tmp5);
