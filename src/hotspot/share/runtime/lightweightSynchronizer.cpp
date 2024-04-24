@@ -566,7 +566,7 @@ void LightweightSynchronizer::enter_for(Handle obj, BasicLock* lock, JavaThread*
 
   // TODO[OMWorld]: Is this necessary?
   if (obj->klass()->is_value_based()) {
-    ObjectSynchronizer::handle_sync_on_value_based_class(obj, current);
+    ObjectSynchronizer::handle_sync_on_value_based_class(obj, locking_thread);
   }
 
   locking_thread->inc_held_monitor_count();
