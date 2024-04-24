@@ -460,7 +460,7 @@ bool ObjectSynchronizer::quick_enter(oop obj, JavaThread* current,
       return true;
     }
 
-    if (LockingMode != LM_LIGHTWEIGHT) {
+    if (LockingMode == LM_LEGACY) {
       // This Java Monitor is inflated so obj's header will never be
       // displaced to this thread's BasicLock. Make the displaced header
       // non-null so this BasicLock is not seen as recursive nor as
