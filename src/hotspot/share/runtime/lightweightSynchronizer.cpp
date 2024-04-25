@@ -1019,7 +1019,7 @@ intptr_t LightweightSynchronizer::FastHashCode(Thread* current, oop obj) {
   }
 }
 
-bool LightweightSynchronizer::quick_enter(oop obj, JavaThread* current, BasicLock * lock) {
+bool LightweightSynchronizer::quick_enter(oop obj, JavaThread* current, BasicLock* lock) {
   assert(LockingMode == LM_LIGHTWEIGHT, "must be");
   assert(current->thread_state() == _thread_in_Java, "must be");
   assert(obj != nullptr, "must be");
