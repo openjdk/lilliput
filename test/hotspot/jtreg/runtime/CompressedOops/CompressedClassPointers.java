@@ -60,11 +60,7 @@ public class CompressedClassPointers {
 
     // Returns true if the output indicates that the VM uses compact object headers
     static boolean usesCompactObjectHeaders(OutputAnalyzer output) {
-        if (output.getOutput().contains(usesCompactObjectHeadersPat)) {
-            return true;
-        } else {
-            return false;
-        }
+        return output.getOutput().contains(usesCompactObjectHeadersPat);
     }
 
     // Returns true if the output indicates that the ccs is reserved anywhere.
