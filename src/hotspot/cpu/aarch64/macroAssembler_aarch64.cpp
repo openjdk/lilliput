@@ -5203,6 +5203,14 @@ address MacroAssembler::arrays_equals(Register a1, Register a2, Register tmp3,
   int length_offset = arrayOopDesc::length_offset_in_bytes();
   int base_offset
     = arrayOopDesc::base_offset_in_bytes(elem_size == 2 ? T_CHAR : T_BYTE);
+  // When the base is not aligned to 8 bytes, then we let
+  // the compare loop include the array length, and skip
+  // the explicit comparison of length.
+  bool is_8aligned = is_aligned(base_offset, BytesPerWord);
+  assert(is_aligned(base_offset, BytesPerWord) || is_aligned(length_offset, BytesPerWord),
+         "base_offset or length_offset must be 8-byte aligned");
+  int start_offset = is_8aligned ? base_offset : length_offset;
+  int extra_length = is_8aligned ? 0 : BytesPerInt / elem_size;
   int stubBytesThreshold = 3 * 64 + (UseSIMDForArrayEquals ? 0 : 16);
 
   assert(elem_size == 1 || elem_size == 2, "must be char or byte");
@@ -5237,10 +5245,15 @@ address MacroAssembler::arrays_equals(Register a1, Register a2, Register tmp3,
     bind(A_IS_NOT_NULL);
     ldrw(cnt1, Address(a1, length_offset));
     ldrw(cnt2, Address(a2, length_offset));
+    if (extra_length != 0) {
+      // Increase loop counter by size of length field.
+      addw(cnt1, cnt1, extra_length);
+      addw(cnt2, cnt2, extra_length);
+    }
     eorw(tmp5, cnt1, cnt2);
     cbnzw(tmp5, DONE);
-    lea(a1, Address(a1, base_offset));
-    lea(a2, Address(a2, base_offset));
+    lea(a1, Address(a1, start_offset));
+    lea(a2, Address(a2, start_offset));
     // Check for short strings, i.e. smaller than wordSize.
     subs(cnt1, cnt1, elem_per_word);
     br(Assembler::LT, SHORT);
@@ -5304,14 +5317,19 @@ address MacroAssembler::arrays_equals(Register a1, Register a2, Register tmp3,
     ldrw(cnt1, Address(a1, length_offset));
     cbz(a2, DONE);
     ldrw(cnt2, Address(a2, length_offset));
+    if (extra_length != 0) {
+      // Increase loop counter by size of length field.
+      addw(cnt1, cnt1, extra_length);
+      addw(cnt2, cnt2, extra_length);
+    }
     // on most CPUs a2 is still "locked"(surprisingly) in ldrw and it's
     // faster to perform another branch before comparing a1 and a2
     cmp(cnt1, (u1)elem_per_word);
     br(LE, SHORT); // short or same
-    ldr(tmp3, Address(pre(a1, base_offset)));
+    ldr(tmp3, Address(pre(a1, start_offset)));
     subs(zr, cnt1, stubBytesThreshold);
     br(GE, STUB);
-    ldr(tmp4, Address(pre(a2, base_offset)));
+    ldr(tmp4, Address(pre(a2, start_offset)));
     sub(tmp5, zr, cnt1, LSL, 3 + log_elem_size);
     cmp(cnt2, cnt1);
     br(NE, DONE);
@@ -5346,7 +5364,7 @@ address MacroAssembler::arrays_equals(Register a1, Register a2, Register tmp3,
     b(LAST_CHECK);
 
     bind(STUB);
-    ldr(tmp4, Address(pre(a2, base_offset)));
+    ldr(tmp4, Address(pre(a2, start_offset)));
     cmp(cnt2, cnt1);
     br(NE, DONE);
     if (elem_size == 2) { // convert to byte counter
@@ -5373,8 +5391,8 @@ address MacroAssembler::arrays_equals(Register a1, Register a2, Register tmp3,
     br(NE, DONE);
     cbz(cnt1, SAME);
     sub(tmp5, zr, cnt1, LSL, 3 + log_elem_size);
-    ldr(tmp3, Address(a1, base_offset));
-    ldr(tmp4, Address(a2, base_offset));
+    ldr(tmp3, Address(pre(a1, start_offset)));
+    ldr(tmp4, Address(pre(a2, start_offset)));
     bind(LAST_CHECK);
     eor(tmp4, tmp3, tmp4);
     lslv(tmp5, tmp4, tmp5);
