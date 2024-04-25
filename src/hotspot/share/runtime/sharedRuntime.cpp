@@ -56,6 +56,7 @@
 #include "prims/methodHandles.hpp"
 #include "prims/nativeLookup.hpp"
 #include "runtime/atomic.hpp"
+#include "runtime/basicLock.inline.hpp"
 #include "runtime/frame.inline.hpp"
 #include "runtime/globals.hpp"
 #include "runtime/handles.inline.hpp"
@@ -2937,7 +2938,7 @@ JRT_LEAF(intptr_t*, SharedRuntime::OSR_migration_begin( JavaThread *current) )
         // object's header no longer refers to it.
         buf[i] = (intptr_t)lock->displaced_header().value();
       } else if (LockingMode == LM_LIGHTWEIGHT) {
-        buf[i] = (intptr_t)lock->displaced_header().value();
+        buf[i] = (intptr_t)lock->object_monitor_cache();
       }
 #ifdef ASSERT
       else {

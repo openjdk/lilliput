@@ -31,6 +31,7 @@
 #include "logging/logStream.hpp"
 #include "memory/resourceArea.hpp"
 #include "oops/oop.inline.hpp"
+#include "runtime/basicLock.inline.hpp"
 #include "runtime/globals_extension.hpp"
 #include "runtime/javaThread.hpp"
 #include "runtime/lightweightSynchronizer.hpp"
@@ -524,9 +525,9 @@ public:
   ~CacheSetter() {
     if (_monitor != nullptr) {
       _thread->om_set_monitor_cache(_monitor);
-      _lock->set_displaced_header(_monitor);
+      _lock->set_object_monitor_cache(_monitor);
     } else {
-      _lock->clear_displaced_header();
+      _lock->clear_object_monitor_cache();
     }
   }
 

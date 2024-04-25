@@ -237,7 +237,7 @@ void C2_MacroAssembler::fast_lock_lightweight(Register obj, Register box, Regist
   Label slow_path;
 
   // Clear box. TODO[OMWorld]: Is this necessary? May also defer this to not write twice.
-  str(zr, Address(box, BasicLock::displaced_header_offset_in_bytes()));
+  str(zr, Address(box, BasicLock::object_monitor_cache_offset_in_bytes()));
 
   if (DiagnoseSyncOnValueBasedClasses != 0) {
     load_klass(t1, obj);
@@ -379,7 +379,7 @@ void C2_MacroAssembler::fast_lock_lightweight(Register obj, Register box, Regist
       increment(Address(t1_monitor, ObjectMonitor::recursions_offset()), 1);
 
       bind(monitor_locked);
-      str(t1_monitor, Address(box, BasicLock::displaced_header_offset_in_bytes()));
+      str(t1_monitor, Address(box, BasicLock::object_monitor_cache_offset_in_bytes()));
     }
 
   }
@@ -497,7 +497,7 @@ void C2_MacroAssembler::fast_unlock_lightweight(Register obj, Register box, Regi
       const Register t1_monitor = t1;
 
       if (OMCacheHitRate) increment(Address(rthread, JavaThread::unlock_lookup_offset()));
-      ldr(t1_monitor, Address(box, BasicLock::displaced_header_offset_in_bytes()));
+      ldr(t1_monitor, Address(box, BasicLock::object_monitor_cache_offset_in_bytes()));
       // TODO: Cleanup these constants (with an enum and asserts)
       cmp(t1_monitor, (uint8_t)2);
       // Non symmetrical, take slow path monitor == 0 or 1, 0 and 1 < 2, both LS and NE

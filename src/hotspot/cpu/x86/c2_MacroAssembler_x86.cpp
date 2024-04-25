@@ -950,7 +950,7 @@ void C2_MacroAssembler::fast_lock_lightweight(Register obj, Register box, Regist
   Label slow_path;
 
   // Clear box. TODO[OMWorld]: Is this necessary? May also defer this to not write twice.
-  movptr(Address(box, BasicLock::displaced_header_offset_in_bytes()), 0);
+  movptr(Address(box, BasicLock::object_monitor_cache_offset_in_bytes()), 0);
 
   if (DiagnoseSyncOnValueBasedClasses != 0) {
     load_klass(rax_reg, obj, t);
@@ -1084,7 +1084,7 @@ void C2_MacroAssembler::fast_lock_lightweight(Register obj, Register box, Regist
 
       bind(monitor_locked);
       // Cache the monitor for unlock
-      movptr(Address(box, BasicLock::displaced_header_offset_in_bytes()), monitor);
+      movptr(Address(box, BasicLock::object_monitor_cache_offset_in_bytes()), monitor);
     }
   }
 
@@ -1200,7 +1200,7 @@ void C2_MacroAssembler::fast_unlock_lightweight(Register obj, Register reg_rax, 
       jmp(slow_path);
     } else {
       if (OMCacheHitRate) increment(Address(thread, JavaThread::unlock_lookup_offset()));
-      movptr(monitor, Address(box, BasicLock::displaced_header_offset_in_bytes()));
+      movptr(monitor, Address(box, BasicLock::object_monitor_cache_offset_in_bytes()));
       // TODO[OMWorld]: Figure out the correctness surrounding the owner field here. Obj is not on the lock stack
       //                but this means this thread must have locked on the inflated monitor at some point. So it
       //                should not be anonymous.
