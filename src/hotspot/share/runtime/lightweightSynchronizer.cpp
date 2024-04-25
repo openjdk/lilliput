@@ -1019,3 +1019,45 @@ intptr_t LightweightSynchronizer::FastHashCode(Thread* current, oop obj) {
     }
   }
 }
+
+bool LightweightSynchronizer::quick_enter(oop obj, JavaThread* current, BasicLock* lock) {
+  assert(LockingMode == LM_LIGHTWEIGHT, "must be");
+  assert(current->thread_state() == _thread_in_Java, "must be");
+  assert(obj != nullptr, "must be");
+  NoSafepointVerifier nsv;
+
+  CacheSetter cache_setter(current, lock);
+
+  LockStack& lock_stack = current->lock_stack();
+  if (lock_stack.is_full()) {
+    // Always go into runtime if the lock stack is full.
+    return false;
+  }
+
+  if (lock_stack.try_recursive_enter(obj)) {
+    // Recursive lock successful.
+    current->inc_held_monitor_count();
+    return true;
+  }
+
+  const markWord mark = obj->mark();
+
+  if (mark.has_monitor()) {
+    ObjectMonitor* const monitor = current->om_get_from_monitor_cache(obj);
+
+    if (monitor == nullptr) {
+      // Take the slow-path on a cache miss.
+      return false;
+    }
+
+    if (monitor->try_enter(current)) {
+      // ObjectMonitor enter successful.
+      cache_setter.set_monitor(monitor);
+      current->inc_held_monitor_count();
+      return true;
+    }
+  }
+
+  // Slow-path.
+  return false;
+}

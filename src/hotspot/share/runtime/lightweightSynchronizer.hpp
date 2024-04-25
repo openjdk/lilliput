@@ -72,6 +72,8 @@ private:
 
   // NOTE: May not cause monitor inflation
   static intptr_t FastHashCode(Thread* current, oop obj);
+
+  static bool quick_enter(oop obj, JavaThread* current, BasicLock* Lock);
 };
 
 #endif // SHARE_RUNTIME_LIGHTWEIGHTSYNCHRONIZER_HPP

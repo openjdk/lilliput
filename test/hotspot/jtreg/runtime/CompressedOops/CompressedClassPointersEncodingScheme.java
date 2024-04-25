@@ -83,8 +83,10 @@ public class CompressedClassPointersEncodingScheme {
         // - non-aarch64: base=0, shift=3
         // - aarch64: base to start of class range, shift 0
         if (Platform.isAArch64()) {
-            long forceAddress = 0x70000000; // make sure we have a valid EOR immediate
-            test(forceAddress, false, G, forceAddress, 0);
+            // The best we can do on aarch64 is to be *near* the end of the 32g range, since a valid encoding base
+            // on aarch64 must be 4G aligned, and the max. class space size is 3G.
+            long forceAddress = 0x7_0000_0000L; // 28g, and also a valid EOR immediate
+            test(forceAddress, false, 3 * G, forceAddress, 0);
         } else {
             test(32 * G - 128 * M, false, 128 * M, 0, 3);
         }
@@ -92,7 +94,7 @@ public class CompressedClassPointersEncodingScheme {
         // Test ccs starting *below* 4G, but extending upwards beyond 4G. All platforms except aarch64 should pick
         // zero based encoding.
         if (Platform.isAArch64()) {
-            long forceAddress = 0xc0000000; // make sure we have a valid EOR immediate
+            long forceAddress = 0xC000_0000L; // make sure we have a valid EOR immediate
             test(forceAddress, false, G + (128 * M), forceAddress, 0);
         } else {
             test(4 * G - 128 * M, false, 2 * 128 * M, 0, 3);

@@ -416,31 +416,13 @@ bool ObjectSynchronizer::quick_enter(oop obj, JavaThread* current,
   }
 
   if (LockingMode == LM_LIGHTWEIGHT) {
-    LockStack& lock_stack = current->lock_stack();
-    if (lock_stack.is_full()) {
-      // Always go into runtime if the lock stack is full.
-      return false;
-    }
-    if (lock_stack.try_recursive_enter(obj)) {
-      // Recursive lock successful.
-      current->inc_held_monitor_count();
-      return true;
-    }
+    return LightweightSynchronizer::quick_enter(obj, current, lock);
   }
 
   const markWord mark = obj->mark();
 
   if (mark.has_monitor()) {
-    ObjectMonitor* m = nullptr;
-    if (LockingMode == LM_LIGHTWEIGHT) {
-      m = current->om_get_from_monitor_cache(obj);
-      if (m == nullptr) {
-        // Take the slow-path on a cache miss.
-        return false;
-      }
-    } else {
-      m = ObjectSynchronizer::read_monitor(mark);
-    }
+    ObjectMonitor* const m = ObjectSynchronizer::read_monitor(mark);
     // An async deflation or GC can race us before we manage to make
     // the ObjectMonitor busy by setting the owner below. If we detect
     // that race we just bail out to the slow-path here.
