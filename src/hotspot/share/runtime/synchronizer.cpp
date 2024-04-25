@@ -415,31 +415,13 @@ bool ObjectSynchronizer::quick_enter(oop obj, JavaThread* current,
   }
 
   if (LockingMode == LM_LIGHTWEIGHT) {
-    LockStack& lock_stack = current->lock_stack();
-    if (lock_stack.is_full()) {
-      // Always go into runtime if the lock stack is full.
-      return false;
-    }
-    if (lock_stack.try_recursive_enter(obj)) {
-      // Recursive lock successful.
-      current->inc_held_monitor_count();
-      return true;
-    }
+    return LightweightSynchronizer::quick_enter(obj, current, lock);
   }
 
   const markWord mark = obj->mark();
 
   if (mark.has_monitor()) {
-    ObjectMonitor* m = nullptr;
-    if (LockingMode == LM_LIGHTWEIGHT) {
-      m = current->om_get_from_monitor_cache(obj);
-      if (m == nullptr) {
-        // Take the slow-path on a cache miss.
-        return false;
-      }
-    } else {
-      m = ObjectSynchronizer::read_monitor(mark);
-    }
+    ObjectMonitor* const m = ObjectSynchronizer::read_monitor(mark);
     // An async deflation or GC can race us before we manage to make
     // the ObjectMonitor busy by setting the owner below. If we detect
     // that race we just bail out to the slow-path here.
@@ -459,18 +441,16 @@ bool ObjectSynchronizer::quick_enter(oop obj, JavaThread* current,
       return true;
     }
 
-    if (LockingMode != LM_LIGHTWEIGHT) {
-      // This Java Monitor is inflated so obj's header will never be
-      // displaced to this thread's BasicLock. Make the displaced header
-      // non-null so this BasicLock is not seen as recursive nor as
-      // being locked. We do this unconditionally so that this thread's
-      // BasicLock cannot be mis-interpreted by any stack walkers. For
-      // performance reasons, stack walkers generally first check for
-      // stack-locking in the object's header, the second check is for
-      // recursive stack-locking in the displaced header in the BasicLock,
-      // and last are the inflated Java Monitor (ObjectMonitor) checks.
-      lock->set_displaced_header(markWord::unused_mark());
-    }
+    // This Java Monitor is inflated so obj's header will never be
+    // displaced to this thread's BasicLock. Make the displaced header
+    // non-null so this BasicLock is not seen as recursive nor as
+    // being locked. We do this unconditionally so that this thread's
+    // BasicLock cannot be mis-interpreted by any stack walkers. For
+    // performance reasons, stack walkers generally first check for
+    // stack-locking in the object's header, the second check is for
+    // recursive stack-locking in the displaced header in the BasicLock,
+    // and last are the inflated Java Monitor (ObjectMonitor) checks.
+    lock->set_displaced_header(markWord::unused_mark());
 
     if (owner == nullptr && m->try_set_owner_from(nullptr, current) == nullptr) {
       assert(m->_recursions == 0, "invariant");
