@@ -186,17 +186,11 @@ char* CompressedKlassPointers::reserve_address_space_X(uintptr_t from, uintptr_t
 }
 
 char* CompressedKlassPointers::reserve_address_space_for_unscaled_encoding(size_t size, bool aslr) {
-  if (tiny_classpointer_mode()) {
-    return nullptr;
-  }
   const size_t unscaled_max = nth_bit(narrow_klass_pointer_bits());
   return reserve_address_space_X(0, unscaled_max, size, Metaspace::reserve_alignment(), aslr);
 }
 
 char* CompressedKlassPointers::reserve_address_space_for_zerobased_encoding(size_t size, bool aslr) {
-  if (tiny_classpointer_mode()) {
-    return nullptr;
-  }
   const size_t unscaled_max = nth_bit(narrow_klass_pointer_bits());
   const size_t zerobased_max = nth_bit(narrow_klass_pointer_bits() + max_shift());
   return reserve_address_space_X(unscaled_max, zerobased_max, size, Metaspace::reserve_alignment(), aslr);
