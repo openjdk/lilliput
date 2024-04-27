@@ -133,6 +133,10 @@ public:
   // The maximum possible shift; the actual shift employed later can be smaller (see initialize())
   static int max_shift()                 { check_init(_max_shift); return _max_shift; }
 
+  // Returns the maximum encoding range that can be covered with the currently
+  // choosen nKlassID geometry (nKlass bit size, max shift)
+  static size_t max_encoding_range_size();
+
   // Reserve a range of memory that is to contain Klass strucutures which are referenced by narrow Klass IDs.
   // If optimize_for_zero_base is true, the implementation will attempt to reserve optimized for zero-based encoding.
   static char* reserve_address_space_for_compressed_classes(size_t size, bool aslr, bool optimize_for_zero_base);

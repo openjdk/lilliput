@@ -651,23 +651,46 @@ void Metaspace::ergo_initialize() {
   MaxMetaspaceSize = MAX2(MaxMetaspaceSize, commit_alignment());
 
   if (UseCompressedClassPointers) {
+    // Adjust size of the compressed class space.
+
     // Let CCS size not be larger than 80% of MaxMetaspaceSize. Note that is
     // grossly over-dimensioned for most usage scenarios; typical ratio of
     // class space : non class space usage is about 1:6. With many small classes,
     // it can get as low as 1:2. It is not a big deal though since ccs is only
     // reserved and will be committed on demand only.
-    size_t max_ccs_size = 8 * (MaxMetaspaceSize / 10);
-    size_t adjusted_ccs_size = MIN2(CompressedClassSpaceSize, max_ccs_size);
+    const size_t max_ccs_size = 8 * (MaxMetaspaceSize / 10);
+
+    // CCS is also limited by the max. possible Klass encoding range size
+    const size_t max_encoding_range = CompressedKlassPointers::max_encoding_range_size();
+
+    size_t adjusted_ccs_size = MIN3(CompressedClassSpaceSize, max_ccs_size, max_encoding_range);
 
     // CCS must be aligned to root chunk size, and be at least the size of one
     //  root chunk.
-    adjusted_ccs_size = align_up(adjusted_ccs_size, reserve_alignment());
-    adjusted_ccs_size = MAX2(adjusted_ccs_size, reserve_alignment());
+    adjusted_ccs_size = align_down(adjusted_ccs_size, reserve_alignment());
+    if (adjusted_ccs_size < reserve_alignment()) {
+      stringStream ss;
+      ss.print("Class space size (adjusted) (%zu) smaller "
+               "than metaspace reserve granularity (%zu)",
+               adjusted_ccs_size, reserve_alignment());
+      vm_exit_during_initialization(ss.base());
+    }
+
+    // Print a warning if the adjusted size differs from the users input
+    if (CompressedClassSpaceSize > adjusted_ccs_size) {
+      #define X "CompressedClassSpaceSize adjusted from user input " \
+                "%zu bytes down to %zu bytes", CompressedClassSpaceSize, adjusted_ccs_size
+      if (FLAG_IS_CMDLINE(CompressedClassSpaceSize)) {
+        log_warning(metaspace)(X);
+      } else {
+        log_info(metaspace)(X);
+      }
+      #undef X
+    }
 
     // Note: re-adjusting may have us left with a CompressedClassSpaceSize
     //  larger than MaxMetaspaceSize for very small values of MaxMetaspaceSize.
     //  Lets just live with that, its not a big deal.
-
     if (adjusted_ccs_size != CompressedClassSpaceSize) {
       FLAG_SET_ERGO(CompressedClassSpaceSize, adjusted_ccs_size);
       log_info(metaspace)("Setting CompressedClassSpaceSize to " SIZE_FORMAT ".",

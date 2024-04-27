@@ -48,16 +48,19 @@ address CompressedKlassPointers::_base = (address)-1;
 int CompressedKlassPointers::_shift = -1;
 size_t CompressedKlassPointers::_range = (size_t)-1;
 
-// The maximum allowed length of the Klass range (the address range engulfing
-// CDS + class space) must not exceed 32-bit.
-// There is a theoretical limit of: must not exceed the size of a fully-shifted
-// narrow Klass pointer, which would be 32 + 3 = 35 bits in legacy mode;
-// however, keeping this size below 32-bit allows us to use decoding techniques
-// like 16-bit moves into the third quadrant on some architectures, and keeps
-// the code less complex. 32-bit have always been enough for CDS+class space.
-static constexpr size_t max_klass_range_size = 4 * G;
-
 #ifdef _LP64
+
+// Returns the maximum encoding range that can be covered with the currently
+// chosen nKlassID geometry (nKlass bit size, max shift)
+size_t CompressedKlassPointers::max_encoding_range_size() {
+  // Whatever the nKlass geometry is, we don't support cases where the offset
+  // into the Klass encoding range (the shifted nKlass) exceeds 32 bits. That
+  // is because many CPU-specific decoding functions use e.g. 16-bit moves to
+  // combine base and offset.
+  constexpr int max_preshifted_nklass_bits = 32;
+  return nth_bit(MIN2(max_preshifted_nklass_bits,
+                      narrow_klass_pointer_bits() + max_shift()));
+}
 
 void CompressedKlassPointers::pre_initialize() {
   if (UseCompactObjectHeaders) {
@@ -81,10 +84,6 @@ void CompressedKlassPointers::sanity_check_after_initialization() {
 #define ASSERT_HERE(cond) assert(cond, " (%s)", tmp);
 #define ASSERT_HERE_2(cond, msg) assert(cond, msg " (%s)", tmp);
 
-  // There is no technical reason preventing us from using other klass pointer bit lengths,
-  // but it should be a deliberate choice
-  ASSERT_HERE(_narrow_klass_pointer_bits == 32 || _narrow_klass_pointer_bits == 22);
-
   // All values must be inited
   ASSERT_HERE(_max_shift != -1);
   ASSERT_HERE(_klass_range_start != (address)-1);
@@ -95,7 +94,11 @@ void CompressedKlassPointers::sanity_check_after_initialization() {
   ASSERT_HERE(_range != (size_t)-1);
 
   const size_t klab = klass_alignment_in_bytes();
-  ASSERT_HERE(klab >= sizeof(uint64_t) && klab <= K);
+  // must be aligned enough hold 64-bit data
+  ASSERT_HERE(is_aligned(klab, sizeof(uint64_t)));
+
+  // should be smaller than the minimum metaspace chunk size (soft requirement)
+  ASSERT_HERE(klab <= K);
 
   // Check that Klass range is fully engulfed in the encoding range
   ASSERT_HERE(_klass_range_end > _klass_range_start);
@@ -108,7 +111,7 @@ void CompressedKlassPointers::sanity_check_after_initialization() {
   // relevant regions and klass alignment - tied to smallest metachunk size of 1K - will always be smaller
   // than smallest page size of 4K.
   ASSERT_HERE_2(is_aligned(_klass_range_start, klab) && is_aligned(_klass_range_end, klab),
-                "Klass range must start at a properly aligned address");
+                "Klass range must start and end at a properly aligned address");
 
   // Check that lowest and highest possible narrowKlass values make sense
   ASSERT_HERE_2(_lowest_valid_narrow_klass_id > 0, "Null is not a valid narrowKlass");
@@ -153,10 +156,12 @@ void CompressedKlassPointers::calc_lowest_highest_narrow_klass_id() {
 void CompressedKlassPointers::initialize_for_given_encoding(address addr, size_t len, address requested_base, int requested_shift) {
   address const end = addr + len;
 
-  if (len > max_klass_range_size) {
-    // Class space size is limited to 3G. This can theoretically happen if the CDS archive
-    // is larger than 1G and class space size is set to the maximum possible 3G.
-    vm_exit_during_initialization("Sum of CDS archive size and class space size exceed 4 GB");
+  if (len > max_encoding_range_size()) {
+    stringStream ss;
+    ss.print("Class space size and CDS archive size combined (%zu) "
+             "exceed the maximum possible size (%zu)",
+             len, max_encoding_range_size());
+    vm_exit_during_initialization(ss.base());
   }
 
   const size_t encoding_range_size = nth_bit(narrow_klass_pointer_bits() + requested_shift);
@@ -202,10 +207,11 @@ char* CompressedKlassPointers::reserve_address_space_for_16bit_move(size_t size,
 
 void CompressedKlassPointers::initialize(address addr, size_t len) {
 
-  if (len > max_klass_range_size) {
-    // Class space size is limited to 3G. This can theoretically happen if the CDS archive
-    // is larger than 1G and class space size is set to the maximum possible 3G.
-    vm_exit_during_initialization("Sum of CDS archive size and class space size exceed 4 GB");
+  if (len > max_encoding_range_size()) {
+    stringStream ss;
+    ss.print("Class space size (%zu) exceeds the maximum possible size (%zu)",
+              len, max_encoding_range_size());
+    vm_exit_during_initialization(ss.base());
   }
 
   // Give CPU a shot at a specialized init sequence
@@ -217,11 +223,6 @@ void CompressedKlassPointers::initialize(address addr, size_t len) {
 
   if (tiny_classpointer_mode()) {
 
-    // This handles the case that we - experimentally - reduce the number of
-    // class pointer bits further, such that (shift + num bits) < 32.
-    assert(len <= (size_t)nth_bit(narrow_klass_pointer_bits() + max_shift()),
-           "klass range size exceeds encoding");
-
     // In tiny classpointer mode, we don't attempt for zero-based mode.
     // Instead, we set the base to the start of the klass range and then try
     // for the smallest shift possible that still covers the whole range.
@@ -230,16 +231,12 @@ void CompressedKlassPointers::initialize(address addr, size_t len) {
     _base = addr;
     _range = len;
 
-    if (TinyClassPointerShift != 0) {
-      _shift = TinyClassPointerShift;
-    } else {
-      constexpr int log_cacheline = 6;
-      int s = max_shift();
-      while (s > log_cacheline && ((size_t)nth_bit(narrow_klass_pointer_bits() + s - 1) > len)) {
-        s--;
-      }
-      _shift = s;
+    constexpr int log_cacheline = 6;
+    int s = max_shift();
+    while (s > log_cacheline && ((size_t)nth_bit(narrow_klass_pointer_bits() + s - 1) > len)) {
+      s--;
     }
+    _shift = s;
 
   } else {
 
