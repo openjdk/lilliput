@@ -30,8 +30,9 @@
 #include "memory/memRegion.hpp"
 #include "oops/markWord.hpp"
 #include "oops/oopsHierarchy.hpp"
-#include "utilities/fastHash.hpp"
-#include "utilities/resourceHash.hpp"
+
+class FallbackTable;
+class Mutex;
 
 /**
  * SlidingForwarding is a method to store forwarding information in a compressed form into the object header,
@@ -60,7 +61,6 @@
  *   64                              32                                0
  *    [................................OOOOOOOOOOOOOOOOOOOOOOOOOOOOAFTT]
  *                                                                    ^----- normal lock bits, would record "object is forwarded"
- *                                                                  ^------- fallback bit (explained below)
  *                                                                 ^-------- alternate region select
  *                                     ^------------------------------------ in-region offset
  *     ^-------------------------------------------------------------------- protected area, *not touched* by this code, useful for
@@ -80,50 +80,25 @@
  *   3. Look up "to" region base from the base table either at primary or alternate indices, using "alternate" flag
  *   4. Compute the "to" address from "to" region base and "offset"
  *
- * This algorithm is broken by G1 last-ditch serial compaction: there, object from a single region can be
- * forwarded to multiple, more than two regions. To deal with that, we initialize a fallback-hashtable for
- * storing those extra forwardings, and set another bit in the header to indicate that the forwardee is not
- * encoded but should be looked-up in the hashtable. G1 serial compaction is not very common - it is the
- * last-last-ditch GC that is used when the JVM is scrambling to squeeze more space out of the heap, and at
- * that point, ultimate performance is no longer the main concern.
+ * There are several conditions when the above algorithm would be broken because the assumption that
+ * 'objects from each block can only get forwarded to one of two possible target blocks' is violated:
+ * - G1 last-ditch serial compaction: there, object from a single region can be forwarded to multiple,
+ *   more than two regions. G1 serial compaction is not very common - it is the last-last-ditch GC
+ *   that is used when the JVM is scrambling to squeeze more space out of the heap, and at that point,
+ *   ultimate performance is no longer the main concern.
+ * - Serial GC?
+ *
+ * To deal with that, we initialize a fallback-hashtable for storing those extra forwardings, and use a special
+ * offset pattern (0b11...1) to indicate that the forwardee is not encoded but should be looked-up in the hashtable.
+ * This implies that this particular offset (the last word of a block) can not be used directly as forwarding,
+ * but also has to be handled by the fallback-table.
  */
 class SlidingForwarding : public AllStatic {
 private:
+  static const uintptr_t MARK_LOWER_HALF_MASK = right_n_bits(11);
 
-  /*
-   * A simple hash-table that acts as fallback for the sliding forwarding.
-   * This is used in the case of G1 serial compaction, which violates the
-   * assumption of sliding forwarding that each object of any region is only
-   * ever forwarded to one of two target regions. At this point, the GC is
-   * scrambling to free up more Java heap memory, and therefore performance
-   * is not the major concern.
-   *
-   * The implementation is a straightforward open hashtable.
-   * It is a single-threaded (not thread-safe) implementation, and that
-   * is sufficient because G1 serial compaction is single-threaded.
-   */
-  inline static unsigned hash(HeapWord* const& from) {
-    uint64_t val = reinterpret_cast<uint64_t>(from);
-    uint64_t hash = FastHash::get_hash64(val, UCONST64(0xAAAAAAAAAAAAAAAA));
-    return checked_cast<unsigned>(hash >> 32);
-  }
-  inline static bool equals(HeapWord* const& lhs, HeapWord* const& rhs) {
-    return lhs == rhs;
-  }
-  typedef ResourceHashtable<HeapWord* /* key-type */, HeapWord* /* value-type */,
-                            1024 /* size */, AnyObj::C_HEAP /* alloc-type */, mtGC,
-                            SlidingForwarding::hash, SlidingForwarding::equals> FallbackTable;
-
-  static const uintptr_t MARK_LOWER_HALF_MASK = right_n_bits(32);
-
-  // We need the lowest two bits to indicate a forwarded object.
-  // The next bit indicates that the forwardee should be looked-up in a fallback-table.
-  static const int FALLBACK_SHIFT = markWord::lock_bits;
-  static const int FALLBACK_BITS = 1;
-  static const int FALLBACK_MASK = right_n_bits(FALLBACK_BITS) << FALLBACK_SHIFT;
-
-  // Next bit selects the target region
-  static const int ALT_REGION_SHIFT = FALLBACK_SHIFT + FALLBACK_BITS;
+  // One bit selects the target region
+  static const int ALT_REGION_SHIFT = markWord::lock_shift + markWord::lock_bits;
   static const int ALT_REGION_BITS = 1;
   // This will be "2" always, but expose it as named constant for clarity
   static const size_t NUM_TARGET_REGIONS = 1 << ALT_REGION_BITS;
@@ -132,7 +107,17 @@ private:
   static const int OFFSET_BITS_SHIFT = ALT_REGION_SHIFT + ALT_REGION_BITS;
 
   // How many bits we use for the offset
-  static const int NUM_OFFSET_BITS = 32 - OFFSET_BITS_SHIFT;
+  static const int NUM_OFFSET_BITS = 11 - OFFSET_BITS_SHIFT;
+  static const ptrdiff_t BLOCK_SIZE_WORDS = 1 << NUM_OFFSET_BITS;
+
+  static const uintptr_t OFFSET_MASK = right_n_bits(NUM_OFFSET_BITS) << OFFSET_BITS_SHIFT;
+
+  // This offset bit-pattern indicates that the actual mapping is handled by the
+  // fallback-table. This also implies that this cannot be used as a valid offset,
+  // and we must also use the fallback-table for mappings to the last word of a
+  // block.
+  static const uintptr_t FALLBACK_PATTERN = right_n_bits(NUM_OFFSET_BITS);
+  static const uintptr_t FALLBACK_PATTERN_IN_PLACE = FALLBACK_PATTERN << OFFSET_BITS_SHIFT;
 
   // Indicates an unused base address in the target base table.
   static HeapWord* const UNUSED_BASE;
@@ -152,8 +137,14 @@ private:
 
   static FallbackTable* _fallback_table;
 
+#ifndef PRODUCT
+  static volatile uint64_t _num_forwardings;
+  static volatile uint64_t _num_fallback_forwardings;
+#endif
+
   static inline size_t biased_region_index_containing(HeapWord* addr);
 
+  static inline bool is_fallback(uintptr_t encoded);
   static inline uintptr_t encode_forwarding(HeapWord* from, HeapWord* to);
   static inline HeapWord* decode_forwarding(HeapWord* from, uintptr_t encoded);
 
