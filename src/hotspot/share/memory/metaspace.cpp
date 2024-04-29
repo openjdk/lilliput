@@ -653,6 +653,8 @@ void Metaspace::ergo_initialize() {
   if (UseCompressedClassPointers) {
     // Adjust size of the compressed class space.
 
+    const size_t res_align = reserve_alignment();
+
     // Let CCS size not be larger than 80% of MaxMetaspaceSize. Note that is
     // grossly over-dimensioned for most usage scenarios; typical ratio of
     // class space : non class space usage is about 1:6. With many small classes,
@@ -662,24 +664,20 @@ void Metaspace::ergo_initialize() {
 
     // CCS is also limited by the max. possible Klass encoding range size
     const size_t max_encoding_range = CompressedKlassPointers::max_encoding_range_size();
+    assert(max_encoding_range >= res_align,
+           "Encoding range (%zu) must cover at least a full root chunk (%zu)",
+           max_encoding_range, res_align);
 
     size_t adjusted_ccs_size = MIN3(CompressedClassSpaceSize, max_ccs_size, max_encoding_range);
 
     // CCS must be aligned to root chunk size, and be at least the size of one
-    //  root chunk.
-    adjusted_ccs_size = align_down(adjusted_ccs_size, reserve_alignment());
-    if (adjusted_ccs_size < reserve_alignment()) {
-      stringStream ss;
-      ss.print("Class space size (adjusted) (%zu) smaller "
-               "than metaspace reserve granularity (%zu)",
-               adjusted_ccs_size, reserve_alignment());
-      vm_exit_during_initialization(ss.base());
-    }
+    //  root chunk. But impose a miminum size of 1 root chunk (16MB).
+    adjusted_ccs_size = MAX2(align_down(adjusted_ccs_size, res_align), res_align);
 
     // Print a warning if the adjusted size differs from the users input
-    if (CompressedClassSpaceSize > adjusted_ccs_size) {
+    if (CompressedClassSpaceSize != adjusted_ccs_size) {
       #define X "CompressedClassSpaceSize adjusted from user input " \
-                "%zu bytes down to %zu bytes", CompressedClassSpaceSize, adjusted_ccs_size
+                "%zu bytes to %zu bytes", CompressedClassSpaceSize, adjusted_ccs_size
       if (FLAG_IS_CMDLINE(CompressedClassSpaceSize)) {
         log_warning(metaspace)(X);
       } else {
