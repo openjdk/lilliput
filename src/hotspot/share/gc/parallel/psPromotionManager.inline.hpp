@@ -176,7 +176,8 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
   // the mark-word that we have already loaded. This is safe, because we have checked
   // that this is not yet forwarded in the caller.
   Klass* klass = o->forward_safe_klass(test_mark);
-  size_t new_obj_size = o->size_given_klass(klass);
+  size_t old_obj_size = o->size_given_mark_and_klass(test_mark, klass);
+  size_t new_obj_size = o->copy_size(old_obj_size, test_mark);
 
   // Find the objects age, MT safe.
   uint age = (test_mark.has_displaced_mark_helper() /* o->has_displaced_mark() */) ?
@@ -258,7 +259,7 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
   assert(new_obj != nullptr, "allocation should have succeeded");
 
   // Copy obj
-  Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(o), cast_from_oop<HeapWord*>(new_obj), new_obj_size);
+  Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(o), cast_from_oop<HeapWord*>(new_obj), old_obj_size);
 
   if (UseCompactObjectHeaders) {
     // The copy above is not atomic. Make sure we have seen the proper mark
@@ -266,6 +267,7 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
     markWord mark = o->mark();
     if (!mark.is_forwarded()) {
       new_obj->set_mark(mark);
+      new_obj->initialize_hash_if_necessary(o);
       ContinuationGCSupport::transform_stack_chunk(new_obj);
     } else {
       // If we copied a mark-word that indicates 'forwarded' state, the object

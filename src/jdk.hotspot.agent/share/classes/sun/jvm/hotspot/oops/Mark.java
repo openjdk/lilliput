@@ -51,11 +51,11 @@ public class Mark extends VMObject {
     lockBits            = db.lookupLongConstant("markWord::lock_bits").longValue();
     maxHashBits         = db.lookupLongConstant("markWord::max_hash_bits").longValue();
     hashBits            = db.lookupLongConstant("markWord::hash_bits").longValue();
-    hashBitsCompact     = db.lookupLongConstant("markWord::hash_bits_compact").longValue();
+    hashCtrlBits        = db.lookupLongConstant("markWord::hashctrl_bits").longValue();
     lockShift           = db.lookupLongConstant("markWord::lock_shift").longValue();
     ageShift            = db.lookupLongConstant("markWord::age_shift").longValue();
     hashShift           = db.lookupLongConstant("markWord::hash_shift").longValue();
-    hashShiftCompact    = db.lookupLongConstant("markWord::hash_shift_compact").longValue();
+    hashCtrlShift       = db.lookupLongConstant("markWord::hashctrl_shift").longValue();
     if (VM.getVM().isLP64()) {
       klassShift          = db.lookupLongConstant("markWord::klass_shift").longValue();
     }
@@ -65,8 +65,8 @@ public class Mark extends VMObject {
     ageMaskInPlace      = db.lookupLongConstant("markWord::age_mask_in_place").longValue();
     hashMask            = db.lookupLongConstant("markWord::hash_mask").longValue();
     hashMaskInPlace     = db.lookupLongConstant("markWord::hash_mask_in_place").longValue();
-    hashMaskCompact     = db.lookupLongConstant("markWord::hash_mask_compact").longValue();
-    hashMaskCompactInPlace = db.lookupLongConstant("markWord::hash_mask_compact_in_place").longValue();
+    hashCtrlMask        = db.lookupLongConstant("markWord::hashctrl_mask").longValue();
+    hashCtrlMaskInPlace = db.lookupLongConstant("markWord::hashctrl_mask_in_place").longValue();
     lockedValue         = db.lookupLongConstant("markWord::locked_value").longValue();
     unlockedValue       = db.lookupLongConstant("markWord::unlocked_value").longValue();
     monitorValue        = db.lookupLongConstant("markWord::monitor_value").longValue();
@@ -85,12 +85,12 @@ public class Mark extends VMObject {
   private static long lockBits;
   private static long maxHashBits;
   private static long hashBits;
-  private static long hashBitsCompact;
+  private static long hashCtrlBits;
 
   private static long lockShift;
   private static long ageShift;
   private static long hashShift;
-  private static long hashShiftCompact;
+  private static long hashCtrlShift;
   private static long klassShift;
 
   private static long lockMask;
@@ -99,8 +99,8 @@ public class Mark extends VMObject {
   private static long ageMaskInPlace;
   private static long hashMask;
   private static long hashMaskInPlace;
-  private static long hashMaskCompact;
-  private static long hashMaskCompactInPlace;
+  private static long hashCtrlMask;
+  private static long hashCtrlMaskInPlace;
 
   private static long lockedValue;
   private static long unlockedValue;
@@ -201,7 +201,7 @@ public class Mark extends VMObject {
   // hash operations
   public long hash() {
     if (VM.getVM().isCompactObjectHeadersEnabled()) {
-      return Bits.maskBitsLong(value() >> hashShiftCompact, hashMaskCompact);
+      throw new RuntimeException("Compact I-Hash not yet implemented");
     } else {
       return Bits.maskBitsLong(value() >> hashShift, hashMask);
     }
@@ -209,6 +209,11 @@ public class Mark extends VMObject {
 
   public boolean hasNoHash() {
     return hash() == noHash;
+  }
+
+  public boolean isCopiedHash() {
+    assert(VM.getVM().isCompactObjectHeadersEnabled());
+    return (Bits.maskBitsLong(value(), hashCtrlMaskInPlace) >> hashCtrlShift) == 2;
   }
 
   public Klass getKlass() {

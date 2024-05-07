@@ -55,9 +55,14 @@ private:
     lo = (uint32_t)(xy64 >>  0);
   }
 
-  static uint64_t ror(uint64_t x, uint64_t distance) {
-    distance = distance & 0x3F;
+  static uint64_t ror64(uint64_t x, uint64_t distance) {
+    distance = distance & (64 - 1);
     return (x >> distance) | (x << (64 - distance));
+  }
+
+  static uint32_t ror32(uint32_t x, uint32_t distance) {
+    distance = distance & (32 - 1);
+    return (x >> distance) | (x << (32 - distance));
   }
 
 public:
@@ -72,7 +77,7 @@ public:
 
     uint64_t U1, V1; fullmul64(U1, V1, L1, M);
     const uint64_t P1 = (V0 ^ M);
-    const uint64_t Q1 = ror(P1, L1);
+    const uint64_t Q1 = ror64(P1, L1);
     const uint64_t L2 = (Q1 ^ U1);
     return V1 ^ L2;
   }
@@ -88,7 +93,7 @@ public:
 
     uint32_t U1, V1; fullmul32(U1, V1, L1, M);
     const uint32_t P1 = (V0 ^ M);
-    const uint32_t Q1 = ror(P1, L1);
+    const uint32_t Q1 = ror32(P1, L1);
     const uint32_t L2 = (Q1 ^ U1);
     return V1 ^ L2;
   }

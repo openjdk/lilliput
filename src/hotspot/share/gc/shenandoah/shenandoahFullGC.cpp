@@ -349,7 +349,9 @@ public:
     assert(_heap->complete_marking_context()->is_marked(p), "must be marked");
     assert(!_heap->complete_marking_context()->allocated_after_mark_start(p), "must be truly marked");
 
-    size_t obj_size = p->size();
+    size_t old_size = p->size();
+    size_t new_size = p->copy_size(old_size, p->mark());
+    size_t obj_size = _compact_point == cast_from_oop<HeapWord*>(p) ? old_size : new_size;
     if (_compact_point + obj_size > _to_region->end()) {
       finish();
 
@@ -367,6 +369,7 @@ public:
       assert(new_to_region != nullptr, "must not be null");
       _to_region = new_to_region;
       _compact_point = _to_region->bottom();
+      obj_size = _compact_point == cast_from_oop<HeapWord*>(p) ? old_size : new_size;
     }
 
     // Object fits into current region, record new location, if object does not move:
@@ -868,6 +871,7 @@ public:
   void do_object(oop p) {
     assert(_heap->complete_marking_context()->is_marked(p), "must be marked");
     size_t size = p->size();
+    //log_trace(gc)("Compacting object: " PTR_FORMAT ", with size: " SIZE_FORMAT, p2i(p), size);
     if (SlidingForwarding::is_forwarded(p)) {
       HeapWord* compact_from = cast_from_oop<HeapWord*>(p);
       HeapWord* compact_to = cast_from_oop<HeapWord*>(SlidingForwarding::forwardee(p));
@@ -877,6 +881,7 @@ public:
 
       ContinuationGCSupport::relativize_stack_chunk(new_obj);
       new_obj->init_mark();
+      new_obj->initialize_hash_if_necessary(p);
     }
   }
 };

@@ -76,6 +76,12 @@ public:
 
   static bool contains_monitor(Thread* current, ObjectMonitor* monitor);
 
+  // NOTE: May not cause monitor inflation
+  static uint32_t get_hash(markWord mark, oop obj);
+  // For CDS path.
+  static uint32_t get_hash(markWord mark, oop obj, Klass* klass);
+  static intptr_t FastHashCode(Thread* current, oop obj);
+
   static bool quick_enter(oop obj, JavaThread* current, BasicLock* Lock);
 };
 

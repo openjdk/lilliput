@@ -434,7 +434,8 @@ inline void ShenandoahHeap::marked_object_iterate(ShenandoahHeapRegion* region, 
     oop obj = cast_to_oop(cs);
     assert(oopDesc::is_oop(obj), "sanity");
     assert(ctx->is_marked(obj), "object expected to be marked");
-    size_t size = obj->forward_safe_size();
+    assert(!is_full_gc_in_progress(), "No size-based iteration in full-GC");
+    size_t size = ShenandoahForwarding::object_size(obj);
     cl->do_object(obj);
     cs += size;
   }

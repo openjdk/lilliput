@@ -1131,8 +1131,12 @@ oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
 
   assert(ShenandoahThreadLocalData::is_evac_allowed(thread), "must be enclosed in oom-evac scope");
 
-  size_t size = p->forward_safe_size();
-
+  markWord mark = p->mark();
+  if (ShenandoahForwarding::is_forwarded(mark)) {
+    return ShenandoahForwarding::get_forwardee(p);
+  }
+  size_t old_size = ShenandoahForwarding::object_size(p);
+  size_t size = p->copy_size(old_size, mark);
   assert(!heap_region_containing(p)->is_humongous(), "never evacuate humongous objects");
 
   bool alloc_from_gclab = true;
@@ -1141,7 +1145,7 @@ oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
 #ifdef ASSERT
   if (ShenandoahOOMDuringEvacALot &&
       (os::random() & 1) == 0) { // Simulate OOM every ~2nd slow-path call
-    copy = nullptr;
+        copy = nullptr;
   } else {
 #endif
     if (UseTLAB) {
@@ -1165,7 +1169,7 @@ oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
   }
 
   // Copy the object:
-  Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(p), copy, size);
+  Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(p), copy, old_size);
   oop copy_val = cast_to_oop(copy);
 
   if (UseCompactObjectHeaders) {
@@ -1174,6 +1178,7 @@ oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
     markWord mark = copy_val->mark();
     if (!mark.is_marked()) {
       copy_val->set_mark(mark);
+      copy_val->initialize_hash_if_necessary(p);
       ContinuationGCSupport::relativize_stack_chunk(copy_val);
     } else {
       // If we copied a mark-word that indicates 'forwarded' state, the object

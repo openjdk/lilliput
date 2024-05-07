@@ -454,6 +454,8 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
   assert(region_attr.is_in_cset(),
          "Unexpected region attr type: %s", region_attr.get_type_str());
 
+  assert(!old_mark.is_marked(), "must not yet be forwarded");
+
   // Get the klass once.  We'll need it again later, and this avoids
   // re-decoding when it's compressed.
   // NOTE: With compact headers, it is not safe to load the Klass* from o, because
@@ -463,7 +465,8 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
   // the mark-word that we have already loaded. This is safe, because we have checked
   // that this is not yet forwarded in the caller.
   Klass* klass = old->forward_safe_klass(old_mark);
-  const size_t word_sz = old->size_given_klass(klass);
+  const size_t old_size = old->size_given_mark_and_klass(old_mark, klass);
+  const size_t word_sz = old->copy_size(old_size, old_mark);
 
   // JNI only allows pinning of typeArrays, so we only need to keep those in place.
   if (region_attr.is_pinned() && klass->is_typeArray_klass()) {
@@ -499,9 +502,13 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
     return handle_evacuation_failure_par(old, old_mark, word_sz, false /* cause_pinned */);
   }
 
+  if (old_size != word_sz) {
+    log_trace(gc)("expanding obj: " PTR_FORMAT ", old_size: " SIZE_FORMAT ", new object: " PTR_FORMAT ", word_sz: " SIZE_FORMAT, p2i(old), old_size, p2i(obj_ptr), word_sz);
+  }
+
   // We're going to allocate linearly, so might as well prefetch ahead.
   Prefetch::write(obj_ptr, PrefetchCopyIntervalInBytes);
-  Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(old), obj_ptr, word_sz);
+  Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(old), obj_ptr, old_size);
 
   const oop obj = cast_to_oop(obj_ptr);
   // Because the forwarding is done with memory_order_relaxed there is no
@@ -517,6 +524,9 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
              (!from_region->is_young() && young_index == 0), "invariant" );
       _surviving_young_words[young_index] += word_sz;
     }
+
+    // Initialize i-hash if necessary
+    obj->initialize_hash_if_necessary(old);
 
     if (dest_attr.is_young()) {
       if (age < markWord::max_age) {

@@ -64,6 +64,7 @@
 #include "utilities/dtrace.hpp"
 #include "utilities/events.hpp"
 #include "utilities/globalDefinitions.hpp"
+#include "utilities/fastHash.hpp"
 #include "utilities/linkedlist.hpp"
 #include "utilities/preserveException.hpp"
 
@@ -915,7 +916,7 @@ static markWord read_stable_mark(oop obj) {
 //   There are simple ways to "diffuse" the middle address bits over the
 //   generated hashCode values:
 
-static intptr_t get_next_hash(Thread* current, oop obj) {
+intptr_t ObjectSynchronizer::get_next_hash(Thread* current, oop obj) {
   intptr_t value = 0;
   if (hashCode == 0) {
     // This form uses global Park-Miller RNG.
@@ -934,7 +935,7 @@ static intptr_t get_next_hash(Thread* current, oop obj) {
     value = ++GVars.hc_sequence;
   } else if (hashCode == 4) {
     value = cast_from_oop<intptr_t>(obj);
-  } else {
+  } else if (hashCode == 5) {
     // Marsaglia's xor-shift scheme with thread-specific state
     // This is probably the best overall implementation -- we'll
     // likely make this the default in future releases.
@@ -947,11 +948,22 @@ static intptr_t get_next_hash(Thread* current, oop obj) {
     v = (v ^ (v >> 19)) ^ (t ^ (t >> 8));
     current->_hashStateW = v;
     value = v;
+  } else {
+    assert(UseCompactObjectHeaders, "Only with compact i-hash");
+#ifdef _LP64
+    uint64_t val = cast_from_oop<uint64_t>(obj);
+    uint32_t hash = FastHash::get_hash32((uint32_t)val, (uint32_t)(val >> 32));
+#else
+    uint32_t val = cast_from_oop<uint32_t>(obj);
+    uint32_t hash = FastHash::get_hash32(val, UCONST64(0xAAAAAAAA));
+#endif
+    value= static_cast<intptr_t>(hash);
   }
 
-  value &= UseCompactObjectHeaders ? markWord::hash_mask_compact : markWord::hash_mask;
-  if (value == 0) value = 0xBAD;
-  assert(value != markWord::no_hash, "invariant");
+  value &= markWord::hash_mask;
+
+  if (hashCode != 6 && value == 0) value = 0xBAD;
+  assert(value != markWord::no_hash || hashCode == 6, "invariant");
   return value;
 }
 
@@ -960,18 +972,34 @@ static intptr_t install_hash_code(Thread* current, oop obj) {
 
   markWord mark = obj->mark_acquire();
   for(;;) {
-    intptr_t hash = mark.hash();
-    if (hash != 0) {
-      return hash;
-    }
+    if (UseCompactObjectHeaders) {
+      if (mark.hash_is_hashed_or_copied()) {
+        return LightweightSynchronizer::get_hash(mark, obj);
+      }
+      intptr_t hash = ObjectSynchronizer::get_next_hash(current, obj);  // get a new hash
+      markWord new_mark = mark.hash_set_hashed();
+      // Let i-hashed objects promote immediately, to avoid young-gen overflow
+      // through i-hash expansion.
+      //new_mark = new_mark.set_age(markWord::max_age);
+      markWord old_mark = mark;
+      mark = obj->cas_set_mark(new_mark, old_mark);
+      if (old_mark == mark) {
+        return hash;
+      }
+    } else {
+      intptr_t hash = mark.hash();
+      if (hash != 0) {
+        return hash;
+      }
 
-    hash = get_next_hash(current, obj);
-    const markWord old_mark = mark;
-    const markWord new_mark = old_mark.copy_set_hash(hash);
+      hash = ObjectSynchronizer::get_next_hash(current, obj);
+      const markWord old_mark = mark;
+      const markWord new_mark = old_mark.copy_set_hash(hash);
 
-    mark = obj->cas_set_mark(new_mark, old_mark);
-    if (old_mark == mark) {
-      return hash;
+      mark = obj->cas_set_mark(new_mark, old_mark);
+      if (old_mark == mark) {
+        return hash;
+      }
     }
   }
 }

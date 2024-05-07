@@ -38,6 +38,7 @@
 #include "runtime/handles.inline.hpp"
 #include "runtime/javaThread.hpp"
 #include "runtime/synchronizer.hpp"
+#include "runtime/lightweightSynchronizer.hpp"
 #include "utilities/macros.hpp"
 
 void oopDesc::print_on(outputStream* st) const {
@@ -127,6 +128,47 @@ bool oopDesc::is_oop(oop obj, bool ignore_mark_word) {
     return true;
   }
   return LockingMode == LM_LIGHTWEIGHT || !SafepointSynchronize::is_at_safepoint();
+}
+
+markWord oopDesc::initialize_hash_if_necessary(oop obj, Klass* k, markWord m) {
+  if (!UseCompactObjectHeaders) {
+    return m;
+  }
+  assert(!m.has_displaced_mark_helper(), "must not be displaced header");
+  if (m.hash_is_hashed()) {
+    assert(!m.hash_is_copied(), "must not be installed");
+    uint32_t hash = static_cast<uint32_t>(ObjectSynchronizer::get_next_hash(nullptr, obj));
+    int offset = k->hash_offset_in_bytes(cast_to_oop(this));
+    assert(offset >= 8, "hash offset must not be in header");
+    //log_info(gc)("Initializing hash for " PTR_FORMAT ", old: " PTR_FORMAT ", hash: %d, offset: %d", p2i(this), p2i(obj), hash, offset);
+    int_field_put(offset, (jint)hash);
+    m = m.hash_set_copied();
+    assert(static_cast<uint32_t>(LightweightSynchronizer::get_hash(m, cast_to_oop(this), k)) == hash, "hash must remain the same");
+  }
+  return m;
+}
+
+bool oopDesc::initialize_hash_if_necessary(oop obj) {
+  if (!UseCompactObjectHeaders) {
+    return false;
+  }
+  markWord m = mark();
+  assert(!m.has_displaced_mark_helper(), "must not be displaced header");
+  if (m.hash_is_hashed()) {
+    assert(!m.hash_is_copied(), "must not be installed, mark: " INTPTR_FORMAT, m.value());
+    uint32_t hash = static_cast<uint32_t>(ObjectSynchronizer::get_next_hash(nullptr, obj));
+    Klass* k = m.klass();
+    int offset = k->hash_offset_in_bytes(cast_to_oop(this));
+    assert(offset >= 8, "hash offset must not be in header");
+    log_trace(gc)("Initializing hash for " PTR_FORMAT ", old: " PTR_FORMAT ", hash: %d, offset: %d", p2i(this), p2i(obj), hash, offset);
+    int_field_put(offset, (jint)hash);
+    m = m.hash_set_copied();
+    assert(!m.hash_is_hashed(), "must not be hashed state");
+    assert(static_cast<uint32_t>(LightweightSynchronizer::get_hash(m, cast_to_oop(this))) == hash, "hash must remain the same");
+    set_mark(m);
+    return true;
+  }
+  return false;
 }
 
 // used only for asserts and guarantees
@@ -221,12 +263,12 @@ jdouble oopDesc::double_field_acquire(int offset) const               { return A
 void oopDesc::release_double_field_put(int offset, jdouble value)     { Atomic::release_store(field_addr<jdouble>(offset), value); }
 
 #ifdef ASSERT
-bool oopDesc::size_might_change(Klass* klass) {
+bool oopDesc::size_might_change(const Klass* klass) {
   // UseParallelGC and UseG1GC can change the length field
   // of an "old copy" of an object array in the young gen so it indicates
   // the grey portion of an already copied array. This will cause the first
   // disjunct below to fail if the two comparands are computed across such
   // a concurrent change.
-  return Universe::heap()->is_stw_gc_active() && klass->is_objArray_klass() && is_forwarded() && (UseParallelGC || UseG1GC);
+  return UseCompactObjectHeaders || (Universe::heap()->is_stw_gc_active() && klass->is_objArray_klass() && is_forwarded() && (UseParallelGC || UseG1GC));
 }
 #endif

@@ -1051,7 +1051,8 @@ void G1ConcurrentMark::scan_root_region(const MemRegion* region, uint worker_id)
     Prefetch::read(curr, interval);
     oop obj = cast_to_oop(curr);
     size_t size = obj->oop_iterate_size(&cl);
-    assert(size == obj->size(), "sanity");
+    if (UseCompactObjectHeaders) log_trace(gc)("Scan object : " PTR_FORMAT ", with size: " SIZE_FORMAT, p2i(obj), size);
+    assert(size == obj->size(), "sanity: size: " SIZE_FORMAT ", obj-size: " SIZE_FORMAT, size, obj->size());
     curr += size;
   }
 }

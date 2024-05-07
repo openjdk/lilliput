@@ -69,7 +69,7 @@ template <class T> inline void G1AdjustClosure::adjust_pointer(T* p) {
   if (SlidingForwarding::is_forwarded(obj)) {
     oop forwardee = SlidingForwarding::forwardee(obj);
     // Forwarded, just update.
-    assert(G1CollectedHeap::heap()->is_in_reserved(forwardee), "should be in object space");
+    assert(G1CollectedHeap::heap()->is_in_reserved(forwardee), "should be in object space, obj: " PTR_FORMAT ", forwardee: " PTR_FORMAT ", mark: " INTPTR_FORMAT ", pre: " INTPTR_FORMAT ", post: " INTPTR_FORMAT, p2i(obj), p2i(forwardee), obj->mark().value(), *(cast_from_oop<intptr_t*>(obj)) - 1, *(cast_from_oop<intptr_t*>(obj) + 1));
     RawAccess<IS_NOT_NULL>::oop_store(p, forwardee);
   }
 

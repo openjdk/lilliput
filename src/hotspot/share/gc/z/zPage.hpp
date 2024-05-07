@@ -111,6 +111,7 @@ public:
   zoffset_end end() const;
   size_t size() const;
   zoffset_end top() const;
+  zaddress top_addr() const;
   size_t remaining() const;
   size_t used() const;
 

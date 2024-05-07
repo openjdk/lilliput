@@ -41,7 +41,7 @@
 #include "gc/shared/gcTraceTime.inline.hpp"
 #include "gc/shared/referencePolicy.hpp"
 #include "gc/shared/referenceProcessorPhaseTimes.hpp"
-#include "gc/shared/space.hpp"
+#include "gc/shared/space.inline.hpp"
 #include "gc/shared/spaceDecorator.hpp"
 #include "gc/shared/strongRootsScope.hpp"
 #include "gc/shared/weakProcessor.hpp"
@@ -745,17 +745,21 @@ void DefNewGeneration::remove_forwarding_pointers() {
   // Will enter Full GC soon due to failed promotion. Must reset the mark word
   // of objs in young-gen so that no objs are marked (forwarded) when Full GC
   // starts. (The mark word is overloaded: `is_marked()` == `is_forwarded()`.)
-  struct ResetForwardedMarkWord : ObjectClosure {
-    void do_object(oop obj) override {
+  struct ResetForwardedMarkWord {
+    size_t do_object(oop obj) {
+      markWord mark = obj->mark();
+      markWord fwdmark = mark;
       if (obj->is_self_forwarded()) {
         obj->unset_self_forwarded();
       } else if (obj->is_forwarded()) {
+        fwdmark = obj->forwardee(mark)->mark();
         obj->forward_safe_init_mark();
       }
+      return obj->size();
     }
   } cl;
-  eden()->object_iterate(&cl);
-  from()->object_iterate(&cl);
+  eden()->object_iterate_sized(&cl);
+  from()->object_iterate_sized(&cl);
 }
 
 void DefNewGeneration::handle_promotion_failure(oop old) {
@@ -782,7 +786,9 @@ void DefNewGeneration::handle_promotion_failure(oop old) {
 oop DefNewGeneration::copy_to_survivor_space(oop old) {
   assert(is_in_reserved(old) && !old->is_forwarded(),
          "shouldn't be scavenging this oop");
-  size_t s = old->size();
+  size_t old_size = old->size();
+  size_t s = old->copy_size(old_size, old->mark());
+
   oop obj = nullptr;
 
   // Try allocating obj in to-space (unless too old)
@@ -808,7 +814,9 @@ oop DefNewGeneration::copy_to_survivor_space(oop old) {
     Prefetch::write(obj, interval);
 
     // Copy obj
-    Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(old), cast_from_oop<HeapWord*>(obj), s);
+    Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(old), cast_from_oop<HeapWord*>(obj), old_size);
+    markWord new_mark = obj->mark();
+    assert(!UseCompactObjectHeaders || (!(new_mark.hash_is_hashed() && new_mark.hash_is_copied())), "must not be simultaneously hashed and copied state");
 
     ContinuationGCSupport::transform_stack_chunk(obj);
 
@@ -817,8 +825,10 @@ oop DefNewGeneration::copy_to_survivor_space(oop old) {
     age_table()->add(obj, s);
   }
 
+  bool expanded = obj->initialize_hash_if_necessary(old);
+
   // Done, insert forward pointer to obj in this header
-  old->forward_to(obj);
+  old->forward_to(obj, expanded);
 
   if (SerialStringDedup::is_candidate_from_evacuation(obj, new_obj_is_tenured)) {
     // Record old; request adds a new weak reference, which reference

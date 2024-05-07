@@ -475,6 +475,10 @@ inline zaddress ZPage::alloc_object(size_t size) {
   return ZOffset::address(to_zoffset(addr));
 }
 
+inline zaddress ZPage::top_addr() const {
+  return ZOffset::address(to_zoffset(top()));
+}
+
 inline zaddress ZPage::alloc_object_atomic(size_t size) {
   assert(is_allocating(), "Invalid state");
 

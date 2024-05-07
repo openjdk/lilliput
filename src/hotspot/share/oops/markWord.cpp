@@ -33,8 +33,6 @@
 STATIC_ASSERT((markWord::klass_shadow_mask_inplace & markWord::klass_mask_in_place) == 0);
 STATIC_ASSERT((markWord::klass_load_shift + markWord::klass_shadow_bits) == markWord::klass_shift);
 STATIC_ASSERT(markWord::klass_shift + markWord::klass_bits == 64);
-// The hash (preceding nKlass) shall be a direct neighbor but not interleave
-STATIC_ASSERT(markWord::klass_shift == markWord::hash_bits_compact + markWord::hash_shift_compact);
 #endif
 
 markWord markWord::displaced_mark_helper() const {
@@ -93,6 +91,8 @@ void markWord::print_on(outputStream* st, bool print_monitor_info) const {
       st->print("is_unlocked");
       if (has_no_hash()) {
         st->print(" no_hash");
+      } else if (UseCompactObjectHeaders) {
+        st->print(" hash is-hashed=%s is-copied=%s", BOOL_TO_STR(hash_is_hashed()), BOOL_TO_STR(hash_is_copied()));
       } else {
         st->print(" hash=" INTPTR_FORMAT, hash());
       }

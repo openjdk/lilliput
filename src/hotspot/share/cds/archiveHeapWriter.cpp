@@ -394,7 +394,9 @@ void update_buffered_object_field(address buffered_obj, int field_offset, T valu
 
 size_t ArchiveHeapWriter::copy_one_source_obj_to_buffer(oop src_obj) {
   assert(!is_too_large_to_archive(src_obj), "already checked");
-  size_t byte_size = src_obj->size() * HeapWordSize;
+  size_t old_size = src_obj->size();
+  size_t new_size = src_obj->copy_size(old_size, src_obj->mark());
+  size_t byte_size = new_size * HeapWordSize;
   assert(byte_size > 0, "no zero-size objects");
 
   // For region-based collectors such as G1, the archive heap may be mapped into
@@ -413,9 +415,11 @@ size_t ArchiveHeapWriter::copy_one_source_obj_to_buffer(oop src_obj) {
 
   address from = cast_from_oop<address>(src_obj);
   address to = offset_to_buffered_address<address>(_buffer_used);
+  log_info(gc)("Copying obj: " PTR_FORMAT ", to: " PTR_FORMAT ", old_size: " SIZE_FORMAT ", new_size: " SIZE_FORMAT, p2i(src_obj), p2i(to), old_size, new_size);
+
   assert(is_object_aligned(_buffer_used), "sanity");
   assert(is_object_aligned(byte_size), "sanity");
-  memcpy(to, from, byte_size);
+  memcpy(to, from, old_size * HeapWordSize);
 
   // These native pointers will be restored explicitly at run time.
   if (java_lang_Module::is_instance(src_obj)) {
@@ -539,24 +543,40 @@ void ArchiveHeapWriter::update_header_for_requested_obj(oop requested_obj, oop s
 
   oop fake_oop = cast_to_oop(buffered_addr);
   if (UseCompactObjectHeaders) {
-    fake_oop->set_mark(markWord::prototype().set_narrow_klass(nk));
+    if (src_obj == nullptr) {
+      // Other case below.
+      fake_oop->set_mark(markWord::prototype().set_narrow_klass(nk));
+    }
   } else {
     fake_oop->set_narrow_klass(nk);
   }
 
   // We need to retain the identity_hash, because it may have been used by some hashtables
-  // in the shared heap.
-  if (src_obj != nullptr && !src_obj->fast_no_hash_check()) {
-    intptr_t src_hash = src_obj->identity_hash();
+  // in the shared heap. This also has the side effect of pre-initializing the
+  // identity_hash for all shared objects, so they are less likely to be written
+  // into during run time, increasing the potential of memory sharing.
+  if (src_obj != nullptr) {
     if (UseCompactObjectHeaders) {
-      fake_oop->set_mark(markWord::prototype().set_narrow_klass(nk).copy_set_hash(src_hash));
+      markWord m = markWord::prototype().set_narrow_klass(nk);
+      m = m.hash_copy_hashctrl_from(src_obj->mark());
+      assert(m.hashctrl() == src_obj->mark().hashctrl(), "hashctrl must match");
+      if (m.has_no_hash()) {
+        m.hash_set_hashed();
+      } else if (m.hash_is_hashed()) {
+        intptr_t src_hash = src_obj->identity_hash();
+        log_info(gc)("init_hash: old: " PTR_FORMAT ", new: " PTR_FORMAT, p2i(src_obj), p2i(fake_oop));
+        m = fake_oop->initialize_hash_if_necessary(src_obj, src_klass, m);
+        fake_oop->set_mark(m);
+        assert(src_hash == fake_oop->identity_hash(), "i-hash must match");
+      }
+      fake_oop->set_mark(m);
     } else {
+      intptr_t src_hash = src_obj->identity_hash();
       fake_oop->set_mark(markWord::prototype().copy_set_hash(src_hash));
+      DEBUG_ONLY(intptr_t archived_hash = fake_oop->identity_hash());
+      assert(src_hash == archived_hash, "Different hash codes: original " INTPTR_FORMAT ", archived " INTPTR_FORMAT, src_hash, archived_hash);
     }
     assert(fake_oop->mark().is_unlocked(), "sanity");
-
-    DEBUG_ONLY(intptr_t archived_hash = fake_oop->identity_hash());
-    assert(src_hash == archived_hash, "Different hash codes: original " INTPTR_FORMAT ", archived " INTPTR_FORMAT, src_hash, archived_hash);
   }
 }
 

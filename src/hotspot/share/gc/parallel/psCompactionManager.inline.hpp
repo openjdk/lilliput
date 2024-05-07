@@ -116,7 +116,9 @@ inline void ParCompactionManager::mark_and_push(T* p) {
       ContinuationGCSupport::transform_stack_chunk(obj);
 
       assert(_marking_stats_cache != nullptr, "inv");
-      _marking_stats_cache->push(obj, obj->size());
+      size_t old_size = obj->size();
+      size_t new_size = obj->copy_size(old_size, obj->mark());
+      _marking_stats_cache->push(obj, new_size);
       push(obj);
     }
   }

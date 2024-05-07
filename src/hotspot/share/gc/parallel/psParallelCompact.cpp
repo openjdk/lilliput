@@ -1602,12 +1602,17 @@ void PSParallelCompact::forward_to_new_addr() {
             assert(mark_bitmap()->is_marked(cur_addr), "inv");
             HeapWord* new_addr = destination + live_words;
             oop obj = cast_to_oop(cur_addr);
+            size_t obj_size = obj->size();
+            size_t new_size = obj_size;
             if (new_addr != cur_addr) {
               cm->preserved_marks()->push_if_necessary(obj, obj->mark());
               SlidingForwarding::forward_to(obj, cast_to_oop(new_addr));
+              new_size = obj->copy_size(obj_size, obj->mark());
+              if (new_size != obj_size) {
+                Unimplemented();
+              }
             }
-            size_t obj_size = obj->size();
-            live_words += obj_size;
+            live_words += new_size;
             cur_addr += obj_size;
           }
         }

@@ -234,7 +234,7 @@ public:
     // in this region (words).  This does not include the partial object
     // extending onto the region (if any), or the part of an object that extends
     // onto the next region (if any).
-    size_t live_obj_size() const { return _dc_and_los & los_mask; }
+    size_t live_obj_size() const { return MIN2((size_t)_dc_and_los & los_mask, RegionSize - partial_obj_size()); }
 
     // Total live data that lies within the region (words).
     size_t data_size() const { return partial_obj_size() + live_obj_size(); }

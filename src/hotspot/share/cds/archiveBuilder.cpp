@@ -1143,7 +1143,9 @@ class ArchiveBuilder::CDSMapLogger : AllStatic {
       if (source_oop != nullptr) {
         // This is a regular oop that got archived.
         print_oop_with_requested_addr_cr(&st, source_oop, false);
-        byte_size = source_oop->size() * BytesPerWord;
+        size_t old_size = source_oop->size();
+        size_t new_size = source_oop->copy_size(old_size, source_oop->mark());
+        byte_size = new_size * BytesPerWord;
       } else if (start == ArchiveHeapWriter::buffered_heap_roots_addr()) {
         // HeapShared::roots() is copied specially, so it doesn't exist in
         // ArchiveHeapWriter::BufferOffsetToSourceObjectTable.
