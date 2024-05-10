@@ -3262,32 +3262,40 @@ void MacroAssembler::compiler_fast_lock_object(Register oop, Register box, Regis
 
   bind(object_has_monitor);
 
-  Register zero = temp;
-  Register monitor_tagged = displacedHeader; // Tagged with markWord::monitor_value.
-  // The object's monitor m is unlocked iff m->owner is null,
-  // otherwise m->owner may contain a thread or a stack address.
+  if (LockingMode == LM_LIGHTWEIGHT) {
+    // OMCache lookup not supported yet. Take slowpath.
 
-  // Try to CAS m->owner from null to current thread.
-  // If m->owner is null, then csg succeeds and sets m->owner=THREAD and CR=EQ.
-  // Otherwise, register zero is filled with the current owner.
-  z_lghi(zero, 0);
-  z_csg(zero, Z_thread, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner), monitor_tagged);
-  if (LockingMode != LM_LIGHTWEIGHT) {
-    // Store a non-null value into the box.
-    z_stg(box, BasicLock::displaced_header_offset_in_bytes(), box);
+    // Set flag to NE.
+    z_ltgr(oop, oop);
+    z_bru(done);
+  } else {
+    Register zero = temp;
+    Register monitor_tagged = displacedHeader; // Tagged with markWord::monitor_value.
+    // The object's monitor m is unlocked iff m->owner is null,
+    // otherwise m->owner may contain a thread or a stack address.
+
+    // Try to CAS m->owner from null to current thread.
+    // If m->owner is null, then csg succeeds and sets m->owner=THREAD and CR=EQ.
+    // Otherwise, register zero is filled with the current owner.
+    z_lghi(zero, 0);
+    z_csg(zero, Z_thread, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner), monitor_tagged);
+    if (LockingMode != LM_LIGHTWEIGHT) {
+      // Store a non-null value into the box.
+      z_stg(box, BasicLock::displaced_header_offset_in_bytes(), box);
+    }
+
+    z_bre(done); // acquired the lock for the first time.
+
+    BLOCK_COMMENT("fast_path_recursive_lock {");
+    // Check if we are already the owner (recursive lock)
+    z_cgr(Z_thread, zero); // owner is stored in zero by "z_csg" above
+    z_brne(done); // not a recursive lock
+
+    // Current thread already owns the lock. Just increment recursion count.
+    z_agsi(Address(monitor_tagged, OM_OFFSET_NO_MONITOR_VALUE_TAG(recursions)), 1ll);
+    z_cgr(zero, zero); // set the CC to EQUAL
+    BLOCK_COMMENT("} fast_path_recursive_lock");
   }
-
-  z_bre(done); // acquired the lock for the first time.
-
-  BLOCK_COMMENT("fast_path_recursive_lock {");
-  // Check if we are already the owner (recursive lock)
-  z_cgr(Z_thread, zero); // owner is stored in zero by "z_csg" above
-  z_brne(done); // not a recursive lock
-
-  // Current thread already owns the lock. Just increment recursion count.
-  z_agsi(Address(monitor_tagged, OM_OFFSET_NO_MONITOR_VALUE_TAG(recursions)), 1ll);
-  z_cgr(zero, zero); // set the CC to EQUAL
-  BLOCK_COMMENT("} fast_path_recursive_lock");
   bind(done);
 
   BLOCK_COMMENT("} compiler_fast_lock_object");
@@ -3348,28 +3356,35 @@ void MacroAssembler::compiler_fast_unlock_object(Register oop, Register box, Reg
   // Handle existing monitor.
   bind(object_has_monitor);
 
-  z_cg(Z_thread, Address(currentHeader, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner)));
-  z_brne(done);
+  if (LockingMode == LM_LIGHTWEIGHT) {
+    // OMCache lookup not supported yet. Take slowpath.
 
-  BLOCK_COMMENT("fast_path_recursive_unlock {");
-  load_and_test_long(temp, Address(currentHeader, OM_OFFSET_NO_MONITOR_VALUE_TAG(recursions)));
-  z_bre(not_recursive); // if 0 then jump, it's not recursive locking
+    // Set flag to NE.
+    z_ltgr(oop, oop);
+    z_bru(done);
+  } else {
+    z_cg(Z_thread, Address(currentHeader, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner)));
+    z_brne(done);
 
-  // Recursive inflated unlock
-  z_agsi(Address(currentHeader, OM_OFFSET_NO_MONITOR_VALUE_TAG(recursions)), -1ll);
-  z_cgr(currentHeader, currentHeader); // set the CC to EQUAL
-  BLOCK_COMMENT("} fast_path_recursive_unlock");
-  z_bru(done);
+    BLOCK_COMMENT("fast_path_recursive_unlock {");
+    load_and_test_long(temp, Address(currentHeader, OM_OFFSET_NO_MONITOR_VALUE_TAG(recursions)));
+    z_bre(not_recursive); // if 0 then jump, it's not recursive locking
 
-  bind(not_recursive);
+    // Recursive inflated unlock
+    z_agsi(Address(currentHeader, OM_OFFSET_NO_MONITOR_VALUE_TAG(recursions)), -1ll);
+    z_cgr(currentHeader, currentHeader); // set the CC to EQUAL
+    BLOCK_COMMENT("} fast_path_recursive_unlock");
+    z_bru(done);
 
-  load_and_test_long(temp, Address(currentHeader, OM_OFFSET_NO_MONITOR_VALUE_TAG(EntryList)));
-  z_brne(done);
-  load_and_test_long(temp, Address(currentHeader, OM_OFFSET_NO_MONITOR_VALUE_TAG(cxq)));
-  z_brne(done);
-  z_release();
-  z_stg(temp/*=0*/, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner), currentHeader);
+    bind(not_recursive);
 
+    load_and_test_long(temp, Address(currentHeader, OM_OFFSET_NO_MONITOR_VALUE_TAG(EntryList)));
+    z_brne(done);
+    load_and_test_long(temp, Address(currentHeader, OM_OFFSET_NO_MONITOR_VALUE_TAG(cxq)));
+    z_brne(done);
+    z_release();
+    z_stg(temp/*=0*/, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner), currentHeader);
+  }
   bind(done);
 
   BLOCK_COMMENT("} compiler_fast_unlock_object");
