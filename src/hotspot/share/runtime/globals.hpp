@@ -1996,8 +1996,6 @@ const int ObjectAlignmentInBytes = 8;
   product(int, OMCacheSize, 8, "")                                          \
           range(0, OMCache::CAPACITY)                                       \
                                                                             \
-  product(bool, OMShrinkCHT, false, "")                                     \
-                                                                            \
   product(int, OMSpins, 20, "")                                             \
                                                                             \
   product(int, OMYields, 5, "")                                             \

@@ -40,6 +40,7 @@
 #include "runtime/javaCalls.hpp"
 #include "runtime/jniHandles.hpp"
 #include "runtime/serviceThread.hpp"
+#include "runtime/lightweightSynchronizer.hpp"
 #include "runtime/mutexLocker.hpp"
 #include "runtime/os.hpp"
 #include "prims/jvmtiImpl.hpp"
@@ -95,6 +96,7 @@ void ServiceThread::service_thread_entry(JavaThread* jt, TRAPS) {
     bool oop_handles_to_release = false;
     bool cldg_cleanup_work = false;
     bool jvmti_tagmap_work = false;
+    bool omworldtable_work = false;
     {
       // Need state transition ThreadBlockInVM so that this thread
       // will be handled by safepoint correctly when this thread is
@@ -124,7 +126,8 @@ void ServiceThread::service_thread_entry(JavaThread* jt, TRAPS) {
               (oopstorage_work = OopStorage::has_cleanup_work_and_reset()) |
               (oop_handles_to_release = JavaThread::has_oop_handles_to_release()) |
               (cldg_cleanup_work = ClassLoaderDataGraph::should_clean_metaspaces_and_reset()) |
-              (jvmti_tagmap_work = JvmtiTagMap::has_object_free_events_and_reset())
+              (jvmti_tagmap_work = JvmtiTagMap::has_object_free_events_and_reset()) |
+              (omworldtable_work = LightweightSynchronizer::needs_resize())
              ) == 0) {
         // Wait until notified that there is some work to do or timer expires.
         // Some cleanup requests don't notify the ServiceThread so work needs to be done at periodic intervals.
@@ -195,6 +198,10 @@ void ServiceThread::service_thread_entry(JavaThread* jt, TRAPS) {
 
     if (jvmti_tagmap_work) {
       JvmtiTagMap::flush_all_object_free_events();
+    }
+
+    if (omworldtable_work) {
+      LightweightSynchronizer::resize_table(jt);
     }
   }
 }
