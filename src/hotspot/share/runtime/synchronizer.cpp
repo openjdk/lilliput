@@ -939,7 +939,7 @@ static markWord read_stable_mark(oop obj) {
 //   There are simple ways to "diffuse" the middle address bits over the
 //   generated hashCode values:
 
-static inline intptr_t get_next_hash(Thread* current, oop obj) {
+intptr_t ObjectSynchronizer::get_next_hash(Thread* current, oop obj) {
   intptr_t value = 0;
   if (hashCode == 0) {
     // This form uses global Park-Miller RNG.
@@ -977,11 +977,6 @@ static inline intptr_t get_next_hash(Thread* current, oop obj) {
   if (value == 0) value = 0xBAD;
   assert(value != markWord::no_hash, "invariant");
   return value;
-}
-
-intptr_t ObjectSynchronizer::get_next_hash(Thread* current, oop obj) {
-  // CLEANUP[Axel]: hack for LightweightSynchronizer being in different translation unit
-  return ::get_next_hash(current, obj);
 }
 
 intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {

@@ -1695,7 +1695,8 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
       __ jcc(Assembler::notEqual, slow_path_lock);
     } else {
       assert(LockingMode == LM_LIGHTWEIGHT, "must be");
-      __ lightweight_lock(lock_reg, obj_reg, swap_reg, thread, lock_reg, slow_path_lock);
+      // Lacking registers and thread on x86_32. Always take slow path.
+      __ jmp(slow_path_lock);
     }
     __ bind(count_mon);
     __ inc_held_monitor_count();
@@ -1933,11 +1934,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     // BEGIN Slow path lock
 
     __ bind(slow_path_lock);
-
-    if (LockingMode == LM_LIGHTWEIGHT) {
-      // Reload the lock addr. Clobbered by lightweight_lock.
-      __ lea(lock_reg, Address(rbp, lock_slot_rbp_offset));
-    }
 
     // has last_Java_frame setup. No exceptions so do vanilla call not call_VM
     // args are (oop obj, BasicLock* lock, JavaThread* thread)

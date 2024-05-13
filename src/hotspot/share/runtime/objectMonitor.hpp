@@ -159,7 +159,6 @@ class ObjectMonitor : public CHeapObj<mtObjectMonitor> {
 public:
   // NOTE: Typed as uintptr_t so that we can pick it up in SA, via vmStructs.
   static const uintptr_t ANONYMOUS_OWNER = 1;
-  static const uintptr_t ANONYMOUS_OWNER_OR_DEFLATER_MARKER = ANONYMOUS_OWNER | DEFLATER_MARKER_VALUE;
 
 private:
   static void* anon_owner_ptr() { return reinterpret_cast<void*>(ANONYMOUS_OWNER); }
@@ -263,14 +262,6 @@ private:
     }
     if (!owner_is_DEFLATER_MARKER()) {
       ret_code |= intptr_t(owner_raw());
-    }
-    return ret_code != 0;
-  }
-  bool is_contended() const {
-    intptr_t ret_code = intptr_t(_waiters) | intptr_t(_cxq) | intptr_t(_EntryList);
-    int cnts = contentions();
-    if (cnts > 0) {
-      ret_code |= intptr_t(cnts);
     }
     return ret_code != 0;
   }

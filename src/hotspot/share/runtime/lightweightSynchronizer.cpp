@@ -459,7 +459,7 @@ bool LightweightSynchronizer::resize_table(JavaThread* current) {
                           ObjectSynchronizer::_in_use_list.max());
 }
 
-class LockStackInflateContendedLocks : private OopClosure {
+class LightweightSynchronizer::LockStackInflateContendedLocks : private OopClosure {
  private:
   oop _contended_oops[LockStack::CAPACITY];
   int _length;
@@ -538,7 +538,7 @@ public:
 
 };
 
-class VerifyThreadState {
+class LightweightSynchronizer::VerifyThreadState {
   bool _no_safepoint;
   union {
     struct {} _dummy;
@@ -565,7 +565,6 @@ void LightweightSynchronizer::enter_for(Handle obj, BasicLock* lock, JavaThread*
   JavaThread* current = JavaThread::current();
   VerifyThreadState vts(locking_thread, current);
 
-  // TODO[OMWorld]: Is this necessary?
   if (obj->klass()->is_value_based()) {
     ObjectSynchronizer::handle_sync_on_value_based_class(obj, locking_thread);
   }
@@ -583,9 +582,6 @@ void LightweightSynchronizer::enter_for(Handle obj, BasicLock* lock, JavaThread*
     assert(entered, "recursive ObjectMonitor::enter_for must succeed");
   } else {
     // It is assumed that enter_for must enter on an object without contention.
-    // TODO[OMWorld]: We also assume that this re-lock is on either a new never
-    //                inflated monitor, or one that is already locked by the
-    //                locking_thread. Should we have this stricter restriction?
     monitor = inflate_and_enter(obj(), locking_thread, current, ObjectSynchronizer::inflate_cause_monitor_enter);
   }
 
@@ -611,11 +607,6 @@ void LightweightSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* cur
   LockStack& lock_stack = current->lock_stack();
 
   if (!lock_stack.is_full() && lock_stack.try_recursive_enter(obj())) {
-    // TODO[OMWorld]: Maybe guard this by the value in the markWord (only is fast locked)
-    //                Currently this is done when exiting. Doing it early could remove,
-    //                LockStack::CAPACITY - 1 slow paths in the best case. But need to fix
-    //                some of the inflation counters for this change.
-
     // Recursively fast locked
     return;
   }
@@ -718,7 +709,6 @@ void LightweightSynchronizer::exit(oop object, JavaThread* current) {
   monitor->exit(current);
 }
 
-// TODO[OMWorld]: Rename this. No idea what to call it, used by notify/notifyall/wait and jni exit
 ObjectMonitor* LightweightSynchronizer::inflate_locked_or_imse(oop obj, const ObjectSynchronizer::InflateCause cause, TRAPS) {
   assert(LockingMode == LM_LIGHTWEIGHT, "must be");
   JavaThread* current = THREAD;
@@ -974,19 +964,6 @@ void LightweightSynchronizer::deflate_monitor(Thread* current, oop obj, ObjectMo
   if (obj != nullptr) {
     assert(removed, "Should have removed the entry if obj was alive");
   }
-}
-
-void LightweightSynchronizer::deflate_anon_monitor(Thread* current, oop obj, ObjectMonitor* monitor) {
-  markWord mark = obj->mark_acquire();
-  assert(!mark.has_no_hash(), "obj with inflated monitor must have had a hash");
-
-  while (mark.has_monitor()) {
-    const markWord new_mark = mark.set_fast_locked();
-    mark = obj->cas_set_mark(new_mark, mark);
-  }
-
-  bool removed = remove_monitor(current, obj, monitor);
-  assert(removed, "Should have removed the entry");
 }
 
 ObjectMonitor* LightweightSynchronizer::read_monitor(Thread* current, oop obj) {
