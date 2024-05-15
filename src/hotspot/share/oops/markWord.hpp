@@ -160,17 +160,9 @@ class markWord {
   // We store nKlass in the upper 22 bits of the markword. When extracting, we need to read the upper
   // 32 bits and rightshift by the lower 10 foreign bits.
 
-  // These are for loading the nKlass with a 32-bit load and subsequent masking of the lower
-  // shadow bits
-  static constexpr int klass_load_shift           = 32;
-  static constexpr int klass_load_bits            = 32;
-  static constexpr int klass_shadow_bits          = 10;
-  static constexpr uintptr_t klass_shadow_mask    = right_n_bits(klass_shadow_bits);
-  static constexpr uintptr_t klass_shadow_mask_inplace  = klass_shadow_mask << klass_load_shift;
-
   // These are for bit-precise extraction of the nKlass from the 64-bit Markword
-  static constexpr int klass_shift                = 42;
-  static constexpr int klass_bits                 = 22;
+  static constexpr int klass_shift                = 13;
+  static constexpr int klass_bits                 = 19;
   static constexpr uintptr_t klass_mask           = right_n_bits(klass_bits);
   static constexpr uintptr_t klass_mask_in_place  = klass_mask << klass_shift;
 #endif

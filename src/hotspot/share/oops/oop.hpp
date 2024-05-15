@@ -359,16 +359,8 @@ public:
   // for code generation
   static int mark_offset_in_bytes()      { return (int)offset_of(oopDesc, _mark); }
   static int klass_offset_in_bytes()     {
-#ifdef _LP64
-    if (UseCompactObjectHeaders) {
-      constexpr int load_shift = markWord::klass_load_shift;
-      STATIC_ASSERT(load_shift % 8 == 0);
-      return mark_offset_in_bytes() + load_shift / 8;
-    } else
-#endif
-    {
-      return (int)offset_of(oopDesc, _metadata._klass);
-    }
+    assert(!UseCompactObjectHeaders, "don't use klass_offset_in_bytes with compact headers");
+    return (int)offset_of(oopDesc, _metadata._klass);
   }
   static int klass_gap_offset_in_bytes() {
     assert(has_klass_gap(), "only applicable to compressed klass pointers");

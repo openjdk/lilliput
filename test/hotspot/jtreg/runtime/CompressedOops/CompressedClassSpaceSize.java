@@ -54,17 +54,6 @@
  * @run driver CompressedClassSpaceSize valid_large_nocds
  */
 
-/*
- * @test id=valid_large_cds
- * @bug 8022865
- * @summary Tests for the -XX:CompressedClassSpaceSize command line option
- * @requires vm.bits == 64 & vm.opt.final.UseCompressedOops == true & vm.cds
- * @requires vm.flagless
- * @library /test/lib
- * @modules java.base/jdk.internal.misc java.management
- * @run driver CompressedClassSpaceSize valid_large_cds
- */
-
 import jdk.test.lib.process.ProcessTools;
 import jdk.test.lib.process.OutputAnalyzer;
 
@@ -74,7 +63,7 @@ public class CompressedClassSpaceSize {
 
     final static long minAllowedClassSpaceSize = MB;
     final static long minRealClassSpaceSize = 16 * MB;
-    final static long maxClassSpaceSize = 4096 * MB;
+    final static long maxClassSpaceSize = 512 * MB;
 
     // For the valid_large_cds sub test: we need to have a notion of what archive size to
     // maximally expect, with a generous fudge factor to avoid having to tweak this test

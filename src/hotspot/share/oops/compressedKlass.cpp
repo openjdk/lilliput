@@ -84,6 +84,10 @@ void CompressedKlassPointers::sanity_check_after_initialization() {
 #define ASSERT_HERE(cond) assert(cond, " (%s)", tmp);
 #define ASSERT_HERE_2(cond, msg) assert(cond, msg " (%s)", tmp);
 
+  // There is no technical reason preventing us from using other klass pointer bit lengths,
+  // but it should be a deliberate choice
+  ASSERT_HERE(_narrow_klass_pointer_bits == 32 || _narrow_klass_pointer_bits == 19);
+
   // All values must be inited
   ASSERT_HERE(_max_shift != -1);
   ASSERT_HERE(_klass_range_start != (address)-1);
@@ -222,6 +226,11 @@ void CompressedKlassPointers::initialize(address addr, size_t len) {
 #endif
 
   if (tiny_classpointer_mode()) {
+
+    // This handles the case that we - experimentally - reduce the number of
+    // class pointer bits further, such that (shift + num bits) < 32.
+    assert(len <= (size_t)nth_bit(narrow_klass_pointer_bits() + max_shift()),
+           "klass range size exceeds encoding, len: " SIZE_FORMAT ", narrow_klass_pointer_bits: %d, max_shift: %d", len, narrow_klass_pointer_bits(), max_shift());
 
     // In tiny classpointer mode, we don't attempt for zero-based mode.
     // Instead, we set the base to the start of the klass range and then try

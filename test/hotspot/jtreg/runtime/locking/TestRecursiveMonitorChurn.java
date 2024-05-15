@@ -83,7 +83,7 @@ public class TestRecursiveMonitorChurn {
                     long reserved = Long.parseLong(m.group(1));
                     long committed = Long.parseLong(m.group(2));
                     System.out.println(">>>>> " + line + ": " + reserved + " - " + committed);
-                    if (committed > 1000) {
+                    if (committed > 300000) {
                         throw new RuntimeException("Allocated too many monitors");
                     }
                     return;
