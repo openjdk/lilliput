@@ -5679,8 +5679,8 @@ void MacroAssembler::load_method_holder(Register holder, Register method) {
 #ifdef _LP64
 void MacroAssembler::load_nklass_compact(Register dst, Register src) {
   assert(UseCompactObjectHeaders, "expect compact object headers");
-  movq(dst, Address(src, oopDesc::mark_offset_in_bytes()));
-  shrq(dst, markWord::klass_shift);
+  movl(dst, Address(src, oopDesc::mark_offset_in_bytes()));
+  shrl(dst, markWord::klass_shift);
 }
 #endif
 

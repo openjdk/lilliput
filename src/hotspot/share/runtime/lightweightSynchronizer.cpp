@@ -1192,7 +1192,7 @@ uint32_t LightweightSynchronizer::get_hash(markWord mark, oop obj, Klass* klass)
     return obj->int_field(klass->hash_offset_in_bytes(obj));
   } else {
     assert(mark.hash_is_hashed(), "must be hashed");
-    assert(hashCode == 6 || hashCode == 2, "must have idempotent hashCode");
+    assert(hashCode == 6 || hashCode == 4 || hashCode == 2, "must have idempotent hashCode");
     // Already marked as hashed, but not yet copied. Recompute hash and return it.
     return ObjectSynchronizer::get_next_hash(nullptr, obj); // recompute hash
   }

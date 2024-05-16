@@ -139,7 +139,7 @@ markWord oopDesc::initialize_hash_if_necessary(oop obj, Klass* k, markWord m) {
     assert(!m.hash_is_copied(), "must not be installed");
     uint32_t hash = static_cast<uint32_t>(ObjectSynchronizer::get_next_hash(nullptr, obj));
     int offset = k->hash_offset_in_bytes(cast_to_oop(this));
-    assert(offset >= 8, "hash offset must not be in header");
+    assert(offset >= 4, "hash offset must not be in header");
     //log_info(gc)("Initializing hash for " PTR_FORMAT ", old: " PTR_FORMAT ", hash: %d, offset: %d", p2i(this), p2i(obj), hash, offset);
     int_field_put(offset, (jint)hash);
     m = m.hash_set_copied();
@@ -159,7 +159,7 @@ bool oopDesc::initialize_hash_if_necessary(oop obj) {
     uint32_t hash = static_cast<uint32_t>(ObjectSynchronizer::get_next_hash(nullptr, obj));
     Klass* k = m.klass();
     int offset = k->hash_offset_in_bytes(cast_to_oop(this));
-    assert(offset >= 8, "hash offset must not be in header");
+    assert(offset >= 4, "hash offset must not be in header");
     log_trace(gc)("Initializing hash for " PTR_FORMAT ", old: " PTR_FORMAT ", hash: %d, offset: %d", p2i(this), p2i(obj), hash, offset);
     int_field_put(offset, (jint)hash);
     m = m.hash_set_copied();
@@ -196,8 +196,7 @@ bool oopDesc::is_typeArray_noinline()   const { return is_typeArray();   }
 
 bool oopDesc::has_klass_gap() {
   // Only has a klass gap when compressed class pointers are used.
-  // Except when using compact headers.
-  return UseCompressedClassPointers && !UseCompactObjectHeaders;
+  return UseCompressedClassPointers || UseCompactObjectHeaders;
 }
 
 #if INCLUDE_CDS_JAVA_HEAP

@@ -4085,8 +4085,7 @@ void TemplateTable::_new() {
     // The object is initialized before the header.  If the object size is
     // zero, go directly to the header initialization.
     if (UseCompactObjectHeaders) {
-      assert(is_aligned(oopDesc::base_offset_in_bytes(), BytesPerLong), "oop base offset must be 8-byte-aligned");
-      __ decrement(rdx, oopDesc::base_offset_in_bytes());
+      __ decrement(rdx, align_up(oopDesc::base_offset_in_bytes(), BytesPerLong));
     } else {
       __ decrement(rdx, sizeof(oopDesc));
     }
@@ -4112,8 +4111,7 @@ void TemplateTable::_new() {
     { Label loop;
     __ bind(loop);
     if (UseCompactObjectHeaders) {
-      assert(is_aligned(oopDesc::base_offset_in_bytes(), BytesPerLong), "oop base offset must be 8-byte-aligned");
-      int header_size = oopDesc::base_offset_in_bytes();
+      int header_size = align_up(oopDesc::base_offset_in_bytes(), BytesPerLong);
       __ movptr(Address(rax, rdx, Address::times_8, header_size - 1*oopSize), rcx);
       NOT_LP64(__ movptr(Address(rax, rdx, Address::times_8, header_size - 2*oopSize), rcx));
     } else {
@@ -4129,6 +4127,7 @@ void TemplateTable::_new() {
     if (UseCompactObjectHeaders) {
       __ pop(rcx);   // get saved klass back in the register.
       __ movptr(rbx, Address(rcx, Klass::prototype_header_offset()));
+      // Also clears the 'gap'.
       __ movptr(Address(rax, oopDesc::mark_offset_in_bytes()), rbx);
     } else {
       __ movptr(Address(rax, oopDesc::mark_offset_in_bytes()),

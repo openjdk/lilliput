@@ -123,6 +123,7 @@ class markWord {
 
   // Conversion
   uintptr_t value() const { return _value; }
+  uint32_t value32() const { return (uint32_t)_value; }
 
   // Constants
   static const int age_bits                       = 4;

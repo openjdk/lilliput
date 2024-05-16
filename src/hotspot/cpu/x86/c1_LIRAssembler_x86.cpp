@@ -3509,8 +3509,8 @@ void LIR_Assembler::emit_load_klass(LIR_OpLoadKlass* op) {
     assert_different_registers(tmp, obj);
     assert_different_registers(tmp, result);
 
-    __ movq(result, Address(obj, oopDesc::mark_offset_in_bytes()));
-    __ shrq(result, markWord::klass_shift);
+    __ movl(result, Address(obj, oopDesc::mark_offset_in_bytes()));
+    __ shrl(result, markWord::klass_shift);
     __ decode_klass_not_null(result, tmp);
   } else if (UseCompressedClassPointers) {
     __ movl(result, Address(obj, oopDesc::klass_offset_in_bytes()));

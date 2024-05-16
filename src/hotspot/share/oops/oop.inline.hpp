@@ -37,6 +37,7 @@
 #include "oops/markWord.inline.hpp"
 #include "oops/oopsHierarchy.hpp"
 #include "runtime/atomic.hpp"
+#include "gc/shared/gc_globals.hpp"
 #include "runtime/globals.hpp"
 #include "utilities/align.hpp"
 #include "utilities/debug.hpp"
@@ -73,36 +74,61 @@ static void assert_correct_hash_transition(markWord old_mark, markWord new_mark)
 
 void oopDesc::set_mark(markWord m) {
   assert_correct_hash_transition(mark(), m);
+  if (UseCompactObjectHeaders) {
+    Atomic::store(reinterpret_cast<uint32_t volatile*>(&_mark), m.value32());
+  } else {
+    Atomic::store(&_mark, m);
+  }
+}
+
+void oopDesc::set_mark_full(markWord m) {
+  assert_correct_hash_transition(mark(), m);
   Atomic::store(&_mark, m);
 }
 
 void oopDesc::set_mark(HeapWord* mem, markWord m) {
   if (UseCompactObjectHeaders) {
     assert(!(m.hash_is_hashed() && m.hash_is_copied()), "must not be simultaneously hashed and copied state");
+    *(uint32_t*)(((char*)mem) + mark_offset_in_bytes()) = m.value32();
+  } else {
+    *(markWord*)(((char*)mem) + mark_offset_in_bytes()) = m;
   }
-  *(markWord*)(((char*)mem) + mark_offset_in_bytes()) = m;
 }
 
 void oopDesc::release_set_mark(markWord m) {
   assert_correct_hash_transition(mark(), m);
-  Atomic::release_store(&_mark, m);
+  if (UseCompactObjectHeaders) {
+    Atomic::release_store(reinterpret_cast<uint32_t volatile*>(&_mark), m.value32());
+  } else {
+    Atomic::release_store(&_mark, m);
+  }
 }
 
 void oopDesc::release_set_mark(HeapWord* mem, markWord m) {
   if (UseCompactObjectHeaders) {
     assert(!(m.hash_is_hashed() && m.hash_is_copied()), "must not be simultaneously hashed and copied state");
+    Atomic::release_store((uint32_t*)(((char*)mem) + mark_offset_in_bytes()), m.value32());
+  } else {
+    Atomic::release_store((markWord*)(((char*)mem) + mark_offset_in_bytes()), m);
   }
-  Atomic::release_store((markWord*)(((char*)mem) + mark_offset_in_bytes()), m);
 }
 
 markWord oopDesc::cas_set_mark(markWord new_mark, markWord old_mark) {
   assert_correct_hash_transition(old_mark, new_mark);
-  return Atomic::cmpxchg(&_mark, old_mark, new_mark);
+  //if (UseCompactObjectHeaders) {
+  //  return markWord(Atomic::cmpxchg(reinterpret_cast<uint32_t volatile*>(&_mark), old_mark.value32(), new_mark.value32()));
+  //} else {
+    return Atomic::cmpxchg(&_mark, old_mark, new_mark);
+  //}
 }
 
 markWord oopDesc::cas_set_mark(markWord new_mark, markWord old_mark, atomic_memory_order order) {
   assert_correct_hash_transition(old_mark, new_mark);
-  return Atomic::cmpxchg(&_mark, old_mark, new_mark, order);
+  //if (UseCompactObjectHeaders) {
+  //  return markWord(Atomic::cmpxchg(reinterpret_cast<uint32_t volatile*>(&_mark), old_mark.value32(), new_mark.value32(), order));
+  //} else {
+    return Atomic::cmpxchg(&_mark, old_mark, new_mark, order);
+  //}
 }
 
 markWord oopDesc::prototype_mark() const {
@@ -188,7 +214,6 @@ void oopDesc::release_set_klass(HeapWord* mem, Klass* k) {
 }
 
 void oopDesc::set_klass_gap(HeapWord* mem, int v) {
-  assert(!UseCompactObjectHeaders, "don't set Klass* gap with compact headers");
   if (UseCompressedClassPointers) {
     *(int*)(((char*)mem) + klass_gap_offset_in_bytes()) = v;
   }
@@ -353,7 +378,7 @@ void oopDesc::forward_safe_init_mark() {
       m = m.hash_set_hashed();
     }
     // log_info(gc)("FS Init mark: oop: " PTR_FORMAT ", mark: " INTPTR_FORMAT, p2i(this), m.value());
-    set_mark(m);
+    set_mark_full(m);
   } else {
     set_mark(markWord::prototype());
   }
@@ -435,7 +460,7 @@ void oopDesc::forward_to(oop p, bool expanded) {
     m = m.set_forward_expanded();
   }
   assert(m.decode_pointer() == p, "encoding must be reversible");
-  set_mark(m);
+  set_mark_full(m);
 }
 
 void oopDesc::forward_to_self() {
@@ -461,6 +486,10 @@ oop oopDesc::forward_to_atomic(oop p, markWord compare, atomic_memory_order orde
 oop oopDesc::forward_to_self_atomic(markWord old_mark, atomic_memory_order order) {
   markWord new_mark = old_mark.set_self_forwarded();
   assert(forwardee(new_mark) == cast_to_oop(this), "encoding must be reversible");
+  // Note: It is ok, and even necessary, to CAS the full 64 bit, even though only
+  // the lowest 32 bits are modified. This happens during a safepoint, therefore
+  // the object beyond the header should not change. And we need the full
+  // 64 bit to capture the forwarding pointer in case of CAS failure.
   return cas_set_forwardee(new_mark, old_mark, order);
 }
 

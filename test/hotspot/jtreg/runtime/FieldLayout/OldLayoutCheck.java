@@ -69,7 +69,7 @@ public class OldLayoutCheck {
     static final long LONG_OFFSET;
     static {
       if (!Platform.is64bit() || WB.getBooleanVMFlag("UseCompactObjectHeaders")) {
-        INT_OFFSET = 16L;
+        INT_OFFSET = 4L;
         LONG_OFFSET = 8L;
       } else {
         INT_OFFSET = 12L;

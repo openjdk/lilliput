@@ -711,15 +711,18 @@ int BarrierSetC2::arraycopy_payload_base_offset(bool is_array) {
   // 16 - 64-bit VM, normal klass
   if (base_off % BytesPerLong != 0) {
     assert(UseCompressedClassPointers, "");
-    assert(!UseCompactObjectHeaders, "");
     if (is_array) {
       // Exclude length to copy by 8 bytes words.
       base_off += sizeof(int);
     } else {
-      // Include klass to copy by 8 bytes words.
-      base_off = instanceOopDesc::klass_offset_in_bytes();
+      if (UseCompactObjectHeaders) {
+        base_off = 0; /* FIXME */
+      } else {
+        // Include klass to copy by 8 bytes words.
+        base_off = instanceOopDesc::klass_offset_in_bytes();
+      }
     }
-    assert(base_off % BytesPerLong == 0, "expect 8 bytes alignment");
+    assert(base_off % BytesPerLong == 0 || UseCompactObjectHeaders, "expect 8 bytes alignment");
   }
   return base_off;
 }

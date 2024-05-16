@@ -6408,7 +6408,7 @@ void C2_MacroAssembler::load_nklass_compact_c2(Register dst, Register obj, Regis
   // then passes that register as obj and 0 in disp. The following code extracts the base
   // and offset to load the mark-word.
   int offset = oopDesc::mark_offset_in_bytes() + disp - Type::klass_offset();
-  movq(dst, Address(obj, index, scale, offset));
-  shrq(dst, markWord::klass_shift);
+  movl(dst, Address(obj, index, scale, offset));
+  shrl(dst, markWord::klass_shift);
 }
 #endif

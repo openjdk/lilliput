@@ -2574,10 +2574,10 @@ void C2_MacroAssembler::load_nklass_compact(Register dst, Register obj, Register
   // and offset to load the mark-word.
   int offset = oopDesc::mark_offset_in_bytes() + disp - Type::klass_offset();
   if (index == noreg) {
-    ldr(dst, Address(obj, offset));
+    ldrw(dst, Address(obj, offset));
   } else {
     lea(dst, Address(obj, index, Address::lsl(scale)));
-    ldr(dst, Address(dst, offset));
+    ldrw(dst, Address(dst, offset));
   }
-  lsr(dst, dst, markWord::klass_shift);
+  lsrw(dst, dst, markWord::klass_shift);
 }

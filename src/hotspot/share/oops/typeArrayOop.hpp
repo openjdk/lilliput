@@ -118,6 +118,7 @@ private:
  private:
   static size_t object_size(int lh, int length) {
     int instance_header_size = Klass::layout_helper_header_size(lh);
+    assert(instance_header_size == 8 || !UseCompactObjectHeaders, "array header must be 8 with UCOH");
     int element_shift = Klass::layout_helper_log2_element_size(lh);
     DEBUG_ONLY(BasicType etype = Klass::layout_helper_element_type(lh));
     assert(length <= arrayOopDesc::max_array_length(etype), "no overflow");

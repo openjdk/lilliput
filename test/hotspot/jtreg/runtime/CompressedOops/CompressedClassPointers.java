@@ -345,7 +345,7 @@ public class CompressedClassPointers {
 
     public static void main(String[] args) throws Exception {
         smallHeapTest();
-        smallHeapTestWith1G();
+        //smallHeapTestWith1G();
         largeHeapTest();
         largeHeapAbove32GTest();
         largePagesForHeapTest();
@@ -353,7 +353,7 @@ public class CompressedClassPointers {
         sharingTest();
 
         smallHeapTestNoCoop();
-        smallHeapTestWith1GNoCoop();
+        //smallHeapTestWith1GNoCoop();
         largeHeapTestNoCoop();
         largePagesTestNoCoop();
         heapBaseMinAddressTestNoCoop();

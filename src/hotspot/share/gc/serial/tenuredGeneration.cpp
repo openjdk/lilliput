@@ -269,6 +269,7 @@ HeapWord* TenuredGeneration::block_start(const void* addr) const {
   HeapWord* cur_block = _bts->block_start_reaching_into_card(addr);
 
   while (true) {
+    assert(!cast_to_oop(cur_block)->is_forwarded(), "can not deal with forwarded object here");
     HeapWord* next_block = cur_block + cast_to_oop(cur_block)->size();
     if (next_block > addr) {
       assert(cur_block <= addr, "postcondition");
@@ -387,8 +388,8 @@ bool TenuredGeneration::promotion_attempt_is_safe(size_t max_promotion_in_bytes)
   return res;
 }
 
-oop TenuredGeneration::promote(oop obj, size_t obj_size) {
-  assert(obj_size == obj->size() || UseCompactObjectHeaders, "bad obj_size passed in");
+oop TenuredGeneration::promote(oop obj, size_t old_size, size_t new_size) {
+  assert(old_size == obj->size(), "bad obj_size passed in");
 
 #ifndef PRODUCT
   if (SerialHeap::heap()->promotion_should_fail()) {
@@ -397,17 +398,17 @@ oop TenuredGeneration::promote(oop obj, size_t obj_size) {
 #endif  // #ifndef PRODUCT
 
   // Allocate new object.
-  HeapWord* result = allocate(obj_size, false);
+  HeapWord* result = allocate(new_size, false);
   if (result == nullptr) {
     // Promotion of obj into gen failed.  Try to expand and allocate.
-    result = expand_and_allocate(obj_size, false);
+    result = expand_and_allocate(new_size, false);
     if (result == nullptr) {
       return nullptr;
     }
   }
 
   // Copy to new location.
-  Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(obj), result, obj_size);
+  Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(obj), result, old_size);
   oop new_obj = cast_to_oop<HeapWord*>(result);
   return new_obj;
 }

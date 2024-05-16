@@ -558,6 +558,7 @@ static HeapWord* block_start_const(const ContiguousSpace* cs, const void* p) {
     HeapWord* cur = last;
     while (cur <= p) {
       last = cur;
+      assert(!cast_to_oop(cur)->is_forwarded(), "can not deal with forwarded object here");
       cur += cast_to_oop(cur)->size();
     }
     assert(oopDesc::is_oop(cast_to_oop(last)), PTR_FORMAT " should be an object start", p2i(last));
@@ -799,7 +800,7 @@ oop DefNewGeneration::copy_to_survivor_space(oop old) {
   bool new_obj_is_tenured = false;
   // Otherwise try allocating obj tenured
   if (obj == nullptr) {
-    obj = _old_gen->promote(old, s);
+    obj = _old_gen->promote(old, old_size, s);
     if (obj == nullptr) {
       handle_promotion_failure(old);
       return old;
@@ -816,7 +817,7 @@ oop DefNewGeneration::copy_to_survivor_space(oop old) {
     // Copy obj
     Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(old), cast_from_oop<HeapWord*>(obj), old_size);
     markWord new_mark = obj->mark();
-    assert(!UseCompactObjectHeaders || (!(new_mark.hash_is_hashed() && new_mark.hash_is_copied())), "must not be simultaneously hashed and copied state");
+    assert(!UseCompactObjectHeaders || !(new_mark.hash_is_hashed() && new_mark.hash_is_copied()), "must not be simultaneously hashed and copied state");
 
     ContinuationGCSupport::transform_stack_chunk(obj);
 
