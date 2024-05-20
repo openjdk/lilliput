@@ -1042,6 +1042,16 @@ bool LightweightSynchronizer::quick_enter(oop obj, JavaThread* current, BasicLoc
 
   const markWord mark = obj->mark();
 
+  if (mark.is_unlocked()) {
+    markWord locked_mark = mark.set_fast_locked();
+    if (obj->cas_set_mark(locked_mark, mark) == mark) {
+      // Successfully fast-locked, push object to lock-stack and return.
+      lock_stack.push(obj);
+      current->inc_held_monitor_count();
+      return true;
+    }
+  }
+
   if (mark.has_monitor()) {
     ObjectMonitor* const monitor = current->om_get_from_monitor_cache(obj);
 
