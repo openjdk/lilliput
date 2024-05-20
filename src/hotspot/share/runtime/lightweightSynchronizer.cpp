@@ -38,7 +38,9 @@
 #include "runtime/lockStack.inline.hpp"
 #include "runtime/mutexLocker.hpp"
 #include "runtime/objectMonitor.inline.hpp"
+#include "runtime/os.hpp"
 #include "runtime/perfData.inline.hpp"
+#include "runtime/safepointMechanism.inline.hpp"
 #include "runtime/safepointVerifiers.hpp"
 #include "runtime/synchronizer.hpp"
 #include "utilities/concurrentHashTable.inline.hpp"
@@ -605,6 +607,9 @@ void LightweightSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* cur
 
   CacheSetter cache_setter(current, lock);
 
+  // Used when deflation is observed. Progress here requires progress
+  // from the deflator. After observing the that the deflator is not
+  // making progress (after two yields), switch to sleeping.
   SpinYield spin_yield(0, 2);
   bool first_time = true;
 
@@ -628,16 +633,33 @@ void LightweightSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* cur
     return;
   }
 
-  const int spins = OMSpins;
-  const int yields = OMYields;
+  // Will spin with exponential backoff with an accumulative O(2^spin_limit) spins.
+  const int log_spin_limit = OMSpins;
+  const int log_min_safepoint_check_interval = 10;
 
   while (true) {
-
-    SpinYield fast_lock_spin_yield(spins, yields);
     // Fast-locking does not use the 'lock' argument.
-    markWord mark = obj()->mark_acquire();
+    markWord mark = obj()->mark();
     const bool try_spin = !first_time || !mark.has_monitor();
-    for (int attempts = spins + yields; try_spin && attempts > 0; attempts--) {
+    // Always attempt to lock once even when safepoint synchronizing.
+    bool should_process = false;
+    for (int i = 0; try_spin && !should_process && i < log_spin_limit; i++) {
+      // Spin with exponential backoff.
+      const int total_spin_count = 1 << i;
+      const int inner_spin_count = MIN2(1 << log_min_safepoint_check_interval, total_spin_count);
+      const int outer_spin_count = total_spin_count / inner_spin_count;
+      for (int outer = 0; outer < outer_spin_count; outer++) {
+        should_process = SafepointMechanism::should_process(current);
+        if (should_process) {
+          // Stop spinning for safepoint.
+          break;
+        }
+        for (int inner = 1; inner < inner_spin_count; inner++) {
+          SpinPause();
+        }
+      }
+
+      mark = obj()->mark();
       while (mark.is_unlocked()) {
         ensure_lock_stack_space(current);
         assert(!lock_stack.is_full(), "must have made room on the lock stack");
@@ -652,9 +674,6 @@ void LightweightSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* cur
           return;
         }
       }
-
-      fast_lock_spin_yield.wait();
-      mark = obj()->mark_acquire();
     }
 
     if (!first_time) {

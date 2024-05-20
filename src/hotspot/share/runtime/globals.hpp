@@ -1998,9 +1998,8 @@ const int ObjectAlignmentInBytes = 8;
                                                                             \
   product(bool, OMShrinkCHT, false, "")                                     \
                                                                             \
-  product(int, OMSpins, 20, "")                                             \
-                                                                            \
-  product(int, OMYields, 5, "")                                             \
+  product(int, OMSpins, 13, "")                                             \
+          range(1, 30)                                                      \
                                                                             \
   product(bool, OMCacheHitRate, false, "")                                  \
                                                                             \
