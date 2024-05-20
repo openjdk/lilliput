@@ -349,7 +349,7 @@ ObjectMonitor* LightweightSynchronizer::get_or_insert_monitor_from_table(oop obj
 static void log_inflate(Thread* current, oop object, const ObjectSynchronizer::InflateCause cause) {
   if (log_is_enabled(Trace, monitorinflation)) {
     ResourceMark rm(current);
-    log_info(monitorinflation)("inflate(has_locker): object=" INTPTR_FORMAT ", mark="
+    log_info(monitorinflation)("inflate: object=" INTPTR_FORMAT ", mark="
                                INTPTR_FORMAT ", type='%s' cause %s", p2i(object),
                                object->mark().value(), object->klass()->external_name(),
                                ObjectSynchronizer::inflate_cause_name(cause));
