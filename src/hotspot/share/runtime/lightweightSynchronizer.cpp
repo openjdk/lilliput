@@ -485,11 +485,12 @@ class LightweightSynchronizer::LockStackInflateContendedLocks : private OopClosu
     _contended_oops(),
     _length(0) {};
 
-  void inflate(JavaThread* locking_thread, JavaThread* current) {
-    locking_thread->lock_stack().oops_do(this);
+  void inflate(JavaThread* current) {
+    assert(current == JavaThread::current(), "must be");
+    current->lock_stack().oops_do(this);
     for (int i = 0; i < _length; i++) {
       LightweightSynchronizer::
-        inflate_fast_locked_object(_contended_oops[i], locking_thread, current, ObjectSynchronizer::inflate_cause_vm_internal);
+        inflate_fast_locked_object(_contended_oops[i], current, current, ObjectSynchronizer::inflate_cause_vm_internal);
     }
   }
 };
@@ -501,7 +502,7 @@ void LightweightSynchronizer::ensure_lock_stack_space(JavaThread* current) {
   // Make room on lock_stack
   if (lock_stack.is_full()) {
     // Inflate contented objects
-    LockStackInflateContendedLocks().inflate(current, current);
+    LockStackInflateContendedLocks().inflate(current);
     if (lock_stack.is_full()) {
       // Inflate the oldest object
       inflate_fast_locked_object(lock_stack.bottom(), current, current, ObjectSynchronizer::inflate_cause_vm_internal);
@@ -940,7 +941,7 @@ ObjectMonitor* LightweightSynchronizer::inflate_and_enter(oop object, JavaThread
     }
 
     // Monitor is contended, take the time befor entering to fix the lock stack.
-    LockStackInflateContendedLocks().inflate(locking_thread, current);
+    LockStackInflateContendedLocks().inflate(current);
   }
 
   // enter can block for safepoints; clear the unhandled object oop
