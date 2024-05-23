@@ -634,7 +634,7 @@ void LightweightSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* cur
   }
 
   // Will spin with exponential backoff with an accumulative O(2^spin_limit) spins.
-  const int log_spin_limit = OMSpins;
+  const int log_spin_limit = os::is_MP() ? OMSpins : 1;
   const int log_min_safepoint_check_interval = 10;
 
   while (true) {
