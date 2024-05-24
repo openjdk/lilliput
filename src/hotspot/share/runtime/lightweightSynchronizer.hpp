@@ -56,7 +56,7 @@ private:
   static void set_table_max(JavaThread* current);
 
 private:
-  static bool fast_lock_spin_enter(oop obj, JavaThread* current, bool first_time);
+  static bool fast_lock_spin_enter(oop obj, JavaThread* current, bool observed_deflation);
 
 public:
   static void enter_for(Handle obj, BasicLock* lock, JavaThread* locking_thread);

@@ -562,7 +562,7 @@ public:
   }
 };
 
-bool LightweightSynchronizer::fast_lock_spin_enter(oop obj, JavaThread* current, bool first_time) {
+bool LightweightSynchronizer::fast_lock_spin_enter(oop obj, JavaThread* current, bool observed_deflation) {
   // Will spin with exponential backoff with an accumulative O(2^spin_limit) spins.
   const int log_spin_limit = os::is_MP() ? OMSpins : 1;
   const int log_min_safepoint_check_interval = 10;
@@ -570,7 +570,7 @@ bool LightweightSynchronizer::fast_lock_spin_enter(oop obj, JavaThread* current,
   LockStack& lock_stack = current->lock_stack();
 
   markWord mark = obj->mark();
-  const bool try_spin = !first_time || !mark.has_monitor();
+  const bool try_spin = observed_deflation || !mark.has_monitor();
   // Always attempt to lock once even when safepoint synchronizing.
   bool should_process = false;
   for (int i = 0; try_spin && !should_process && i < log_spin_limit; i++) {
@@ -657,7 +657,7 @@ void LightweightSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* cur
   // from the deflator. After observing the that the deflator is not
   // making progress (after two yields), switch to sleeping.
   SpinYield spin_yield(0, 2);
-  bool first_time = true;
+  bool observed_deflation = false;
 
   LockStack& lock_stack = current->lock_stack();
 
@@ -681,11 +681,11 @@ void LightweightSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* cur
 
   while (true) {
     // Fast-locking does not use the 'lock' argument.
-    if (fast_lock_spin_enter(obj(), current, first_time)) {
+    if (fast_lock_spin_enter(obj(), current, observed_deflation)) {
       return;
     }
 
-    if (!first_time) {
+    if (observed_deflation) {
       spin_yield.wait();
     }
 
@@ -695,7 +695,7 @@ void LightweightSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* cur
       return;
     }
 
-    first_time = false;
+    observed_deflation = true;
   }
 }
 
