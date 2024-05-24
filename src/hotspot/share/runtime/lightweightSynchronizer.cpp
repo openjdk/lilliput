@@ -562,6 +562,52 @@ public:
   }
 };
 
+bool LightweightSynchronizer::fast_lock_spin_enter(oop obj, JavaThread* current, bool first_time) {
+  // Will spin with exponential backoff with an accumulative O(2^spin_limit) spins.
+  const int log_spin_limit = os::is_MP() ? OMSpins : 1;
+  const int log_min_safepoint_check_interval = 10;
+
+  LockStack& lock_stack = current->lock_stack();
+
+  markWord mark = obj->mark();
+  const bool try_spin = !first_time || !mark.has_monitor();
+  // Always attempt to lock once even when safepoint synchronizing.
+  bool should_process = false;
+  for (int i = 0; try_spin && !should_process && i < log_spin_limit; i++) {
+    // Spin with exponential backoff.
+    const int total_spin_count = 1 << i;
+    const int inner_spin_count = MIN2(1 << log_min_safepoint_check_interval, total_spin_count);
+    const int outer_spin_count = total_spin_count / inner_spin_count;
+    for (int outer = 0; outer < outer_spin_count; outer++) {
+      should_process = SafepointMechanism::should_process(current);
+      if (should_process) {
+        // Stop spinning for safepoint.
+        break;
+      }
+      for (int inner = 1; inner < inner_spin_count; inner++) {
+        SpinPause();
+      }
+    }
+
+    mark = obj->mark();
+    while (mark.is_unlocked()) {
+      ensure_lock_stack_space(current);
+      assert(!lock_stack.is_full(), "must have made room on the lock stack");
+      assert(!lock_stack.contains(obj), "thread must not already hold the lock");
+      // Try to swing into 'fast-locked' state.
+      markWord locked_mark = mark.set_fast_locked();
+      markWord old_mark = mark;
+      mark = obj->cas_set_mark(locked_mark, old_mark);
+      if (old_mark == mark) {
+        // Successfully fast-locked, push object to lock-stack and return.
+        lock_stack.push(obj);
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 void LightweightSynchronizer::enter_for(Handle obj, BasicLock* lock, JavaThread* locking_thread) {
   assert(LockingMode == LM_LIGHTWEIGHT, "must be");
   JavaThread* current = JavaThread::current();
@@ -633,47 +679,10 @@ void LightweightSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* cur
     return;
   }
 
-  // Will spin with exponential backoff with an accumulative O(2^spin_limit) spins.
-  const int log_spin_limit = os::is_MP() ? OMSpins : 1;
-  const int log_min_safepoint_check_interval = 10;
-
   while (true) {
     // Fast-locking does not use the 'lock' argument.
-    markWord mark = obj()->mark();
-    const bool try_spin = !first_time || !mark.has_monitor();
-    // Always attempt to lock once even when safepoint synchronizing.
-    bool should_process = false;
-    for (int i = 0; try_spin && !should_process && i < log_spin_limit; i++) {
-      // Spin with exponential backoff.
-      const int total_spin_count = 1 << i;
-      const int inner_spin_count = MIN2(1 << log_min_safepoint_check_interval, total_spin_count);
-      const int outer_spin_count = total_spin_count / inner_spin_count;
-      for (int outer = 0; outer < outer_spin_count; outer++) {
-        should_process = SafepointMechanism::should_process(current);
-        if (should_process) {
-          // Stop spinning for safepoint.
-          break;
-        }
-        for (int inner = 1; inner < inner_spin_count; inner++) {
-          SpinPause();
-        }
-      }
-
-      mark = obj()->mark();
-      while (mark.is_unlocked()) {
-        ensure_lock_stack_space(current);
-        assert(!lock_stack.is_full(), "must have made room on the lock stack");
-        assert(!lock_stack.contains(obj()), "thread must not already hold the lock");
-        // Try to swing into 'fast-locked' state.
-        markWord locked_mark = mark.set_fast_locked();
-        markWord old_mark = mark;
-        mark = obj()->cas_set_mark(locked_mark, old_mark);
-        if (old_mark == mark) {
-          // Successfully fast-locked, push object to lock-stack and return.
-          lock_stack.push(obj());
-          return;
-        }
-      }
+    if (fast_lock_spin_enter(obj(), current, first_time)) {
+      return;
     }
 
     if (!first_time) {
