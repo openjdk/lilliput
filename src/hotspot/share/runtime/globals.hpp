@@ -1998,7 +1998,11 @@ const int ObjectAlignmentInBytes = 8;
                                                                             \
   product(bool, OMShrinkCHT, false, "")                                     \
                                                                             \
-  product(int, OMSpins, 13, "")                                             \
+  product(int, OMSpins, 13,                                                 \
+          "Specifies the number of time lightweight fast locking will "     \
+          "attempt to CAS the markWord before inflating. Between each "     \
+          "CAS it will spin for exponentially more time, resulting in "     \
+          "a total number of spins on the order of O(2^OMSpins)")           \
           range(1, 30)                                                      \
                                                                             \
   product(bool, OMCacheHitRate, false, "")                                  \
