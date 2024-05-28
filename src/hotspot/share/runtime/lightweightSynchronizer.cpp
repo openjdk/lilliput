@@ -707,7 +707,7 @@ void LightweightSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* cur
     }
 
     // If inflate_and_enter returns nullptr it is because a deflated monitor
-    // was encountered. Fallback to fast locking. The deflater is responisble
+    // was encountered. Fallback to fast locking. The deflater is responsible
     // for clearing out the monitor and transitioning the markWord back to
     // fast locking.
     observed_deflation = true;
