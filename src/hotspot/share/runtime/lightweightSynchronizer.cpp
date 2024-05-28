@@ -570,7 +570,7 @@ bool LightweightSynchronizer::fast_lock_spin_enter(oop obj, JavaThread* current,
   LockStack& lock_stack = current->lock_stack();
 
   markWord mark = obj->mark();
-  const auto try_spin = [&]() {
+  const auto should_spin = [&]() {
     if (!mark.has_monitor()) {
       // Spin while not inflated.
       return true;
@@ -584,7 +584,7 @@ bool LightweightSynchronizer::fast_lock_spin_enter(oop obj, JavaThread* current,
   };
   // Always attempt to lock once even when safepoint synchronizing.
   bool should_process = false;
-  for (int i = 0; try_spin() && !should_process && i < log_spin_limit; i++) {
+  for (int i = 0; should_spin() && !should_process && i < log_spin_limit; i++) {
     // Spin with exponential backoff.
     const int total_spin_count = 1 << i;
     const int inner_spin_count = MIN2(1 << log_min_safepoint_check_interval, total_spin_count);
