@@ -570,7 +570,18 @@ bool LightweightSynchronizer::fast_lock_spin_enter(oop obj, JavaThread* current,
   LockStack& lock_stack = current->lock_stack();
 
   markWord mark = obj->mark();
-  const auto try_spin = [&]() { return observed_deflation || !mark.has_monitor(); };
+  const auto try_spin = [&]() {
+    if (!mark.has_monitor()) {
+      // Spin while not inflated.
+      return true;
+    } else if (observed_deflation) {
+      // Spin while monitor is being deflated.
+      ObjectMonitor* monitor = LightweightSynchronizer::read_monitor(current, obj);
+      return monitor == nullptr || monitor->is_being_async_deflated();
+    }
+    // Else stop spinning.
+    return false;
+  };
   // Always attempt to lock once even when safepoint synchronizing.
   bool should_process = false;
   for (int i = 0; try_spin() && !should_process && i < log_spin_limit; i++) {
@@ -695,6 +706,10 @@ void LightweightSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* cur
       return;
     }
 
+    // If inflate_and_enter returns nullptr it is because a deflated monitor
+    // was encountered. Fallback to fast locking. The deflater is responisble
+    // for clearing out the monitor and transitioning the markWord back to
+    // fast locking.
     observed_deflation = true;
   }
 }
