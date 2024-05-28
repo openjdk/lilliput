@@ -692,6 +692,10 @@ void LightweightSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* cur
 
   while (true) {
     // Fast-locking does not use the 'lock' argument.
+    // Fast-lock spinning to avoid inflating for short critical sections.
+    // The goal is to only inflate when the extra cost of using ObjectMonitors
+    // is worth it.
+    // If deflation has been observed we also spin while deflation is onging.
     if (fast_lock_spin_enter(obj(), current, observed_deflation)) {
       return;
     }
