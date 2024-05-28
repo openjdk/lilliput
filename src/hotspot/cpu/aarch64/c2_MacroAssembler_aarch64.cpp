@@ -236,7 +236,7 @@ void C2_MacroAssembler::fast_lock_lightweight(Register obj, Register box, Regist
   // Finish fast lock unsuccessfully. MUST branch to with flag == NE
   Label slow_path;
 
-  // Clear box. TODO[OMWorld]: Is this necessary? May also defer this to not write twice.
+  // Clear cache in case fast locking succeeds.
   str(zr, Address(box, BasicLock::object_monitor_cache_offset_in_bytes()));
 
   if (DiagnoseSyncOnValueBasedClasses != 0) {
@@ -498,9 +498,8 @@ void C2_MacroAssembler::fast_unlock_lightweight(Register obj, Register box, Regi
 
       if (OMCacheHitRate) increment(Address(rthread, JavaThread::unlock_lookup_offset()));
       ldr(t1_monitor, Address(box, BasicLock::object_monitor_cache_offset_in_bytes()));
-      // TODO: Cleanup these constants (with an enum and asserts)
-      cmp(t1_monitor, (uint8_t)2);
-      // Non symmetrical, take slow path monitor == 0 or 1, 0 and 1 < 2, both LS and NE
+      // null check with Flags == NE, no valid pointer below alignof(ObjectMonitor*)
+      cmp(t1_monitor, checked_cast<uint8_t>(alignof(ObjectMonitor*)));
       br(Assembler::LO, slow_path);
       if (OMCacheHitRate) increment(Address(rthread, JavaThread::unlock_hit_offset()));
 

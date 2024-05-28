@@ -1305,10 +1305,8 @@ void InterpreterMacroAssembler::unlock_object(Register lock_reg) {
 #ifdef _LP64
       lightweight_unlock(obj_reg, swap_reg, r15_thread, header_reg, slow_case);
 #else
-      // This relies on the implementation of lightweight_unlock being able to handle
-      // that the reg_rax and thread Register parameters may alias each other.
-      get_thread(swap_reg);
-      lightweight_unlock(obj_reg, swap_reg, swap_reg, header_reg, slow_case);
+      // Lacking registers and thread on x86_32. Always take slow path.
+      jmp(slow_case);
 #endif
     } else if (LockingMode == LM_LEGACY) {
       // Load the old header from BasicLock structure

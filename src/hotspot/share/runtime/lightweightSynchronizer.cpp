@@ -349,7 +349,7 @@ ObjectMonitor* LightweightSynchronizer::get_or_insert_monitor_from_table(oop obj
 static void log_inflate(Thread* current, oop object, const ObjectSynchronizer::InflateCause cause) {
   if (log_is_enabled(Trace, monitorinflation)) {
     ResourceMark rm(current);
-    log_info(monitorinflation)("inflate(has_locker): object=" INTPTR_FORMAT ", mark="
+    log_info(monitorinflation)("inflate: object=" INTPTR_FORMAT ", mark="
                                INTPTR_FORMAT ", type='%s' cause %s", p2i(object),
                                object->mark().value(), object->klass()->external_name(),
                                ObjectSynchronizer::inflate_cause_name(cause));
@@ -459,7 +459,7 @@ bool LightweightSynchronizer::resize_table(JavaThread* current) {
                           ObjectSynchronizer::_in_use_list.max());
 }
 
-class LockStackInflateContendedLocks : private OopClosure {
+class LightweightSynchronizer::LockStackInflateContendedLocks : private OopClosure {
  private:
   oop _contended_oops[LockStack::CAPACITY];
   int _length;
@@ -485,11 +485,12 @@ class LockStackInflateContendedLocks : private OopClosure {
     _contended_oops(),
     _length(0) {};
 
-  void inflate(JavaThread* locking_thread, JavaThread* current) {
-    locking_thread->lock_stack().oops_do(this);
+  void inflate(JavaThread* current) {
+    assert(current == JavaThread::current(), "must be");
+    current->lock_stack().oops_do(this);
     for (int i = 0; i < _length; i++) {
       LightweightSynchronizer::
-        inflate_fast_locked_object(_contended_oops[i], locking_thread, current, ObjectSynchronizer::inflate_cause_vm_internal);
+        inflate_fast_locked_object(_contended_oops[i], current, current, ObjectSynchronizer::inflate_cause_vm_internal);
     }
   }
 };
@@ -501,7 +502,7 @@ void LightweightSynchronizer::ensure_lock_stack_space(JavaThread* current) {
   // Make room on lock_stack
   if (lock_stack.is_full()) {
     // Inflate contented objects
-    LockStackInflateContendedLocks().inflate(current, current);
+    LockStackInflateContendedLocks().inflate(current);
     if (lock_stack.is_full()) {
       // Inflate the oldest object
       inflate_fast_locked_object(lock_stack.bottom(), current, current, ObjectSynchronizer::inflate_cause_vm_internal);
@@ -538,7 +539,7 @@ public:
 
 };
 
-class VerifyThreadState {
+class LightweightSynchronizer::VerifyThreadState {
   bool _no_safepoint;
   union {
     struct {} _dummy;
@@ -565,7 +566,6 @@ void LightweightSynchronizer::enter_for(Handle obj, BasicLock* lock, JavaThread*
   JavaThread* current = JavaThread::current();
   VerifyThreadState vts(locking_thread, current);
 
-  // TODO[OMWorld]: Is this necessary?
   if (obj->klass()->is_value_based()) {
     ObjectSynchronizer::handle_sync_on_value_based_class(obj, locking_thread);
   }
@@ -583,9 +583,6 @@ void LightweightSynchronizer::enter_for(Handle obj, BasicLock* lock, JavaThread*
     assert(entered, "recursive ObjectMonitor::enter_for must succeed");
   } else {
     // It is assumed that enter_for must enter on an object without contention.
-    // TODO[OMWorld]: We also assume that this re-lock is on either a new never
-    //                inflated monitor, or one that is already locked by the
-    //                locking_thread. Should we have this stricter restriction?
     monitor = inflate_and_enter(obj(), locking_thread, current, ObjectSynchronizer::inflate_cause_monitor_enter);
   }
 
@@ -611,11 +608,6 @@ void LightweightSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* cur
   LockStack& lock_stack = current->lock_stack();
 
   if (!lock_stack.is_full() && lock_stack.try_recursive_enter(obj())) {
-    // TODO[OMWorld]: Maybe guard this by the value in the markWord (only is fast locked)
-    //                Currently this is done when exiting. Doing it early could remove,
-    //                LockStack::CAPACITY - 1 slow paths in the best case. But need to fix
-    //                some of the inflation counters for this change.
-
     // Recursively fast locked
     return;
   }
@@ -718,7 +710,6 @@ void LightweightSynchronizer::exit(oop object, JavaThread* current) {
   monitor->exit(current);
 }
 
-// TODO[OMWorld]: Rename this. No idea what to call it, used by notify/notifyall/wait and jni exit
 ObjectMonitor* LightweightSynchronizer::inflate_locked_or_imse(oop obj, const ObjectSynchronizer::InflateCause cause, TRAPS) {
   assert(LockingMode == LM_LIGHTWEIGHT, "must be");
   JavaThread* current = THREAD;
@@ -950,7 +941,7 @@ ObjectMonitor* LightweightSynchronizer::inflate_and_enter(oop object, JavaThread
     }
 
     // Monitor is contended, take the time befor entering to fix the lock stack.
-    LockStackInflateContendedLocks().inflate(locking_thread, current);
+    LockStackInflateContendedLocks().inflate(current);
   }
 
   // enter can block for safepoints; clear the unhandled object oop
@@ -974,19 +965,6 @@ void LightweightSynchronizer::deflate_monitor(Thread* current, oop obj, ObjectMo
   if (obj != nullptr) {
     assert(removed, "Should have removed the entry if obj was alive");
   }
-}
-
-void LightweightSynchronizer::deflate_anon_monitor(Thread* current, oop obj, ObjectMonitor* monitor) {
-  markWord mark = obj->mark_acquire();
-  assert(!mark.has_no_hash(), "obj with inflated monitor must have had a hash");
-
-  while (mark.has_monitor()) {
-    const markWord new_mark = mark.set_fast_locked();
-    mark = obj->cas_set_mark(new_mark, mark);
-  }
-
-  bool removed = remove_monitor(current, obj, monitor);
-  assert(removed, "Should have removed the entry");
 }
 
 ObjectMonitor* LightweightSynchronizer::read_monitor(Thread* current, oop obj) {
