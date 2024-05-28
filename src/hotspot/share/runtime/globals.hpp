@@ -2004,8 +2004,6 @@ const int ObjectAlignmentInBytes = 8;
                                                                             \
   product(bool, OMCacheHitRate, false, "")                                  \
                                                                             \
-  product(bool, OMRecursiveFastPath, true, "Inflated recursion check first")\
-                                                                            \
   product(uint, TrimNativeHeapInterval, 0,                                  \
           "Interval, in ms, at which the JVM will trim the native heap if " \
           "the platform supports that. Lower values will reclaim memory "   \

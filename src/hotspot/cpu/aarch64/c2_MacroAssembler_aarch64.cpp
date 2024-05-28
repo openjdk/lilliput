@@ -349,33 +349,21 @@ void C2_MacroAssembler::fast_lock_lightweight(Register obj, Register box, Regist
       const Register t2_owner_addr = t2;
       const Register t3_owner = t3;
 
-      Label recursive;
       Label monitor_locked;
 
       // Compute owner address.
       lea(t2_owner_addr, Address(t1_monitor, ObjectMonitor::owner_offset()));
-
-      if (OMRecursiveFastPath) {
-        ldr(t3_owner, Address(t2_owner_addr));
-        cmp(t3_owner, rthread);
-        br(Assembler::EQ, recursive);
-      }
 
       // CAS owner (null => current thread).
       cmpxchg(t2_owner_addr, zr, rthread, Assembler::xword, /*acquire*/ true,
               /*release*/ false, /*weak*/ false, t3_owner);
       br(Assembler::EQ, monitor_locked);
 
-      if (OMRecursiveFastPath) {
-        b(slow_path);
-      } else {
-        // Check if recursive.
-        cmp(t3_owner, rthread);
-        br(Assembler::NE, slow_path);
-      }
+      // Check if recursive.
+      cmp(t3_owner, rthread);
+      br(Assembler::NE, slow_path);
 
       // Recursive.
-      bind(recursive);
       increment(Address(t1_monitor, ObjectMonitor::recursions_offset()), 1);
 
       bind(monitor_locked);

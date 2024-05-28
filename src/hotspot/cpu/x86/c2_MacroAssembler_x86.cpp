@@ -1056,29 +1056,17 @@ void C2_MacroAssembler::fast_lock_lightweight(Register obj, Register box, Regist
 
       Label monitor_locked;
       // Lock the monitor.
-      Label recursion;
-      if (OMRecursiveFastPath) {
-        // Check owner for recursion first.
-        cmpptr(thread, Address(monitor, ObjectMonitor::owner_offset()));
-        jccb(Assembler::equal, recursion);
-      }
 
       // CAS owner (null => current thread).
       xorptr(rax, rax);
       lock(); cmpxchgptr(thread, Address(monitor, ObjectMonitor::owner_offset()));
       jccb(Assembler::equal, monitor_locked);
 
-      if (OMRecursiveFastPath) {
-        // Recursion already checked.
-        jmpb(slow_path);
-      } else {
-        // Check if recursive.
-        cmpptr(thread, rax);
-        jccb(Assembler::notEqual, slow_path);
-      }
+      // Check if recursive.
+      cmpptr(thread, rax);
+      jccb(Assembler::notEqual, slow_path);
 
       // Recursive.
-      bind(recursion);
       increment(Address(monitor, ObjectMonitor::recursions_offset()));
 
       bind(monitor_locked);
