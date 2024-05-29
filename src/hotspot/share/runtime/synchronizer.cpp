@@ -939,7 +939,7 @@ static markWord read_stable_mark(oop obj) {
 //   There are simple ways to "diffuse" the middle address bits over the
 //   generated hashCode values:
 
-static inline intptr_t get_next_hash(Thread* current, oop obj) {
+intptr_t ObjectSynchronizer::get_next_hash(Thread* current, oop obj) {
   intptr_t value = 0;
   if (hashCode == 0) {
     // This form uses global Park-Miller RNG.
@@ -979,11 +979,6 @@ static inline intptr_t get_next_hash(Thread* current, oop obj) {
   return value;
 }
 
-intptr_t ObjectSynchronizer::get_next_hash(Thread* current, oop obj) {
-  // CLEANUP[Axel]: hack for LightweightSynchronizer being in different translation unit
-  return ::get_next_hash(current, obj);
-}
-
 intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {
   if (LockingMode == LM_LIGHTWEIGHT) {
     return LightweightSynchronizer::FastHashCode(current, obj);
@@ -998,7 +993,7 @@ intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {
       assert(LockingMode == LM_MONITOR, "+VerifyHeavyMonitors requires LockingMode == 0 (LM_MONITOR)");
       guarantee((obj->mark().value() & markWord::lock_mask_in_place) != markWord::locked_value, "must not be lightweight/stack-locked");
     }
-    if (mark.is_unlocked() || (LockingMode == LM_LIGHTWEIGHT && mark.is_fast_locked())) {
+    if (mark.is_unlocked()) {
       hash = mark.hash();
       if (hash != 0) {                     // if it has a hash, just return it
         return hash;
@@ -1010,10 +1005,7 @@ intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {
       if (test == mark) {                  // if the hash was installed, return it
         return hash;
       }
-      if (LockingMode == LM_LIGHTWEIGHT) {
-        // CAS failed, retry
-        continue;
-      }
+
       // Failed to install the hash. It could be that another thread
       // installed the hash just before our attempt or inflation has
       // occurred or... so we fall thru to inflate the monitor for

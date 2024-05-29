@@ -1996,13 +1996,14 @@ const int ObjectAlignmentInBytes = 8;
   product(int, OMCacheSize, 8, "")                                          \
           range(0, OMCache::CAPACITY)                                       \
                                                                             \
-  product(int, OMSpins, 20, "")                                             \
-                                                                            \
-  product(int, OMYields, 5, "")                                             \
+  product(int, OMSpins, 13,                                                 \
+          "Specifies the number of time lightweight fast locking will "     \
+          "attempt to CAS the markWord before inflating. Between each "     \
+          "CAS it will spin for exponentially more time, resulting in "     \
+          "a total number of spins on the order of O(2^OMSpins)")           \
+          range(1, 30)                                                      \
                                                                             \
   product(bool, OMCacheHitRate, false, "")                                  \
-                                                                            \
-  product(bool, OMRecursiveFastPath, true, "Inflated recursion check first")\
                                                                             \
   product(uint, TrimNativeHeapInterval, 0,                                  \
           "Interval, in ms, at which the JVM will trim the native heap if " \

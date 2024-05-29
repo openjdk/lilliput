@@ -6456,6 +6456,7 @@ void MacroAssembler::lightweight_lock(Register basic_lock, Register obj, Registe
   // instruction emitted as it is part of C1's null check semantics.
   ldr(mark, Address(obj, oopDesc::mark_offset_in_bytes()));
 
+  // Clear cache in case fast locking succeeds.
   str(zr, Address(basic_lock, BasicObjectLock::lock_offset() + in_ByteSize((BasicLock::object_monitor_cache_offset_in_bytes()))));
 
   // Check if the lock-stack is full.

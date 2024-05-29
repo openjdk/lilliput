@@ -799,7 +799,6 @@ void InterpreterMacroAssembler::unlock_object(Register lock_reg)
     save_bcp(); // Save in case of exception
 
     if (LockingMode != LM_LIGHTWEIGHT) {
-      // TODO[OMWorld]: Cleanup lock_reg usage for placeholder
       // Convert from BasicObjectLock structure to object and BasicLock
       // structure Store the BasicLock address into %r0
       lea(swap_reg, Address(lock_reg, BasicObjectLock::lock_offset()));

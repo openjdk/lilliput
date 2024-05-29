@@ -236,7 +236,7 @@ void C2_MacroAssembler::fast_lock_lightweight(Register obj, Register box, Regist
   // Finish fast lock unsuccessfully. MUST branch to with flag == NE
   Label slow_path;
 
-  // Clear box. TODO[OMWorld]: Is this necessary? May also defer this to not write twice.
+  // Clear cache in case fast locking succeeds.
   str(zr, Address(box, BasicLock::object_monitor_cache_offset_in_bytes()));
 
   if (DiagnoseSyncOnValueBasedClasses != 0) {
@@ -349,33 +349,21 @@ void C2_MacroAssembler::fast_lock_lightweight(Register obj, Register box, Regist
       const Register t2_owner_addr = t2;
       const Register t3_owner = t3;
 
-      Label recursive;
       Label monitor_locked;
 
       // Compute owner address.
       lea(t2_owner_addr, Address(t1_monitor, ObjectMonitor::owner_offset()));
-
-      if (OMRecursiveFastPath) {
-        ldr(t3_owner, Address(t2_owner_addr));
-        cmp(t3_owner, rthread);
-        br(Assembler::EQ, recursive);
-      }
 
       // CAS owner (null => current thread).
       cmpxchg(t2_owner_addr, zr, rthread, Assembler::xword, /*acquire*/ true,
               /*release*/ false, /*weak*/ false, t3_owner);
       br(Assembler::EQ, monitor_locked);
 
-      if (OMRecursiveFastPath) {
-        b(slow_path);
-      } else {
-        // Check if recursive.
-        cmp(t3_owner, rthread);
-        br(Assembler::NE, slow_path);
-      }
+      // Check if recursive.
+      cmp(t3_owner, rthread);
+      br(Assembler::NE, slow_path);
 
       // Recursive.
-      bind(recursive);
       increment(Address(t1_monitor, ObjectMonitor::recursions_offset()), 1);
 
       bind(monitor_locked);
@@ -498,9 +486,8 @@ void C2_MacroAssembler::fast_unlock_lightweight(Register obj, Register box, Regi
 
       if (OMCacheHitRate) increment(Address(rthread, JavaThread::unlock_lookup_offset()));
       ldr(t1_monitor, Address(box, BasicLock::object_monitor_cache_offset_in_bytes()));
-      // TODO: Cleanup these constants (with an enum and asserts)
-      cmp(t1_monitor, (uint8_t)2);
-      // Non symmetrical, take slow path monitor == 0 or 1, 0 and 1 < 2, both LS and NE
+      // null check with Flags == NE, no valid pointer below alignof(ObjectMonitor*)
+      cmp(t1_monitor, checked_cast<uint8_t>(alignof(ObjectMonitor*)));
       br(Assembler::LO, slow_path);
       if (OMCacheHitRate) increment(Address(rthread, JavaThread::unlock_hit_offset()));
 

@@ -949,7 +949,7 @@ void C2_MacroAssembler::fast_lock_lightweight(Register obj, Register box, Regist
   // Finish fast lock unsuccessfully. MUST jump with ZF == 0
   Label slow_path;
 
-  // Clear box. TODO[OMWorld]: Is this necessary? May also defer this to not write twice.
+  // Clear cache in case fast locking succeeds.
   movptr(Address(box, BasicLock::object_monitor_cache_offset_in_bytes()), 0);
 
   if (DiagnoseSyncOnValueBasedClasses != 0) {
@@ -994,7 +994,6 @@ void C2_MacroAssembler::fast_lock_lightweight(Register obj, Register box, Regist
 
     bind(push);
     // After successful lock, push object on lock-stack.
-    // TODO[OMWorld]: Was prepush better?
     movl(top, Address(thread, JavaThread::lock_stack_top_offset()));
     movptr(Address(thread, top), obj);
     addl(Address(thread, JavaThread::lock_stack_top_offset()), oopSize);
@@ -1057,29 +1056,17 @@ void C2_MacroAssembler::fast_lock_lightweight(Register obj, Register box, Regist
 
       Label monitor_locked;
       // Lock the monitor.
-      Label recursion;
-      if (OMRecursiveFastPath) {
-        // Check owner for recursion first.
-        cmpptr(thread, Address(monitor, ObjectMonitor::owner_offset()));
-        jccb(Assembler::equal, recursion);
-      }
 
       // CAS owner (null => current thread).
       xorptr(rax, rax);
       lock(); cmpxchgptr(thread, Address(monitor, ObjectMonitor::owner_offset()));
       jccb(Assembler::equal, monitor_locked);
 
-      if (OMRecursiveFastPath) {
-        // Recursion already checked.
-        jmpb(slow_path);
-      } else {
-        // Check if recursive.
-        cmpptr(thread, rax);
-        jccb(Assembler::notEqual, slow_path);
-      }
+      // Check if recursive.
+      cmpptr(thread, rax);
+      jccb(Assembler::notEqual, slow_path);
 
       // Recursive.
-      bind(recursion);
       increment(Address(monitor, ObjectMonitor::recursions_offset()));
 
       bind(monitor_locked);
@@ -1201,10 +1188,8 @@ void C2_MacroAssembler::fast_unlock_lightweight(Register obj, Register reg_rax, 
     } else {
       if (OMCacheHitRate) increment(Address(thread, JavaThread::unlock_lookup_offset()));
       movptr(monitor, Address(box, BasicLock::object_monitor_cache_offset_in_bytes()));
-      // TODO[OMWorld]: Figure out the correctness surrounding the owner field here. Obj is not on the lock stack
-      //                but this means this thread must have locked on the inflated monitor at some point. So it
-      //                should not be anonymous.
-      cmpptr(monitor, 2);
+      // null check with ZF == 0, no valid pointer below alignof(ObjectMonitor*)
+      cmpptr(monitor, alignof(ObjectMonitor*));
       jcc(Assembler::below, slow_path);
 
       if (OMCacheHitRate) increment(Address(thread, JavaThread::unlock_hit_offset()));

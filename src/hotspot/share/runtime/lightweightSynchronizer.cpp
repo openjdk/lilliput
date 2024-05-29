@@ -41,7 +41,9 @@
 #include "runtime/mutexLocker.hpp"
 #include "runtime/objectMonitor.hpp"
 #include "runtime/objectMonitor.inline.hpp"
+#include "runtime/os.hpp"
 #include "runtime/perfData.inline.hpp"
+#include "runtime/safepointMechanism.inline.hpp"
 #include "runtime/safepointVerifiers.hpp"
 #include "runtime/synchronizer.hpp"
 #include "runtime/timerTrace.hpp"
@@ -373,7 +375,7 @@ ObjectMonitor* LightweightSynchronizer::get_or_insert_monitor_from_table(oop obj
 static void log_inflate(Thread* current, oop object, const ObjectSynchronizer::InflateCause cause) {
   if (log_is_enabled(Trace, monitorinflation)) {
     ResourceMark rm(current);
-    log_info(monitorinflation)("inflate(has_locker): object=" INTPTR_FORMAT ", mark="
+    log_info(monitorinflation)("inflate: object=" INTPTR_FORMAT ", mark="
                                INTPTR_FORMAT ", type='%s' cause %s", p2i(object),
                                object->mark().value(), object->klass()->external_name(),
                                ObjectSynchronizer::inflate_cause_name(cause));
@@ -463,7 +465,7 @@ bool LightweightSynchronizer::resize_table(JavaThread* current) {
   return _omworld->resize(current);
 }
 
-class LockStackInflateContendedLocks : private OopClosure {
+class LightweightSynchronizer::LockStackInflateContendedLocks : private OopClosure {
  private:
   oop _contended_oops[LockStack::CAPACITY];
   int _length;
@@ -489,11 +491,12 @@ class LockStackInflateContendedLocks : private OopClosure {
     _contended_oops(),
     _length(0) {};
 
-  void inflate(JavaThread* locking_thread, JavaThread* current) {
-    locking_thread->lock_stack().oops_do(this);
+  void inflate(JavaThread* current) {
+    assert(current == JavaThread::current(), "must be");
+    current->lock_stack().oops_do(this);
     for (int i = 0; i < _length; i++) {
       LightweightSynchronizer::
-        inflate_fast_locked_object(_contended_oops[i], locking_thread, current, ObjectSynchronizer::inflate_cause_vm_internal);
+        inflate_fast_locked_object(_contended_oops[i], current, current, ObjectSynchronizer::inflate_cause_vm_internal);
     }
   }
 };
@@ -505,7 +508,7 @@ void LightweightSynchronizer::ensure_lock_stack_space(JavaThread* current) {
   // Make room on lock_stack
   if (lock_stack.is_full()) {
     // Inflate contented objects
-    LockStackInflateContendedLocks().inflate(current, current);
+    LockStackInflateContendedLocks().inflate(current);
     if (lock_stack.is_full()) {
       // Inflate the oldest object
       inflate_fast_locked_object(lock_stack.bottom(), current, current, ObjectSynchronizer::inflate_cause_vm_internal);
@@ -542,7 +545,7 @@ public:
 
 };
 
-class VerifyThreadState {
+class LightweightSynchronizer::VerifyThreadState {
   bool _no_safepoint;
   union {
     struct {} _dummy;
@@ -564,12 +567,68 @@ public:
   }
 };
 
+bool LightweightSynchronizer::fast_lock_spin_enter(oop obj, JavaThread* current, bool observed_deflation) {
+  // Will spin with exponential backoff with an accumulative O(2^spin_limit) spins.
+  const int log_spin_limit = os::is_MP() ? OMSpins : 1;
+  const int log_min_safepoint_check_interval = 10;
+
+  LockStack& lock_stack = current->lock_stack();
+
+  markWord mark = obj->mark();
+  const auto should_spin = [&]() {
+    if (!mark.has_monitor()) {
+      // Spin while not inflated.
+      return true;
+    } else if (observed_deflation) {
+      // Spin while monitor is being deflated.
+      ObjectMonitor* monitor = LightweightSynchronizer::read_monitor(current, obj);
+      return monitor == nullptr || monitor->is_being_async_deflated();
+    }
+    // Else stop spinning.
+    return false;
+  };
+  // Always attempt to lock once even when safepoint synchronizing.
+  bool should_process = false;
+  for (int i = 0; should_spin() && !should_process && i < log_spin_limit; i++) {
+    // Spin with exponential backoff.
+    const int total_spin_count = 1 << i;
+    const int inner_spin_count = MIN2(1 << log_min_safepoint_check_interval, total_spin_count);
+    const int outer_spin_count = total_spin_count / inner_spin_count;
+    for (int outer = 0; outer < outer_spin_count; outer++) {
+      should_process = SafepointMechanism::should_process(current);
+      if (should_process) {
+        // Stop spinning for safepoint.
+        break;
+      }
+      for (int inner = 1; inner < inner_spin_count; inner++) {
+        SpinPause();
+      }
+    }
+
+    mark = obj->mark();
+    while (mark.is_unlocked()) {
+      ensure_lock_stack_space(current);
+      assert(!lock_stack.is_full(), "must have made room on the lock stack");
+      assert(!lock_stack.contains(obj), "thread must not already hold the lock");
+      // Try to swing into 'fast-locked' state.
+      markWord locked_mark = mark.set_fast_locked();
+      markWord old_mark = mark;
+      mark = obj->cas_set_mark(locked_mark, old_mark);
+      if (old_mark == mark) {
+        // Successfully fast-locked, push object to lock-stack and return.
+        lock_stack.push(obj);
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 void LightweightSynchronizer::enter_for(Handle obj, BasicLock* lock, JavaThread* locking_thread) {
   assert(LockingMode == LM_LIGHTWEIGHT, "must be");
   JavaThread* current = JavaThread::current();
   VerifyThreadState vts(locking_thread, current);
 
-  // TODO[OMWorld]: Is this necessary?
   if (obj->klass()->is_value_based()) {
     ObjectSynchronizer::handle_sync_on_value_based_class(obj, locking_thread);
   }
@@ -587,9 +646,6 @@ void LightweightSynchronizer::enter_for(Handle obj, BasicLock* lock, JavaThread*
     assert(entered, "recursive ObjectMonitor::enter_for must succeed");
   } else {
     // It is assumed that enter_for must enter on an object without contention.
-    // TODO[OMWorld]: We also assume that this re-lock is on either a new never
-    //                inflated monitor, or one that is already locked by the
-    //                locking_thread. Should we have this stricter restriction?
     monitor = inflate_and_enter(obj(), locking_thread, current, ObjectSynchronizer::inflate_cause_monitor_enter);
   }
 
@@ -609,17 +665,15 @@ void LightweightSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* cur
 
   CacheSetter cache_setter(current, lock);
 
+  // Used when deflation is observed. Progress here requires progress
+  // from the deflator. After observing the that the deflator is not
+  // making progress (after two yields), switch to sleeping.
   SpinYield spin_yield(0, 2);
-  bool first_time = true;
+  bool observed_deflation = false;
 
   LockStack& lock_stack = current->lock_stack();
 
   if (!lock_stack.is_full() && lock_stack.try_recursive_enter(obj())) {
-    // TODO[OMWorld]: Maybe guard this by the value in the markWord (only is fast locked)
-    //                Currently this is done when exiting. Doing it early could remove,
-    //                LockStack::CAPACITY - 1 slow paths in the best case. But need to fix
-    //                some of the inflation counters for this change.
-
     // Recursively fast locked
     return;
   }
@@ -632,36 +686,17 @@ void LightweightSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* cur
     return;
   }
 
-  const int spins = OMSpins;
-  const int yields = OMYields;
-
   while (true) {
-
-    SpinYield fast_lock_spin_yield(spins, yields);
     // Fast-locking does not use the 'lock' argument.
-    markWord mark = obj()->mark_acquire();
-    const bool try_spin = !first_time || !mark.has_monitor();
-    for (int attempts = spins + yields; try_spin && attempts > 0; attempts--) {
-      while (mark.is_unlocked()) {
-        ensure_lock_stack_space(current);
-        assert(!lock_stack.is_full(), "must have made room on the lock stack");
-        assert(!lock_stack.contains(obj()), "thread must not already hold the lock");
-        // Try to swing into 'fast-locked' state.
-        markWord locked_mark = mark.set_fast_locked();
-        markWord old_mark = mark;
-        mark = obj()->cas_set_mark(locked_mark, old_mark);
-        if (old_mark == mark) {
-          // Successfully fast-locked, push object to lock-stack and return.
-          lock_stack.push(obj());
-          return;
-        }
-      }
-
-      fast_lock_spin_yield.wait();
-      mark = obj()->mark_acquire();
+    // Fast-lock spinning to avoid inflating for short critical sections.
+    // The goal is to only inflate when the extra cost of using ObjectMonitors
+    // is worth it.
+    // If deflation has been observed we also spin while deflation is onging.
+    if (fast_lock_spin_enter(obj(), current, observed_deflation)) {
+      return;
     }
 
-    if (!first_time) {
+    if (observed_deflation) {
       spin_yield.wait();
     }
 
@@ -671,7 +706,11 @@ void LightweightSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* cur
       return;
     }
 
-    first_time = false;
+    // If inflate_and_enter returns nullptr it is because a deflated monitor
+    // was encountered. Fallback to fast locking. The deflater is responsible
+    // for clearing out the monitor and transitioning the markWord back to
+    // fast locking.
+    observed_deflation = true;
   }
 }
 
@@ -722,7 +761,6 @@ void LightweightSynchronizer::exit(oop object, JavaThread* current) {
   monitor->exit(current);
 }
 
-// TODO[OMWorld]: Rename this. No idea what to call it, used by notify/notifyall/wait and jni exit
 ObjectMonitor* LightweightSynchronizer::inflate_locked_or_imse(oop obj, const ObjectSynchronizer::InflateCause cause, TRAPS) {
   assert(LockingMode == LM_LIGHTWEIGHT, "must be");
   JavaThread* current = THREAD;
@@ -954,7 +992,7 @@ ObjectMonitor* LightweightSynchronizer::inflate_and_enter(oop object, JavaThread
     }
 
     // Monitor is contended, take the time befor entering to fix the lock stack.
-    LockStackInflateContendedLocks().inflate(locking_thread, current);
+    LockStackInflateContendedLocks().inflate(current);
   }
 
   // enter can block for safepoints; clear the unhandled object oop
@@ -978,19 +1016,6 @@ void LightweightSynchronizer::deflate_monitor(Thread* current, oop obj, ObjectMo
   if (obj != nullptr) {
     assert(removed, "Should have removed the entry if obj was alive");
   }
-}
-
-void LightweightSynchronizer::deflate_anon_monitor(Thread* current, oop obj, ObjectMonitor* monitor) {
-  markWord mark = obj->mark_acquire();
-  assert(!mark.has_no_hash(), "obj with inflated monitor must have had a hash");
-
-  while (mark.has_monitor()) {
-    const markWord new_mark = mark.set_fast_locked();
-    mark = obj->cas_set_mark(new_mark, mark);
-  }
-
-  bool removed = remove_monitor(current, obj, monitor);
-  assert(removed, "Should have removed the entry");
 }
 
 ObjectMonitor* LightweightSynchronizer::read_monitor(Thread* current, oop obj) {

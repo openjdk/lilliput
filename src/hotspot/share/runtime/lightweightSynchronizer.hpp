@@ -47,6 +47,8 @@ private:
   static void ensure_lock_stack_space(JavaThread* current);
 
   class CacheSetter;
+  class LockStackInflateContendedLocks;
+  class VerifyThreadState;
 
  public:
   static void initialize();
@@ -54,6 +56,10 @@ private:
   static bool needs_resize();
   static bool resize_table(JavaThread* current);
 
+private:
+  static bool fast_lock_spin_enter(oop obj, JavaThread* current, bool observed_deflation);
+
+public:
   static void enter_for(Handle obj, BasicLock* lock, JavaThread* locking_thread);
   static void enter(Handle obj, BasicLock* lock, JavaThread* current);
   static void exit(oop object, JavaThread* current);
@@ -63,7 +69,6 @@ private:
   static ObjectMonitor* inflate_and_enter(oop object, JavaThread* locking_thread, JavaThread* current, const ObjectSynchronizer::InflateCause cause);
 
   static void deflate_monitor(Thread* current, oop obj, ObjectMonitor* monitor);
-  static void deflate_anon_monitor(Thread* current, oop obj, ObjectMonitor* monitor);
 
   static ObjectMonitor* read_monitor(Thread* current, oop obj);
 
