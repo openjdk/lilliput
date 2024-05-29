@@ -38,7 +38,9 @@
 #include "runtime/lockStack.inline.hpp"
 #include "runtime/mutexLocker.hpp"
 #include "runtime/objectMonitor.inline.hpp"
+#include "runtime/os.hpp"
 #include "runtime/perfData.inline.hpp"
+#include "runtime/safepointMechanism.inline.hpp"
 #include "runtime/safepointVerifiers.hpp"
 #include "runtime/synchronizer.hpp"
 #include "utilities/concurrentHashTable.inline.hpp"
@@ -561,6 +563,63 @@ public:
   }
 };
 
+bool LightweightSynchronizer::fast_lock_spin_enter(oop obj, JavaThread* current, bool observed_deflation) {
+  // Will spin with exponential backoff with an accumulative O(2^spin_limit) spins.
+  const int log_spin_limit = os::is_MP() ? OMSpins : 1;
+  const int log_min_safepoint_check_interval = 10;
+
+  LockStack& lock_stack = current->lock_stack();
+
+  markWord mark = obj->mark();
+  const auto should_spin = [&]() {
+    if (!mark.has_monitor()) {
+      // Spin while not inflated.
+      return true;
+    } else if (observed_deflation) {
+      // Spin while monitor is being deflated.
+      ObjectMonitor* monitor = LightweightSynchronizer::read_monitor(current, obj);
+      return monitor == nullptr || monitor->is_being_async_deflated();
+    }
+    // Else stop spinning.
+    return false;
+  };
+  // Always attempt to lock once even when safepoint synchronizing.
+  bool should_process = false;
+  for (int i = 0; should_spin() && !should_process && i < log_spin_limit; i++) {
+    // Spin with exponential backoff.
+    const int total_spin_count = 1 << i;
+    const int inner_spin_count = MIN2(1 << log_min_safepoint_check_interval, total_spin_count);
+    const int outer_spin_count = total_spin_count / inner_spin_count;
+    for (int outer = 0; outer < outer_spin_count; outer++) {
+      should_process = SafepointMechanism::should_process(current);
+      if (should_process) {
+        // Stop spinning for safepoint.
+        break;
+      }
+      for (int inner = 1; inner < inner_spin_count; inner++) {
+        SpinPause();
+      }
+    }
+
+    mark = obj->mark();
+    while (mark.is_unlocked()) {
+      ensure_lock_stack_space(current);
+      assert(!lock_stack.is_full(), "must have made room on the lock stack");
+      assert(!lock_stack.contains(obj), "thread must not already hold the lock");
+      // Try to swing into 'fast-locked' state.
+      markWord locked_mark = mark.set_fast_locked();
+      markWord old_mark = mark;
+      mark = obj->cas_set_mark(locked_mark, old_mark);
+      if (old_mark == mark) {
+        // Successfully fast-locked, push object to lock-stack and return.
+        lock_stack.push(obj);
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 void LightweightSynchronizer::enter_for(Handle obj, BasicLock* lock, JavaThread* locking_thread) {
   assert(LockingMode == LM_LIGHTWEIGHT, "must be");
   JavaThread* current = JavaThread::current();
@@ -602,8 +661,11 @@ void LightweightSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* cur
 
   CacheSetter cache_setter(current, lock);
 
+  // Used when deflation is observed. Progress here requires progress
+  // from the deflator. After observing the that the deflator is not
+  // making progress (after two yields), switch to sleeping.
   SpinYield spin_yield(0, 2);
-  bool first_time = true;
+  bool observed_deflation = false;
 
   LockStack& lock_stack = current->lock_stack();
 
@@ -620,36 +682,17 @@ void LightweightSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* cur
     return;
   }
 
-  const int spins = OMSpins;
-  const int yields = OMYields;
-
   while (true) {
-
-    SpinYield fast_lock_spin_yield(spins, yields);
     // Fast-locking does not use the 'lock' argument.
-    markWord mark = obj()->mark_acquire();
-    const bool try_spin = !first_time || !mark.has_monitor();
-    for (int attempts = spins + yields; try_spin && attempts > 0; attempts--) {
-      while (mark.is_unlocked()) {
-        ensure_lock_stack_space(current);
-        assert(!lock_stack.is_full(), "must have made room on the lock stack");
-        assert(!lock_stack.contains(obj()), "thread must not already hold the lock");
-        // Try to swing into 'fast-locked' state.
-        markWord locked_mark = mark.set_fast_locked();
-        markWord old_mark = mark;
-        mark = obj()->cas_set_mark(locked_mark, old_mark);
-        if (old_mark == mark) {
-          // Successfully fast-locked, push object to lock-stack and return.
-          lock_stack.push(obj());
-          return;
-        }
-      }
-
-      fast_lock_spin_yield.wait();
-      mark = obj()->mark_acquire();
+    // Fast-lock spinning to avoid inflating for short critical sections.
+    // The goal is to only inflate when the extra cost of using ObjectMonitors
+    // is worth it.
+    // If deflation has been observed we also spin while deflation is onging.
+    if (fast_lock_spin_enter(obj(), current, observed_deflation)) {
+      return;
     }
 
-    if (!first_time) {
+    if (observed_deflation) {
       spin_yield.wait();
     }
 
@@ -659,7 +702,11 @@ void LightweightSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* cur
       return;
     }
 
-    first_time = false;
+    // If inflate_and_enter returns nullptr it is because a deflated monitor
+    // was encountered. Fallback to fast locking. The deflater is responsible
+    // for clearing out the monitor and transitioning the markWord back to
+    // fast locking.
+    observed_deflation = true;
   }
 }
 
