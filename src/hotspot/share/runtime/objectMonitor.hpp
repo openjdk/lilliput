@@ -134,9 +134,9 @@ class ObjectMonitor : public CHeapObj<mtObjectMonitor> {
 
   // The sync code expects the metadata field to be at offset zero (0).
   // Enforced by the assert() in metadata_addr().
-  // * LM_LIGHTWEIGHT
+  // * LM_LIGHTWEIGHT with UseObjectMonitorTable:
   // Contains the _object's hashCode.
-  // * LM_LEGACY, LM_MONITOR
+  // * LM_LEGACY, LM_MONITOR:
   // Contains the displaced object header word - mark
   volatile uintptr_t _metadata;     // metadata
   WeakHandle _object;               // backward object pointer

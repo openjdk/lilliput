@@ -1975,6 +1975,10 @@ const int ObjectAlignmentInBytes = 8;
           "2: monitors & new lightweight locking (LM_LIGHTWEIGHT, default)") \
           range(0, 2)                                                       \
                                                                             \
+  product(bool, UseObjectMonitorTable, false, DIAGNOSTIC,                   \
+          "With Lightweight Locking mode, use a table to record inflated "  \
+          "monitors rather than the first word of the object.")             \
+                                                                            \
   product(bool, OMUseC2Cache, true, "")                                     \
                                                                             \
   product(bool, OMC2UnrollCacheLookupLoopTail, true, "")                    \

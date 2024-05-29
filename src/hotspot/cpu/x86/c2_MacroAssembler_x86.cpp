@@ -1005,71 +1005,81 @@ void C2_MacroAssembler::fast_lock_lightweight(Register obj, Register box, Regist
 
     const Register monitor = t;
 
-    if (!OMUseC2Cache) {
-      jmp(slow_path);
+    if (!UseObjectMonitorTable) {
+      // Untag the monitor.
+      assert(mark == monitor, "should be same");
+      subptr(monitor, markWord::monitor_value);
+
     } else {
-      if (OMCacheHitRate) increment(Address(thread, JavaThread::lock_lookup_offset()));
-
-      // Fetch ObjectMonitor* from the cache or take the slow-path.
-      Label monitor_found;
-
-      // Load cache address
-      lea(t, Address(thread, JavaThread::om_cache_oops_offset()));
-
-      const int num_unrolled = MIN2(OMC2UnrollCacheEntries, OMCacheSize);
-      for (int i = 0; i < num_unrolled; i++) {
-        cmpptr(obj, Address(t));
-        jccb(Assembler::equal, monitor_found);
-        if (i + 1 != num_unrolled) {
-          increment(t, in_bytes(OMCache::oop_to_oop_difference()));
-        }
-      }
-
-      if (num_unrolled == 0 || (OMC2UnrollCacheLookupLoopTail && num_unrolled != OMCacheSize)) {
-        if (num_unrolled != 0) {
-          // Loop after unrolling, advance iterator.
-          increment(t, in_bytes(OMCache::oop_to_oop_difference()));
-        }
-
-        Label loop;
-
-        // Search for obj in cache.
-        bind(loop);
-
-        // Check for match.
-        cmpptr(obj, Address(t));
-        jccb(Assembler::equal, monitor_found);
-
-        // Search until null encountered, guaranteed _null_sentinel at end.
-        cmpptr(Address(t), 1);
-        jcc(Assembler::below, slow_path); // 0 check, but with ZF=0 when *t == 0
-        increment(t, in_bytes(OMCache::oop_to_oop_difference()));
-        jmpb(loop);
-      } else {
+      // Uses ObjectMonitorTable.  Look for the monitor in the om_cache.
+      if (!OMUseC2Cache) {
         jmp(slow_path);
+      } else {
+        if (OMCacheHitRate) increment(Address(thread, JavaThread::lock_lookup_offset()));
+
+        // Fetch ObjectMonitor* from the cache or take the slow-path.
+        Label monitor_found;
+
+        // Load cache address
+        lea(t, Address(thread, JavaThread::om_cache_oops_offset()));
+
+        const int num_unrolled = MIN2(OMC2UnrollCacheEntries, OMCacheSize);
+        for (int i = 0; i < num_unrolled; i++) {
+          cmpptr(obj, Address(t));
+          jccb(Assembler::equal, monitor_found);
+          if (i + 1 != num_unrolled) {
+            increment(t, in_bytes(OMCache::oop_to_oop_difference()));
+          }
+        }
+
+        if (num_unrolled == 0 || (OMC2UnrollCacheLookupLoopTail && num_unrolled != OMCacheSize)) {
+          if (num_unrolled != 0) {
+            // Loop after unrolling, advance iterator.
+            increment(t, in_bytes(OMCache::oop_to_oop_difference()));
+          }
+
+          Label loop;
+
+          // Search for obj in cache.
+          bind(loop);
+
+          // Check for match.
+          cmpptr(obj, Address(t));
+          jccb(Assembler::equal, monitor_found);
+
+          // Search until null encountered, guaranteed _null_sentinel at end.
+          cmpptr(Address(t), 1);
+          jcc(Assembler::below, slow_path); // 0 check, but with ZF=0 when *t == 0
+          increment(t, in_bytes(OMCache::oop_to_oop_difference()));
+          jmpb(loop);
+        } else {
+          jmp(slow_path);
+        }
+
+        // Cache hit.
+        bind(monitor_found);
+        movptr(monitor, Address(t, OMCache::oop_to_monitor_difference()));
+        if (OMCacheHitRate) increment(Address(thread, JavaThread::lock_hit_offset()));
       }
+    }
 
-      // Cache hit.
-      bind(monitor_found);
-      movptr(monitor, Address(t, OMCache::oop_to_monitor_difference()));
-      if (OMCacheHitRate) increment(Address(thread, JavaThread::lock_hit_offset()));
+    Label monitor_locked;
+    // Lock the monitor.
 
-      Label monitor_locked;
-      // Lock the monitor.
+    // CAS owner (null => current thread).
+    xorptr(rax, rax);
+    lock(); cmpxchgptr(thread, Address(monitor, ObjectMonitor::owner_offset()));
+    jccb(Assembler::equal, monitor_locked);
 
-      // CAS owner (null => current thread).
-      xorptr(rax, rax);
-      lock(); cmpxchgptr(thread, Address(monitor, ObjectMonitor::owner_offset()));
-      jccb(Assembler::equal, monitor_locked);
+    // Check if recursive.
+    cmpptr(thread, rax);
+    jccb(Assembler::notEqual, slow_path);
 
-      // Check if recursive.
-      cmpptr(thread, rax);
-      jccb(Assembler::notEqual, slow_path);
+    // Recursive.
+    increment(Address(monitor, ObjectMonitor::recursions_offset()));
 
-      // Recursive.
-      increment(Address(monitor, ObjectMonitor::recursions_offset()));
-
-      bind(monitor_locked);
+    bind(monitor_locked);
+    if (UseObjectMonitorTable) {
       // Cache the monitor for unlock
       movptr(Address(box, BasicLock::object_monitor_cache_offset_in_bytes()), monitor);
     }
@@ -1183,37 +1193,46 @@ void C2_MacroAssembler::fast_unlock_lightweight(Register obj, Register reg_rax, 
 
     bind(inflated);
 
-    if (!OMUseC2Cache) {
-      jmp(slow_path);
+    if (!UseObjectMonitorTable) {
+      // Untag the monitor.
+      assert(mark == monitor, "should be the same here");
+      movptr(mark, Address(obj, oopDesc::mark_offset_in_bytes()));
+      subptr(monitor, markWord::monitor_value);
     } else {
-      if (OMCacheHitRate) increment(Address(thread, JavaThread::unlock_lookup_offset()));
-      movptr(monitor, Address(box, BasicLock::object_monitor_cache_offset_in_bytes()));
-      // null check with ZF == 0, no valid pointer below alignof(ObjectMonitor*)
-      cmpptr(monitor, alignof(ObjectMonitor*));
-      jcc(Assembler::below, slow_path);
 
-      if (OMCacheHitRate) increment(Address(thread, JavaThread::unlock_hit_offset()));
+      // Uses ObjectMonitorTable.  Look for the monitor in our BasicLock on the stack.
+      if (!OMUseC2Cache) {
+        jmp(slow_path);
+      } else {
+        if (OMCacheHitRate) increment(Address(thread, JavaThread::unlock_lookup_offset()));
+        movptr(monitor, Address(box, BasicLock::object_monitor_cache_offset_in_bytes()));
+        // null check with ZF == 0, no valid pointer below alignof(ObjectMonitor*)
+        cmpptr(monitor, alignof(ObjectMonitor*));
+        jcc(Assembler::below, slow_path);
 
-      Label recursive;
-
-      // Check if recursive.
-      cmpptr(Address(monitor,ObjectMonitor::recursions_offset()), 0);
-      jccb(Assembler::notEqual, recursive);
-
-      // Check if the entry lists are empty.
-      movptr(reg_rax, Address(monitor, ObjectMonitor::cxq_offset()));
-      orptr(reg_rax, Address(monitor, ObjectMonitor::EntryList_offset()));
-      jcc(Assembler::notZero, check_successor);
-
-      // Release lock.
-      movptr(Address(monitor, ObjectMonitor::owner_offset()), NULL_WORD);
-      jmpb(unlocked);
-
-      // Recursive unlock.
-      bind(recursive);
-      decrement(Address(monitor, ObjectMonitor::recursions_offset()));
-      xorl(t, t);
+        if (OMCacheHitRate) increment(Address(thread, JavaThread::unlock_hit_offset()));
+      }
     }
+
+    Label recursive;
+
+    // Check if recursive.
+    cmpptr(Address(monitor, ObjectMonitor::recursions_offset()), 0);
+    jccb(Assembler::notEqual, recursive);
+
+    // Check if the entry lists are empty.
+    movptr(reg_rax, Address(monitor, ObjectMonitor::cxq_offset()));
+    orptr(reg_rax, Address(monitor, ObjectMonitor::EntryList_offset()));
+    jcc(Assembler::notZero, check_successor);
+
+    // Release lock.
+    movptr(Address(monitor, ObjectMonitor::owner_offset()), NULL_WORD);
+    jmpb(unlocked);
+
+    // Recursive unlock.
+    bind(recursive);
+    decrement(Address(monitor, ObjectMonitor::recursions_offset()));
+    xorl(t, t);
   }
 
   bind(unlocked);

@@ -68,22 +68,22 @@ inline volatile uintptr_t* ObjectMonitor::metadata_addr() {
 }
 
 inline markWord ObjectMonitor::header() const {
-  assert(LockingMode != LM_LIGHTWEIGHT, "Lightweight locking does not use header");
+  assert(!UseObjectMonitorTable, "Lightweight locking with OM table does not use header");
   return markWord(metadata());
 }
 
 inline void ObjectMonitor::set_header(markWord hdr) {
-  assert(LockingMode != LM_LIGHTWEIGHT, "Lightweight locking does not use header");
+  assert(!UseObjectMonitorTable, "Lightweight locking with OM table does not use header");
   set_metadata(hdr.value());
 }
 
 inline intptr_t ObjectMonitor::hash() const {
-  assert(LockingMode == LM_LIGHTWEIGHT, "Only used by lightweight locking");
+  assert(UseObjectMonitorTable, "Only used by lightweight locking with OM table");
   return metadata();
 }
 
 inline void ObjectMonitor::set_hash(intptr_t hash) {
-  assert(LockingMode == LM_LIGHTWEIGHT, "Only used by lightweight locking");
+  assert(UseObjectMonitorTable, "Only used by lightweight locking with OM table");
   set_metadata(hash);
 }
 
