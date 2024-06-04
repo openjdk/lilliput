@@ -104,66 +104,6 @@ void LockStack::verify(const char* msg) const {
 }
 #endif
 
-#ifdef ASSERT
-void LockStack::verify_consistent_lock_order(GrowableArray<oop>& lock_order, bool leaf_frame) const {
-  int top_index = to_index(_top);
-  int lock_index = lock_order.length();
-
-  if (!leaf_frame) {
-    // If the lock_order is not from the leaf frame we must search
-    // for the top_index which fits with the most recent fast_locked
-    // objects in the lock stack.
-    while (lock_index-- > 0) {
-      const oop obj = lock_order.at(lock_index);
-      if (contains(obj)) {
-        for (int index = 0; index < top_index; index++) {
-          if (_base[index] == obj) {
-            // Found top index
-            top_index = index + 1;
-            break;
-          }
-        }
-
-        if (VM_Version::supports_recursive_lightweight_locking()) {
-          // With recursive looks there may be more of the same object
-          while (lock_index-- > 0 && lock_order.at(lock_index) == obj) {
-            top_index++;
-          }
-          assert(top_index <= to_index(_top), "too many obj in lock_order");
-        }
-
-        break;
-      }
-    }
-
-    lock_index = lock_order.length();
-  }
-
-  JavaThread* thread = get_thread();
-  Thread* current = Thread::current();
-  while (lock_index-- > 0) {
-    const oop obj = lock_order.at(lock_index);
-    const markWord mark = obj->mark_acquire();
-    assert(obj->is_locked(), "must be locked");
-    ObjectMonitor* monitor = nullptr;
-    if (mark.has_monitor()) {
-      monitor = LightweightSynchronizer::read_monitor(current, obj);
-    }
-    if (top_index > 0 && obj == _base[top_index - 1]) {
-      assert(mark.is_fast_locked() || monitor->is_owner_anonymous(),
-             "must be fast_locked or inflated by other thread");
-      top_index--;
-    } else {
-      assert(!mark.is_fast_locked(), "must be inflated");
-      assert(monitor->owner_raw() == thread ||
-             (!leaf_frame && thread->current_waiting_monitor() == monitor),
-             "must be owned by (or waited on by) thread");
-      assert(!contains(obj), "must not be on lock_stack");
-    }
-  }
-}
-#endif
-
 void LockStack::print_on(outputStream* st) {
   for (int i = to_index(_top); (--i) >= 0;) {
     st->print("LockStack[%d]: ", i);

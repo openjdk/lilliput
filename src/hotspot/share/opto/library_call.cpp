@@ -507,6 +507,7 @@ bool LibraryCallKit::try_to_inline(int predicate) {
   case vmIntrinsics::_writebackPostSync0:       return inline_unsafe_writebackSync0(false);
   case vmIntrinsics::_allocateInstance:         return inline_unsafe_allocate();
   case vmIntrinsics::_copyMemory:               return inline_unsafe_copyMemory();
+  case vmIntrinsics::_setMemory:                return inline_unsafe_setMemory();
   case vmIntrinsics::_getLength:                return inline_native_getLength();
   case vmIntrinsics::_copyOf:                   return inline_array_copyOf(false);
   case vmIntrinsics::_copyOfRange:              return inline_array_copyOf(true);
@@ -637,7 +638,10 @@ bool LibraryCallKit::try_to_inline(int predicate) {
     return inline_base64_decodeBlock();
   case vmIntrinsics::_poly1305_processBlocks:
     return inline_poly1305_processBlocks();
-
+  case vmIntrinsics::_intpoly_montgomeryMult_P256:
+    return inline_intpoly_montgomeryMult_P256();
+  case vmIntrinsics::_intpoly_assign:
+    return inline_intpoly_assign();
   case vmIntrinsics::_encodeISOArray:
   case vmIntrinsics::_encodeByteISOArray:
     return inline_encodeISOArray(false);
@@ -4948,6 +4952,57 @@ bool LibraryCallKit::inline_unsafe_copyMemory() {
   return true;
 }
 
+// unsafe_setmemory(void *base, ulong offset, size_t length, char fill_value);
+// Fill 'length' bytes starting from 'base[offset]' with 'fill_value'
+bool LibraryCallKit::inline_unsafe_setMemory() {
+  if (callee()->is_static())  return false;  // caller must have the capability!
+  null_check_receiver();  // null-check receiver
+  if (stopped())  return true;
+
+  C->set_has_unsafe_access(true);  // Mark eventual nmethod as "unsafe".
+
+  Node* dst_base =         argument(1);  // type: oop
+  Node* dst_off  = ConvL2X(argument(2)); // type: long
+  Node* size     = ConvL2X(argument(4)); // type: long
+  Node* byte     =         argument(6);  // type: byte
+
+  assert(Unsafe_field_offset_to_byte_offset(11) == 11,
+         "fieldOffset must be byte-scaled");
+
+  Node* dst_addr = make_unsafe_address(dst_base, dst_off);
+
+  Node* thread = _gvn.transform(new ThreadLocalNode());
+  Node* doing_unsafe_access_addr = basic_plus_adr(top(), thread, in_bytes(JavaThread::doing_unsafe_access_offset()));
+  BasicType doing_unsafe_access_bt = T_BYTE;
+  assert((sizeof(bool) * CHAR_BIT) == 8, "not implemented");
+
+  // update volatile field
+  store_to_memory(control(), doing_unsafe_access_addr, intcon(1), doing_unsafe_access_bt, Compile::AliasIdxRaw, MemNode::unordered);
+
+  int flags = RC_LEAF | RC_NO_FP;
+
+  const TypePtr* dst_type = TypePtr::BOTTOM;
+
+  // Adjust memory effects of the runtime call based on input values.
+  if (!has_wide_mem(_gvn, dst_addr, dst_base)) {
+    dst_type = _gvn.type(dst_addr)->is_ptr(); // narrow out memory
+
+    flags |= RC_NARROW_MEM; // narrow in memory
+  }
+
+  // Call it.  Note that the length argument is not scaled.
+  make_runtime_call(flags,
+                    OptoRuntime::make_setmemory_Type(),
+                    StubRoutines::unsafe_setmemory(),
+                    "unsafe_setmemory",
+                    dst_type,
+                    dst_addr, size XTOP, byte);
+
+  store_to_memory(control(), doing_unsafe_access_addr, intcon(0), doing_unsafe_access_bt, Compile::AliasIdxRaw, MemNode::unordered);
+
+  return true;
+}
+
 #undef XTOP
 
 //------------------------clone_coping-----------------------------------
@@ -7513,6 +7568,69 @@ bool LibraryCallKit::inline_poly1305_processBlocks() {
                                  OptoRuntime::poly1305_processBlocks_Type(),
                                  stubAddr, stubName, TypePtr::BOTTOM,
                                  input_start, len, acc_start, r_start);
+  return true;
+}
+
+bool LibraryCallKit::inline_intpoly_montgomeryMult_P256() {
+  address stubAddr;
+  const char *stubName;
+  assert(UseIntPolyIntrinsics, "need intpoly intrinsics support");
+  assert(callee()->signature()->size() == 3, "intpoly_montgomeryMult_P256 has %d parameters", callee()->signature()->size());
+  stubAddr = StubRoutines::intpoly_montgomeryMult_P256();
+  stubName = "intpoly_montgomeryMult_P256";
+
+  if (!stubAddr) return false;
+  null_check_receiver();  // null-check receiver
+  if (stopped())  return true;
+
+  Node* a = argument(1);
+  Node* b = argument(2);
+  Node* r = argument(3);
+
+  a = must_be_not_null(a, true);
+  b = must_be_not_null(b, true);
+  r = must_be_not_null(r, true);
+
+  Node* a_start = array_element_address(a, intcon(0), T_LONG);
+  assert(a_start, "a array is NULL");
+  Node* b_start = array_element_address(b, intcon(0), T_LONG);
+  assert(b_start, "b array is NULL");
+  Node* r_start = array_element_address(r, intcon(0), T_LONG);
+  assert(r_start, "r array is NULL");
+
+  Node* call = make_runtime_call(RC_LEAF | RC_NO_FP,
+                                 OptoRuntime::intpoly_montgomeryMult_P256_Type(),
+                                 stubAddr, stubName, TypePtr::BOTTOM,
+                                 a_start, b_start, r_start);
+  Node* result = _gvn.transform(new ProjNode(call, TypeFunc::Parms));
+  set_result(result);
+  return true;
+}
+
+bool LibraryCallKit::inline_intpoly_assign() {
+  assert(UseIntPolyIntrinsics, "need intpoly intrinsics support");
+  assert(callee()->signature()->size() == 3, "intpoly_assign has %d parameters", callee()->signature()->size());
+  const char *stubName = "intpoly_assign";
+  address stubAddr = StubRoutines::intpoly_assign();
+  if (!stubAddr) return false;
+
+  Node* set = argument(0);
+  Node* a = argument(1);
+  Node* b = argument(2);
+  Node* arr_length = load_array_length(a);
+
+  a = must_be_not_null(a, true);
+  b = must_be_not_null(b, true);
+
+  Node* a_start = array_element_address(a, intcon(0), T_LONG);
+  assert(a_start, "a array is NULL");
+  Node* b_start = array_element_address(b, intcon(0), T_LONG);
+  assert(b_start, "b array is NULL");
+
+  Node* call = make_runtime_call(RC_LEAF | RC_NO_FP,
+                                 OptoRuntime::intpoly_assign_Type(),
+                                 stubAddr, stubName, TypePtr::BOTTOM,
+                                 set, a_start, b_start, arr_length);
   return true;
 }
 

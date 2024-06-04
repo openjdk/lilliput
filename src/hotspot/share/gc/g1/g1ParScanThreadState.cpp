@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2024, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,6 +27,7 @@
 #include "gc/g1/g1CollectedHeap.inline.hpp"
 #include "gc/g1/g1CollectionSet.hpp"
 #include "gc/g1/g1EvacFailureRegions.inline.hpp"
+#include "gc/g1/g1HeapRegionPrinter.hpp"
 #include "gc/g1/g1OopClosures.inline.hpp"
 #include "gc/g1/g1ParScanThreadState.inline.hpp"
 #include "gc/g1/g1RootClosures.hpp"
@@ -441,7 +442,7 @@ void G1ParScanThreadState::undo_allocation(G1HeapRegionAttr dest_attr,
 void G1ParScanThreadState::update_bot_after_copying(oop obj, size_t word_sz) {
   HeapWord* obj_start = cast_from_oop<HeapWord*>(obj);
   HeapRegion* region = _g1h->heap_region_containing(obj_start);
-  region->update_bot_for_obj(obj_start, word_sz);
+  region->update_bot_for_block(obj_start, obj_start + word_sz);
 }
 
 // Private inline function, for direct internal use and providing the
@@ -644,7 +645,7 @@ oop G1ParScanThreadState::handle_evacuation_failure_par(oop old, markWord m, siz
     HeapRegion* r = _g1h->heap_region_containing(old);
 
     if (_evac_failure_regions->record(_worker_id, r->hrm_index(), cause_pinned)) {
-      _g1h->hr_printer()->evac_failure(r);
+      G1HeapRegionPrinter::evac_failure(r);
     }
 
     // Mark the failing object in the marking bitmap and later use the bitmap to handle

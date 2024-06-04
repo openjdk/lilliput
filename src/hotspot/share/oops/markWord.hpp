@@ -182,6 +182,7 @@ class markWord {
     // Returns true for normal forwarded (0b011) and self-forwarded (0b1xx).
     return mask_bits(value(), lock_mask_in_place | self_fwd_mask_in_place) >= static_cast<intptr_t>(marked_value);
   }
+
   bool is_neutral()  const {  // Not locked, or marked - a "clean" neutral state
     return (mask_bits(value(), lock_mask_in_place) == unlocked_value);
   }
@@ -321,7 +322,7 @@ class markWord {
   inline static markWord encode_pointer_as_mark(void* p) { return from_pointer(p).set_marked(); }
 
   // Recover address of oop from encoded form used in mark
-  inline void* decode_pointer() { return (void*)clear_lock_bits().value(); }
+  inline void* decode_pointer() const { return (void*)clear_lock_bits().value(); }
 
   inline bool self_forwarded() const {
     NOT_LP64(assert(LockingMode != LM_LEGACY, "incorrect with LM_LEGACY on 32 bit");)
@@ -336,6 +337,10 @@ class markWord {
   inline markWord unset_self_forwarded() const {
     NOT_LP64(assert(LockingMode != LM_LEGACY, "incorrect with LM_LEGACY on 32 bit");)
     return markWord(value() & ~self_fwd_mask_in_place);
+  }
+
+  inline oop forwardee() const {
+    return cast_to_oop(decode_pointer());
   }
 };
 

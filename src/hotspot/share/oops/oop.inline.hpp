@@ -308,6 +308,8 @@ inline void   oopDesc::short_field_put(int offset, jshort value)    { *field_add
 
 inline jint oopDesc::int_field(int offset) const                    { return *field_addr<jint>(offset);     }
 inline void oopDesc::int_field_put(int offset, jint value)          { *field_addr<jint>(offset) = value;    }
+inline jint oopDesc::int_field_relaxed(int offset) const            { return Atomic::load(field_addr<jint>(offset)); }
+inline void oopDesc::int_field_put_relaxed(int offset, jint value)  { Atomic::store(field_addr<jint>(offset), value); }
 
 inline jlong oopDesc::long_field(int offset) const                  { return *field_addr<jlong>(offset);    }
 inline void  oopDesc::long_field_put(int offset, jlong value)       { *field_addr<jlong>(offset) = value;   }
@@ -377,7 +379,7 @@ oop oopDesc::forwardee(markWord mark) const {
   if (mark.self_forwarded()) {
     return cast_to_oop(this);
   } else {
-    return cast_to_oop(mark.decode_pointer());
+    return mark.forwardee();
   }
 }
 
@@ -385,7 +387,6 @@ oop oopDesc::forwardee(markWord mark) const {
 // The forwardee is used when copying during scavenge and mark-sweep.
 // It does need to clear the low two locking- and GC-related bits.
 oop oopDesc::forwardee() const {
-  assert(is_forwarded(), "only decode when actually forwarded");
   return forwardee(mark());
 }
 
