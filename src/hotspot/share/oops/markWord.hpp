@@ -240,8 +240,11 @@ class markWord {
   }
   bool has_displaced_mark_helper() const {
     intptr_t lockbits = value() & lock_mask_in_place;
-    return LockingMode == LM_LIGHTWEIGHT  ? UseObjectMonitorTable ? false : lockbits == monitor_value   // no displace mark or monitor?
-                                         : (lockbits & unlocked_value) == 0; // monitor | stack-locked?
+    if (LockingMode == LM_LIGHTWEIGHT) {
+      return !UseObjectMonitorTable && lockbits == monitor_value;
+    }
+    // monitor (0b10) | stack-locked (0b00)?
+    return (lockbits & unlocked_value) == 0;
   }
   markWord displaced_mark_helper() const;
   void set_displaced_mark_helper(markWord m) const;
