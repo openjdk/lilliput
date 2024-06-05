@@ -138,6 +138,7 @@ class outputStream;
   LOG_TAG(objecttagging) \
   LOG_TAG(obsolete) \
   LOG_TAG(oldobject) \
+  LOG_TAG(omworld) \
   LOG_TAG(oom) \
   LOG_TAG(oopmap) \
   LOG_TAG(oops) \
