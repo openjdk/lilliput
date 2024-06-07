@@ -236,8 +236,10 @@ void C2_MacroAssembler::fast_lock_lightweight(Register obj, Register box, Regist
   // Finish fast lock unsuccessfully. MUST branch to with flag == NE
   Label slow_path;
 
-  // Clear cache in case fast locking succeeds.
-  str(zr, Address(box, BasicLock::object_monitor_cache_offset_in_bytes()));
+  if (UseObjectMonitorTable) {
+    // Clear cache in case fast locking succeeds.
+    str(zr, Address(box, BasicLock::object_monitor_cache_offset_in_bytes()));
+  }
 
   if (DiagnoseSyncOnValueBasedClasses != 0) {
     load_klass(t1, obj);
@@ -297,7 +299,11 @@ void C2_MacroAssembler::fast_lock_lightweight(Register obj, Register box, Regist
       cmp(zr, obj);
       b(slow_path);
     } else {
-      if (UseObjectMonitorTable) {
+      const Register t1_monitor = t1;
+
+      if (!UseObjectMonitorTable) {
+        assert(t1_monitor == t1_mark, "should be the same here");
+      } else {
         if (OMCacheHitRate) increment(Address(rthread, JavaThread::lock_lookup_offset()));
 
         Label monitor_found;
@@ -341,22 +347,16 @@ void C2_MacroAssembler::fast_lock_lightweight(Register obj, Register box, Regist
         }
 
         bind(monitor_found);
-        ldr(t1, Address(t3_t, OMCache::oop_to_monitor_difference()));
+        ldr(t1_monitor, Address(t3_t, OMCache::oop_to_monitor_difference()));
         if (OMCacheHitRate) increment(Address(rthread, JavaThread::lock_hit_offset()));
-      } else {
-        // Untag the monitor.
-        add(t1, t1_mark, -(int)markWord::monitor_value);
       }
-
-      // ObjectMonitor* is in t1
-      const Register t1_monitor = t1;
       const Register t2_owner_addr = t2;
       const Register t3_owner = t3;
 
       Label monitor_locked;
 
       // Compute owner address.
-      lea(t2_owner_addr, Address(t1_monitor, ObjectMonitor::owner_offset()));
+      lea(t2_owner_addr, Address(t1_monitor, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner)));
 
       // CAS owner (null => current thread).
       cmpxchg(t2_owner_addr, zr, rthread, Assembler::xword, /*acquire*/ true,
@@ -368,10 +368,12 @@ void C2_MacroAssembler::fast_lock_lightweight(Register obj, Register box, Regist
       br(Assembler::NE, slow_path);
 
       // Recursive.
-      increment(Address(t1_monitor, ObjectMonitor::recursions_offset()), 1);
+      increment(Address(t1_monitor, OM_OFFSET_NO_MONITOR_VALUE_TAG(recursions)), 1);
 
       bind(monitor_locked);
-      str(t1_monitor, Address(box, BasicLock::object_monitor_cache_offset_in_bytes()));
+      if (UseObjectMonitorTable) {
+        str(t1_monitor, Address(box, BasicLock::object_monitor_cache_offset_in_bytes()));
+      }
     }
 
   }
@@ -488,16 +490,18 @@ void C2_MacroAssembler::fast_unlock_lightweight(Register obj, Register box, Regi
     } else {
       const Register t1_monitor = t1;
 
-      if (UseObjectMonitorTable) {
+      if (!UseObjectMonitorTable) {
+        assert(t1_monitor == t1_mark, "should be the same here");
+
+        // Untag the monitor.
+        add(t1_monitor, t1_mark, -(int)markWord::monitor_value);
+      } else {
         if (OMCacheHitRate) increment(Address(rthread, JavaThread::unlock_lookup_offset()));
         ldr(t1_monitor, Address(box, BasicLock::object_monitor_cache_offset_in_bytes()));
         // null check with Flags == NE, no valid pointer below alignof(ObjectMonitor*)
         cmp(t1_monitor, checked_cast<uint8_t>(alignof(ObjectMonitor*)));
         br(Assembler::LO, slow_path);
         if (OMCacheHitRate) increment(Address(rthread, JavaThread::unlock_hit_offset()));
-      } else {
-        // Untag the monitor.
-        add(t1_monitor, t1_mark, -(int)markWord::monitor_value);
       }
 
       const Register t2_recursions = t2;
