@@ -241,7 +241,7 @@ private:
   // instead of the markWord and doesn't work with tagged values.
   //
   #define OM_OFFSET_NO_MONITOR_VALUE_TAG(f) \
-    ((in_bytes(ObjectMonitor::f ## _offset())) - (LockingMode == LM_LIGHTWEIGHT ? 0 : checked_cast<int>(markWord::monitor_value)))
+    ((in_bytes(ObjectMonitor::f ## _offset())) - (UseObjectMonitorTable ? 0 : checked_cast<int>(markWord::monitor_value)))
 
   uintptr_t           metadata() const;
   void                set_metadata(uintptr_t value);
