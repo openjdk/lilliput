@@ -348,11 +348,14 @@ void C2_MacroAssembler::fast_lock_lightweight(Register obj, Register box, Regist
 
     const Register t2_owner_addr = t2;
     const Register t3_owner = t3;
+    const ByteSize monitor_tag = in_ByteSize(UseObjectMonitorTable ? 0 : checked_cast<int>(markWord::monitor_value));
+    const Address owner_address{t1_monitor, ObjectMonitor::owner_offset() - monitor_tag};
+    const Address recursions_address{t1_monitor, ObjectMonitor::recursions_offset() - monitor_tag};
 
     Label monitor_locked;
 
     // Compute owner address.
-    lea(t2_owner_addr, Address(t1_monitor, OM_OFFSET_NO_MONITOR_VALUE_TAG(owner)));
+    lea(t2_owner_addr, owner_address);
 
     // CAS owner (null => current thread).
     cmpxchg(t2_owner_addr, zr, rthread, Assembler::xword, /*acquire*/ true,
@@ -364,7 +367,7 @@ void C2_MacroAssembler::fast_lock_lightweight(Register obj, Register box, Regist
     br(Assembler::NE, slow_path);
 
     // Recursive.
-    increment(Address(t1_monitor, OM_OFFSET_NO_MONITOR_VALUE_TAG(recursions)), 1);
+    increment(recursions_address, 1);
 
     bind(monitor_locked);
     if (UseObjectMonitorTable) {
