@@ -31,19 +31,25 @@
 #include "logging/logStream.hpp"
 #include "memory/resourceArea.hpp"
 #include "oops/oop.inline.hpp"
+#include "runtime/atomic.hpp"
 #include "runtime/basicLock.inline.hpp"
 #include "runtime/globals_extension.hpp"
+#include "runtime/interfaceSupport.inline.hpp"
 #include "runtime/javaThread.hpp"
 #include "runtime/lightweightSynchronizer.hpp"
 #include "runtime/lockStack.inline.hpp"
 #include "runtime/mutexLocker.hpp"
+#include "runtime/objectMonitor.hpp"
 #include "runtime/objectMonitor.inline.hpp"
 #include "runtime/os.hpp"
 #include "runtime/perfData.inline.hpp"
 #include "runtime/safepointMechanism.inline.hpp"
 #include "runtime/safepointVerifiers.hpp"
 #include "runtime/synchronizer.inline.hpp"
+#include "runtime/timerTrace.hpp"
+#include "runtime/trimNativeHeap.hpp"
 #include "utilities/concurrentHashTable.inline.hpp"
+#include "utilities/concurrentHashTableTasks.inline.hpp"
 #include "utilities/globalDefinitions.hpp"
 
 
@@ -64,17 +70,20 @@ class ObjectMonitorWorld : public CHeapObj<mtOMWorld> {
       return (uintx)value->hash();
     }
     static void* allocate_node(void* context, size_t size, Value const& value) {
+      reinterpret_cast<ObjectMonitorWorld*>(context)->inc_table_count();
       return AllocateHeap(size, mtOMWorld);
     };
     static void free_node(void* context, void* memory, Value const& value) {
+      reinterpret_cast<ObjectMonitorWorld*>(context)->dec_table_count();
       FreeHeap(memory);
     }
   };
   using ConcurrentTable = ConcurrentHashTable<Config, mtOMWorld>;
 
   ConcurrentTable* _table;
+  volatile size_t _table_count;
+  size_t _table_size;
   volatile bool _resize;
-  uint32_t _shrink_count;
 
   class Lookup : public StackObj {
     oop _obj;
@@ -120,6 +129,22 @@ class ObjectMonitorWorld : public CHeapObj<mtOMWorld> {
     }
   };
 
+  void inc_table_count() {
+    Atomic::inc(&_table_count);
+  }
+
+  void dec_table_count() {
+    Atomic::inc(&_table_count);
+  }
+
+  double get_load_factor() {
+    return (double)_table_count/(double)_table_size;
+  }
+
+  size_t table_size(Thread* current = Thread::current()) {
+    return ((size_t)1) << _table->get_size_log2(current);
+  }
+
   static size_t max_log_size() {
     // TODO[OMWorld]: Evaluate the max size.
     // TODO[OMWorld]: Need to fix init order to use Universe::heap()->max_capacity();
@@ -134,7 +159,7 @@ class ObjectMonitorWorld : public CHeapObj<mtOMWorld> {
   }
 
   static size_t min_log_size() {
-    // TODO[OMWorld]: Evaluate the min size, currently ~= log(AvgMonitorsPerThreadEstimate default)
+    // ~= log(AvgMonitorsPerThreadEstimate default)
     return 10;
   }
 
@@ -149,27 +174,20 @@ class ObjectMonitorWorld : public CHeapObj<mtOMWorld> {
   }
 
   static size_t grow_hint () {
-    // TODO[OMWorld]: Evaluate why 4 is a good grow hint.
-    //                Have seen grow hint hits when lower with a
-    //                load factor as low as 0.1. (Grow Hint = 3)
-    // TODO[OMWorld]: Evaluate the hash code used, are large buckets
-    //                expected even with a low load factor. Or is it
-    //                something with the hashing used.
     return ConcurrentTable::DEFAULT_GROW_HINT;
-  }
-
-  static size_t log_shrink_difference() {
-    // TODO[OMWorld]: Evaluate shrink heuristics, currently disabled by
-    //                default, and only really shrinks if AvgMonitorsPerThreadEstimate
-    //                is also set to a none default value
-    return 2;
   }
 
 public:
   ObjectMonitorWorld()
-  : _table(new ConcurrentTable(initial_log_size(), max_log_size(), grow_hint())),
-    _resize(false),
-    _shrink_count(0) {}
+  : _table(new ConcurrentTable(initial_log_size(),
+                               max_log_size(),
+                               grow_hint(),
+                               ConcurrentTable::DEFAULT_ENABLE_STATISTICS,
+                               ConcurrentTable::DEFAULT_MUTEX_RANK,
+                               this)),
+    _table_count(0),
+    _table_size(table_size()),
+    _resize(false) {}
 
   void verify_monitor_get_result(oop obj, ObjectMonitor* monitor) {
 #ifdef ASSERT
@@ -197,76 +215,82 @@ public:
   void try_notify_grow() {
     if (!_table->is_max_size_reached() && !Atomic::load(&_resize)) {
       Atomic::store(&_resize, true);
-      if (MonitorDeflation_lock->try_lock()) {
-        MonitorDeflation_lock->notify();
-        MonitorDeflation_lock->unlock();
+      if (Service_lock->try_lock()) {
+        Service_lock->notify();
+        Service_lock->unlock();
       }
     }
   }
 
-  void set_table_max(JavaThread* current) {
-    while (!_table->is_max_size_reached()) {
-      _table->grow(current);
+  bool should_shrink() {
+    // No implemented;
+    return false;
+  }
+
+  static constexpr double GROW_LOAD_FACTOR = 0.75;
+
+  bool should_grow() {
+    return get_load_factor() > GROW_LOAD_FACTOR && !_table->is_max_size_reached();
+  }
+
+  bool should_resize() {
+    return should_grow() || should_shrink() || Atomic::load(&_resize);
+  }
+
+  template<typename Task, typename... Args>
+  bool run_task(JavaThread* current, Task& task, const char* task_name, Args&... args) {
+    if (task.prepare(current)) {
+      log_trace(omworld)("Started to %s", task_name);
+      TraceTime timer(task_name, TRACETIME_LOG(Debug, omworld, perf));
+      while (task.do_task(current, args...)) {
+        task.pause(current);
+        {
+          ThreadBlockInVM tbivm(current);
+        }
+        task.cont(current);
+      }
+      task.done(current);
+      return true;
     }
+    return false;
   }
 
-  bool needs_shrink(size_t log_target, size_t log_size) {
-    return OMShrinkCHT && log_target + log_shrink_difference() <= log_size;
+  bool grow(JavaThread* current) {
+    ConcurrentTable::GrowTask grow_task(_table);
+    if (run_task(current, grow_task, "Grow")) {
+      _table_size = table_size(current);
+      log_info(omworld)("Grown to size: %zu", _table_size);
+      return true;
+    }
+    return false;
   }
 
-  bool needs_grow(size_t log_target, size_t log_size) {
-    return log_size < log_target;
-  }
-
-  bool needs_resize(JavaThread* current, size_t ceiling, size_t count, size_t max) {
-    const size_t log_size = _table->get_size_log2(current);
-    const int log_ceiling = log2i_graceful(ceiling);
-    const int log_max = log2i_graceful(max);
-    const size_t log_count = log2i(MAX2(count, size_t(1)));
-    const size_t log_target = clamp_log_size(MAX2(log_ceiling, log_max) + 2);
-
-    return needs_grow(log_target, log_size) || needs_shrink(log_target, log_size) || Atomic::load(&_resize);
-  }
-
-  bool resize(JavaThread* current, size_t ceiling, size_t count, size_t max) {
-    const size_t log_size = _table->get_size_log2(current);
-    const int log_ceiling = log2i_graceful(ceiling);
-    const int log_max = log2i_graceful(max);
-    const size_t log_count = log2i(MAX2(count, size_t(1)));
-    const size_t log_target = clamp_log_size(MAX2(log_ceiling, log_max) + 2);
-    LogTarget(Info, monitorinflation) lt;
-
-    auto print_table_stats = [&]() {
-      ResourceMark rm;
-      LogStream ls(lt);
-      auto vs_f = [](Config::Value* v) { return sizeof(Config::Value); };
-      _table->statistics_to(current, vs_f, &ls, "ObjectMonitorWorld");
+  bool clean(JavaThread* current) {
+    ConcurrentTable::BulkDeleteTask clean_task(_table);
+    auto is_dead = [&](ObjectMonitor** monitor) {
+      return (*monitor)->object_is_dead();
     };
+    auto do_nothing = [&](ObjectMonitor** monitor) {};
+    NativeHeapTrimmer::SuspendMark sm("omworld");
+    return run_task(current, clean_task, "Clean", is_dead, do_nothing);
+  }
 
-    bool success = true;
+  bool resize(JavaThread* current) {
+    LogTarget(Info, omworld) lt;
+    bool success = false;
 
-    if (needs_grow(log_target, log_size)) {
-      // Grow
-      lt.print("Growing to %02zu->%02zu", log_size, log_target);
-      success = _table->grow(current, log_target);
-      print_table_stats();
-    } else if (!_table->is_max_size_reached() && Atomic::load(&_resize)) {
-      lt.print("WARNING: Getting resize hints with Size: %02zu Ceiling: %2i Target: %02zu", log_size, log_ceiling, log_target);
-      print_table_stats();
-      success = false;
+    if (should_grow()) {
+      lt.print("Start growing with load factor %f", get_load_factor());
+      success = grow(current);
+    } else {
+      if (!_table->is_max_size_reached() && Atomic::load(&_resize)) {
+        lt.print("WARNING: Getting resize hints with load factor %f", get_load_factor());
+      }
+      lt.print("Start cleaning with load factor %f", get_load_factor());
+      success = clean(current);
     }
 
-    if (needs_shrink(log_target, log_size)) {
-      _shrink_count++;
-      // Shrink
-      lt.print("Shrinking to %02zu->%02zu", log_size, log_target);
-      success = _table->shrink(current, log_target);
-      print_table_stats();
-    }
-
-    if (success) {
-      Atomic::store(&_resize, _table->is_max_size_reached());
-    }
+    Atomic::store(&_resize, false);
 
     return success;
   }
@@ -429,40 +453,20 @@ void LightweightSynchronizer::initialize() {
     return;
   }
   _omworld = new ObjectMonitorWorld();
-
-  if (!FLAG_IS_CMDLINE(AvgMonitorsPerThreadEstimate)) {
-    // This is updated after ceiling is set and ObjectMonitorWorld is created;
-    // TODO[OMWorld]: Clean this up and find a good initial ceiling,
-    //                and initial HashTable size
-    FLAG_SET_ERGO(AvgMonitorsPerThreadEstimate, 0);
-  }
 }
 
-void LightweightSynchronizer::set_table_max(JavaThread* current) {
-  if (!UseObjectMonitorTable) {
-    return;
-  }
-  _omworld->set_table_max(current);
-}
-
-bool LightweightSynchronizer::needs_resize(JavaThread *current) {
+bool LightweightSynchronizer::needs_resize() {
   if (!UseObjectMonitorTable) {
     return false;
   }
-  return _omworld->needs_resize(current,
-                                  ObjectSynchronizer::in_use_list_ceiling(),
-                                  ObjectSynchronizer::_in_use_list.count(),
-                                  ObjectSynchronizer::_in_use_list.max());
+  return _omworld->should_resize();
 }
 
 bool LightweightSynchronizer::resize_table(JavaThread* current) {
   if (!UseObjectMonitorTable) {
     return true;
   }
-  return _omworld->resize(current,
-                          ObjectSynchronizer::in_use_list_ceiling(),
-                          ObjectSynchronizer::_in_use_list.count(),
-                          ObjectSynchronizer::_in_use_list.max());
+  return _omworld->resize(current);
 }
 
 class LightweightSynchronizer::LockStackInflateContendedLocks : private OopClosure {
