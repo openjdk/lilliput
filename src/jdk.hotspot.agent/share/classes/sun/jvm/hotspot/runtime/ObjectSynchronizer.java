@@ -55,7 +55,7 @@ public class ObjectSynchronizer {
       // FIXME: can not generate marks in debugging system
       return mark.hash();
     } else if (mark.hasMonitor()) {
-      if (VM.getVM().getCommandLineFlag("LockingMode").getInt() == LockingMode.getLightweight()) {
+      if (VM.getVM().getCommandLineFlag("UseObjectMonitorTable").getBool()) {
         return mark.hash();
       }
       ObjectMonitor monitor = mark.monitor();

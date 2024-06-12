@@ -1979,8 +1979,6 @@ const int ObjectAlignmentInBytes = 8;
           "With Lightweight Locking mode, use a table to record inflated "  \
           "monitors rather than the first word of the object.")             \
                                                                             \
-  product(bool, OMUseC2Cache, true, "")                                     \
-                                                                            \
   product(bool, OMC2UnrollCacheLookupLoopTail, true, "")                    \
                                                                             \
   product(int, OMC2UnrollCacheEntries, 0, "")                               \
