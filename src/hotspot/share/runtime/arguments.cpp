@@ -2970,9 +2970,9 @@ jint Arguments::finalize_vm_init_args(bool patch_mod_javabase) {
     // If UseObjectMonitorTable is on the command line, turn off UseCompactObjectHeaders.
     } else if (FLAG_IS_CMDLINE(UseObjectMonitorTable)) {
       FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
-    // If neither on the command line, the defaults are incompatible.
+    // If neither on the command line, the defaults are incompatible, but turn on UseObjectMonitorTable.
     } else {
-      fatal("Compact object headers requires ObjectMonitorTable. Defaults are incompatible.");
+      FLAG_SET_DEFAULT(UseObjectMonitorTable, true);
     }
   }
   if (UseCompactObjectHeaders && !UseCompressedClassPointers) {
