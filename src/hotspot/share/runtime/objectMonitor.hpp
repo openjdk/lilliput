@@ -134,9 +134,9 @@ class ObjectMonitor : public CHeapObj<mtObjectMonitor> {
 
   // The sync code expects the metadata field to be at offset zero (0).
   // Enforced by the assert() in metadata_addr().
-  // * LM_LIGHTWEIGHT
+  // * LM_LIGHTWEIGHT with UseObjectMonitorTable:
   // Contains the _object's hashCode.
-  // * LM_LEGACY, LM_MONITOR
+  // * LM_LEGACY, LM_MONITOR:
   // Contains the displaced object header word - mark
   volatile uintptr_t _metadata;     // metadata
   WeakHandle _object;               // backward object pointer
@@ -237,11 +237,8 @@ private:
   // stall so the helper macro adjusts the offset value that is returned
   // to the ObjectMonitor reference manipulation code:
   //
-  // Lightweight locking fetches ObjectMonitor references from a cache
-  // instead of the markWord and doesn't work with tagged values.
-  //
   #define OM_OFFSET_NO_MONITOR_VALUE_TAG(f) \
-    ((in_bytes(ObjectMonitor::f ## _offset())) - (LockingMode == LM_LIGHTWEIGHT ? 0 : checked_cast<int>(markWord::monitor_value)))
+    ((in_bytes(ObjectMonitor::f ## _offset())) - checked_cast<int>(markWord::monitor_value))
 
   uintptr_t           metadata() const;
   void                set_metadata(uintptr_t value);

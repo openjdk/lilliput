@@ -54,7 +54,7 @@
 #include "runtime/safepointVerifiers.hpp"
 #include "runtime/sharedRuntime.hpp"
 #include "runtime/stubRoutines.hpp"
-#include "runtime/synchronizer.hpp"
+#include "runtime/synchronizer.inline.hpp"
 #include "runtime/threads.hpp"
 #include "runtime/timer.hpp"
 #include "runtime/trimNativeHeap.hpp"
@@ -68,18 +68,6 @@
 #include "utilities/preserveException.hpp"
 
 class ObjectMonitorDeflationLogging;
-
-ObjectMonitor* ObjectSynchronizer::read_monitor(markWord mark) {
-  assert(LockingMode != LM_LIGHTWEIGHT, "lightweight locking uses table");
-  return mark.monitor();
-}
-
-ObjectMonitor* ObjectSynchronizer::read_monitor(Thread* current, oop obj, markWord mark) {
-  if (LockingMode != LM_LIGHTWEIGHT) {
-    return read_monitor(mark);
-  }
-  return LightweightSynchronizer::read_monitor(current, obj);
-}
 
 void MonitorList::add(ObjectMonitor* m) {
   ObjectMonitor* head;
@@ -398,6 +386,13 @@ bool ObjectSynchronizer::quick_notify(oopDesc* obj, JavaThread* current, bool al
   return false;
 }
 
+static bool useHeavyMonitors() {
+#if defined(X86) || defined(AARCH64) || defined(PPC64) || defined(RISCV64) || defined(S390)
+  return LockingMode == LM_MONITOR;
+#else
+  return false;
+#endif
+}
 
 // The LockNode emitted directly at the synchronization site would have
 // been too big if it were to have included support for the cases of inflated
@@ -415,14 +410,21 @@ bool ObjectSynchronizer::quick_enter(oop obj, JavaThread* current,
     return false;
   }
 
+  if (useHeavyMonitors()) {
+    return false;  // Slow path
+  }
+
   if (LockingMode == LM_LIGHTWEIGHT) {
     return LightweightSynchronizer::quick_enter(obj, current, lock);
   }
 
+  assert(LockingMode == LM_LEGACY, "legacy mode below");
+
   const markWord mark = obj->mark();
 
   if (mark.has_monitor()) {
-    ObjectMonitor* const m = ObjectSynchronizer::read_monitor(mark);
+
+    ObjectMonitor* const m = read_monitor(mark);
     // An async deflation or GC can race us before we manage to make
     // the ObjectMonitor busy by setting the owner below. If we detect
     // that race we just bail out to the slow-path here.
@@ -442,18 +444,16 @@ bool ObjectSynchronizer::quick_enter(oop obj, JavaThread* current,
       return true;
     }
 
-    if (LockingMode == LM_LEGACY) {
-      // This Java Monitor is inflated so obj's header will never be
-      // displaced to this thread's BasicLock. Make the displaced header
-      // non-null so this BasicLock is not seen as recursive nor as
-      // being locked. We do this unconditionally so that this thread's
-      // BasicLock cannot be mis-interpreted by any stack walkers. For
-      // performance reasons, stack walkers generally first check for
-      // stack-locking in the object's header, the second check is for
-      // recursive stack-locking in the displaced header in the BasicLock,
-      // and last are the inflated Java Monitor (ObjectMonitor) checks.
-      lock->set_displaced_header(markWord::unused_mark());
-    }
+    // This Java Monitor is inflated so obj's header will never be
+    // displaced to this thread's BasicLock. Make the displaced header
+    // non-null so this BasicLock is not seen as recursive nor as
+    // being locked. We do this unconditionally so that this thread's
+    // BasicLock cannot be mis-interpreted by any stack walkers. For
+    // performance reasons, stack walkers generally first check for
+    // stack-locking in the object's header, the second check is for
+    // recursive stack-locking in the displaced header in the BasicLock,
+    // and last are the inflated Java Monitor (ObjectMonitor) checks.
+    lock->set_displaced_header(markWord::unused_mark());
 
     if (owner == nullptr && m->try_set_owner_from(nullptr, current) == nullptr) {
       assert(m->_recursions == 0, "invariant");
@@ -519,14 +519,6 @@ void ObjectSynchronizer::handle_sync_on_value_based_class(Handle obj, JavaThread
   if (bcp_was_adjusted) {
     last_frame.interpreter_frame_set_bcp(last_frame.interpreter_frame_bcp() + 1);
   }
-}
-
-static bool useHeavyMonitors() {
-#if defined(X86) || defined(AARCH64) || defined(PPC64) || defined(RISCV64) || defined(S390)
-  return LockingMode == LM_MONITOR;
-#else
-  return false;
-#endif
 }
 
 // -----------------------------------------------------------------------------
@@ -939,7 +931,7 @@ static markWord read_stable_mark(oop obj) {
 //   There are simple ways to "diffuse" the middle address bits over the
 //   generated hashCode values:
 
-intptr_t ObjectSynchronizer::get_next_hash(Thread* current, oop obj) {
+static intptr_t get_next_hash(Thread* current, oop obj) {
   intptr_t value = 0;
   if (hashCode == 0) {
     // This form uses global Park-Miller RNG.
@@ -979,9 +971,31 @@ intptr_t ObjectSynchronizer::get_next_hash(Thread* current, oop obj) {
   return value;
 }
 
+static intptr_t install_hash_code(Thread* current, oop obj) {
+  assert(UseObjectMonitorTable && LockingMode == LM_LIGHTWEIGHT, "must be");
+
+  markWord mark = obj->mark_acquire();
+  for(;;) {
+    intptr_t hash = mark.hash();
+    if (hash != 0) {
+      return hash;
+    }
+
+    hash = get_next_hash(current, obj);
+    const markWord old_mark = mark;
+    const markWord new_mark = old_mark.copy_set_hash(hash);
+
+    mark = obj->cas_set_mark(new_mark, old_mark);
+    if (old_mark == mark) {
+      return hash;
+    }
+  }
+}
+
 intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {
-  if (LockingMode == LM_LIGHTWEIGHT) {
-    return LightweightSynchronizer::FastHashCode(current, obj);
+  // Since the monitor isn't in the object header, it can simply be installed.
+  if (UseObjectMonitorTable && LockingMode == LM_LIGHTWEIGHT) {
+    return install_hash_code(current, obj);
   }
 
   while (true) {
@@ -993,7 +1007,7 @@ intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {
       assert(LockingMode == LM_MONITOR, "+VerifyHeavyMonitors requires LockingMode == 0 (LM_MONITOR)");
       guarantee((obj->mark().value() & markWord::lock_mask_in_place) != markWord::locked_value, "must not be lightweight/stack-locked");
     }
-    if (mark.is_unlocked()) {
+    if (mark.is_unlocked() || (LockingMode == LM_LIGHTWEIGHT && mark.is_fast_locked())) {
       hash = mark.hash();
       if (hash != 0) {                     // if it has a hash, just return it
         return hash;
@@ -1005,7 +1019,10 @@ intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {
       if (test == mark) {                  // if the hash was installed, return it
         return hash;
       }
-
+      if (LockingMode == LM_LIGHTWEIGHT) {
+        // CAS failed, retry
+        continue;
+      }
       // Failed to install the hash. It could be that another thread
       // installed the hash just before our attempt or inflation has
       // occurred or... so we fall thru to inflate the monitor for
@@ -1085,7 +1102,7 @@ intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {
         assert(test.is_neutral(), "invariant: header=" INTPTR_FORMAT, test.value());
         assert(hash != 0, "should only have lost the race to a thread that set a non-zero hash");
       }
-      if (monitor->is_being_async_deflated()) {
+      if (monitor->is_being_async_deflated() && !UseObjectMonitorTable) {
         // If we detect that async deflation has occurred, then we
         // attempt to restore the header/dmw to the object's header
         // so that we only retry once if the deflater thread happens
@@ -1117,7 +1134,7 @@ bool ObjectSynchronizer::current_thread_holds_lock(JavaThread* current,
   }
 
   while (LockingMode == LM_LIGHTWEIGHT && mark.has_monitor()) {
-    ObjectMonitor* monitor = LightweightSynchronizer::read_monitor(current, obj);
+    ObjectMonitor* monitor = read_monitor(current, obj, mark);
     if (monitor != nullptr) {
       return monitor->is_entered(current) != 0;
     }
@@ -1159,7 +1176,7 @@ JavaThread* ObjectSynchronizer::get_lock_owner(ThreadsList * t_list, Handle h_ob
   }
 
   while (LockingMode == LM_LIGHTWEIGHT && mark.has_monitor()) {
-    ObjectMonitor* monitor = LightweightSynchronizer::read_monitor(Thread::current(), obj);
+    ObjectMonitor* monitor = read_monitor(Thread::current(), obj, mark);
     if (monitor != nullptr) {
       return Threads::owning_thread_from_monitor(t_list, monitor);
     }
@@ -1403,8 +1420,11 @@ void ObjectSynchronizer::inflate_helper(oop obj) {
 
 ObjectMonitor* ObjectSynchronizer::inflate(Thread* current, oop obj, const InflateCause cause) {
   assert(current == Thread::current(), "must be");
-  assert(LockingMode != LM_LIGHTWEIGHT, "LM_LIGHTWEIGHT cannot use inflate");
-  return inflate_impl(obj, cause);
+  if (LockingMode == LM_LIGHTWEIGHT) {
+    return LightweightSynchronizer::inflate_into_object_header(current, nullptr, obj, cause);
+  } else {
+    return inflate_impl(obj, cause);
+  }
 }
 
 ObjectMonitor* ObjectSynchronizer::inflate_for(JavaThread* thread, oop obj, const InflateCause cause) {
@@ -1767,7 +1787,7 @@ size_t ObjectSynchronizer::deflate_idle_monitors() {
     unlinked_count = _in_use_list.unlink_deflated(deflated_count, &delete_list, &safepointer);
 
 #ifdef ASSERT
-    if (LockingMode == LM_LIGHTWEIGHT) {
+    if (UseObjectMonitorTable) {
       for (ObjectMonitor* monitor : delete_list) {
         assert(!LightweightSynchronizer::contains_monitor(current, monitor), "Should have been removed");
       }
@@ -2033,7 +2053,7 @@ void ObjectSynchronizer::log_in_use_monitor_details(outputStream* out, bool log_
     monitors_iterate([&](ObjectMonitor* monitor) {
       if (is_interesting(monitor)) {
         const oop obj = monitor->object_peek();
-        const intptr_t hash = LockingMode == LM_LIGHTWEIGHT ? monitor->hash() : monitor->header().hash();
+        const intptr_t hash = UseObjectMonitorTable ? monitor->hash() : monitor->header().hash();
         ResourceMark rm;
         out->print(INTPTR_FORMAT "  %d%d%d  " INTPTR_FORMAT "  %s", p2i(monitor),
                    monitor->is_busy(), hash != 0, monitor->owner() != nullptr,

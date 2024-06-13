@@ -172,7 +172,7 @@ public class Mark extends VMObject {
     if (Assert.ASSERTS_ENABLED) {
       Assert.that(hasMonitor(), "check");
     }
-    if (VM.getVM().getCommandLineFlag("LockingMode").getInt() == LockingMode.getLightweight()) {
+    if (VM.getVM().getCommandLineFlag("UseObjectMonitorTable").getBool()) {
       Iterator it = ObjectSynchronizer.objectMonitorIterator();
       while (it != null && it.hasNext()) {
         ObjectMonitor mon = (ObjectMonitor)it.next();

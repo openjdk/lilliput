@@ -64,18 +64,16 @@ public:
   static void enter(Handle obj, BasicLock* lock, JavaThread* current);
   static void exit(oop object, JavaThread* current);
 
+  static ObjectMonitor* inflate_into_object_header(Thread* current, JavaThread* inflating_thread, oop object, const ObjectSynchronizer::InflateCause cause);
   static ObjectMonitor* inflate_locked_or_imse(oop object, const ObjectSynchronizer::InflateCause cause, TRAPS);
   static ObjectMonitor* inflate_fast_locked_object(oop object, JavaThread* locking_thread, JavaThread* current, const ObjectSynchronizer::InflateCause cause);
   static ObjectMonitor* inflate_and_enter(oop object, JavaThread* locking_thread, JavaThread* current, const ObjectSynchronizer::InflateCause cause);
 
   static void deflate_monitor(Thread* current, oop obj, ObjectMonitor* monitor);
 
-  static ObjectMonitor* read_monitor(Thread* current, oop obj);
+  static ObjectMonitor* get_monitor_from_table(Thread* current, oop obj);
 
   static bool contains_monitor(Thread* current, ObjectMonitor* monitor);
-
-  // NOTE: May not cause monitor inflation
-  static intptr_t FastHashCode(Thread* current, oop obj);
 
   static bool quick_enter(oop obj, JavaThread* current, BasicLock* Lock);
 };

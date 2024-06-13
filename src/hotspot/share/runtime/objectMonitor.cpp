@@ -297,7 +297,7 @@ void ObjectMonitor::ClearSuccOnSuspend::operator()(JavaThread* current) {
 }
 
 #define assert_mark_word_concistency()                                                 \
-  assert(LockingMode == LM_LIGHTWEIGHT || object()->mark() == markWord::encode(this),  \
+  assert(UseObjectMonitorTable || object()->mark() == markWord::encode(this),  \
          "object mark must match encoded this: mark=" INTPTR_FORMAT                    \
          ", encoded this=" INTPTR_FORMAT, object()->mark().value(),                    \
          markWord::encode(this).value());
@@ -307,7 +307,7 @@ void ObjectMonitor::ClearSuccOnSuspend::operator()(JavaThread* current) {
 
 bool ObjectMonitor::enter_is_async_deflating() {
   if (is_being_async_deflated()) {
-    if (LockingMode != LM_LIGHTWEIGHT) {
+    if (!UseObjectMonitorTable) {
       const oop l_object = object();
       if (l_object != nullptr) {
         // Attempt to restore the header/dmw to the object's header so that
@@ -658,7 +658,7 @@ bool ObjectMonitor::deflate_monitor(Thread* current) {
     }
   }
 
-  if (LockingMode == LM_LIGHTWEIGHT) {
+  if (UseObjectMonitorTable) {
     LightweightSynchronizer::deflate_monitor(current, obj, this);
   } else {
     if (obj != nullptr) {
@@ -678,7 +678,7 @@ bool ObjectMonitor::deflate_monitor(Thread* current) {
 // monitor and by other threads that have detected a race with the
 // deflation process.
 void ObjectMonitor::install_displaced_markword_in_object(const oop obj) {
-  assert(LockingMode != LM_LIGHTWEIGHT, "Lightweight has no dmw");
+  assert(!UseObjectMonitorTable, "Lightweight has no dmw");
   // This function must only be called when (owner == DEFLATER_MARKER
   // && contentions <= 0), but we can't guarantee that here because
   // those values could change when the ObjectMonitor gets moved from
