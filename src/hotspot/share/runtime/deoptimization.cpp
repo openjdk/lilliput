@@ -1644,17 +1644,11 @@ bool Deoptimization::relock_objects(JavaThread* thread, GrowableArray<MonitorInf
             ObjectMonitor* waiting_monitor = deoptee_thread->current_waiting_monitor();
             if (waiting_monitor != nullptr && waiting_monitor->object() == obj()) {
               assert(fr.is_deoptimized_frame(), "frame must be scheduled for deoptimization");
-              if (LockingMode == LM_LEGACY) {
+              if (!UseObjectMonitorTable) {
                 mon_info->lock()->set_displaced_header(markWord::unused_mark());
-              } else if (LockingMode == LM_LIGHTWEIGHT) {
+              } else {
                 mon_info->lock()->clear_object_monitor_cache();
               }
-#ifdef ASSERT
-              else {
-                assert(LockingMode == LM_MONITOR, "must be");
-                mon_info->lock()->set_bad_metadata_deopt();
-              }
-#endif
               JvmtiDeferredUpdates::inc_relock_count_after_wait(deoptee_thread);
               continue;
             }
