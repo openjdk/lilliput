@@ -31,7 +31,7 @@
 
 void BasicLock::print_on(outputStream* st, oop owner) const {
   st->print("monitor");
-  if (LockingMode == LM_LIGHTWEIGHT) {
+  if (UseObjectMonitorTable) {
     ObjectMonitor* mon = object_monitor_cache();
     if (mon != nullptr) {
       mon->print_on(st);
@@ -91,7 +91,7 @@ void BasicLock::move_to(oop obj, BasicLock* dest) {
       // we can find any flavor mark in the displaced mark.
     }
     dest->set_displaced_header(displaced_header());
-  } else if (LockingMode == LM_LIGHTWEIGHT) {
+  } else if (UseObjectMonitorTable) {
     // Preserve the ObjectMonitor*, the cache is cleared when a box is reused
     // and only read while the lock is held, so no stale ObjectMonitor* is
     // encountered.
