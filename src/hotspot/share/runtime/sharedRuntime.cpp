@@ -2950,7 +2950,7 @@ JRT_LEAF(intptr_t*, SharedRuntime::OSR_migration_begin( JavaThread *current) )
         // Now the displaced header is free to move because the
         // object's header no longer refers to it.
         buf[i] = (intptr_t)lock->displaced_header().value();
-      } else if (LockingMode == LM_LIGHTWEIGHT) {
+      } else if (UseObjectMonitorTable) {
         buf[i] = (intptr_t)lock->object_monitor_cache();
       }
 #ifdef ASSERT
