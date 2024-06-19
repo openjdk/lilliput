@@ -762,7 +762,6 @@ void LightweightSynchronizer::exit(oop object, JavaThread* current) {
     assert(current->lock_stack().contains(object), "current must have object on its lock stack");
     monitor->set_owner_from_anonymous(current);
     monitor->set_recursions(current->lock_stack().remove(object) - 1);
-    current->_contended_inflation++;
   }
 
   monitor->exit(current);
@@ -801,7 +800,6 @@ ObjectMonitor* LightweightSynchronizer::inflate_locked_or_imse(oop obj, const Ob
           // fix owner and pop lock stack
           monitor->set_owner_from_anonymous(current);
           monitor->set_recursions(lock_stack.remove(obj) - 1);
-          current->_contended_inflation++;
         } else {
           // Fast locked (and inflated) by other thread, or deflation in progress, IMSE.
           THROW_MSG_(vmSymbols::java_lang_IllegalMonitorStateException(),
@@ -942,15 +940,6 @@ ObjectMonitor* LightweightSynchronizer::inflate_fast_locked_object(oop object, J
   VerifyThreadState vts(locking_thread, current);
   assert(locking_thread->lock_stack().contains(object), "locking_thread must have object on its lock stack");
 
-  // Do stats first
-  if (cause == ObjectSynchronizer::inflate_cause_wait) {
-    locking_thread->_wait_inflation++;
-  } else if (cause == ObjectSynchronizer::inflate_cause_monitor_enter) {
-    locking_thread->_recursive_inflation++;
-  } else if (cause == ObjectSynchronizer::inflate_cause_vm_internal) {
-    locking_thread->_lock_stack_inflation++;
-  }
-
   ObjectMonitor* monitor;
 
   if (!UseObjectMonitorTable) {
@@ -1089,7 +1078,6 @@ ObjectMonitor* LightweightSynchronizer::inflate_and_enter(oop object, JavaThread
         // convert it to a held monitor with a known owner.
         monitor->set_owner_from_anonymous(locking_thread);
         monitor->set_recursions(lock_stack.remove(object) - 1);
-        locking_thread->_contended_recursive_inflation++;
       }
 
       break; // Success
@@ -1112,7 +1100,6 @@ ObjectMonitor* LightweightSynchronizer::inflate_and_enter(oop object, JavaThread
         // convert it to a held monitor with a known owner.
         monitor->set_owner_from_anonymous(locking_thread);
         monitor->set_recursions(lock_stack.remove(object) - 1);
-        locking_thread->_recursive_inflation++;
       }
 
       break; // Success
@@ -1131,8 +1118,6 @@ ObjectMonitor* LightweightSynchronizer::inflate_and_enter(oop object, JavaThread
 
     // Transitioned from unlocked to monitor means locking_thread owns the lock.
     monitor->set_owner_from_anonymous(locking_thread);
-
-    locking_thread->_unlocked_inflation++;
 
     return monitor;
   }

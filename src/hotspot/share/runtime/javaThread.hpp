@@ -1168,12 +1168,6 @@ private:
 
 public:
   LockStack& lock_stack() { return _lock_stack; }
-  size_t _unlocked_inflation = 0;
-  size_t _recursive_inflation = 0;
-  size_t _contended_recursive_inflation = 0;
-  size_t _contended_inflation = 0;
-  size_t _wait_inflation = 0;
-  size_t _lock_stack_inflation = 0;
 
   static ByteSize lock_stack_offset()      { return byte_offset_of(JavaThread, _lock_stack); }
   // Those offsets are used in code generators to access the LockStack that is embedded in this
