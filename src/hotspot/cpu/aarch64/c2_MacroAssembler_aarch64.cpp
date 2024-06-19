@@ -299,14 +299,14 @@ void C2_MacroAssembler::fast_lock_lightweight(Register obj, Register box, Regist
     if (!UseObjectMonitorTable) {
       assert(t1_monitor == t1_mark, "should be the same here");
     } else {
-      if (OMCacheHitRate) increment(Address(rthread, JavaThread::lock_lookup_offset()));
+      if (false) increment(Address(rthread, JavaThread::lock_lookup_offset()));
 
       Label monitor_found;
 
       // Load cache address
       lea(t3_t, Address(rthread, JavaThread::om_cache_oops_offset()));
 
-      const int num_unrolled = MIN2(OMC2UnrollCacheEntries, OMCacheSize);
+      const int num_unrolled = MIN2(2, OMCache::CAPACITY);
       for (int i = 0; i < num_unrolled; i++) {
         ldr(t1, Address(t3_t));
         cmp(obj, t1);
@@ -316,7 +316,7 @@ void C2_MacroAssembler::fast_lock_lightweight(Register obj, Register box, Regist
         }
       }
 
-      if (num_unrolled == 0 || (OMC2UnrollCacheLookupLoopTail && num_unrolled != OMCacheSize)) {
+      if (num_unrolled == 0 || (true && num_unrolled != OMCache::CAPACITY)) {
         if (num_unrolled != 0) {
           // Loop after unrolling, advance iterator.
           increment(t3_t, in_bytes(OMCache::oop_to_oop_difference()));
@@ -343,7 +343,7 @@ void C2_MacroAssembler::fast_lock_lightweight(Register obj, Register box, Regist
 
       bind(monitor_found);
       ldr(t1_monitor, Address(t3_t, OMCache::oop_to_monitor_difference()));
-      if (OMCacheHitRate) increment(Address(rthread, JavaThread::lock_hit_offset()));
+      if (false) increment(Address(rthread, JavaThread::lock_hit_offset()));
     }
 
     const Register t2_owner_addr = t2;
@@ -490,12 +490,12 @@ void C2_MacroAssembler::fast_unlock_lightweight(Register obj, Register box, Regi
       // Untag the monitor.
       add(t1_monitor, t1_mark, -(int)markWord::monitor_value);
     } else {
-      if (OMCacheHitRate) increment(Address(rthread, JavaThread::unlock_lookup_offset()));
+      if (false) increment(Address(rthread, JavaThread::unlock_lookup_offset()));
       ldr(t1_monitor, Address(box, BasicLock::object_monitor_cache_offset_in_bytes()));
       // null check with Flags == NE, no valid pointer below alignof(ObjectMonitor*)
       cmp(t1_monitor, checked_cast<uint8_t>(alignof(ObjectMonitor*)));
       br(Assembler::LO, slow_path);
-      if (OMCacheHitRate) increment(Address(rthread, JavaThread::unlock_hit_offset()));
+      if (false) increment(Address(rthread, JavaThread::unlock_hit_offset()));
     }
 
     const Register t2_recursions = t2;

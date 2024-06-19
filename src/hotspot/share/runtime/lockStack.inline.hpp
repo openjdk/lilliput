@@ -237,7 +237,7 @@ inline void LockStack::oops_do(OopClosure* cl) {
 }
 
 inline void OMCache::set_monitor(ObjectMonitor *monitor) {
-  const int end = OMCacheSize - 1;
+  const int end = OMCache::CAPACITY - 1;
   if (end < 0) {
     return;
   }
@@ -263,13 +263,13 @@ inline void OMCache::set_monitor(ObjectMonitor *monitor) {
 }
 
 inline ObjectMonitor* OMCache::get_monitor(oop o) {
-  for (int i = 0; i < OMCacheSize; ++i) {
+  for (int i = 0; i < OMCache::CAPACITY; ++i) {
     if (_entries[i]._oop == o) {
       assert(_entries[i]._monitor != nullptr, "monitor must exist");
       if (_entries[i]._monitor->is_being_async_deflated()) {
         // Bad monitor
         // Shift down rest
-        for (; i < OMCacheSize - 1; ++i) {
+        for (; i < OMCache::CAPACITY - 1; ++i) {
           _entries[i] = _entries[i + 1];
         }
         // Clear end
