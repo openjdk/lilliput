@@ -1175,16 +1175,6 @@ public:
   size_t _wait_inflation = 0;
   size_t _lock_stack_inflation = 0;
 
-  size_t _lock_lookup = 0;
-  size_t _lock_hit = 0;
-  size_t _unlock_lookup = 0;
-  size_t _unlock_hit = 0;
-
-  static ByteSize lock_lookup_offset() { return byte_offset_of(JavaThread, _lock_lookup); }
-  static ByteSize lock_hit_offset() { return byte_offset_of(JavaThread, _lock_hit); }
-  static ByteSize unlock_lookup_offset() { return byte_offset_of(JavaThread, _unlock_lookup); }
-  static ByteSize unlock_hit_offset() { return byte_offset_of(JavaThread, _unlock_hit); }
-
   static ByteSize lock_stack_offset()      { return byte_offset_of(JavaThread, _lock_stack); }
   // Those offsets are used in code generators to access the LockStack that is embedded in this
   // JavaThread structure. Those accesses are relative to the current thread, which

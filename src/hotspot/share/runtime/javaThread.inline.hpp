@@ -289,20 +289,6 @@ inline void JavaThread::om_clear_monitor_cache() {
   _contended_inflation           = 0;
   _wait_inflation                = 0;
   _lock_stack_inflation          = 0;
-
-  if (_lock_lookup != 0 ||
-      _unlock_lookup != 0) {
-    const double lock_hit_rate = (double)_lock_hit / (double)_lock_lookup * 100;
-    const double unlock_hit_rate = (double)_unlock_hit / (double)_unlock_lookup * 100;
-    lt.print("Lock: %3.2lf %% [%6zu / %6zu] Unlock: %3.2lf %% [%6zu / %6zu] Thread: %s",
-             lock_hit_rate, _lock_hit, _lock_lookup,
-             unlock_hit_rate, _unlock_hit, _unlock_lookup,
-             name());
-  }
-  _lock_hit = 0;
-  _lock_lookup = 0;
-  _unlock_hit = 0;
-  _unlock_lookup = 0;
 }
 
 inline ObjectMonitor* JavaThread::om_get_from_monitor_cache(oop obj) {
