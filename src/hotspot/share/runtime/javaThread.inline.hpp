@@ -246,7 +246,7 @@ inline InstanceKlass* JavaThread::class_to_be_initialized() const {
 }
 
 inline void JavaThread::om_set_monitor_cache(ObjectMonitor* monitor) {
-  assert(LockingMode == LM_LIGHTWEIGHT, "must be");
+  assert(UseObjectMonitorTable, "must be");
   assert(monitor != nullptr, "use om_clear_monitor_cache to clear");
   assert(this == current() || monitor->owner_raw() == this, "only add owned monitors for other threads");
   assert(this == current() || is_obj_deopt_suspend(), "thread must not run concurrently");
@@ -255,7 +255,7 @@ inline void JavaThread::om_set_monitor_cache(ObjectMonitor* monitor) {
 }
 
 inline void JavaThread::om_clear_monitor_cache() {
-  if (LockingMode != LM_LIGHTWEIGHT) {
+  if (!UseObjectMonitorTable) {
     return;
   }
 

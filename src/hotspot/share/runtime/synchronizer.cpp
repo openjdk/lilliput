@@ -994,7 +994,7 @@ static intptr_t install_hash_code(Thread* current, oop obj) {
 
 intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {
   // Since the monitor isn't in the object header, it can simply be installed.
-  if (UseObjectMonitorTable && LockingMode == LM_LIGHTWEIGHT) {
+  if (UseObjectMonitorTable) {
     return install_hash_code(current, obj);
   }
 
