@@ -38,17 +38,17 @@ inline void BasicLock::set_displaced_header(markWord header) {
 }
 
 inline ObjectMonitor* BasicLock::object_monitor_cache() const {
-  assert(LockingMode == LM_LIGHTWEIGHT, "must be");
+  assert(UseObjectMonitorTable, "must be");
   return reinterpret_cast<ObjectMonitor*>(get_metadata());
 }
 
 inline void BasicLock::clear_object_monitor_cache() {
-  assert(LockingMode == LM_LIGHTWEIGHT, "must be");
+  assert(UseObjectMonitorTable, "must be");
   set_metadata(0);
 }
 
 inline void BasicLock::set_object_monitor_cache(ObjectMonitor* mon) {
-  assert(LockingMode == LM_LIGHTWEIGHT, "must be");
+  assert(UseObjectMonitorTable, "must be");
   set_metadata(reinterpret_cast<uintptr_t>(mon));
 }
 
