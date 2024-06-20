@@ -24,6 +24,8 @@
 
 #include "runtime/synchronizer.hpp"
 
+#include "runtime/lightweightSynchronizer.hpp"
+
 ObjectMonitor* ObjectSynchronizer::read_monitor(markWord mark) {
   return mark.monitor();
 }

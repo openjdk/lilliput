@@ -732,7 +732,7 @@ void ThreadSafepointState::account_safe_thread() {
   assert(!_safepoint_safe, "Must be unsafe before safe");
   _safepoint_safe = true;
 
-  // The oops in the monitor cache is cleared to prevent stale cache entries
+  // The oops in the monitor cache are cleared to prevent stale cache entries
   // from keeping dead objects alive. Because these oops are always cleared
   // before safepoint operations they are not visited in JavaThread::oops_do.
   _thread->om_clear_monitor_cache();

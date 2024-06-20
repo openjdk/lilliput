@@ -58,7 +58,6 @@
 #include "runtime/atomic.hpp"
 #include "runtime/basicLock.inline.hpp"
 #include "runtime/frame.inline.hpp"
-#include "runtime/globals.hpp"
 #include "runtime/handles.inline.hpp"
 #include "runtime/init.hpp"
 #include "runtime/interfaceSupport.inline.hpp"

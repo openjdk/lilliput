@@ -41,7 +41,6 @@
 #include "runtime/stubRoutines.hpp"
 #include "utilities/checkedCast.hpp"
 #include "utilities/globalDefinitions.hpp"
-#include "utilities/macros.hpp"
 
 int C1_MacroAssembler::lock_object(Register hdr, Register obj, Register disp_hdr, Register tmp, Label& slow_case) {
   const int aligned_mask = BytesPerWord -1;

@@ -30,6 +30,7 @@
 #include "logging/log.hpp"
 #include "logging/logStream.hpp"
 #include "memory/resourceArea.hpp"
+#include "nmt/memflags.hpp"
 #include "oops/oop.inline.hpp"
 #include "runtime/atomic.hpp"
 #include "runtime/basicLock.inline.hpp"
@@ -63,7 +64,7 @@
 //
 
 // ConcurrentHashTable storing links from objects to ObjectMonitors
-class ObjectMonitorWorld : public CHeapObj<mtOMWorld> {
+class ObjectMonitorWorld : public CHeapObj<MEMFLAGS::mtObjectMonitor> {
   struct Config {
     using Value = ObjectMonitor*;
     static uintx get_hash(Value const& value, bool* is_dead) {
@@ -71,14 +72,14 @@ class ObjectMonitorWorld : public CHeapObj<mtOMWorld> {
     }
     static void* allocate_node(void* context, size_t size, Value const& value) {
       reinterpret_cast<ObjectMonitorWorld*>(context)->inc_table_count();
-      return AllocateHeap(size, mtOMWorld);
+      return AllocateHeap(size, MEMFLAGS::mtObjectMonitor);
     };
     static void free_node(void* context, void* memory, Value const& value) {
       reinterpret_cast<ObjectMonitorWorld*>(context)->dec_table_count();
       FreeHeap(memory);
     }
   };
-  using ConcurrentTable = ConcurrentHashTable<Config, mtOMWorld>;
+  using ConcurrentTable = ConcurrentHashTable<Config, MEMFLAGS::mtObjectMonitor>;
 
   ConcurrentTable* _table;
   volatile size_t _table_count;
@@ -240,8 +241,8 @@ public:
   template<typename Task, typename... Args>
   bool run_task(JavaThread* current, Task& task, const char* task_name, Args&... args) {
     if (task.prepare(current)) {
-      log_trace(omworld)("Started to %s", task_name);
-      TraceTime timer(task_name, TRACETIME_LOG(Debug, omworld, perf));
+      log_trace(monitortable)("Started to %s", task_name);
+      TraceTime timer(task_name, TRACETIME_LOG(Debug, monitortable, perf));
       while (task.do_task(current, args...)) {
         task.pause(current);
         {
@@ -259,7 +260,7 @@ public:
     ConcurrentTable::GrowTask grow_task(_table);
     if (run_task(current, grow_task, "Grow")) {
       _table_size = table_size(current);
-      log_info(omworld)("Grown to size: %zu", _table_size);
+      log_info(monitortable)("Grown to size: %zu", _table_size);
       return true;
     }
     return false;
@@ -276,7 +277,7 @@ public:
   }
 
   bool resize(JavaThread* current) {
-    LogTarget(Info, omworld) lt;
+    LogTarget(Info, monitortable) lt;
     bool success = false;
 
     if (should_grow()) {

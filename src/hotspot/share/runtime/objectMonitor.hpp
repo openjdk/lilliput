@@ -136,7 +136,7 @@ class ObjectMonitor : public CHeapObj<mtObjectMonitor> {
   // Enforced by the assert() in metadata_addr().
   // * LM_LIGHTWEIGHT with UseObjectMonitorTable:
   // Contains the _object's hashCode.
-  // * LM_LEGACY, LM_MONITOR:
+  // * LM_LEGACY, LM_MONITOR, LM_LIGHTWEIGHT without UseObjectMonitorTable:
   // Contains the displaced object header word - mark
   volatile uintptr_t _metadata;     // metadata
   WeakHandle _object;               // backward object pointer

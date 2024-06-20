@@ -129,6 +129,7 @@ class outputStream;
   LOG_TAG(module) \
   LOG_TAG(monitorinflation) \
   LOG_TAG(monitormismatch) \
+  LOG_TAG(monitortable) \
   LOG_TAG(native) \
   LOG_TAG(nestmates) \
   LOG_TAG(nmethod) \
@@ -138,7 +139,6 @@ class outputStream;
   LOG_TAG(objecttagging) \
   LOG_TAG(obsolete) \
   LOG_TAG(oldobject) \
-  LOG_TAG(omworld) \
   LOG_TAG(oom) \
   LOG_TAG(oopmap) \
   LOG_TAG(oops) \

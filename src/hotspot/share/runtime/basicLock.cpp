@@ -27,7 +27,6 @@
 #include "runtime/basicLock.inline.hpp"
 #include "runtime/objectMonitor.hpp"
 #include "runtime/synchronizer.hpp"
-#include "utilities/globalDefinitions.hpp"
 
 void BasicLock::print_on(outputStream* st, oop owner) const {
   st->print("monitor");

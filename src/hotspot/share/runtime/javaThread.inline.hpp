@@ -30,21 +30,17 @@
 
 #include "classfile/javaClasses.hpp"
 #include "gc/shared/tlab_globals.hpp"
-#include "logging/log.hpp"
-#include "memory/resourceArea.hpp"
 #include "memory/universe.hpp"
 #include "oops/instanceKlass.hpp"
 #include "oops/oopHandle.inline.hpp"
 #include "runtime/atomic.hpp"
 #include "runtime/continuation.hpp"
 #include "runtime/continuationEntry.inline.hpp"
+#include "runtime/lockStack.inline.hpp"
 #include "runtime/nonJavaThread.hpp"
 #include "runtime/objectMonitor.inline.hpp"
 #include "runtime/orderAccess.hpp"
 #include "runtime/safepoint.hpp"
-#include "runtime/synchronizer.hpp"
-#include "utilities/globalDefinitions.hpp"
-#include "utilities/sizes.hpp"
 
 inline void JavaThread::set_suspend_flag(SuspendFlags f) {
   uint32_t flags;

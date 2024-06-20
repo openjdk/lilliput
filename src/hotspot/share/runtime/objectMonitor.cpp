@@ -296,10 +296,10 @@ void ObjectMonitor::ClearSuccOnSuspend::operator()(JavaThread* current) {
   }
 }
 
-#define assert_mark_word_concistency()                                                 \
+#define assert_mark_word_concistency()                                         \
   assert(UseObjectMonitorTable || object()->mark() == markWord::encode(this),  \
-         "object mark must match encoded this: mark=" INTPTR_FORMAT                    \
-         ", encoded this=" INTPTR_FORMAT, object()->mark().value(),                    \
+         "object mark must match encoded this: mark=" INTPTR_FORMAT            \
+         ", encoded this=" INTPTR_FORMAT, object()->mark().value(),            \
          markWord::encode(this).value());
 
 // -----------------------------------------------------------------------------

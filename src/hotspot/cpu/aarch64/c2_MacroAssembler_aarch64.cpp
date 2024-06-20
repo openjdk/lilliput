@@ -392,7 +392,7 @@ void C2_MacroAssembler::fast_unlock_lightweight(Register obj, Register box, Regi
   assert_different_registers(obj, box, t1, t2, t3);
 
   // Handle inflated monitor.
-  Label inflated, inflated_load_monitor;
+  Label inflated, inflated_load_mark;
   // Finish fast unlock successfully. MUST branch to with flag == EQ
   Label unlocked;
   // Finish fast unlock unsuccessfully. MUST branch to with flag == NE
@@ -412,7 +412,7 @@ void C2_MacroAssembler::fast_unlock_lightweight(Register obj, Register box, Regi
     ldr(t3_t, Address(rthread, t2_top));
     cmp(obj, t3_t);
     // Top of lock stack was not obj. Must be monitor.
-    br(Assembler::NE, inflated_load_monitor);
+    br(Assembler::NE, inflated_load_mark);
 
     // Pop lock-stack.
     DEBUG_ONLY(str(zr, Address(rthread, t2_top));)
@@ -432,7 +432,7 @@ void C2_MacroAssembler::fast_unlock_lightweight(Register obj, Register box, Regi
     // Because we got here by popping (meaning we pushed in locked)
     // there will be no monitor in the box. So we need to push back the obj
     // so that the runtime can fix any potential anonymous owner.
-    tbnz(t1_mark, exact_log2(markWord::monitor_value), push_and_slow_path);
+    tbnz(t1_mark, exact_log2(markWord::monitor_value), UseObjectMonitorTable ? push_and_slow_path : inflated);
 
     // Try to unlock. Transition lock bits 0b00 => 0b01
     assert(oopDesc::mark_offset_in_bytes() == 0, "required to avoid lea");
@@ -452,7 +452,7 @@ void C2_MacroAssembler::fast_unlock_lightweight(Register obj, Register box, Regi
 
 
   { // Handle inflated monitor.
-    bind(inflated_load_monitor);
+    bind(inflated_load_mark);
     ldr(t1_mark, Address(obj, oopDesc::mark_offset_in_bytes()));
 #ifdef ASSERT
     tbnz(t1_mark, exact_log2(markWord::monitor_value), inflated);

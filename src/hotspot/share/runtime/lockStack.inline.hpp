@@ -30,15 +30,12 @@
 #include "runtime/lockStack.hpp"
 
 #include "memory/iterator.hpp"
-#include "oops/oop.inline.hpp"
-#include "runtime/globals.hpp"
 #include "runtime/javaThread.hpp"
 #include "runtime/lightweightSynchronizer.hpp"
 #include "runtime/objectMonitor.inline.hpp"
 #include "runtime/safepoint.hpp"
 #include "runtime/stackWatermark.hpp"
 #include "runtime/stackWatermarkSet.inline.hpp"
-#include "runtime/synchronizer.hpp"
 #include "utilities/align.hpp"
 #include "utilities/globalDefinitions.hpp"
 
@@ -56,10 +53,6 @@ JavaThread* LockStack::get_thread() const {
 
 inline bool LockStack::is_full() const {
   return to_index(_top) == CAPACITY;
-}
-
-inline bool LockStack::can_push(int n) const {
-  return (CAPACITY - to_index(_top)) >= n;
 }
 
 inline bool LockStack::is_owning_thread() const {
@@ -87,11 +80,6 @@ inline void LockStack::push(oop o) {
 inline oop LockStack::bottom() const {
   assert(to_index(_top) > 0, "must contain an oop");
   return _base[0];
-}
-
-inline oop LockStack::top() {
-  assert(to_index(_top) > 0, "may only call with at least one element in the stack");
-  return _base[to_index(_top) - 1];
 }
 
 inline bool LockStack::is_empty() const {
@@ -238,9 +226,6 @@ inline void LockStack::oops_do(OopClosure* cl) {
 
 inline void OMCache::set_monitor(ObjectMonitor *monitor) {
   const int end = OMCache::CAPACITY - 1;
-  if (end < 0) {
-    return;
-  }
 
   oop obj = monitor->object_peek();
   assert(obj != nullptr, "must be alive");
@@ -263,13 +248,13 @@ inline void OMCache::set_monitor(ObjectMonitor *monitor) {
 }
 
 inline ObjectMonitor* OMCache::get_monitor(oop o) {
-  for (int i = 0; i < OMCache::CAPACITY; ++i) {
+  for (int i = 0; i < CAPACITY; ++i) {
     if (_entries[i]._oop == o) {
       assert(_entries[i]._monitor != nullptr, "monitor must exist");
       if (_entries[i]._monitor->is_being_async_deflated()) {
         // Bad monitor
         // Shift down rest
-        for (; i < OMCache::CAPACITY - 1; ++i) {
+        for (; i < CAPACITY - 1; ++i) {
           _entries[i] = _entries[i + 1];
         }
         // Clear end

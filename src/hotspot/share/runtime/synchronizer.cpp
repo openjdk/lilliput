@@ -1405,9 +1405,7 @@ static void post_monitor_inflate_event(EventJavaMonitorInflate* event,
 
 // Fast path code shared by multiple functions
 void ObjectSynchronizer::inflate_helper(oop obj) {
-  if (LockingMode == LM_LIGHTWEIGHT) {
-    return;
-  }
+  assert(LockingMode != LM_LIGHTWEIGHT, "only inflate through enter");
   markWord mark = obj->mark_acquire();
   if (mark.has_monitor()) {
     ObjectMonitor* monitor = read_monitor(mark);
@@ -1420,11 +1418,8 @@ void ObjectSynchronizer::inflate_helper(oop obj) {
 
 ObjectMonitor* ObjectSynchronizer::inflate(Thread* current, oop obj, const InflateCause cause) {
   assert(current == Thread::current(), "must be");
-  if (LockingMode == LM_LIGHTWEIGHT) {
-    return LightweightSynchronizer::inflate_into_object_header(current, nullptr, obj, cause);
-  } else {
-    return inflate_impl(obj, cause);
-  }
+  assert(LockingMode != LM_LIGHTWEIGHT, "only inflate through enter");
+  return inflate_impl(obj, cause);
 }
 
 ObjectMonitor* ObjectSynchronizer::inflate_for(JavaThread* thread, oop obj, const InflateCause cause) {

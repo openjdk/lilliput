@@ -10391,9 +10391,6 @@ void MacroAssembler::lightweight_lock(Register basic_lock, Register obj, Registe
 // reg_rax: rax
 // thread: the thread
 // tmp: a temporary register
-//
-// x86_32 Note: reg_rax and thread may alias each other due to limited register
-//              availiability.
 void MacroAssembler::lightweight_unlock(Register obj, Register reg_rax, Register thread, Register tmp, Label& slow) {
   assert(reg_rax == rax, "");
   assert_different_registers(obj, reg_rax, thread, tmp);

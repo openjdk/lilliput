@@ -98,7 +98,6 @@
 #include "utilities/defaultStream.hpp"
 #include "utilities/dtrace.hpp"
 #include "utilities/events.hpp"
-#include "utilities/globalDefinitions.hpp"
 #include "utilities/macros.hpp"
 #include "utilities/preserveException.hpp"
 #include "utilities/spinYield.hpp"

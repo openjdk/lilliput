@@ -96,7 +96,6 @@
 #include "runtime/vmOperations.hpp"
 #include "utilities/checkedCast.hpp"
 #include "utilities/events.hpp"
-#include "utilities/globalDefinitions.hpp"
 #include "utilities/growableArray.hpp"
 #include "utilities/macros.hpp"
 #include "utilities/preserveException.hpp"
