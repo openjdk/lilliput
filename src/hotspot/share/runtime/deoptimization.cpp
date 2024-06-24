@@ -96,7 +96,6 @@
 #include "runtime/vmOperations.hpp"
 #include "utilities/checkedCast.hpp"
 #include "utilities/events.hpp"
-#include "utilities/globalDefinitions.hpp"
 #include "utilities/growableArray.hpp"
 #include "utilities/macros.hpp"
 #include "utilities/preserveException.hpp"
@@ -1646,12 +1645,12 @@ bool Deoptimization::relock_objects(JavaThread* thread, GrowableArray<MonitorInf
               assert(fr.is_deoptimized_frame(), "frame must be scheduled for deoptimization");
               if (LockingMode == LM_LEGACY) {
                 mon_info->lock()->set_displaced_header(markWord::unused_mark());
-              } else if (LockingMode == LM_LIGHTWEIGHT) {
+              } else if (UseObjectMonitorTable) {
                 mon_info->lock()->clear_object_monitor_cache();
               }
 #ifdef ASSERT
               else {
-                assert(LockingMode == LM_MONITOR, "must be");
+                assert(LockingMode == LM_MONITOR || !UseObjectMonitorTable, "must be");
                 mon_info->lock()->set_bad_metadata_deopt();
               }
 #endif

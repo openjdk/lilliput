@@ -1977,22 +1977,12 @@ const int ObjectAlignmentInBytes = 8;
           "With Lightweight Locking mode, use a table to record inflated "  \
           "monitors rather than the first word of the object.")             \
                                                                             \
-  product(bool, OMC2UnrollCacheLookupLoopTail, true, "")                    \
-                                                                            \
-  product(int, OMC2UnrollCacheEntries, 0, "")                               \
-          range(0, OMCache::CAPACITY)                                       \
-                                                                            \
-  product(int, OMCacheSize, 8, "")                                          \
-          range(0, OMCache::CAPACITY)                                       \
-                                                                            \
-  product(int, OMSpins, 13,                                                 \
+  product(int, LightweightFastLockingSpins, 13, DIAGNOSTIC,                 \
           "Specifies the number of time lightweight fast locking will "     \
           "attempt to CAS the markWord before inflating. Between each "     \
           "CAS it will spin for exponentially more time, resulting in "     \
-          "a total number of spins on the order of O(2^OMSpins)")           \
+          "a total number of spins on the order of O(2^value)")             \
           range(1, 30)                                                      \
-                                                                            \
-  product(bool, OMCacheHitRate, false, "")                                  \
                                                                             \
   product(uint, TrimNativeHeapInterval, 0,                                  \
           "Interval, in ms, at which the JVM will trim the native heap if " \

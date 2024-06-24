@@ -29,7 +29,6 @@
 #include "oops/compressedKlass.hpp"
 #include "oops/oopsHierarchy.hpp"
 #include "runtime/globals.hpp"
-#include "utilities/globalDefinitions.hpp"
 
 #include <type_traits>
 

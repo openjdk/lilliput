@@ -299,14 +299,12 @@ void C2_MacroAssembler::fast_lock_lightweight(Register obj, Register box, Regist
     if (!UseObjectMonitorTable) {
       assert(t1_monitor == t1_mark, "should be the same here");
     } else {
-      if (OMCacheHitRate) increment(Address(rthread, JavaThread::lock_lookup_offset()));
-
       Label monitor_found;
 
       // Load cache address
       lea(t3_t, Address(rthread, JavaThread::om_cache_oops_offset()));
 
-      const int num_unrolled = MIN2(OMC2UnrollCacheEntries, OMCacheSize);
+      const int num_unrolled = 2;
       for (int i = 0; i < num_unrolled; i++) {
         ldr(t1, Address(t3_t));
         cmp(obj, t1);
@@ -316,34 +314,27 @@ void C2_MacroAssembler::fast_lock_lightweight(Register obj, Register box, Regist
         }
       }
 
-      if (num_unrolled == 0 || (OMC2UnrollCacheLookupLoopTail && num_unrolled != OMCacheSize)) {
-        if (num_unrolled != 0) {
-          // Loop after unrolling, advance iterator.
-          increment(t3_t, in_bytes(OMCache::oop_to_oop_difference()));
-        }
+      // Loop after unrolling, advance iterator.
+      increment(t3_t, in_bytes(OMCache::oop_to_oop_difference()));
 
-        Label loop;
+      Label loop;
 
-        // Search for obj in cache.
-        bind(loop);
+      // Search for obj in cache.
+      bind(loop);
 
-        // Check for match.
-        ldr(t1, Address(t3_t));
-        cmp(obj, t1);
-        br(Assembler::EQ, monitor_found);
+      // Check for match.
+      ldr(t1, Address(t3_t));
+      cmp(obj, t1);
+      br(Assembler::EQ, monitor_found);
 
-        // Search until null encountered, guaranteed _null_sentinel at end.
-        increment(t3_t, in_bytes(OMCache::oop_to_oop_difference()));
-        cbnz(t1, loop);
-        // Cache Miss, NE set from cmp above, cbnz does not set flags
-        b(slow_path);
-      } else {
-        b(slow_path);
-      }
+      // Search until null encountered, guaranteed _null_sentinel at end.
+      increment(t3_t, in_bytes(OMCache::oop_to_oop_difference()));
+      cbnz(t1, loop);
+      // Cache Miss, NE set from cmp above, cbnz does not set flags
+      b(slow_path);
 
       bind(monitor_found);
       ldr(t1_monitor, Address(t3_t, OMCache::oop_to_monitor_difference()));
-      if (OMCacheHitRate) increment(Address(rthread, JavaThread::lock_hit_offset()));
     }
 
     const Register t2_owner_addr = t2;
@@ -401,7 +392,7 @@ void C2_MacroAssembler::fast_unlock_lightweight(Register obj, Register box, Regi
   assert_different_registers(obj, box, t1, t2, t3);
 
   // Handle inflated monitor.
-  Label inflated, inflated_load_monitor;
+  Label inflated, inflated_load_mark;
   // Finish fast unlock successfully. MUST branch to with flag == EQ
   Label unlocked;
   // Finish fast unlock unsuccessfully. MUST branch to with flag == NE
@@ -421,7 +412,7 @@ void C2_MacroAssembler::fast_unlock_lightweight(Register obj, Register box, Regi
     ldr(t3_t, Address(rthread, t2_top));
     cmp(obj, t3_t);
     // Top of lock stack was not obj. Must be monitor.
-    br(Assembler::NE, inflated_load_monitor);
+    br(Assembler::NE, inflated_load_mark);
 
     // Pop lock-stack.
     DEBUG_ONLY(str(zr, Address(rthread, t2_top));)
@@ -441,7 +432,7 @@ void C2_MacroAssembler::fast_unlock_lightweight(Register obj, Register box, Regi
     // Because we got here by popping (meaning we pushed in locked)
     // there will be no monitor in the box. So we need to push back the obj
     // so that the runtime can fix any potential anonymous owner.
-    tbnz(t1_mark, exact_log2(markWord::monitor_value), push_and_slow_path);
+    tbnz(t1_mark, exact_log2(markWord::monitor_value), UseObjectMonitorTable ? push_and_slow_path : inflated);
 
     // Try to unlock. Transition lock bits 0b00 => 0b01
     assert(oopDesc::mark_offset_in_bytes() == 0, "required to avoid lea");
@@ -461,7 +452,7 @@ void C2_MacroAssembler::fast_unlock_lightweight(Register obj, Register box, Regi
 
 
   { // Handle inflated monitor.
-    bind(inflated_load_monitor);
+    bind(inflated_load_mark);
     ldr(t1_mark, Address(obj, oopDesc::mark_offset_in_bytes()));
 #ifdef ASSERT
     tbnz(t1_mark, exact_log2(markWord::monitor_value), inflated);
@@ -490,12 +481,10 @@ void C2_MacroAssembler::fast_unlock_lightweight(Register obj, Register box, Regi
       // Untag the monitor.
       add(t1_monitor, t1_mark, -(int)markWord::monitor_value);
     } else {
-      if (OMCacheHitRate) increment(Address(rthread, JavaThread::unlock_lookup_offset()));
       ldr(t1_monitor, Address(box, BasicLock::object_monitor_cache_offset_in_bytes()));
       // null check with Flags == NE, no valid pointer below alignof(ObjectMonitor*)
       cmp(t1_monitor, checked_cast<uint8_t>(alignof(ObjectMonitor*)));
       br(Assembler::LO, slow_path);
-      if (OMCacheHitRate) increment(Address(rthread, JavaThread::unlock_hit_offset()));
     }
 
     const Register t2_recursions = t2;

@@ -994,7 +994,7 @@ static intptr_t install_hash_code(Thread* current, oop obj) {
 
 intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {
   // Since the monitor isn't in the object header, it can simply be installed.
-  if (UseObjectMonitorTable && LockingMode == LM_LIGHTWEIGHT) {
+  if (UseObjectMonitorTable) {
     return install_hash_code(current, obj);
   }
 
@@ -1405,9 +1405,7 @@ static void post_monitor_inflate_event(EventJavaMonitorInflate* event,
 
 // Fast path code shared by multiple functions
 void ObjectSynchronizer::inflate_helper(oop obj) {
-  if (LockingMode == LM_LIGHTWEIGHT) {
-    return;
-  }
+  assert(LockingMode != LM_LIGHTWEIGHT, "only inflate through enter");
   markWord mark = obj->mark_acquire();
   if (mark.has_monitor()) {
     ObjectMonitor* monitor = read_monitor(mark);
@@ -1420,11 +1418,8 @@ void ObjectSynchronizer::inflate_helper(oop obj) {
 
 ObjectMonitor* ObjectSynchronizer::inflate(Thread* current, oop obj, const InflateCause cause) {
   assert(current == Thread::current(), "must be");
-  if (LockingMode == LM_LIGHTWEIGHT) {
-    return LightweightSynchronizer::inflate_into_object_header(current, nullptr, obj, cause);
-  } else {
-    return inflate_impl(obj, cause);
-  }
+  assert(LockingMode != LM_LIGHTWEIGHT, "only inflate through enter");
+  return inflate_impl(obj, cause);
 }
 
 ObjectMonitor* ObjectSynchronizer::inflate_for(JavaThread* thread, oop obj, const InflateCause cause) {

@@ -296,10 +296,10 @@ void ObjectMonitor::ClearSuccOnSuspend::operator()(JavaThread* current) {
   }
 }
 
-#define assert_mark_word_concistency()                                                 \
+#define assert_mark_word_consistency()                                         \
   assert(UseObjectMonitorTable || object()->mark() == markWord::encode(this),  \
-         "object mark must match encoded this: mark=" INTPTR_FORMAT                    \
-         ", encoded this=" INTPTR_FORMAT, object()->mark().value(),                    \
+         "object mark must match encoded this: mark=" INTPTR_FORMAT            \
+         ", encoded this=" INTPTR_FORMAT, object()->mark().value(),            \
          markWord::encode(this).value());
 
 // -----------------------------------------------------------------------------
@@ -424,7 +424,7 @@ bool ObjectMonitor::spin_enter(JavaThread* current) {
   if (TrySpin(current)) {
     assert(owner_raw() == current, "must be current: owner=" INTPTR_FORMAT, p2i(owner_raw()));
     assert(_recursions == 0, "must be 0: recursions=" INTX_FORMAT, _recursions);
-    assert_mark_word_concistency();
+    assert_mark_word_consistency();
     return true;
   }
 
@@ -524,7 +524,7 @@ void ObjectMonitor::enter_with_contention_mark(JavaThread *current, ObjectMonito
   assert(_recursions == 0, "invariant");
   assert(owner_raw() == current, "invariant");
   assert(_succ != current, "invariant");
-  assert_mark_word_concistency();
+  assert_mark_word_consistency();
 
   // The thread -- now the owner -- is back in vm mode.
   // Report the glorious news via TI,DTrace and jvmstat.
@@ -1019,7 +1019,7 @@ void ObjectMonitor::ReenterI(JavaThread* current, ObjectWaiter* currentNode) {
   assert(currentNode != nullptr, "invariant");
   assert(currentNode->_thread == current, "invariant");
   assert(_waiters > 0, "invariant");
-  assert_mark_word_concistency();
+  assert_mark_word_consistency();
 
   for (;;) {
     ObjectWaiter::TStates v = currentNode->TState;
@@ -1084,7 +1084,7 @@ void ObjectMonitor::ReenterI(JavaThread* current, ObjectWaiter* currentNode) {
   // In addition, current.TState is stable.
 
   assert(owner_raw() == current, "invariant");
-  assert_mark_word_concistency();
+  assert_mark_word_consistency();
   UnlinkAfterAcquire(current, currentNode);
   if (_succ == current) _succ = nullptr;
   assert(_succ != current, "invariant");
@@ -1710,7 +1710,7 @@ void ObjectMonitor::wait(jlong millis, bool interruptible, TRAPS) {
   // Verify a few postconditions
   assert(owner_raw() == current, "invariant");
   assert(_succ != current, "invariant");
-  assert_mark_word_concistency();
+  assert_mark_word_consistency();
 
   // check if the notification happened
   if (!WasNotified) {

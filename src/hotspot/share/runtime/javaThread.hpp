@@ -1168,22 +1168,6 @@ private:
 
 public:
   LockStack& lock_stack() { return _lock_stack; }
-  size_t _unlocked_inflation = 0;
-  size_t _recursive_inflation = 0;
-  size_t _contended_recursive_inflation = 0;
-  size_t _contended_inflation = 0;
-  size_t _wait_inflation = 0;
-  size_t _lock_stack_inflation = 0;
-
-  size_t _lock_lookup = 0;
-  size_t _lock_hit = 0;
-  size_t _unlock_lookup = 0;
-  size_t _unlock_hit = 0;
-
-  static ByteSize lock_lookup_offset() { return byte_offset_of(JavaThread, _lock_lookup); }
-  static ByteSize lock_hit_offset() { return byte_offset_of(JavaThread, _lock_hit); }
-  static ByteSize unlock_lookup_offset() { return byte_offset_of(JavaThread, _unlock_lookup); }
-  static ByteSize unlock_hit_offset() { return byte_offset_of(JavaThread, _unlock_hit); }
 
   static ByteSize lock_stack_offset()      { return byte_offset_of(JavaThread, _lock_stack); }
   // Those offsets are used in code generators to access the LockStack that is embedded in this
@@ -1194,7 +1178,7 @@ public:
 
 
   static ByteSize om_cache_offset()        { return byte_offset_of(JavaThread, _om_cache); }
-  static ByteSize om_cache_oops_offset()   { return om_cache_offset() + OMCache::entries(); }
+  static ByteSize om_cache_oops_offset()   { return om_cache_offset() + OMCache::entries_offset(); }
 
   void om_set_monitor_cache(ObjectMonitor* monitor);
   void om_clear_monitor_cache();

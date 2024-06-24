@@ -30,21 +30,17 @@
 
 #include "classfile/javaClasses.hpp"
 #include "gc/shared/tlab_globals.hpp"
-#include "logging/log.hpp"
-#include "memory/resourceArea.hpp"
 #include "memory/universe.hpp"
 #include "oops/instanceKlass.hpp"
 #include "oops/oopHandle.inline.hpp"
 #include "runtime/atomic.hpp"
 #include "runtime/continuation.hpp"
 #include "runtime/continuationEntry.inline.hpp"
+#include "runtime/lockStack.inline.hpp"
 #include "runtime/nonJavaThread.hpp"
 #include "runtime/objectMonitor.inline.hpp"
 #include "runtime/orderAccess.hpp"
 #include "runtime/safepoint.hpp"
-#include "runtime/synchronizer.hpp"
-#include "utilities/globalDefinitions.hpp"
-#include "utilities/sizes.hpp"
 
 inline void JavaThread::set_suspend_flag(SuspendFlags f) {
   uint32_t flags;
@@ -246,7 +242,7 @@ inline InstanceKlass* JavaThread::class_to_be_initialized() const {
 }
 
 inline void JavaThread::om_set_monitor_cache(ObjectMonitor* monitor) {
-  assert(LockingMode == LM_LIGHTWEIGHT, "must be");
+  assert(UseObjectMonitorTable, "must be");
   assert(monitor != nullptr, "use om_clear_monitor_cache to clear");
   assert(this == current() || monitor->owner_raw() == this, "only add owned monitors for other threads");
   assert(this == current() || is_obj_deopt_suspend(), "thread must not run concurrently");
@@ -255,54 +251,11 @@ inline void JavaThread::om_set_monitor_cache(ObjectMonitor* monitor) {
 }
 
 inline void JavaThread::om_clear_monitor_cache() {
-  if (LockingMode != LM_LIGHTWEIGHT) {
+  if (!UseObjectMonitorTable) {
     return;
   }
 
   _om_cache.clear();
-
-  LogTarget(Info, monitorinflation, thread) lt;
-  if (!lt.is_enabled()) {
-    return;
-  }
-
-  ResourceMark rm;
-
-  if (_unlocked_inflation != 0 ||
-      _recursive_inflation != 0 ||
-      _contended_recursive_inflation != 0 ||
-      _contended_inflation != 0 ||
-      _wait_inflation != 0 ||
-      _lock_stack_inflation != 0) {
-    lt.print("Mon: %8zu Rec: %8zu CRec: %8zu Cont: %8zu Wait: %8zu Stack: %8zu Thread: %s",
-             _unlocked_inflation,
-             _recursive_inflation,
-             _contended_recursive_inflation,
-             _contended_inflation,
-             _wait_inflation,
-             _lock_stack_inflation,
-             name());
-  }
-  _unlocked_inflation            = 0;
-  _recursive_inflation           = 0;
-  _contended_recursive_inflation = 0;
-  _contended_inflation           = 0;
-  _wait_inflation                = 0;
-  _lock_stack_inflation          = 0;
-
-  if (_lock_lookup != 0 ||
-      _unlock_lookup != 0) {
-    const double lock_hit_rate = (double)_lock_hit / (double)_lock_lookup * 100;
-    const double unlock_hit_rate = (double)_unlock_hit / (double)_unlock_lookup * 100;
-    lt.print("Lock: %3.2lf %% [%6zu / %6zu] Unlock: %3.2lf %% [%6zu / %6zu] Thread: %s",
-             lock_hit_rate, _lock_hit, _lock_lookup,
-             unlock_hit_rate, _unlock_hit, _unlock_lookup,
-             name());
-  }
-  _lock_hit = 0;
-  _lock_lookup = 0;
-  _unlock_hit = 0;
-  _unlock_lookup = 0;
 }
 
 inline ObjectMonitor* JavaThread::om_get_from_monitor_cache(oop obj) {
