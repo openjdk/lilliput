@@ -34,7 +34,8 @@
 #include "utilities/globalDefinitions.hpp"
 #include "utilities/ostream.hpp"
 
-int CompressedKlassPointers::_tiny_cp = -1;
+int8_t CompressedKlassPointers::_tiny_cp = -1;
+int8_t CompressedKlassPointers::_use_oopmap_lu_table = -1;
 int CompressedKlassPointers::_narrow_klass_pointer_bits = -1;
 int CompressedKlassPointers::_max_shift = -1;
 #ifdef ASSERT
@@ -72,6 +73,7 @@ void CompressedKlassPointers::pre_initialize() {
     _narrow_klass_pointer_bits = narrow_klass_pointer_bits_legacy;
     _max_shift = max_shift_legacy;
   }
+  _use_oopmap_lu_table = UseOopMapLUTable ? 1 : 0;
 }
 
 #ifdef ASSERT

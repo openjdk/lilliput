@@ -31,6 +31,7 @@
 #include "oops/fieldInfo.inline.hpp"
 #include "oops/klass.inline.hpp"
 #include "oops/oop.inline.hpp"
+#include "oops/oopMapLUTable.inline.hpp"
 #include "runtime/atomic.hpp"
 #include "utilities/devirtualizer.inline.hpp"
 #include "utilities/globalDefinitions.hpp"
@@ -129,6 +130,18 @@ ALWAYSINLINE void InstanceKlass::oop_oop_iterate_oop_map_bounded(OopMapBlock* ma
 
 template <typename T, class OopClosureType>
 ALWAYSINLINE void InstanceKlass::oop_oop_iterate_oop_maps(oop obj, OopClosureType* closure) {
+
+  if (CompressedKlassPointers::tiny_classpointer_mode() && CompressedKlassPointers::use_oopmap_lu_table()) {
+    OopMapBlock b;
+    const int rc = OopMapLUTable::get_entry(this, &b);
+    if (rc < 2) {
+      if (rc == 1) {
+        oop_oop_iterate_oop_map<T>(&b, obj, closure);
+      }
+      return;
+    }
+  }
+
   OopMapBlock* map           = start_of_nonstatic_oop_maps();
   OopMapBlock* const end_map = map + nonstatic_oop_map_count();
 
@@ -139,6 +152,18 @@ ALWAYSINLINE void InstanceKlass::oop_oop_iterate_oop_maps(oop obj, OopClosureTyp
 
 template <typename T, class OopClosureType>
 ALWAYSINLINE void InstanceKlass::oop_oop_iterate_oop_maps_reverse(oop obj, OopClosureType* closure) {
+
+  if (CompressedKlassPointers::tiny_classpointer_mode() && CompressedKlassPointers::use_oopmap_lu_table()) {
+    OopMapBlock b;
+    const int rc = OopMapLUTable::get_entry(this, &b);
+    if (rc < 2) {
+      if (rc == 1) {
+        oop_oop_iterate_oop_map_reverse<T>(&b, obj, closure);
+      }
+      return;
+    }
+  }
+
   OopMapBlock* const start_map = start_of_nonstatic_oop_maps();
   OopMapBlock* map             = start_map + nonstatic_oop_map_count();
 
@@ -150,6 +175,18 @@ ALWAYSINLINE void InstanceKlass::oop_oop_iterate_oop_maps_reverse(oop obj, OopCl
 
 template <typename T, class OopClosureType>
 ALWAYSINLINE void InstanceKlass::oop_oop_iterate_oop_maps_bounded(oop obj, OopClosureType* closure, MemRegion mr) {
+
+  if (CompressedKlassPointers::tiny_classpointer_mode() && CompressedKlassPointers::use_oopmap_lu_table()) {
+    OopMapBlock b;
+    const int rc = OopMapLUTable::get_entry(this, &b);
+    if (rc < 2) {
+      if (rc == 1) {
+        oop_oop_iterate_oop_map_bounded<T>(&b, obj, closure, mr);
+      }
+      return;
+    }
+  }
+
   OopMapBlock* map           = start_of_nonstatic_oop_maps();
   OopMapBlock* const end_map = map + nonstatic_oop_map_count();
 

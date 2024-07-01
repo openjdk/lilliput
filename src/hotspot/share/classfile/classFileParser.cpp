@@ -5340,6 +5340,11 @@ void ClassFileParser::fill_instance_klass(InstanceKlass* ik,
     oop_map_blocks->copy(ik->start_of_nonstatic_oop_maps());
   }
 
+  // set OopMapLUTable entry
+  if (UseCompactObjectHeaders) {
+    OopMapLUTable::set_entry(ik, ik->nonstatic_oop_map_count(), ik->start_of_nonstatic_oop_maps());
+  }
+
   if (_has_contended_fields || _parsed_annotations->is_contended() ||
       ( _super_klass != nullptr && _super_klass->has_contended_annotations())) {
     ik->set_has_contended_annotations(true);

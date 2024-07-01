@@ -33,6 +33,7 @@
 #include "oops/arrayKlass.hpp"
 #include "oops/arrayOop.hpp"
 #include "oops/compressedKlass.inline.hpp"
+#include "oops/oopMapLUTable.inline.hpp"
 #include "oops/instanceKlass.hpp"
 #include "oops/markWord.inline.hpp"
 #include "oops/oopsHierarchy.hpp"
@@ -177,7 +178,15 @@ size_t oopDesc::size()  {
 }
 
 size_t oopDesc::size_given_klass(Klass* klass)  {
-  int lh = klass->layout_helper();
+
+  int lh = 0;
+
+  if (CompressedKlassPointers::tiny_classpointer_mode() && CompressedKlassPointers::use_oopmap_lu_table()) {
+    lh = KlassSizeLUTable::get_entry(klass);
+  } else {
+    lh = klass->layout_helper();
+  }
+
   size_t s;
 
   // lh is now a value computed at class initialization that may hint

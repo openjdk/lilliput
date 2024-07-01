@@ -282,6 +282,13 @@ Klass::Klass(KlassKind kind) : _kind(kind),
   set_super_check_offset(in_bytes(primary_supers_offset()));
 }
 
+void Klass::set_layout_helper(int lh) {
+  _layout_helper = lh;
+  if (UseCompactObjectHeaders && UseOopMapLUTable) {
+    KlassSizeLUTable::set_entry(this, lh);
+  }
+}
+
 jint Klass::array_layout_helper(BasicType etype) {
   assert(etype >= T_BOOLEAN && etype <= T_OBJECT, "valid etype");
   // Note that T_ARRAY is not allowed here.

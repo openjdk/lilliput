@@ -1409,6 +1409,9 @@ const int ObjectAlignmentInBytes = 8;
           "Force the class space to be allocated at this address or "       \
           "fails VM initialization (requires -Xshare=off.")                 \
                                                                             \
+  product(bool, UseOopMapLUTable, false, EXPERIMENTAL,                      \
+          "Only for coh")                                                   \
+                                                                            \
   develop(bool, RandomizeClassSpaceLocation, true,                          \
           "Randomize location of class space.")                             \
                                                                             \

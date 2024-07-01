@@ -52,6 +52,7 @@
 #include "nmt/memTracker.hpp"
 #include "oops/compressedKlass.inline.hpp"
 #include "oops/compressedOops.hpp"
+#include "oops/oopMapLUTable.hpp"
 #include "prims/jvmtiExport.hpp"
 #include "runtime/atomic.hpp"
 #include "runtime/globals_extension.hpp"
@@ -574,6 +575,13 @@ void Metaspace::initialize_class_space(ReservedSpace rs) {
   MetaspaceContext::initialize_class_space_context(rs);
   _class_space_start = rs.base();
   _class_space_end = rs.end();
+
+
+  if (UseCompactObjectHeaders) {
+    OopMapLUTable::initialize();
+    KlassSizeLUTable::initialize();
+  }
+
 }
 
 // Returns true if class space has been setup (initialize_class_space).

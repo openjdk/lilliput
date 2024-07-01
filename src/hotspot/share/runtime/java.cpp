@@ -58,6 +58,7 @@
 #include "oops/method.hpp"
 #include "oops/objArrayOop.hpp"
 #include "oops/oop.inline.hpp"
+#include "oops/oopMapLUTable.hpp"
 #include "oops/symbol.hpp"
 #include "prims/jvmtiAgentList.hpp"
 #include "prims/jvmtiExport.hpp"
@@ -360,6 +361,12 @@ void print_statistics() {
   ThreadsSMRSupport::log_statistics();
 
   ClassLoader::print_counters(tty);
+
+#ifdef ASSERT
+  if (UseCompactObjectHeaders && UseOopMapLUTable) {
+    OopMapLUTable::print_statistics(tty);
+  }
+#endif
 }
 
 // Note: before_exit() can be executed only once, if more than one threads
