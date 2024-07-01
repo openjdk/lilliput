@@ -43,6 +43,7 @@
 #include "memory/oopFactory.hpp"
 #include "memory/resourceArea.hpp"
 #include "memory/universe.hpp"
+#include "oops/compressedKlass.inline.hpp"
 #include "oops/compressedOops.inline.hpp"
 #include "oops/instanceKlass.hpp"
 #include "oops/klass.inline.hpp"
@@ -248,7 +249,10 @@ Method* Klass::uncached_lookup_method(const Symbol* name, const Symbol* signatur
 }
 
 void* Klass::operator new(size_t size, ClassLoaderData* loader_data, size_t word_size, TRAPS) throw() {
-  return Metaspace::allocate(loader_data, word_size, MetaspaceObj::ClassType, THREAD);
+  void* const k = Metaspace::allocate(loader_data, word_size, MetaspaceObj::ClassType, THREAD);
+  log_debug(metaspace)("Returning new Klass*=" INTPTR_FORMAT ", nKlass=%u, word size=%zx",
+                        p2i(k), CompressedKlassPointers::encode((Klass*)k), word_size);
+  return k;
 }
 
 static markWord make_prototype(Klass* kls) {
