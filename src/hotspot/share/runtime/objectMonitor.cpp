@@ -382,22 +382,38 @@ bool ObjectMonitor::enter_for(JavaThread* locking_thread) {
 }
 
 bool ObjectMonitor::try_enter(JavaThread* current) {
-  void* cur = try_set_owner_from(nullptr, current);
-  if (cur == nullptr) {
-    assert(_recursions == 0, "invariant");
-    return true;
-  }
+  if (LockingMode == LM_LIGHTWEIGHT) {
+    // TryLock avoids the CAS
+    TryLockResult r = TryLock(current);
+    if (r == TryLockResult::Success) {
+      assert(_recursions == 0, "invariant");
+      return true;
+    }
 
-  if (cur == current) {
-    _recursions++;
-    return true;
-  }
+    if (r == TryLockResult::HasOwner && owner() == current) {
+      _recursions++;
+      return true;
+    }
+    return false;
 
-  if (LockingMode != LM_LIGHTWEIGHT && current->is_lock_owned((address)cur)) {
-    assert(_recursions == 0, "internal state error");
-    _recursions = 1;
-    set_owner_from_BasicLock(cur, current);  // Convert from BasicLock* to Thread*.
-    return true;
+  } else {
+    void* cur = try_set_owner_from(nullptr, current);
+    if (cur == nullptr) {
+      assert(_recursions == 0, "invariant");
+      return true;
+    }
+
+    if (cur == current) {
+      _recursions++;
+      return true;
+    }
+
+    if (LockingMode == LM_LEGACY && current->is_lock_owned((address)cur)) {
+      assert(_recursions == 0, "internal state error");
+      _recursions = 1;
+      set_owner_from_BasicLock(cur, current);  // Convert from BasicLock* to Thread*.
+      return true;
+    }
   }
 
   return false;

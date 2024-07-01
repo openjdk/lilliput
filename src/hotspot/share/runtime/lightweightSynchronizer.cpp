@@ -575,12 +575,31 @@ public:
   }
 };
 
-bool LightweightSynchronizer::fast_lock_spin_enter(oop obj, JavaThread* current, bool observed_deflation) {
-  // Will spin with exponential backoff with an accumulative O(2^spin_limit) spins.
-  const int log_spin_limit = os::is_MP() || !UseObjectMonitorTable ? LightweightFastLockingSpins : 1;
-  const int log_min_safepoint_check_interval = 10;
+inline bool LightweightSynchronizer::check_unlocked(oop obj, LockStack& lock_stack, JavaThread* current) {
+  markWord mark = obj->mark();
+  while (mark.is_unlocked()) {
+    ensure_lock_stack_space(current);
+    assert(!lock_stack.is_full(), "must have made room on the lock stack");
+    assert(!lock_stack.contains(obj), "thread must not already hold the lock");
+    // Try to swing into 'fast-locked' state.
+    markWord locked_mark = mark.set_fast_locked();
+    markWord old_mark = mark;
+    mark = obj->cas_set_mark(locked_mark, old_mark);
+    if (old_mark == mark) {
+      // Successfully fast-locked, push object to lock-stack and return.
+      lock_stack.push(obj);
+      return true;
+    }
+  }
+  return false;
+}
 
-  LockStack& lock_stack = current->lock_stack();
+
+bool LightweightSynchronizer::fast_lock_spin_enter(oop obj, LockStack& lock_stack, JavaThread* current, bool observed_deflation) {
+  assert(UseObjectMonitorTable, "must be");
+  // Will spin with exponential backoff with an accumulative O(2^spin_limit) spins.
+  const int log_spin_limit = os::is_MP() ? LightweightFastLockingSpins : 1;
+  const int log_min_safepoint_check_interval = 10;
 
   markWord mark = obj->mark();
   const auto should_spin = [&]() {
@@ -613,21 +632,7 @@ bool LightweightSynchronizer::fast_lock_spin_enter(oop obj, JavaThread* current,
       }
     }
 
-    mark = obj->mark();
-    while (mark.is_unlocked()) {
-      ensure_lock_stack_space(current);
-      assert(!lock_stack.is_full(), "must have made room on the lock stack");
-      assert(!lock_stack.contains(obj), "thread must not already hold the lock");
-      // Try to swing into 'fast-locked' state.
-      markWord locked_mark = mark.set_fast_locked();
-      markWord old_mark = mark;
-      mark = obj->cas_set_mark(locked_mark, old_mark);
-      if (old_mark == mark) {
-        // Successfully fast-locked, push object to lock-stack and return.
-        lock_stack.push(obj);
-        return true;
-      }
-    }
+    if (check_unlocked(obj, lock_stack, current)) return true;
   }
   return false;
 }
@@ -700,7 +705,9 @@ void LightweightSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* cur
     // The goal is to only inflate when the extra cost of using ObjectMonitors
     // is worth it.
     // If deflation has been observed we also spin while deflation is onging.
-    if (fast_lock_spin_enter(obj(), current, observed_deflation)) {
+    if (check_unlocked(obj(), lock_stack, current)) {
+      return;
+    } else if (UseObjectMonitorTable && fast_lock_spin_enter(obj(), lock_stack, current, observed_deflation)) {
       return;
     }
 
@@ -1179,14 +1186,16 @@ bool LightweightSynchronizer::quick_enter(oop obj, JavaThread* current, BasicLoc
     return false;
   }
 
+  const markWord mark = obj->mark();
+
+#ifndef _LP64
+  // Only for 32bit which have limited support for fast locking outside the runtime.
   if (lock_stack.try_recursive_enter(obj)) {
     // Recursive lock successful.
     current->inc_held_monitor_count();
     // Clears object monitor cache, because ?
     return true;
   }
-
-  const markWord mark = obj->mark();
 
   if (mark.is_unlocked()) {
     markWord locked_mark = mark.set_fast_locked();
@@ -1197,6 +1206,7 @@ bool LightweightSynchronizer::quick_enter(oop obj, JavaThread* current, BasicLoc
       return true;
     }
   }
+#endif
 
   if (mark.has_monitor()) {
     ObjectMonitor* const monitor = UseObjectMonitorTable ? current->om_get_from_monitor_cache(obj) :

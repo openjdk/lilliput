@@ -29,6 +29,7 @@
 #include "oops/markWord.hpp"
 #include "oops/oop.inline.hpp"
 #include "runtime/globals.hpp"
+#include "runtime/javaThread.inline.hpp"
 #include "runtime/lockStack.inline.hpp"
 #include "runtime/objectMonitor.inline.hpp"
 #include "runtime/safepoint.hpp"

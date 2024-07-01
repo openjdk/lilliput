@@ -93,8 +93,9 @@ class ObjectSynchronizer : AllStatic {
   // deoptimization at monitor exit. Hence, it does not take a Handle argument.
 
   // This is the "slow path" version of monitor enter and exit.
-  static void enter(Handle obj, BasicLock* lock, JavaThread* current);
-  static void exit(oop obj, BasicLock* lock, JavaThread* current);
+  static inline void enter(Handle obj, BasicLock* lock, JavaThread* current);
+  static inline void exit(oop obj, BasicLock* lock, JavaThread* current);
+
   // Used to enter a monitor for another thread. This requires that the
   // locking_thread is suspended, and that entering on a potential
   // inflated monitor may only contend with deflation. That is the obj being
@@ -106,6 +107,9 @@ private:
   // inflated monitor enter.
   static bool enter_fast_impl(Handle obj, BasicLock* lock, JavaThread* locking_thread);
 
+  static bool quick_enter_legacy(oop obj, JavaThread* current, BasicLock* Lock);
+  static void enter_legacy(Handle obj, BasicLock* Lock, JavaThread* current);
+  static void exit_legacy(oop obj, BasicLock* lock, JavaThread* current);
 public:
   // Used only to handle jni locks or other unmatched monitor enter/exit
   // Internally they will use heavy weight monitor.
@@ -118,7 +122,7 @@ public:
   static void notifyall(Handle obj, TRAPS);
 
   static bool quick_notify(oopDesc* obj, JavaThread* current, bool All);
-  static bool quick_enter(oop obj, JavaThread* current, BasicLock* Lock);
+  static inline bool quick_enter(oop obj, JavaThread* current, BasicLock* Lock);
 
   // Inflate light weight monitor to heavy weight monitor
   static ObjectMonitor* inflate(Thread* current, oop obj, const InflateCause cause);
