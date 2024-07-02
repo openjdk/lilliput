@@ -400,15 +400,9 @@ static bool useHeavyMonitors() {
 // Note that we can't safely call AsyncPrintJavaStack() from within
 // quick_enter() as our thread state remains _in_Java.
 
-bool ObjectSynchronizer::quick_enter(oop obj, JavaThread* current,
+bool ObjectSynchronizer::quick_enter_legacy(oop obj, JavaThread* current,
                                      BasicLock * lock) {
   assert(current->thread_state() == _thread_in_Java, "invariant");
-  NoSafepointVerifier nsv;
-  if (obj == nullptr) return false;       // Need to throw NPE
-
-  if (obj->klass()->is_value_based()) {
-    return false;
-  }
 
   if (useHeavyMonitors()) {
     return false;  // Slow path
@@ -550,13 +544,7 @@ void ObjectSynchronizer::enter_for(Handle obj, BasicLock* lock, JavaThread* lock
   }
 }
 
-void ObjectSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* current) {
-  assert(current == Thread::current(), "must be");
-
-  if (LockingMode == LM_LIGHTWEIGHT) {
-    return LightweightSynchronizer::enter(obj, lock, current);
-  }
-
+void ObjectSynchronizer::enter_legacy(Handle obj, BasicLock* lock, JavaThread* current) {
   if (!enter_fast_impl(obj, lock, current)) {
     // Inflated ObjectMonitor::enter is required
 
@@ -618,12 +606,8 @@ bool ObjectSynchronizer::enter_fast_impl(Handle obj, BasicLock* lock, JavaThread
   return false;
 }
 
-void ObjectSynchronizer::exit(oop object, BasicLock* lock, JavaThread* current) {
-  current->dec_held_monitor_count();
-
-  if (LockingMode == LM_LIGHTWEIGHT) {
-    return LightweightSynchronizer::exit(object, current);
-  }
+void ObjectSynchronizer::exit_legacy(oop object, BasicLock* lock, JavaThread* current) {
+  assert(LockingMode != LM_LIGHTWEIGHT, "Use LightweightSynchronizer");
 
   if (!useHeavyMonitors()) {
     markWord mark = object->mark();
