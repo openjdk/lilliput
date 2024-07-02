@@ -57,7 +57,7 @@ private:
   static bool resize_table(JavaThread* current);
 
 private:
-  static inline bool check_unlocked(oop obj, LockStack& lock_stack, JavaThread* current);
+  static inline bool fast_lock_try_enter(oop obj, LockStack& lock_stack, JavaThread* current);
   static bool fast_lock_spin_enter(oop obj, LockStack& lock_stack, JavaThread* current, bool observed_deflation);
 
 public:

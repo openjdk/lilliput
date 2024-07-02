@@ -575,7 +575,7 @@ public:
   }
 };
 
-inline bool LightweightSynchronizer::check_unlocked(oop obj, LockStack& lock_stack, JavaThread* current) {
+inline bool LightweightSynchronizer::fast_lock_try_enter(oop obj, LockStack& lock_stack, JavaThread* current) {
   markWord mark = obj->mark();
   while (mark.is_unlocked()) {
     ensure_lock_stack_space(current);
@@ -632,7 +632,7 @@ bool LightweightSynchronizer::fast_lock_spin_enter(oop obj, LockStack& lock_stac
       }
     }
 
-    if (check_unlocked(obj, lock_stack, current)) return true;
+    if (fast_lock_try_enter(obj, lock_stack, current)) return true;
   }
   return false;
 }
@@ -705,7 +705,7 @@ void LightweightSynchronizer::enter(Handle obj, BasicLock* lock, JavaThread* cur
     // The goal is to only inflate when the extra cost of using ObjectMonitors
     // is worth it.
     // If deflation has been observed we also spin while deflation is onging.
-    if (check_unlocked(obj(), lock_stack, current)) {
+    if (fast_lock_try_enter(obj(), lock_stack, current)) {
       return;
     } else if (UseObjectMonitorTable && fast_lock_spin_enter(obj(), lock_stack, current, observed_deflation)) {
       return;
