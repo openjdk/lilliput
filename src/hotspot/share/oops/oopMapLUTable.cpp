@@ -31,68 +31,70 @@
 #include "utilities/debug.hpp"
 #include "utilities/ostream.hpp"
 
-OopMapLUTable::Entry* OopMapLUTable::_entries = nullptr;
+uint32_t* OopMapLUTable::_entries = nullptr;
 
 void OopMapLUTable::initialize() {
   if (CompressedKlassPointers::tiny_classpointer_mode()) {
     assert(CompressedKlassPointers::tiny_classpointer_mode(), "sanity");
     assert(CompressedKlassPointers::narrow_klass_pointer_bits() <= 22, "sanity");
-    _entries = NEW_C_HEAP_ARRAY(Entry, max_index(), mtX1);
-    memset(_entries, 0xFE, max_index() * sizeof(Entry));
+    _entries = NEW_C_HEAP_ARRAY(uint32_t, num_entries(), mtX1);
+    memset(_entries, 0xFE, num_entries() * sizeof(uint32_t));
   }
 }
 
 #ifdef ASSERT
-volatile uint64_t OopMapLUTable::hits_0 = 0;
-volatile uint64_t OopMapLUTable::hits_non_0 = 0;
-volatile uint64_t OopMapLUTable::misses = 0;
 
-void OopMapLUTable::add_to_statistics(int rc) {
-  switch (rc) {
-  case 0: Atomic::inc(&hits_0); break;
-  case 1: Atomic::inc(&hits_non_0); break;
-  case 2: Atomic::inc(&misses); break;
-  default: ShouldNotReachHere();
-  }
+#define XX(xx)                      \
+volatile uint64_t counter_##xx = 0; \
+void OopMapLUTable::inc_##xx() {    \
+  Atomic::inc(&counter_##xx);       \
 }
+STATS_DO(XX)
+#undef XX
 
 void OopMapLUTable::print_statistics(outputStream* st) {
-  st->print_cr("OopMapLUTable hits_0: " UINT64_FORMAT ", hits_non_0: " UINT64_FORMAT ", misses: " UINT64_FORMAT,
-               hits_0, hits_non_0, misses);
+  st->print("OopMapLUTable ");
+#define XX(xx) st->print(#xx ":" UINT64_FORMAT ", ", counter_##xx);
+STATS_DO(XX)
+#undef XX
 }
 
-void OopMapLUTable::verify_after_decode(Klass* k, int rc, const OopMapBlock* cached) {
-  const InstanceKlass* ik = (const InstanceKlass*) k;
-  if (rc == 0) {
-    assert(ik->nonstatic_oop_map_count() == 0, "nonstatic_oop_map_count not 0 (%u)", ik->nonstatic_oop_map_count());
+void OopMapLUTable::InstanceKlassEntry::verify_against(const InstanceKlass* k) const {
+  const uint32_t v = *entry_for_klass(k);
+  assert(!is_array(v), "Not an array?");
+  InstanceKlassEntry ike(v);
+
+  int lh = 0;
+  if (ike.get_layouthelper(lh)) {
+    assert(lh == k->layout_helper(), "lh differs");
   } else {
-    const OopMapBlock* real = ik->start_of_nonstatic_oop_maps();
-    if (rc == 1) {
-      assert(real->count() == cached->count() && real->offset() == cached->offset(), "mismatch");
-    } else {
-      assert(rc == 2, "wtf");
-      assert(ik->nonstatic_oop_map_count() > 1 ||
-          real->count() >= 0xFF || real->offset() > 0xFF, "mismatch");
-    }
+    assert(k->layout_helper() < 4096, "should have worked");
   }
+
+  OopMapBlock b;
+  const int result = ike.get_oopmapblock(&b);
+  if (result == 0) {
+    assert(k->nonstatic_oop_map_count() == 0, "mismatch");
+  } else if (result == 1) {
+    assert(k->nonstatic_oop_map_count() == 1, "mismatch");
+    assert(k->start_of_nonstatic_oop_maps()->count() == b.count(), "mismatch");
+    assert(k->start_of_nonstatic_oop_maps()->offset() == b.offset(), "mismatch");
+  } else {
+    assert(result == 2, "mismatch");
+    assert(k->nonstatic_oop_map_count() > 1 ||
+           k->start_of_nonstatic_oop_maps()->count() > 0xFE ||
+           k->start_of_nonstatic_oop_maps()->offset() > 0xFE, "mismatch");
+  }
+
+  assert(ike.get_kind() == k->kind(), "kind differs");
+}
+
+void OopMapLUTable::ArrayKlassEntry::verify_against(const ArrayKlass* k) const {
+  const uint32_t v = *entry_for_klass(k);
+  assert(is_array(v), "Not an array?");
+  ArrayKlassEntry ake(v);
+  assert(ake.get_layouthelper() == k->layout_helper(), "lh differs");
+  assert(ake.get_kind() == k->kind(), "kind differs");
 }
 
 #endif // ASSERT
-
-jint* KlassSizeLUTable::_entries = nullptr;
-
-void KlassSizeLUTable::initialize() {
-  if (CompressedKlassPointers::tiny_classpointer_mode()) {
-    assert(CompressedKlassPointers::tiny_classpointer_mode(), "sanity");
-    assert(CompressedKlassPointers::narrow_klass_pointer_bits() <= 22, "sanity");
-    _entries = NEW_C_HEAP_ARRAY(jint, max_index(), mtX2);
-    memset(_entries, 0xFE, max_index() * sizeof(jint));
-  }
-}
-
-
-#ifdef ASSERT
-void KlassSizeLUTable::verify_after_decode(Klass* k, jint cached) {
-  assert(k->layout_helper() == cached, "mismatch");
-}
-#endif

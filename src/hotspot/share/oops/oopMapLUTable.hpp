@@ -27,6 +27,7 @@
 
 #include "memory/allStatic.hpp"
 #include "oops/compressedKlass.hpp"
+#include "oops/klass.hpp"
 #include "utilities/debug.hpp"
 #include "utilities/globalDefinitions.hpp"
 
@@ -36,34 +37,126 @@ class outputStream;
 
 class OopMapLUTable : public AllStatic {
 
-  struct Entry {
-    uint8_t _offset;
-    uint8_t _count;
-  };
+  static constexpr uint32_t invalid_entry = right_n_bits(32);
+
+  class InstanceKlassEntry {
+
+    // a 32-bit value:
+    // Bit 31: 1 array 0 object
+    // For arrays:
+    // value is layouthelper (so msb is 1). Kind can only be either
+    //  TypeArrayKlassKind or ObjArrayKlassKind and it is deduced from layouthelper.
+    // For objects:
+    // 31-16: a condensed form of layouthelper. Upper bit is 0, since lh for objects is zero.
+    //  Otherwise, if lh value <= 0xfffe, its lh, otherwise its not representable.
+    // 15-0: a condensed form of the first nonstatic OopMapBlock:
+    //       15 [count][offset] 0
+    // with 0x0 meaning "no entries" and 0xFFFF meaning "not representable"
+
+    static constexpr unsigned reserved_bits = 1; // "is_array" bit, must be 0
+
+    static constexpr unsigned kind_bits = 3;
+    static constexpr unsigned kind_offset = reserved_bits - kind_bits;
+
+    static constexpr unsigned lh_bits = 16 - reserved_bits - kind_bits;
+    static constexpr unsigned lh_offset = 16;
+    static constexpr unsigned lh_is_not_representable = right_n_bits(lh_bits);
+
+    static constexpr unsigned omb_bits = 16;
+    static constexpr unsigned omb_offset = 0;
+    static constexpr unsigned omb_is_not_representable = right_n_bits(omb_bits);
+    static constexpr unsigned omb_is_empty = 0;
+
+    const uint32_t _v;
+
+    STATIC_ASSERT(reserved_bits + kind_bits + lh_bits + omb_bits ==
+                  sizeof(_v) * BitsPerByte);
+
+    unsigned get_kind_bits() const {
+      return (_v >> kind_offset) & right_n_bits(kind_bits);
+    }
+
+    unsigned get_lh_bits() const {
+      return (_v >> lh_offset) & right_n_bits(lh_bits);
+    }
+
+    unsigned get_omb_bits() const {
+      return (_v >> omb_offset) & right_n_bits(omb_bits);
+    }
+
+  public:
+
+    InstanceKlassEntry(uint32_t v) : _v(v) {
+      assert((_v >> 31) == 0, "mysterious");
+    }
+    inline InstanceKlassEntry(const InstanceKlass* ik);
+
+    inline Klass::KlassKind get_kind() const;
+
+    // if layout helper is representable, returns true and the lh value, false otherwise
+    inline bool get_layouthelper(int& out) const;
+
+    // returns:
+    // 0 if there is no oopmap
+    // 1 if it has only one entry, and it was representable. In that case, b contains the entry.
+    // 2 if it had more than one entries, or only one but it was unrepresentable.
+    inline int get_oopmapblock(OopMapBlock* b) const;
 
 #ifdef ASSERT
-  static volatile uint64_t hits_0;
-  static volatile uint64_t hits_non_0;
-  static volatile uint64_t misses;
-  static void add_to_statistics(int rc);
-  static void verify_after_decode(Klass* k, int rc, const OopMapBlock* cached);
+    void verify_against(const InstanceKlass* k) const;
 #endif
 
-  static Entry* _entries;
+    uint32_t value() const { return _v; }
 
-  static unsigned max_index() {
-    return (unsigned) nth_bit(CompressedKlassPointers::narrow_klass_pointer_bits());
-  }
+  }; // InstanceKlassEntry
 
-  static inline Entry encode_block(unsigned num_entries, const OopMapBlock* first);
-  static inline int decode_block(const Entry* e, OopMapBlock* b);
+  class ArrayKlassEntry {
+    const uint32_t _v;
+  public:
+    ArrayKlassEntry(uint32_t v) : _v(v) {
+      assert((_v >> 31) == 1, "abnormal");
+    }
+    inline ArrayKlassEntry(const ArrayKlass* ik);
+    int get_layouthelper() const { return (int) _v; }
+    inline Klass::KlassKind get_kind() const;
+
+#ifdef ASSERT
+    void verify_against(const ArrayKlass* k) const;
+#endif
+
+    uint32_t value() const { return _v; }
+  }; // ArrayKlassEntry
+
+
+  static uint32_t* _entries;
+
+  static inline unsigned num_entries();
+
+  static inline uint32_t* entry_for_klass(const Klass* k);
+
+  static bool is_array(uint32_t e) { return e >> 31 == 1; }
+
+#ifdef ASSERT
+  // statistics
+#define STATS_DO(f)     \
+  f(hits_omb_zero)      \
+  f(hits_omb_non_zero)  \
+  f(misses_omb)         \
+  f(hits_lh)            \
+  f(misses_lh)
+#define XX(xx)          \
+  void inc_##xx();
+  STATS_DO(XX)
+#undef XX
+  void print_statistics(outputStream* out);
+#endif // ASSERT
 
 public:
 
   static void initialize();
 
-  static inline void set_entry(const Klass* k, unsigned num_entries, const OopMapBlock* first);
-  static inline void set_entry(narrowKlass k, unsigned num_entries, const OopMapBlock* first);
+  static inline void set_entry(const InstanceKlass* k);
+  static inline void set_entry(const ArrayKlass* k);
 
   // returns:
   // 0 if the klass has no oopmap entry
@@ -71,8 +164,14 @@ public:
   //   to restore it. In that case, b contains the one and only block.
   // 2 if the klass has multiple entries, or a single entry that does not fit into the table.
   //   In that case, caller needs to query the real oopmap.
-  static inline int get_entry(const Klass* k, OopMapBlock* b);
-  static inline int get_entry(narrowKlass k, OopMapBlock* b);
+  static inline int try_get_oopmapblock(const InstanceKlass* k, OopMapBlock* b);
+
+  // returns:
+  // true if we can get the lh. lh is in out, then
+  // false if we cannot get the lh.
+  static inline bool try_get_layouthelper(const Klass* k, int& out);
+
+  static inline Klass::KlassKind get_kind(const Klass* k);
 
 #ifdef ASSERT
   static void print_statistics(outputStream* st);
@@ -80,28 +179,5 @@ public:
 
 };
 
-class KlassSizeLUTable : public AllStatic {
-
-#ifdef ASSERT
-  static void verify_after_decode(Klass* k, jint cached);
-#endif
-
-  static jint* _entries;
-
-  static unsigned max_index() {
-    return (unsigned) nth_bit(CompressedKlassPointers::narrow_klass_pointer_bits());
-  }
-
-public:
-
-  static void initialize();
-
-  static inline void set_entry(const Klass* k, jint value);
-  static inline void set_entry(narrowKlass k, jint value);
-
-  static inline jint get_entry(const Klass* k);
-  static inline jint get_entry(narrowKlass k);
-
-};
 
 #endif // SHARE_OOPS_OOPMAPLUTABLE_HPP

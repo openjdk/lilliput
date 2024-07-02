@@ -30,48 +30,128 @@
 #include "oops/oopMapLUTable.hpp"
 #include "utilities/debug.hpp"
 
-inline OopMapLUTable::Entry OopMapLUTable::OopMapLUTable::encode_block(unsigned num_entries, const OopMapBlock* first) {
-  Entry e;
-  if (num_entries == 0) {
-    e._count = e._offset = 0;
-  } else if (num_entries > 1) {
-    e._count = e._offset = 0xFF;
+// InstanceKlassEntry
+
+inline OopMapLUTable::InstanceKlassEntry::InstanceKlassEntry(const InstanceKlass* ik) {
+
+  const unsigned kind = (unsigned)ik->kind();
+  assert(kind <= right_n_bits(kind_bits), "sanity");
+
+  constexpr unsigned max_representable_lh = lh_is_not_representable - 1;
+  const int lh_orig = ik->layout_helper();
+  const unsigned lh_condensed =
+      lh_orig > max_representable_lh ? lh_is_not_representable : (unsigned)lh_orig;
+
+  unsigned omb_condensed = 0;
+  const int num_oopmap_entries = ik->nonstatic_oop_map_count();
+  if (num_oopmap_entries == 0) {
+    omb_condensed = omb_is_empty;
+  } else if (num_oopmap_entries > 1) {
+    omb_condensed = omb_is_not_representable;
   } else {
-    // Fit into uint8 each?
-    unsigned count = first->count();
-    int offset = first->offset();
-    assert(count > 0, "Sanity");
-    if (count <= 0xFF && offset < 0xFF) {
-      e._count = (uint8_t) count;
-      e._offset = (uint8_t) offset;
+    const OopMapBlock* b = ik->start_of_nonstatic_oop_maps();
+    assert(b->count() > 0, "zero-length oop map block?");
+    assert(b->offset() >= 0, "negative oop map block offset?");
+    const unsigned c = b->count();
+    const unsigned o = (unsigned)b->offset();
+    if (o > 0xFE || c > 0xFE) {
+      omb_condensed = omb_is_not_representable;
+    } else {
+      omb_condensed = (o << 8) | c;
     }
   }
-  return e;
+
+  assert(kind <= right_n_bits(kind_bits), "sanity");
+  assert(lh_condensed <= right_n_bits(lh_bits), "sanity");
+  assert(omb_condensed <= right_n_bits(omb_bits), "sanity");
+
+  _v =
+      (0 << 31) // is_array = 0
+      | (kind << kind_offset)
+      | (lh_condensed << lh_offset)
+      | (omb_condensed << omb_offset);
+
+#ifdef ASSERT
+  verify_against(ik);
+#endif
 }
 
-inline int OopMapLUTable::decode_block(const Entry* e, OopMapBlock* b) {
-  if (e->_count == 0 && e->_offset == 0) {
-    return 0;
-  } else if (e->_count == 0xFF && e->_offset == 0xFF) {
+inline Klass::KlassKind OopMapLUTable::InstanceKlassEntry::get_kind() const {
+  const Klass::KlassKind kind = (Klass::KlassKind)get_kind_bits();
+  assert(kind == Klass::InstanceClassLoaderKlassKind ||
+         kind == Klass::InstanceKlassKind ||
+         kind == Klass::InstanceMirrorKlassKind ||
+         kind == Klass::InstanceRefKlassKind ||
+         kind == Klass::InstanceStackChunkKlassKind, "weird");
+  return kind;
+}
+
+// if layout helper is representable, returns true and the lh value, false otherwise
+inline bool OopMapLUTable::InstanceKlassEntry::get_layouthelper(int& out) const {
+  const unsigned lh = get_lh_bits();
+  if (lh == lh_is_not_representable) {
+    return false;
+  }
+  out = (int) lh;
+  assert(out > 0, "odd");
+  return true;
+}
+
+// returns:
+// 0 if there is no oopmap
+// 1 if it has only one entry, and it was representable. In that case, b contains the entry.
+// 2 if it had more than one entries, or only one but it was unrepresentable.
+inline int OopMapLUTable::InstanceKlassEntry::get_oopmapblock(OopMapBlock* b) const {
+  const unsigned omb = get_omb_bits();
+  if (omb == omb_is_not_representable) {
     return 2;
+  } else if (omb == omb_is_empty) {
+    return 0;
   } else {
-    b->set_count(e->_count);
-    b->set_offset(e->_offset);
+    b->set_count(omb & 0xFF);
+    b->set_offset((omb >> 8) & 0xFF);
     return 1;
   }
 }
 
+// ArrayKlassEntry
 
-inline void OopMapLUTable::set_entry(const Klass* k, unsigned num_entries, const OopMapBlock* first) {
-  const narrowKlass nk = CompressedKlassPointers::encode_not_null(const_cast<Klass*>(k));
-  set_entry(nk, num_entries, first);
+inline OopMapLUTable::ArrayKlassEntry::ArrayKlassEntry(const ArrayKlass* ak) {
+  _v = (uint32_t)ak->layout_helper();
+#ifdef ASSERT
+  verify_against(ak);
+#endif
 }
 
-inline void OopMapLUTable::set_entry(narrowKlass nk, unsigned num_entries, const OopMapBlock* first) {
-  assert(nk < max_index(), "Invalid index?");
+inline Klass::KlassKind OopMapLUTable::ArrayKlassEntry::get_kind() const {
+  const int lh = get_layouthelper();
+  const bool is_objarray = Klass::layout_helper_is_objArray(lh);
+  assert(is_objarray || Klass::layout_helper_is_typeArray(lh), "strange");
+  return is_objarray ? Klass::ObjArrayKlassKind : Klass::TypeArrayKlassKind;
+}
 
-  // what about concurrent class unloading and loading?
-  _entries[nk] = encode_block(num_entries, first);
+// OopMapLUTable
+
+inline unsigned OopMapLUTable::num_entries() {
+  return (unsigned) nth_bit(CompressedKlassPointers::narrow_klass_pointer_bits());
+}
+
+inline uint32_t* OopMapLUTable::entry_for_klass(const Klass* k) {
+  const narrowKlass nk = CompressedKlassPointers::encode_not_null(const_cast<Klass*>(k));
+  assert(nk < num_entries(), "nk oob (%u, max is %u)", nk, num_entries());
+  return _entries + nk;
+}
+
+inline void OopMapLUTable::set_entry(const InstanceKlass* ik) {
+  assert(_entries != nullptr, "not initialized");
+  uint32_t* const pe = OopMapLUTable::entry_for_klass(ik);
+  *pe = InstanceKlassEntry(ik).value();
+}
+
+inline void OopMapLUTable::set_entry(const ArrayKlass* ak) {
+  assert(_entries != nullptr, "not initialized");
+  uint32_t* const pe = OopMapLUTable::entry_for_klass(ak);
+  *pe = ArrayKlassEntry(ak).value();
 }
 
 // returns:
@@ -80,46 +160,33 @@ inline void OopMapLUTable::set_entry(narrowKlass nk, unsigned num_entries, const
 //   to restore it. In that case, b contains the one and only block.
 // 2 if the klass has multiple entries, or a single entry that does not fit into the table.
 //   In that case, caller needs to query the real oopmap.
-inline int OopMapLUTable::get_entry(const Klass* k, OopMapBlock* b) {
-  const narrowKlass nk = CompressedKlassPointers::encode_not_null(const_cast<Klass*>(k));
-  return get_entry(nk, b);
+inline int OopMapLUTable::try_get_oopmapblock(const InstanceKlass* ik, OopMapBlock* b) {
+  // note: very hot path. Do not dereference ik!
+  const uint32_t* const pe = OopMapLUTable::entry_for_klass(ik);
+  return InstanceKlassEntry(*pe).get_oopmapblock(b);
 }
 
-inline int OopMapLUTable::get_entry(narrowKlass nk, OopMapBlock* b) {
-  assert(nk < max_index(), "Invalid index?");
-  int rc = decode_block(_entries + nk, b);
-#ifdef ASSERT
-  add_to_statistics(rc);
-  verify_after_decode(CompressedKlassPointers::decode_not_null(nk), rc, b);
-#endif
-  return rc;
+inline bool OopMapLUTable::try_get_layouthelper(const Klass* k, int& out) {
+  // note: very hot path. Do not dereference k!
+  const uint32_t* const pe = OopMapLUTable::entry_for_klass(k);
+  const uint32_t v = *pe;
+  if (is_array(v)) {
+    out = ArrayKlassEntry(v).get_layouthelper();
+    return true;
+  } else {
+    return InstanceKlassEntry(v).get_layouthelper(out);
+  }
 }
 
-
-inline void KlassSizeLUTable::set_entry(const Klass* k, jint value) {
-  const narrowKlass nk = CompressedKlassPointers::encode_not_null(const_cast<Klass*>(k));
-  set_entry(nk, value);
+inline Klass::KlassKind OopMapLUTable::get_kind(const Klass* k) {
+  // note: very hot path. Do not dereference k!
+  const uint32_t* const pe = OopMapLUTable::entry_for_klass(k);
+  const uint32_t v = *pe;
+  if (is_array(v)) {
+    return ArrayKlassEntry(v).get_kind();
+  } else {
+    return InstanceKlassEntry(v).get_kind();
+  }
 }
-
-inline void KlassSizeLUTable::set_entry(narrowKlass nk, jint value) {
-  assert(nk < max_index(), "Invalid index?");
-  // what about concurrent class unloading and loading?
-  _entries[nk] = value;
-}
-
-inline jint KlassSizeLUTable::get_entry(const Klass* k) {
-  const narrowKlass nk = CompressedKlassPointers::encode_not_null(const_cast<Klass*>(k));
-  return get_entry(nk);
-}
-
-inline jint KlassSizeLUTable::get_entry(narrowKlass nk) {
-  assert(nk < max_index(), "Invalid index?");
-  jint rc = _entries[nk];
-#ifdef ASSERT
-  verify_after_decode(CompressedKlassPointers::decode_not_null(nk), rc);
-#endif
-  return rc;
-}
-
 
 #endif // SHARE_OOPS_OOPMAPLUTABLE_INLINE_HPP
