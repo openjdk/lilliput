@@ -190,12 +190,16 @@ inline int OopMapLUTable::try_get_oopmapblock(const InstanceKlass* ik, OopMapBlo
   }
   // note: very hot path. Do not dereference ik!
   const uint32_t* const pe = OopMapLUTable::entry_for_klass(ik);
-  int rc = InstanceKlassEntry(*pe).get_oopmapblock(b);
+  const uint32_t v = *pe;
+  int rc = InstanceKlassEntry(v).get_oopmapblock(b);
 #ifdef ASSERT
   if (rc == 0) {
     inc_hits_omb_zero();
+    assert(ik->nonstatic_oop_map_count() == 0, "mismatch");
   } else if (rc == 1) {
     inc_hits_omb_non_zero();
+    assert(ik->nonstatic_oop_map_count() == 1, "mismatch");
+    assert(ik->start_of_nonstatic_oop_maps()->equals(b), "mismatch");
   } else {
     inc_misses_omb();
   }
@@ -211,15 +215,18 @@ inline bool OopMapLUTable::try_get_layouthelper(const Klass* k, int& out) {
   bool rc = false;
   const uint32_t* const pe = OopMapLUTable::entry_for_klass(k);
   const uint32_t v = *pe;
+
   if (is_array(v)) {
     out = ArrayKlassEntry(v).get_layouthelper();
     rc = true;
   } else {
     rc = InstanceKlassEntry(v).get_layouthelper(out);
   }
+
 #ifdef ASSERT
   if (rc) {
     inc_hits_lh();
+    assert(out == k->layout_helper(), "mismatch");
   } else {
     inc_misses_lh();
   }
@@ -235,10 +242,12 @@ inline bool OopMapLUTable::try_get_kind(const Klass* k, int& out) {
   const uint32_t* const pe = OopMapLUTable::entry_for_klass(k);
   const uint32_t v = *pe;
   if (is_array(v)) {
-    return ArrayKlassEntry(v).get_kind();
+    out = ArrayKlassEntry(v).get_kind();
   } else {
-    return InstanceKlassEntry(v).get_kind();
+    out = InstanceKlassEntry(v).get_kind();
   }
+  assert(out == k->kind(), "mismatch");
+  return true;
 }
 
 #endif // SHARE_OOPS_OOPMAPLUTABLE_INLINE_HPP

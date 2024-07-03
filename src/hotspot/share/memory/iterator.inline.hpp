@@ -31,7 +31,7 @@
 #include "code/nmethod.hpp"
 #include "oops/access.inline.hpp"
 #include "oops/compressedOops.inline.hpp"
-#include "oops/klass.hpp"
+#include "oops/klass.inline.hpp"
 #include "oops/instanceKlass.inline.hpp"
 #include "oops/instanceMirrorKlass.inline.hpp"
 #include "oops/instanceClassLoaderKlass.inline.hpp"
@@ -156,7 +156,7 @@ private:
 public:
 
   static FunctionType function(Klass* klass) {
-    return _table._function[klass->kind()];
+    return _table._function[klass->kind_fast()];
   }
 };
 
@@ -219,7 +219,7 @@ private:
 public:
 
   static FunctionType function(Klass* klass) {
-    return _table._function[klass->kind()];
+    return _table._function[klass->kind_fast()];
   }
 };
 
@@ -282,7 +282,7 @@ private:
 public:
 
   static FunctionType function(Klass* klass) {
-    return _table._function[klass->kind()];
+    return _table._function[klass->kind_fast()];
   }
 };
 

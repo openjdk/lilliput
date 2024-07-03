@@ -125,6 +125,10 @@ class OopMapBlock {
     return a->offset() - b->offset();
   }
 
+  bool equals(const OopMapBlock* other) const {
+    return _count == other->_count && _offset == other->_offset;
+  }
+
  private:
   int  _offset;
   uint _count;

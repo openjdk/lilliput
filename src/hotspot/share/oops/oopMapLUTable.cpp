@@ -85,13 +85,12 @@ void OopMapLUTable::InstanceKlassEntry::verify_against(const InstanceKlass* k) c
     assert(k->nonstatic_oop_map_count() == 0, "mismatch");
   } else if (result == 1) {
     assert(k->nonstatic_oop_map_count() == 1, "mismatch");
-    assert(k->start_of_nonstatic_oop_maps()->count() == b.count(), "mismatch");
-    assert(k->start_of_nonstatic_oop_maps()->offset() == b.offset(), "mismatch");
+    assert(k->start_of_nonstatic_oop_maps()->equals(&b), "mismatch");
   } else {
     assert(result == 2, "mismatch");
     assert(k->nonstatic_oop_map_count() > 1 ||
            k->start_of_nonstatic_oop_maps()->count() > 0xFE ||
-           k->start_of_nonstatic_oop_maps()->offset() > 0xFE, "mismatch");
+           k->start_of_nonstatic_oop_maps()->offset() > 0xFE, "could have fit?");
   }
 
   assert(ike.get_kind() == k->kind(), "kind differs");
