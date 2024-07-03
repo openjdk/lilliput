@@ -131,9 +131,9 @@ ALWAYSINLINE void InstanceKlass::oop_oop_iterate_oop_map_bounded(OopMapBlock* ma
 template <typename T, class OopClosureType>
 ALWAYSINLINE void InstanceKlass::oop_oop_iterate_oop_maps(oop obj, OopClosureType* closure) {
 
-  if (CompressedKlassPointers::tiny_classpointer_mode() && CompressedKlassPointers::use_oopmap_lu_table()) {
+  {
     OopMapBlock b;
-    const int rc = OopMapLUTable::get_entry(this, &b);
+    const int rc = OopMapLUTable::try_get_oopmapblock(this, &b);
     if (rc < 2) {
       if (rc == 1) {
         oop_oop_iterate_oop_map<T>(&b, obj, closure);
@@ -153,9 +153,9 @@ ALWAYSINLINE void InstanceKlass::oop_oop_iterate_oop_maps(oop obj, OopClosureTyp
 template <typename T, class OopClosureType>
 ALWAYSINLINE void InstanceKlass::oop_oop_iterate_oop_maps_reverse(oop obj, OopClosureType* closure) {
 
-  if (CompressedKlassPointers::tiny_classpointer_mode() && CompressedKlassPointers::use_oopmap_lu_table()) {
+  {
     OopMapBlock b;
-    const int rc = OopMapLUTable::get_entry(this, &b);
+    const int rc = OopMapLUTable::try_get_oopmapblock(this, &b);
     if (rc < 2) {
       if (rc == 1) {
         oop_oop_iterate_oop_map_reverse<T>(&b, obj, closure);
@@ -176,9 +176,9 @@ ALWAYSINLINE void InstanceKlass::oop_oop_iterate_oop_maps_reverse(oop obj, OopCl
 template <typename T, class OopClosureType>
 ALWAYSINLINE void InstanceKlass::oop_oop_iterate_oop_maps_bounded(oop obj, OopClosureType* closure, MemRegion mr) {
 
-  if (CompressedKlassPointers::tiny_classpointer_mode() && CompressedKlassPointers::use_oopmap_lu_table()) {
+  {
     OopMapBlock b;
-    const int rc = OopMapLUTable::get_entry(this, &b);
+    const int rc = OopMapLUTable::try_get_oopmapblock(this, &b);
     if (rc < 2) {
       if (rc == 1) {
         oop_oop_iterate_oop_map_bounded<T>(&b, obj, closure, mr);

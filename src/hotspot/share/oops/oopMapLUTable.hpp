@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 1997, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2024, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2024, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -56,7 +57,7 @@ class OopMapLUTable : public AllStatic {
     static constexpr unsigned reserved_bits = 1; // "is_array" bit, must be 0
 
     static constexpr unsigned kind_bits = 3;
-    static constexpr unsigned kind_offset = reserved_bits - kind_bits;
+    static constexpr unsigned kind_offset = 32 - reserved_bits - kind_bits;
 
     static constexpr unsigned lh_bits = 16 - reserved_bits - kind_bits;
     static constexpr unsigned lh_offset = 16;
@@ -84,11 +85,11 @@ class OopMapLUTable : public AllStatic {
       return (_v >> omb_offset) & right_n_bits(omb_bits);
     }
 
+    static inline uint32_t build_from(const InstanceKlass* ik);
+
   public:
 
-    InstanceKlassEntry(uint32_t v) : _v(v) {
-      assert((_v >> 31) == 0, "mysterious");
-    }
+    inline InstanceKlassEntry(uint32_t v);
     inline InstanceKlassEntry(const InstanceKlass* ik);
 
     inline Klass::KlassKind get_kind() const;
@@ -112,11 +113,10 @@ class OopMapLUTable : public AllStatic {
 
   class ArrayKlassEntry {
     const uint32_t _v;
+    static inline uint32_t build_from(const ArrayKlass* ak);
   public:
-    ArrayKlassEntry(uint32_t v) : _v(v) {
-      assert((_v >> 31) == 1, "abnormal");
-    }
-    inline ArrayKlassEntry(const ArrayKlass* ik);
+    inline ArrayKlassEntry(uint32_t v);
+    inline ArrayKlassEntry(const ArrayKlass* ak);
     int get_layouthelper() const { return (int) _v; }
     inline Klass::KlassKind get_kind() const;
 
@@ -144,11 +144,9 @@ class OopMapLUTable : public AllStatic {
   f(misses_omb)         \
   f(hits_lh)            \
   f(misses_lh)
-#define XX(xx)          \
-  void inc_##xx();
+#define XX(xx) static void inc_##xx();
   STATS_DO(XX)
 #undef XX
-  void print_statistics(outputStream* out);
 #endif // ASSERT
 
 public:
@@ -171,11 +169,11 @@ public:
   // false if we cannot get the lh.
   static inline bool try_get_layouthelper(const Klass* k, int& out);
 
-  static inline Klass::KlassKind get_kind(const Klass* k);
+  static inline bool try_get_kind(const Klass* k, int& out);
 
 #ifdef ASSERT
-  static void print_statistics(outputStream* st);
-#endif
+  static void print_statistics(outputStream* out);
+#endif // ASSERT
 
 };
 

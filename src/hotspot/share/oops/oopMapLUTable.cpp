@@ -26,7 +26,8 @@
 #include "memory/allocation.hpp"
 #include "oops/compressedKlass.inline.hpp"
 #include "oops/instanceKlass.inline.hpp"
-#include "oops/oopMapLUTable.hpp"
+#include "oops/klass.hpp"
+#include "oops/oopMapLUTable.inline.hpp"
 #include "runtime/atomic.hpp"
 #include "utilities/debug.hpp"
 #include "utilities/ostream.hpp"
@@ -34,11 +35,18 @@
 uint32_t* OopMapLUTable::_entries = nullptr;
 
 void OopMapLUTable::initialize() {
-  if (CompressedKlassPointers::tiny_classpointer_mode()) {
-    assert(CompressedKlassPointers::tiny_classpointer_mode(), "sanity");
+  if (UseCompressedClassPointers &&
+      CompressedKlassPointers::tiny_classpointer_mode() &&
+      CompressedKlassPointers::use_oopmap_lu_table()) {
+    assert(UseCompactObjectHeaders, "sanity");
     assert(CompressedKlassPointers::narrow_klass_pointer_bits() <= 22, "sanity");
     _entries = NEW_C_HEAP_ARRAY(uint32_t, num_entries(), mtX1);
-    memset(_entries, 0xFE, num_entries() * sizeof(uint32_t));
+    // each Klass, upon creation, initializes its entry, so it is okay to leave the
+    // area uninitialized. Here, we just do it for later checking.
+#ifdef ASSERT
+    memset(_entries, 0xFF, num_entries() * sizeof(uint32_t));
+    assert(_entries[0] == invalid_entry, "odd");
+#endif
   }
 }
 

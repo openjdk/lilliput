@@ -284,9 +284,6 @@ Klass::Klass(KlassKind kind) : _kind(kind),
 
 void Klass::set_layout_helper(int lh) {
   _layout_helper = lh;
-  if (UseCompactObjectHeaders && UseOopMapLUTable) {
-    KlassSizeLUTable::set_entry(this, lh);
-  }
 }
 
 jint Klass::array_layout_helper(BasicType etype) {

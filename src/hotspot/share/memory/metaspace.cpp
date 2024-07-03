@@ -577,10 +577,7 @@ void Metaspace::initialize_class_space(ReservedSpace rs) {
   _class_space_end = rs.end();
 
 
-  if (UseCompactObjectHeaders) {
-    OopMapLUTable::initialize();
-    KlassSizeLUTable::initialize();
-  }
+  OopMapLUTable::initialize();
 
 }
 

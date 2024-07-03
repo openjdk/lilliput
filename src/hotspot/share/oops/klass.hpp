@@ -208,6 +208,7 @@ protected:
 
  public:
   int kind() const { return _kind; }
+  inline int kind_fast() const;
 
   enum class DefaultsLookupMode { find, skip };
   enum class OverpassLookupMode { find, skip };
@@ -295,6 +296,7 @@ protected:
 
   // size helper
   int layout_helper() const            { return _layout_helper; }
+  inline int layout_helper_fast() const;
   void set_layout_helper(int lh);
 
   // Note: for instances layout_helper() may include padding.
