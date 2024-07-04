@@ -606,6 +606,17 @@ void FieldLayoutBuilder::insert_contended_padding(LayoutRawBlock* slot) {
   }
 }
 
+// Helper function for compute_regular_layout()
+// Given an InstanceKlass, compute its numeric inheritance level
+static int calc_inheritance_level(const InstanceKlass* ik) {
+  int level = 0;
+  while (ik != nullptr) {
+    ik = ik->java_super();
+    level++;
+  }
+  return level;
+}
+
 // Computation of regular classes layout is an evolution of the previous default layout
 // (FieldAllocationStyle 1):
 //   - primitive fields are allocated first (from the biggest to the smallest)
@@ -623,8 +634,19 @@ void FieldLayoutBuilder::compute_regular_layout() {
     insert_contended_padding(_layout->start());
     need_tail_padding = true;
   }
-  _layout->add(_root_group->primitive_fields());
-  _layout->add(_root_group->oop_fields());
+
+  // Depending on depth of inheritance level, alternate between oop-fields-first and
+  // oop-fields-last. This little trick will cause oop regions of every second
+  // parent-child-class-pair to be adjacent, which later reduces the number of non-static
+  // oop maps, since these areas are merged into one OopMapBlock.
+  const int inheritance_level = calc_inheritance_level(_super_klass);
+  if (inheritance_level % 2 == 1) {
+    _layout->add(_root_group->primitive_fields());
+    _layout->add(_root_group->oop_fields());
+  } else {
+    _layout->add(_root_group->oop_fields());
+    _layout->add(_root_group->primitive_fields());
+  }
 
   if (!_contended_groups.is_empty()) {
     for (int i = 0; i < _contended_groups.length(); i++) {
