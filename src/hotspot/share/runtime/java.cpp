@@ -22,6 +22,7 @@
  *
  */
 
+#include <oops/klassInfoLUTEntry.hpp>
 #include "precompiled.hpp"
 #include "cds/cds_globals.hpp"
 #include "cds/classListWriter.hpp"
@@ -58,7 +59,6 @@
 #include "oops/method.hpp"
 #include "oops/objArrayOop.hpp"
 #include "oops/oop.inline.hpp"
-#include "oops/oopMapLUTable.hpp"
 #include "oops/symbol.hpp"
 #include "prims/jvmtiAgentList.hpp"
 #include "prims/jvmtiExport.hpp"

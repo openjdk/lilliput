@@ -22,6 +22,7 @@
  *
  */
 
+#include <oops/klassInfoLUTEntry.inline.hpp>
 #include "precompiled.hpp"
 #include "classfile/moduleEntry.hpp"
 #include "classfile/packageEntry.hpp"
@@ -37,7 +38,6 @@
 #include "oops/klass.inline.hpp"
 #include "oops/objArrayKlass.hpp"
 #include "oops/oop.inline.hpp"
-#include "oops/oopMapLUTable.inline.hpp"
 #include "oops/typeArrayKlass.inline.hpp"
 #include "oops/typeArrayOop.inline.hpp"
 #include "runtime/handles.inline.hpp"

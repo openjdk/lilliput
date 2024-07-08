@@ -24,6 +24,7 @@
  *
  */
 
+#include <oops/klassInfoLUTEntry.hpp>
 #include "precompiled.hpp"
 #include "cds/cdsConfig.hpp"
 #include "cds/metaspaceShared.hpp"
@@ -52,7 +53,6 @@
 #include "nmt/memTracker.hpp"
 #include "oops/compressedKlass.inline.hpp"
 #include "oops/compressedOops.hpp"
-#include "oops/oopMapLUTable.hpp"
 #include "prims/jvmtiExport.hpp"
 #include "runtime/atomic.hpp"
 #include "runtime/globals_extension.hpp"

@@ -25,12 +25,12 @@
 #ifndef SHARE_OOPS_KLASS_INLINE_HPP
 #define SHARE_OOPS_KLASS_INLINE_HPP
 
+#include <oops/klassInfoLUTEntry.inline.hpp>
 #include "oops/klass.hpp"
 
 #include "classfile/classLoaderData.inline.hpp"
 #include "oops/klassVtable.hpp"
 #include "oops/markWord.hpp"
-#include "oops/oopMapLUTable.inline.hpp"
 
 // This loads and keeps the klass's loader alive.
 inline oop Klass::klass_holder() const {
@@ -81,22 +81,5 @@ inline vtableEntry* Klass::start_of_vtable() const {
 inline ByteSize Klass::vtable_start_offset() {
   return in_ByteSize(InstanceKlass::header_size() * wordSize);
 }
-
-inline int Klass::layout_helper_fast() const {
-  int lh;
-  if (!OopMapLUTable::try_get_layouthelper(this, lh)) {
-    lh = layout_helper();
-  }
-  return lh;
-}
-
-inline int Klass::kind_fast() const {
-  int v;
-  if (!OopMapLUTable::try_get_kind(this, v)) {
-    v = kind();
-  }
-  return v;
-}
-
 
 #endif // SHARE_OOPS_KLASS_INLINE_HPP

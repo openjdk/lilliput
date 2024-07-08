@@ -25,6 +25,7 @@
 #ifndef SHARE_OOPS_OOP_INLINE_HPP
 #define SHARE_OOPS_OOP_INLINE_HPP
 
+#include <oops/klassInfoLUTEntry.inline.hpp>
 #include "oops/oop.hpp"
 
 #include "memory/universe.hpp"
@@ -33,7 +34,6 @@
 #include "oops/arrayKlass.hpp"
 #include "oops/arrayOop.hpp"
 #include "oops/compressedKlass.inline.hpp"
-#include "oops/oopMapLUTable.inline.hpp"
 #include "oops/instanceKlass.hpp"
 #include "oops/klass.inline.hpp"
 #include "oops/markWord.inline.hpp"
@@ -180,7 +180,7 @@ size_t oopDesc::size()  {
 
 size_t oopDesc::size_given_klass(Klass* klass)  {
 
-  int lh = klass->layout_helper_fast();
+  int lh = klass->layout_helper();
   size_t s;
 
   // lh is now a value computed at class initialization that may hint

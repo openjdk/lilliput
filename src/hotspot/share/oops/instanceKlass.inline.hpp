@@ -25,13 +25,13 @@
 #ifndef SHARE_OOPS_INSTANCEKLASS_INLINE_HPP
 #define SHARE_OOPS_INSTANCEKLASS_INLINE_HPP
 
+#include <oops/klassInfoLUTEntry.inline.hpp>
 #include "oops/instanceKlass.hpp"
 
 #include "memory/memRegion.hpp"
 #include "oops/fieldInfo.inline.hpp"
 #include "oops/klass.inline.hpp"
 #include "oops/oop.inline.hpp"
-#include "oops/oopMapLUTable.inline.hpp"
 #include "runtime/atomic.hpp"
 #include "utilities/devirtualizer.inline.hpp"
 #include "utilities/globalDefinitions.hpp"
