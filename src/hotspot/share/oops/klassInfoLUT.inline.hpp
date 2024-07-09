@@ -36,7 +36,7 @@ inline unsigned KlassInfoLUT::num_entries() {
    return nth_bit(CompressedKlassPointers::narrow_klass_pointer_bits());
 }
 
-inline uint32_t KlassInfoLUT::get_entry(narrowKlass nk) {
+inline KlassLUTEntry KlassInfoLUT::get_entry(narrowKlass nk) {
   assert(nk < num_entries(), "oob");
   const uint32_t v = _entries[nk];
 #ifdef ASSERT
@@ -49,7 +49,7 @@ inline uint32_t KlassInfoLUT::get_entry(narrowKlass nk) {
     }
   }
 #endif
-  return v;
+  return KlassLUTEntry(v);
 }
 
 #endif // SHARE_OOPS_KLASSINFOLUT_INLINE_HPP

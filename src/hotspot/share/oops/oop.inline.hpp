@@ -36,6 +36,8 @@
 #include "oops/compressedKlass.inline.hpp"
 #include "oops/instanceKlass.hpp"
 #include "oops/klass.inline.hpp"
+#include "oops/klassInfoLUT.inline.hpp"
+#include "oops/klassInfoLUTEntry.inline.hpp"
 #include "oops/markWord.inline.hpp"
 #include "oops/oopsHierarchy.hpp"
 #include "runtime/atomic.hpp"

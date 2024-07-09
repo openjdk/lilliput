@@ -53,6 +53,13 @@ void KlassInfoLUT::register_klass(const Klass* k) {
   KlassLUTEntry e(k);
   _entries[nk] = e.value();
 #ifdef ASSERT
+  // sanity checks
+  {
+    KlassLUTEntry e2 = get_entry(nk);
+    assert(e2.value() == e.value(), "Sanity");
+    e2.verify_against(k);
+  }
+  // stats
   if (e.valid()) {
     inc_registered_as_valid();
   } else {

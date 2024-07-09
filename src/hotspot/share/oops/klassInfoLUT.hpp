@@ -28,6 +28,7 @@
 
 #include "memory/allStatic.hpp"
 #include "oops/compressedKlass.hpp"
+#include "oops/klassInfoLUTEntry.hpp"
 #include "utilities/globalDefinitions.hpp"
 
 class Klass;
@@ -58,7 +59,7 @@ public:
 
   static void register_klass(const Klass* k);
 
-  static inline uint32_t get_entry(narrowKlass k);
+  static inline KlassLUTEntry get_entry(narrowKlass k);
 
 #ifdef ASSERT
   static void print_statistics(outputStream* out);

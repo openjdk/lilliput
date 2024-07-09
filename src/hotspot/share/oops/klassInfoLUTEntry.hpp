@@ -29,6 +29,7 @@
 #include "memory/allStatic.hpp"
 #include "utilities/debug.hpp"
 #include "utilities/globalDefinitions.hpp"
+#include "utilities/debug.hpp"
 
 class OopMapBlock;
 class Klass;
@@ -48,45 +49,44 @@ class outputStream;
 
 class KlassLUTEntry {
 
+  // All valid entries:  KKK- ---- ---- ---- ---- ---- ---- ----
+  static constexpr int bits_kind       = 3;
+
   // InstanceKlass:      KKKS SSSS SSSS SSSS CCCC CCCC OOOO OOOO
   static constexpr int bits_ik_omb_offset = 8;
   static constexpr int bits_ik_omb_count  = 8;
   static constexpr int bits_ik_wordsize   = 13;
-  static constexpr int bits_ik_kind       = 3;
-  struct IKEntry {
+  struct UIK {
     // lsb
     unsigned omb_offset : bits_ik_omb_offset;
     unsigned omb_count  : bits_ik_omb_count;
     unsigned wordsize   : bits_ik_wordsize;
-    unsigned kind       : bits_ik_kind;
+    unsigned kind       : bits_kind;
     // msb
   };
 
   // ArrayKlass:         KKKL LLLL LLLL LLLL LLLL LLLL LLLL LLLL
   static constexpr int bits_ak_lh         = 29;
-  static constexpr int bits_ak_kind       = 3;
-  struct AKEntry {
+  struct UAK {
     // lsb
     unsigned lh29       : bits_ak_lh;
-    unsigned kind       : bits_ak_kind;
+    unsigned kind       : bits_kind;
     // msb
   };
 
-  STATIC_ASSERT(bits_ak_kind == bits_ik_kind);
   STATIC_ASSERT(bits_ak_lh == bits_ik_omb_offset + bits_ik_omb_count + bits_ik_wordsize);
-  STATIC_ASSERT(sizeof(AKEntry) == sizeof(uint32_t));
-  STATIC_ASSERT(sizeof(IKEntry) == sizeof(uint32_t));
+  STATIC_ASSERT(sizeof(UAK) == sizeof(uint32_t));
+  STATIC_ASSERT(sizeof(UIK) == sizeof(uint32_t));
 
-  typedef union {
+  union U {
     uint32_t raw;
-    IKEntry ike;
-    AKEntry ake;
-  } U;
+    UIK ike;
+    UAK ake;
+    U(uint32_t v) : raw(v) {}
+  };
   STATIC_ASSERT(sizeof(U) == sizeof(uint32_t));
 
-  const uint32_t _v;
-
-  const U* as_union() const { return static_cast<const U*>(&_v); }
+  const U _v;
 
   static bool build_from_0(uint32_t& value, const Klass* k);
   static uint32_t build_from(const Klass* k);
@@ -103,7 +103,9 @@ public:
 
   static constexpr uint32_t invalid_entry = 0;
 
-  inline KlassLUTEntry(uint32_t v);
+  inline KlassLUTEntry(uint32_t v) : _v(v) {}
+  inline KlassLUTEntry(const KlassLUTEntry& other) : _v(other._v) {}
+
   KlassLUTEntry(const Klass* ik);
 
   bool valid() const      { return _v != invalid_entry; }
@@ -118,7 +120,7 @@ public:
   // Following methods only if entry is valid:
 
   // Returns kind
-  inline int kind() const;
+  inline int kind() const { return _v.ake.kind; }
 
   // Following methods only if IK:
 

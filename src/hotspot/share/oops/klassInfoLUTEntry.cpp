@@ -242,6 +242,5 @@ uint32_t KlassLUTEntry::build_from(const Klass* k) {
 }
 
 KlassLUTEntry::KlassLUTEntry(const Klass* k) : _v(build_from(k)) {
-  DEBUG_ONLY(verify_against(k));
 }
 

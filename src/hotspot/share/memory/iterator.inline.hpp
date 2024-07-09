@@ -156,7 +156,7 @@ private:
 public:
 
   static FunctionType function(Klass* klass) {
-    return _table._function[klass->kind_fast()];
+    return _table._function[klass->kind()];
   }
 };
 
@@ -219,7 +219,7 @@ private:
 public:
 
   static FunctionType function(Klass* klass) {
-    return _table._function[klass->kind_fast()];
+    return _table._function[klass->kind()];
   }
 };
 
@@ -282,7 +282,7 @@ private:
 public:
 
   static FunctionType function(Klass* klass) {
-    return _table._function[klass->kind_fast()];
+    return _table._function[klass->kind()];
   }
 };
 

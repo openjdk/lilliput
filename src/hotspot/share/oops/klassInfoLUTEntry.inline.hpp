@@ -32,40 +32,25 @@
 #include "oops/oop.hpp"
 #include "utilities/debug.hpp"
 
-inline KlassLUTEntry::KlassLUTEntry(uint32_t v) : _v(v) {}
-
-
-// Returns kind
-inline int KlassLUTEntry::kind() const {
-  U u;
-  u.raw = _v;
-  return u.ake.kind;
-}
 
 // Following methods only if IK:
 
 // Returns size, in words, of oops of this class
 inline size_t KlassLUTEntry::ik_wordsize() const {
   assert(kind() < Klass::TypeArrayKlassKind, "only for ik entries");
-  U u;
-  u.raw = _v;
-  return u.ike.wordsize;
+  return _v.ike.wordsize;
 }
 
 // Returns count of first OopMapBlock. Returns 0 if there is no OopMapBlock.
 inline unsigned KlassLUTEntry::ik_first_omb_count() const {
   assert(kind() < Klass::TypeArrayKlassKind, "only for ik entries");
-  U u;
-  u.raw = _v;
-  return u.ike.omb_count;
+  return _v.ike.omb_count;
 }
 
 // Returns offset of first OopMapBlock. Only call if count is > 0
 inline unsigned KlassLUTEntry::ik_first_omb_offset() const {
   assert(kind() < Klass::TypeArrayKlassKind, "only for ik entries");
-  U u;
-  u.raw = _v;
-  return u.ike.omb_offset;
+  return _v.ike.omb_offset;
 }
 
 // Following methods only if AK:
