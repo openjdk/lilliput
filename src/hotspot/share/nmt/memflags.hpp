@@ -58,8 +58,6 @@
   f(mtMetaspace,      "Metaspace")                                                   \
   f(mtStringDedup,    "String Deduplication")                                        \
   f(mtObjectMonitor,  "Object Monitors")                                             \
-  f(mtX1,             "X1")                                                          \
-  f(mtX2,             "X2")                                                          \
   f(mtNone,           "Unknown")                                                     \
   //end
 

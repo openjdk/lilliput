@@ -34,8 +34,7 @@
 #include "utilities/globalDefinitions.hpp"
 #include "utilities/ostream.hpp"
 
-int8_t CompressedKlassPointers::_tiny_cp = -1;
-int8_t CompressedKlassPointers::_use_oopmap_lu_table = -1;
+int CompressedKlassPointers::_tiny_cp = -1;
 int CompressedKlassPointers::_narrow_klass_pointer_bits = -1;
 int CompressedKlassPointers::_max_shift = -1;
 #ifdef ASSERT
@@ -73,7 +72,6 @@ void CompressedKlassPointers::pre_initialize() {
     _narrow_klass_pointer_bits = narrow_klass_pointer_bits_legacy;
     _max_shift = max_shift_legacy;
   }
-  _use_oopmap_lu_table = UseOopMapLUTable ? 1 : 0;
 }
 
 #ifdef ASSERT
@@ -233,12 +231,12 @@ void CompressedKlassPointers::initialize(address addr, size_t len) {
     _base = addr;
     _range = len;
 
-//    constexpr int log_cacheline = 6;
-//    int s = max_shift();
-//    while (s > log_cacheline && ((size_t)nth_bit(narrow_klass_pointer_bits() + s - 1) > len)) {
-//      s--;
-//    }
-    _shift = max_shift();
+    constexpr int log_cacheline = 6;
+    int s = max_shift();
+    while (s > log_cacheline && ((size_t)nth_bit(narrow_klass_pointer_bits() + s - 1) > len)) {
+      s--;
+    }
+    _shift = s;
 
   } else {
 

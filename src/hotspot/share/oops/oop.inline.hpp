@@ -25,7 +25,6 @@
 #ifndef SHARE_OOPS_OOP_INLINE_HPP
 #define SHARE_OOPS_OOP_INLINE_HPP
 
-#include <oops/klassInfoLUTEntry.inline.hpp>
 #include "oops/oop.hpp"
 
 #include "memory/universe.hpp"
@@ -35,9 +34,6 @@
 #include "oops/arrayOop.hpp"
 #include "oops/compressedKlass.inline.hpp"
 #include "oops/instanceKlass.hpp"
-#include "oops/klass.inline.hpp"
-#include "oops/klassInfoLUT.inline.hpp"
-#include "oops/klassInfoLUTEntry.inline.hpp"
 #include "oops/markWord.inline.hpp"
 #include "oops/oopsHierarchy.hpp"
 #include "runtime/atomic.hpp"
@@ -181,7 +177,6 @@ size_t oopDesc::size()  {
 }
 
 size_t oopDesc::size_given_klass(Klass* klass)  {
-
   int lh = klass->layout_helper();
   size_t s;
 
@@ -420,62 +415,18 @@ void oopDesc::incr_age() {
   }
 }
 
-KlassLUTEntry oopDesc::get_klute() const {
-  assert(UseCompactObjectHeaders, "Only +COH");
-  const narrowKlass nk = _metadata._compressed_klass;
-  return get_klute(nk);
-}
-
-KlassLUTEntry oopDesc::get_klute(narrowKlass nk) {
-  assert(UseCompactObjectHeaders, "Only +COH");
-  return KlassInfoLUT::get_entry(nk);
-}
-
-KlassLUTEntry oopDesc::get_klute(const Klass* k) {
-  assert(UseCompactObjectHeaders, "Only +COH");
-  const narrowKlass nk = CompressedKlassPointers::encode(const_cast<Klass*>(k));
-  return get_klute(nk);
-}
-
 template <typename OopClosureType>
 void oopDesc::oop_iterate(OopClosureType* cl) {
-
-  if (UseCompactObjectHeaders) {
-    KlassLUTEntry klute = get_klute();
-    if (klute.valid()) {
-      OopIteratorClosureDispatch::oop_oop_iterate(cl, this, klute);
-      return;
-    }
-  }
-
   OopIteratorClosureDispatch::oop_oop_iterate(cl, this, klass());
 }
 
 template <typename OopClosureType>
 void oopDesc::oop_iterate(OopClosureType* cl, MemRegion mr) {
-
-  if (UseCompactObjectHeaders) {
-    KlassLUTEntry klute = get_klute();
-    if (klute.valid()) {
-      OopIteratorClosureDispatch::oop_oop_iterate(cl, this, klute, mr);
-      return;
-    }
-  }
-
   OopIteratorClosureDispatch::oop_oop_iterate(cl, this, klass(), mr);
 }
 
 template <typename OopClosureType>
 size_t oopDesc::oop_iterate_size(OopClosureType* cl) {
-
-  if (UseCompactObjectHeaders) {
-    KlassLUTEntry klute = get_klute();
-    if (klute.valid()) {
-      OopIteratorClosureDispatch::oop_oop_iterate(cl, this, klute);
-      return klute.calculate_oop_wordsize_given_oop(this);
-    }
-  }
-
   Klass* k = klass();
   size_t size = size_given_klass(k);
   OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k);
@@ -484,15 +435,6 @@ size_t oopDesc::oop_iterate_size(OopClosureType* cl) {
 
 template <typename OopClosureType>
 size_t oopDesc::oop_iterate_size(OopClosureType* cl, MemRegion mr) {
-
-  if (UseCompactObjectHeaders) {
-    KlassLUTEntry klute = get_klute();
-    if (klute.valid()) {
-      OopIteratorClosureDispatch::oop_oop_iterate(cl, this, klute, mr);
-      return klute.calculate_oop_wordsize_given_oop(this);
-    }
-  }
-
   Klass* k = klass();
   size_t size = size_given_klass(k);
   OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k, mr);
@@ -501,29 +443,11 @@ size_t oopDesc::oop_iterate_size(OopClosureType* cl, MemRegion mr) {
 
 template <typename OopClosureType>
 void oopDesc::oop_iterate_backwards(OopClosureType* cl) {
-
-  if (UseCompactObjectHeaders) {
-    KlassLUTEntry klute = get_klute();
-    if (klute.valid()) {
-      OopIteratorClosureDispatch::oop_oop_iterate_backwards(cl, this, klute);
-      return;
-    }
-  }
-
   oop_iterate_backwards(cl, klass());
 }
 
 template <typename OopClosureType>
 void oopDesc::oop_iterate_backwards(OopClosureType* cl, Klass* k) {
-
-  if (UseCompactObjectHeaders) {
-    KlassLUTEntry klute = get_klute(k);
-    if (klute.valid()) {
-      OopIteratorClosureDispatch::oop_oop_iterate_backwards(cl, this, klute);
-      return;
-    }
-  }
-
   // In this assert, we cannot safely access the Klass* with compact headers.
   assert(UseCompactObjectHeaders || k == klass(), "wrong klass");
   OopIteratorClosureDispatch::oop_oop_iterate_backwards(cl, this, k);

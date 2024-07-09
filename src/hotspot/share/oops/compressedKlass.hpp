@@ -40,8 +40,7 @@ class CompressedKlassPointers : public AllStatic {
   friend class ArchiveBuilder;
 
   // Tiny-class-pointer mode
-  static int8_t _tiny_cp; // -1, 0=true, 1=false
-  static int8_t _use_oopmap_lu_table; // -1, 0=true, 1=false
+  static int _tiny_cp; // -1, 0=true, 1=false
 
   // We use a different narrow Klass pointer geometry depending on
   // whether we run in standard mode or in compact-object-header-mode (Lilliput):
@@ -127,9 +126,6 @@ public:
   static void pre_initialize();
 
   static bool tiny_classpointer_mode()   { check_init(_tiny_cp); return (_tiny_cp == 1); }
-
-
-  static bool use_oopmap_lu_table()   { check_init(_use_oopmap_lu_table); return (_use_oopmap_lu_table == 1); }
 
   // The number of bits a narrow Klass pointer has;
   static int narrow_klass_pointer_bits() { check_init(_narrow_klass_pointer_bits); return _narrow_klass_pointer_bits; }

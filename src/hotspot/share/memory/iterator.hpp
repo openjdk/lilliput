@@ -27,7 +27,6 @@
 
 #include "memory/allocation.hpp"
 #include "memory/memRegion.hpp"
-#include "oops/klassInfoLUTEntry.hpp"
 #include "oops/oopsHierarchy.hpp"
 
 class CodeBlob;
@@ -318,10 +317,6 @@ class OopIteratorClosureDispatch {
   template <typename OopClosureType> static void oop_oop_iterate(OopClosureType* cl, oop obj, Klass* klass);
   template <typename OopClosureType> static void oop_oop_iterate(OopClosureType* cl, oop obj, Klass* klass, MemRegion mr);
   template <typename OopClosureType> static void oop_oop_iterate_backwards(OopClosureType* cl, oop obj, Klass* klass);
-
-  template <typename OopClosureType> static void oop_oop_iterate(OopClosureType* cl, oop obj, KlassLUTEntry klute);
-  template <typename OopClosureType> static void oop_oop_iterate(OopClosureType* cl, oop obj, KlassLUTEntry klute, MemRegion mr);
-  template <typename OopClosureType> static void oop_oop_iterate_backwards(OopClosureType* cl, oop obj, KlassLUTEntry klute);
 };
 
 #endif // SHARE_MEMORY_ITERATOR_HPP
