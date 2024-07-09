@@ -3515,10 +3515,14 @@ void InstanceKlass::print_on(outputStream* st) const {
 
   st->print(BULLET"instance size:     %d", size_helper());                        st->cr();
   st->print(BULLET"klass size:        %d", size());                               st->cr();
+  st->print(BULLET"klass header size: %d", header_size());                        st->cr();
+  st->print(BULLET"vtable size:       %d", itable_length());                      st->cr();
+  st->print(BULLET"itable size:       %d", vtable_length());                      st->cr();
+  st->print(BULLET"nonstatic_oopmap size: %d", nonstatic_oop_map_size());         st->cr();
+
   st->print(BULLET"access:            "); access_flags().print_on(st);            st->cr();
   st->print(BULLET"flags:             "); _misc_flags.print_on(st);               st->cr();
   st->print(BULLET"state:             "); st->print_cr("%s", init_state_name());
-  st->print(BULLET"name:              "); name()->print_value_on(st);             st->cr();
   st->print(BULLET"super:             "); Metadata::print_value_on_maybe_null(st, super()); st->cr();
   st->print(BULLET"sub:               ");
   Klass* sub = subklass();
@@ -3653,11 +3657,11 @@ void InstanceKlass::print_on(outputStream* st) const {
   InstanceKlass* ik = const_cast<InstanceKlass*>(this);
   ik->print_nonstatic_fields(&print_nonstatic_field);
 
-  st->print(BULLET"non-static oop maps: ");
+  st->print(BULLET"%u non-static oop maps: ", nonstatic_oop_map_count());
   OopMapBlock* map     = start_of_nonstatic_oop_maps();
   OopMapBlock* end_map = map + nonstatic_oop_map_count();
   while (map < end_map) {
-    st->print("%d-%d ", map->offset(), map->offset() + heapOopSize*(map->count() - 1));
+    st->print("%d-%d (%d oops) ", map->offset(), map->offset() + heapOopSize*(map->count() - 1), map->count());
     map++;
   }
   st->cr();

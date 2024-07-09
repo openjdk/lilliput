@@ -334,7 +334,6 @@ class InstanceKlass: public Klass {
   void set_nonstatic_field_size(int size)  { _nonstatic_field_size = size; }
 
   int static_field_size() const            { return _static_field_size; }
-  void set_static_field_size(int size)     { _static_field_size = size; }
 
   int static_oop_field_count() const       { return (int)_static_oop_field_count; }
   void set_static_oop_field_count(u2 size) { _static_oop_field_count = size; }

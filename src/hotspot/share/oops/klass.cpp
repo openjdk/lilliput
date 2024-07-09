@@ -965,9 +965,12 @@ jint Klass::jvmti_class_status() const {
 void Klass::print_on(outputStream* st) const {
   ResourceMark rm;
   // print title
-  st->print("%s", internal_name());
+  st->print("Klass: %s", internal_name());
   print_address_on(st);
   st->cr();
+  st->print(" - kind:              %d", kind());                               st->cr();
+  st->print(" - layouthelper raw   %x", layout_helper());                      st->cr();
+  st->print(" - name:              "); name()->print_value_on(st);             st->cr();
 }
 
 #define BULLET  " - "
