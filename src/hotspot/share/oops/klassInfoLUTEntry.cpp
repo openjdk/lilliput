@@ -142,7 +142,7 @@ void KlassLUTEntry::verify_against(const Klass* k) const {
 
 #endif // ASSERT
 
-int KlassLUTEntry::build_from_0(uint32_t& value, const Klass* k) {
+const char* KlassLUTEntry::build_from_0(uint32_t& value, const Klass* k) {
 
   const int kind = k->kind();
   const int lh = k->layout_helper();
@@ -155,7 +155,6 @@ int KlassLUTEntry::build_from_0(uint32_t& value, const Klass* k) {
   STATIC_ASSERT(Klass::InstanceStackChunkKlassKind  < Klass::TypeArrayKlassKind);
   STATIC_ASSERT(Klass::ObjArrayKlassKind            > Klass::TypeArrayKlassKind);
 
-#define ERRBYE return (100000 + __LINE__);
   if (kind >= Klass::TypeArrayKlassKind) {
     assert(k->is_array_klass(), "sanity");
     assert(Klass::layout_helper_is_objArray(lh) || Klass::layout_helper_is_typeArray(lh), "unexpected");
@@ -170,7 +169,7 @@ int KlassLUTEntry::build_from_0(uint32_t& value, const Klass* k) {
     u.ake.lh29 = lh29;
 
     value = u.raw;
-    return 0; // ok
+    return nullptr; // ok
 
   } else {
     assert(k->is_instance_klass(), "unexpected");
@@ -178,7 +177,7 @@ int KlassLUTEntry::build_from_0(uint32_t& value, const Klass* k) {
 
     // for the moment we don't handle InstanceStackChunkKlassKind
     if (kind == Klass::InstanceStackChunkKlassKind) {
-      ERRBYE;
+      return "InstanceStackChunkKlassKind";
     }
 
     const InstanceKlass* const ik = InstanceKlass::cast(k);
@@ -189,22 +188,22 @@ int KlassLUTEntry::build_from_0(uint32_t& value, const Klass* k) {
     // Size not trivially computable?
     if (Klass::layout_helper_needs_slow_path(lh)) {
       if (ik->is_abstract() || ik->is_interface()) {
-        ERRBYE;
+        return "ik, lh slow path (abstract or interface)";
       } else {
-        ERRBYE;
+        return "ik, lh slow path";
       }
     }
 
     // Size trivially computable but would not fit?
     const size_t wordsize = lh >> LogHeapWordSize;
     if (wordsize >= ik_wordsize_limit) {
-      ERRBYE;
+      return "ik, size too large";
     }
 
     // Has more than one nonstatic OopMapBlock?
     const int num_omb = ik->nonstatic_oop_map_count();
     if (num_omb > 1) {
-      ERRBYE;
+      return "ik, >1 oop map";
     }
 
     unsigned first_omb_count = 0;
@@ -220,7 +219,7 @@ int KlassLUTEntry::build_from_0(uint32_t& value, const Klass* k) {
       // Has one omb, but it won't fit into 16 bit?
       if (first_omb_count >= ik_omb_count_limit ||
           (size_t)first_omb_offset >= ik_omb_offset_limit ) {
-        ERRBYE;
+        return "ik, omb count/offset too large";
       }
     }
 
@@ -232,23 +231,23 @@ int KlassLUTEntry::build_from_0(uint32_t& value, const Klass* k) {
     u.ike.omb_offset = first_omb_offset;
 
     value = u.raw;
-    return 0; // ok
+    return nullptr; // ok
 
   }
 
   ShouldNotReachHere();
 
-  return 0;
+  return nullptr;
 }
 
 uint32_t KlassLUTEntry::build_from(const Klass* k) {
   uint32_t v = 0;
-  const int rc = build_from_0(v, k);
-  if (rc == 0) {
+  const char* const rc = build_from_0(v, k);
+  if (rc == nullptr) {
     return v;
   }
   ResourceMark rm;
-  log_info(class, load)("%s: klute invalid (%d)", k->name()->as_C_string(), rc);
+  log_info(class, load)("%s: klute invalid (%s)", k->name()->as_C_string(), rc);
   return invalid_entry;
 }
 

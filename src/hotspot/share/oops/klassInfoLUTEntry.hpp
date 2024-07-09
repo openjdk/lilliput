@@ -82,7 +82,8 @@ class KlassLUTEntry {
 
   const U _v;
 
-  static int build_from_0(uint32_t& value, const Klass* k);
+  // returns explanation if invalid if error, nullptr if ok
+  static const char* build_from_0(uint32_t& value, const Klass* k);
   static uint32_t build_from(const Klass* k);
 
   // The limits to what we can numerically represent in an (InstanceKlass) Entry
