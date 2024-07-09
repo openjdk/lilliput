@@ -32,6 +32,11 @@
 // Helper function. Returns true if ik can be represented by a 32-bit entry
 static bool KlassLUTEntry::klass_is_representable(const Klass* k) {
 
+  STATIC_ASSERT(bits_ak_lh == bits_ik_omb_offset + bits_ik_omb_count + bits_ik_wordsize);
+  STATIC_ASSERT(sizeof(UAK) == sizeof(uint32_t));
+  STATIC_ASSERT(sizeof(UIK) == sizeof(uint32_t));
+  STATIC_ASSERT(sizeof(U) == sizeof(uint32_t));
+
   // Can always represent arrays (obj and type)
   if (k->is_array_klass()) {
     return true;
@@ -158,7 +163,7 @@ bool KlassLUTEntry::build_from_0(uint32_t& value, const Klass* k) {
 
     // ArrayKlass:         KKKL LLLL LLLL LLLL LLLL LLLL LLLL LLLL
     uint32_t lh29 = (uint32_t) lh;
-    const uint32_t kind_mask = right_n_bits(bits_ak_kind) << bits_ak_lh;
+    const uint32_t kind_mask = right_n_bits(bits_kind) << bits_ak_lh;
     lh29 &= ~kind_mask;
 
     U u;

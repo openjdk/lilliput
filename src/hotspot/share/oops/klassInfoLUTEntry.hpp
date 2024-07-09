@@ -26,10 +26,9 @@
 #ifndef SHARE_OOPS_KLASSINFOLUTENTRY_HPP
 #define SHARE_OOPS_KLASSINFOLUTENTRY_HPP
 
+// Included by oop.hpp, keep it short and sweet here
 #include "memory/allStatic.hpp"
-#include "utilities/debug.hpp"
 #include "utilities/globalDefinitions.hpp"
-#include "utilities/debug.hpp"
 
 class OopMapBlock;
 class Klass;
@@ -74,17 +73,12 @@ class KlassLUTEntry {
     // msb
   };
 
-  STATIC_ASSERT(bits_ak_lh == bits_ik_omb_offset + bits_ik_omb_count + bits_ik_wordsize);
-  STATIC_ASSERT(sizeof(UAK) == sizeof(uint32_t));
-  STATIC_ASSERT(sizeof(UIK) == sizeof(uint32_t));
-
   union U {
     uint32_t raw;
     UIK ike;
     UAK ake;
     U(uint32_t v) : raw(v) {}
   };
-  STATIC_ASSERT(sizeof(U) == sizeof(uint32_t));
 
   const U _v;
 
@@ -103,6 +97,7 @@ public:
 
   static constexpr uint32_t invalid_entry = 0;
 
+  inline KlassLUTEntry() : _v(invalid_entry) {}
   inline KlassLUTEntry(uint32_t v) : _v(v) {}
   inline KlassLUTEntry(const KlassLUTEntry& other) : _v(other._v) {}
 

@@ -29,6 +29,7 @@
 #include "memory/memRegion.hpp"
 #include "oops/compressedKlass.hpp"
 #include "oops/accessDecorators.hpp"
+#include "oops/klassInfoLUTEntry.hpp"
 #include "oops/markWord.hpp"
 #include "oops/metadata.hpp"
 #include "runtime/atomic.hpp"
@@ -63,6 +64,10 @@ class oopDesc {
   NONCOPYABLE(oopDesc);
 
   inline oop cas_set_forwardee(markWord new_mark, markWord old_mark, atomic_memory_order order);
+
+  KlassLUTEntry get_klute() const;
+  static KlassLUTEntry get_klute(narrowKlass nk);
+  static KlassLUTEntry get_klute(const Klass* k);
 
  public:
   // Must be trivial; see verifying static assert after the class.
