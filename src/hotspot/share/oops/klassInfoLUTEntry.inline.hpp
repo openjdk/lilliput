@@ -61,7 +61,7 @@ inline int KlassLUTEntry::ak_layouthelper_full() const {
   // We could probably shave some instructions here, since we essentially
   // just need to swap bits 30 and 29 (translate the upper nibble from
   // ("0x4/0x5" aka XXXArrayKlassKind to "C"|"8")
-  uint32_t x = _v;
+  uint32_t x = _v.raw;
   x &= right_n_bits(bits_ak_lh);
   const uint32_t y = kind() == Klass::TypeArrayKlassKind ? 0xC0000000 : 0x80000000;
   x |= y;
@@ -83,9 +83,9 @@ inline unsigned KlassLUTEntry::calculate_oop_wordsize_given_oop(oop obj) const {
     const union {
       uint32_t raw;
       uint8_t u[4];
-    } u = { _v };
-    const int l2esz = u[0]; // Klass::layout_helper_log2_element_size
-    const int hsz = u[2];   // Klass::layout_helper_header_size
+    } x = { _v.raw };
+    const int l2esz = x.u[0]; // Klass::layout_helper_log2_element_size
+    const int hsz = x.u[2];   // Klass::layout_helper_header_size
     const size_t array_length = (size_t) ((arrayOop)obj)->length();
     const size_t size_in_bytes = (array_length << l2esz) + hsz;
     rc = align_up(size_in_bytes, MinObjAlignmentInBytes) / HeapWordSize;

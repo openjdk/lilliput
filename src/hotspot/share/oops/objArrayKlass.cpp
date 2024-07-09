@@ -22,7 +22,6 @@
  *
  */
 
-#include <oops/klassInfoLUTEntry.inline.hpp>
 #include "precompiled.hpp"
 #include "classfile/moduleEntry.hpp"
 #include "classfile/packageEntry.hpp"
@@ -38,6 +37,7 @@
 #include "oops/arrayKlass.hpp"
 #include "oops/instanceKlass.hpp"
 #include "oops/klass.inline.hpp"
+#include "oops/klassInfoLUT.hpp"
 #include "oops/objArrayKlass.inline.hpp"
 #include "oops/objArrayOop.inline.hpp"
 #include "oops/oop.inline.hpp"
@@ -142,7 +142,10 @@ ObjArrayKlass::ObjArrayKlass(int n, Klass* element_klass, Symbol* name) : ArrayK
   assert(is_array_klass(), "sanity");
   assert(is_objArray_klass(), "sanity");
 
-  OopMapLUTable::set_entry(this);
+  // Add to KLUT
+  if (UseKLUT) {
+    KlassInfoLUT::register_klass(this);
+  }
 }
 
 size_t ObjArrayKlass::oop_size(oop obj) const {

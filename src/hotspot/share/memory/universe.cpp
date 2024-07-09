@@ -62,6 +62,7 @@
 #include "oops/instanceMirrorKlass.hpp"
 #include "oops/klass.inline.hpp"
 #include "oops/objArrayOop.inline.hpp"
+#include "oops/klassInfoLUT.hpp"
 #include "oops/oop.inline.hpp"
 #include "oops/oopHandle.inline.hpp"
 #include "oops/typeArrayKlass.hpp"
@@ -391,6 +392,11 @@ void Universe::genesis(TRAPS) {
   }
   assert(arrayOopDesc::length_offset_in_bytes() < static_cast<intptr_t>(os::vm_page_size()),
          "Array length offset is expected to be less than the page size");
+
+  // Initialize KLUT before starting to create any Klass
+  if (UseKLUT) {
+    KlassInfoLUT::initialize();
+  }
 
   { AutoModifyRestore<bool> temporarily(_bootstrapping, true);
 

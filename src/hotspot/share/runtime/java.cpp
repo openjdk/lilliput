@@ -22,7 +22,6 @@
  *
  */
 
-#include <oops/klassInfoLUTEntry.hpp>
 #include "precompiled.hpp"
 #include "cds/cds_globals.hpp"
 #include "cds/classListWriter.hpp"
@@ -55,6 +54,7 @@
 #include "oops/generateOopMap.hpp"
 #include "oops/instanceKlass.hpp"
 #include "oops/instanceOop.hpp"
+#include "oops/klassInfoLUT.hpp"
 #include "oops/klassVtable.hpp"
 #include "oops/method.hpp"
 #include "oops/objArrayOop.hpp"
@@ -363,8 +363,8 @@ void print_statistics() {
   ClassLoader::print_counters(tty);
 
 #ifdef ASSERT
-  if (UseCompactObjectHeaders && UseOopMapLUTable) {
-    OopMapLUTable::print_statistics(tty);
+  if (UseKLUT) {
+    KlassInfoLUT::print_statistics(tty);
   }
 #endif
 }

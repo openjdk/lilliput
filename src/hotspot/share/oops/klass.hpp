@@ -295,7 +295,7 @@ protected:
 
   // size helper
   int layout_helper() const            { return _layout_helper; }
-  void set_layout_helper(int lh);
+  void set_layout_helper(int lh)       { _layout_helper = lh; }
 
   // Note: for instances layout_helper() may include padding.
   // Use InstanceKlass::contains_field_offset to classify field offsets.

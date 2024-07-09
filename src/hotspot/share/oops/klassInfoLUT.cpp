@@ -37,18 +37,17 @@
 uint32_t* KlassInfoLUT::_entries = nullptr;
 
 void KlassInfoLUT::initialize() {
-  if (UseCompactObjectHeaders) {
-    assert(CompressedKlassPointers::narrow_klass_pointer_bits() <= 22, "sanity");
-    _entries = NEW_C_HEAP_ARRAY(uint32_t, num_entries(), mtX1);
-
-    // All entries are pre-calculated as being invalid
-    memset(_entries, 0, num_entries() * sizeof(uint32_t));
-    assert(_entries[0] == KlassLUTEntry::invalid_entry, "odd");
-  }
+  assert(UseKLUT, "?");
+  assert(CompressedKlassPointers::narrow_klass_pointer_bits() <= 22, "sanity");
+  _entries = NEW_C_HEAP_ARRAY(uint32_t, num_entries(), mtClass);
+  // All entries are pre-calculated as being invalid
+  memset(_entries, 0, num_entries() * sizeof(uint32_t));
+  assert(_entries[0] == KlassLUTEntry::invalid_entry, "odd");
 }
 
 void KlassInfoLUT::register_klass(const Klass* k) {
-  const narrowKlass nk = CompressedKlassPointers::encode(const_cast<InstanceKlass*>(k)); // grr why is this nonconst
+  assert(UseKLUT, "?");
+  const narrowKlass nk = CompressedKlassPointers::encode(const_cast<Klass*>(k)); // grr why is this nonconst
   assert(nk < num_entries(), "oob");
   KlassLUTEntry e(k);
   _entries[nk] = e.value();
@@ -79,6 +78,7 @@ STATS_DO(XX)
 #undef XX
 
 void KlassInfoLUT::print_statistics(outputStream* st) {
+  assert(UseKLUT, "?");
   st->print("KlassInfoLUT ");
 #define XX(xx) st->print(#xx ":" UINT64_FORMAT ", ", counter_##xx);
 STATS_DO(XX)

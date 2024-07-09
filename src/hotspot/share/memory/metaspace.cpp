@@ -24,7 +24,6 @@
  *
  */
 
-#include <oops/klassInfoLUTEntry.hpp>
 #include "precompiled.hpp"
 #include "cds/cdsConfig.hpp"
 #include "cds/metaspaceShared.hpp"
@@ -575,10 +574,6 @@ void Metaspace::initialize_class_space(ReservedSpace rs) {
   MetaspaceContext::initialize_class_space_context(rs);
   _class_space_start = rs.base();
   _class_space_end = rs.end();
-
-
-  OopMapLUTable::initialize();
-
 }
 
 // Returns true if class space has been setup (initialize_class_space).

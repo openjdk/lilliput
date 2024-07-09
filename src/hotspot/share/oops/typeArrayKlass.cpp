@@ -22,7 +22,6 @@
  *
  */
 
-#include <oops/klassInfoLUTEntry.inline.hpp>
 #include "precompiled.hpp"
 #include "classfile/moduleEntry.hpp"
 #include "classfile/packageEntry.hpp"
@@ -36,6 +35,7 @@
 #include "oops/arrayKlass.hpp"
 #include "oops/instanceKlass.hpp"
 #include "oops/klass.inline.hpp"
+#include "oops/klassInfoLUT.hpp"
 #include "oops/objArrayKlass.hpp"
 #include "oops/oop.inline.hpp"
 #include "oops/typeArrayKlass.inline.hpp"
@@ -64,6 +64,12 @@ TypeArrayKlass* TypeArrayKlass::create_klass(BasicType type,
   // an array class without a mirror.
   null_loader_data->add_class(ak);
   JFR_ONLY(ASSIGN_PRIMITIVE_CLASS_ID(ak);)
+
+  // Add to KLUT
+  if (UseKLUT) {
+    KlassInfoLUT::register_klass(ak);
+  }
+
   return ak;
 }
 
@@ -86,7 +92,6 @@ TypeArrayKlass::TypeArrayKlass(BasicType type, Symbol* name) : ArrayKlass(name, 
 
   set_class_loader_data(ClassLoaderData::the_null_class_loader_data());
 
-  OopMapLUTable::set_entry(this);
 }
 
 typeArrayOop TypeArrayKlass::allocate_common(int length, bool do_zero, TRAPS) {

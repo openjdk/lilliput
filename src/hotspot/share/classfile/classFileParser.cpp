@@ -54,6 +54,7 @@
 #include "oops/instanceKlass.inline.hpp"
 #include "oops/instanceMirrorKlass.hpp"
 #include "oops/klass.inline.hpp"
+#include "oops/klassInfoLUT.hpp"
 #include "oops/klassVtable.hpp"
 #include "oops/metadata.hpp"
 #include "oops/method.inline.hpp"
@@ -5439,7 +5440,9 @@ void ClassFileParser::fill_instance_klass(InstanceKlass* ik,
   // in order for it to not be destroyed in the ClassFileParser destructor.
   set_klass_to_deallocate(nullptr);
 
-  OopMapLUTable::set_entry(ik);
+  if (UseKLUT) {
+    KlassInfoLUT::register_klass(ik);
+  }
 
   // it's official
   set_klass(ik);

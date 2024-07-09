@@ -82,7 +82,7 @@ class KlassLUTEntry {
 
   const U _v;
 
-  static bool build_from_0(uint32_t& value, const Klass* k);
+  static int build_from_0(uint32_t& value, const Klass* k);
   static uint32_t build_from(const Klass* k);
 
   // The limits to what we can numerically represent in an (InstanceKlass) Entry
@@ -103,14 +103,14 @@ public:
 
   KlassLUTEntry(const Klass* ik);
 
-  bool valid() const      { return _v != invalid_entry; }
+  bool valid() const      { return _v.raw != invalid_entry; }
   bool invalid() const    { return !valid(); }
 
 #ifdef ASSERT
   void verify_against(const Klass* k) const;
 #endif
 
-  uint32_t value() const { return _v; }
+  uint32_t value() const { return _v.raw; }
 
   // Following methods only if entry is valid:
 
