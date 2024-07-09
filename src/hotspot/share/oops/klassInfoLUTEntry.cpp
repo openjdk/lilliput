@@ -181,12 +181,18 @@ int KlassLUTEntry::build_from_0(uint32_t& value, const Klass* k) {
       ERRBYE;
     }
 
+    const InstanceKlass* const ik = InstanceKlass::cast(k);
+
     //                msb                                          lsb
     // InstanceKlass:      KKKS SSSS SSSS SSSS CCCC CCCC OOOO OOOO
 
     // Size not trivially computable?
     if (Klass::layout_helper_needs_slow_path(lh)) {
-      ERRBYE;
+      if (ik->is_abstract() || ik->is_interface()) {
+        ERRBYE;
+      } else {
+        ERRBYE;
+      }
     }
 
     // Size trivially computable but would not fit?
@@ -194,8 +200,6 @@ int KlassLUTEntry::build_from_0(uint32_t& value, const Klass* k) {
     if (wordsize >= ik_wordsize_limit) {
       ERRBYE;
     }
-
-    const InstanceKlass* const ik = InstanceKlass::cast(k);
 
     // Has more than one nonstatic OopMapBlock?
     const int num_omb = ik->nonstatic_oop_map_count();
