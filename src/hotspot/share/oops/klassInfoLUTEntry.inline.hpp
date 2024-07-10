@@ -37,49 +37,40 @@
 
 // Returns size, in words, of oops of this class
 inline size_t KlassLUTEntry::ik_wordsize() const {
-  assert(kind() < Klass::TypeArrayKlassKind, "only for ik entries");
+  assert(!is_array(), "only for ik entries");
   return _v.ike.wordsize;
 }
 
 // Returns count of first OopMapBlock. Returns 0 if there is no OopMapBlock.
 inline unsigned KlassLUTEntry::ik_first_omb_count() const {
-  assert(kind() < Klass::TypeArrayKlassKind, "only for ik entries");
+  assert(!is_array(), "only for ik entries");
   return _v.ike.omb_count;
 }
 
 // Returns offset of first OopMapBlock. Only call if count is > 0
 inline unsigned KlassLUTEntry::ik_first_omb_offset() const {
-  assert(kind() < Klass::TypeArrayKlassKind, "only for ik entries");
+  assert(!is_array(), "only for ik entries");
   return _v.ike.omb_offset;
 }
 
 // Following methods only if AK:
 
 // returns layouthelper, restored to its full value
-inline int KlassLUTEntry::ak_layouthelper_full() const {
-  assert(kind() >= Klass::TypeArrayKlassKind, "only for ik entries");
-  // We could probably shave some instructions here, since we essentially
-  // just need to swap bits 30 and 29 (translate the upper nibble from
-  // ("0x4/0x5" aka XXXArrayKlassKind to "C"|"8")
-  uint32_t x = _v.raw;
-  x &= right_n_bits(bits_ak_lh);
-  const uint32_t y = kind() == Klass::TypeArrayKlassKind ? 0xC0000000 : 0x80000000;
-  x |= y;
-  return (int)x;
+inline int KlassLUTEntry::ak_layouthelper() const {
+  assert(is_array(), "only for ak entries");
+  // LH is encoded directly into the value.
+  return (int) _v.raw;
 }
 
 // Valid for all valid entries:
 inline unsigned KlassLUTEntry::calculate_oop_wordsize_given_oop(oop obj) const {
   assert(valid(), "must be valid");
   size_t rc = 0;
-  if (kind() < Klass::TypeArrayKlassKind) {
-    // IK is easy.
+  if (!is_array()) {
+    // For IK, instance word size is stored directly in bits 16-30.
     rc = ik_wordsize();
   } else {
-    // For AK, we calculate it from the layout helper. Note that we here ignore the upper three
-    // bits containing kind. For the size calculation they do not matter. We only need element size
-    // (lowest byte) and header size (byte 2).
-    // See also oopDesk::size_given_klass
+    // For AK, we calculate it from the layout helper.
     const union {
       uint32_t raw;
       uint8_t u[4];

@@ -36,10 +36,10 @@ class outputStream;
 
 //                msb                                          lsb
 // not_in_table:       ---- all bits zero --------------------
-// InstanceKlass:      KKKS SSSS SSSS SSSS CCCC CCCC OOOO OOOO
-// ArrayKlass:         KKKL LLLL LLLL LLLL LLLL LLLL LLLL LLLL
+// InstanceKlass:      KKSS SSSS SSSS SSSS CCCC CCCC OOOO OOOO
+// ArrayKlass:         KKLL LLLL LLLL LLLL LLLL LLLL LLLL LLLL
 //
-// K - klass kind
+// K - klass kind (condensed)
 // S - size in words (max 2^13)
 // C - count of first oopmap entry (max 2^8)
 // O - offset of first oopmap entry, in bytes (max 2^8)
@@ -48,13 +48,26 @@ class outputStream;
 
 class KlassLUTEntry {
 
-  // All valid entries:  KKK- ---- ---- ---- ---- ---- ---- ----
-  static constexpr int bits_kind       = 3;
+  // Since not all kinds of Klass are representable, we omit some of the kinds and get a tighter representation
+  // (2 bits instead of 3), a simpler dispatch, and we are able to form the kinds for AK in a way that it matches
+  // layouthelper for AK.
+  static constexpr int kind_instance_klass      = 0b00; // must be 0
+  static constexpr int kind_instance_ref_klass  = 0b01;
+  // kind_objarray_klass and kind_typearray_klass must match the two msb of layouthelper
+  // of ArrayKlass (0x80 for ObjArrayKlass, 0xC0 for TypeArrayKlass)
+  static constexpr int kind_objarray_klass      = 0b10;
+  static constexpr int kind_typearray_klass     = 0b11;
 
-  // InstanceKlass:      KKKS SSSS SSSS SSSS CCCC CCCC OOOO OOOO
+  static int kind_to_ourkind(int kind);
+  static int ourkind_to_kind(int kind);
+
+  // All valid entries:  KK-- ---- ---- ---- ---- ---- ---- ----
+  static constexpr int bits_kind       = 2;
+
+  // InstanceKlass:      KKSS SSSS SSSS SSSS CCCC CCCC OOOO OOOO
   static constexpr int bits_ik_omb_offset = 8;
   static constexpr int bits_ik_omb_count  = 8;
-  static constexpr int bits_ik_wordsize   = 13;
+  static constexpr int bits_ik_wordsize   = 16 - bits_kind; // 14 -> max representable ik instance size 16383 words = 131KB
   struct UIK {
     // lsb
     unsigned omb_offset : bits_ik_omb_offset;
@@ -64,11 +77,11 @@ class KlassLUTEntry {
     // msb
   };
 
-  // ArrayKlass:         KKKL LLLL LLLL LLLL LLLL LLLL LLLL LLLL
-  static constexpr int bits_ak_lh         = 29;
+  // ArrayKlass:         KKLL LLLL LLLL LLLL LLLL LLLL LLLL LLLL
+  static constexpr int bits_ak_lh         = 32 - bits_kind;
   struct UAK {
     // lsb
-    unsigned lh29       : bits_ak_lh;
+    unsigned lh30       : bits_ak_lh;
     unsigned kind       : bits_kind;
     // msb
   };
@@ -91,8 +104,9 @@ class KlassLUTEntry {
   static constexpr size_t ik_omb_offset_limit = nth_bit(bits_ik_omb_offset);
   static constexpr size_t ik_omb_count_limit = nth_bit(bits_ik_omb_count);
 
-  // Helper function. Returns true if k can be represented by a 32-bit entry
-  static bool klass_is_representable(const Klass* ik);
+  // Helper function. Returns true if k can be represented by a 32-bit entry, false if not.
+  // Optionally, returns error string.
+  static bool klass_is_representable(const Klass* ik, const char*& err);
 
 public:
 
@@ -115,8 +129,10 @@ public:
 
   // Following methods only if entry is valid:
 
-  // Returns kind
-  inline int kind() const { return _v.ake.kind; }
+  // Returns (our) kind
+  inline unsigned kind() const { return _v.ake.kind; }
+
+  bool is_array() const { return (_v.raw >> 31) > 0; }
 
   // Following methods only if IK:
 
@@ -131,8 +147,8 @@ public:
 
   // Following methods only if AK:
 
-  // returns layouthelper, restored to its full value
-  inline int ak_layouthelper_full() const;
+  // returns layouthelper
+  inline int ak_layouthelper() const;
 
   // Valid for all valid entries:
   inline unsigned calculate_oop_wordsize_given_oop(oop obj) const;
