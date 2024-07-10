@@ -43,7 +43,7 @@ class outputStream;
 // S - size in words (max 2^13)
 // C - count of first oopmap entry (max 2^8)
 // O - offset of first oopmap entry, in bytes (max 2^8)
-// L - lower 29 bits of layouthelper.
+// L - lower 30 bits of layouthelper.
 //
 
 class KlassLUTEntry {
@@ -53,10 +53,9 @@ class KlassLUTEntry {
   // layouthelper for AK.
   static constexpr int kind_instance_klass      = 0b00; // must be 0
   static constexpr int kind_instance_ref_klass  = 0b01;
-  // kind_objarray_klass and kind_typearray_klass must match the two msb of layouthelper
-  // of ArrayKlass (0x80 for ObjArrayKlass, 0xC0 for TypeArrayKlass)
-  static constexpr int kind_objarray_klass      = 0b10;
-  static constexpr int kind_typearray_klass     = 0b11;
+  // kind_objarray_klass and kind_typearray_klass must match the two most significant bits of array-layouthelper
+  static constexpr int kind_objarray_klass      = 0b10;  // 0x80
+  static constexpr int kind_typearray_klass     = 0b11;  // 0xC0
 
   static int kind_to_ourkind(int kind);
   static int ourkind_to_kind(int kind);
@@ -132,7 +131,8 @@ public:
   // Returns (our) kind
   inline unsigned kind() const { return _v.ake.kind; }
 
-  bool is_array() const { return (_v.raw >> 31) > 0; }
+  bool is_array() const     { return (_v.raw >> 31) != 0; }
+  bool is_instance() const  { return (_v.raw >> 31) == 0; }
 
   // Following methods only if IK:
 
