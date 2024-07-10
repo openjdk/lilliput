@@ -53,6 +53,21 @@ private:
     return reinterpret_cast<int*>(ptr + length_offset_in_bytes());
   }
 
+  static int slice_helper_offset_in_bytes() {
+    if (UseCompactObjectHeaders) {
+      return 8;
+    } else {
+      return length_offset_in_bytes();
+    }
+  }
+
+  int* slice_helper_addr() {
+    char* ptr = cast_from_oop<char*>(const_cast<arrayOopDesc*>(this));
+    //assert(size() * BytesPerWord >= (size_t)slice_helper_offset_in_bytes() + BytesPerInt,
+    //       "slice helper should fit");
+    return reinterpret_cast<int*>(ptr + slice_helper_offset_in_bytes());
+  }
+
   // Given a type, return true if elements of that type must be aligned to 64-bit.
   static bool element_type_should_be_aligned(BasicType type) {
 #ifdef _LP64
@@ -129,6 +144,14 @@ private:
 
   static void set_length(HeapWord* mem, int length) {
     *length_addr_impl(mem) = length;
+  }
+
+  void set_slice_helper(int val) {
+    *slice_helper_addr() = val;
+  }
+
+  int get_slice_helper() {
+    return *slice_helper_addr();
   }
 
   // Return the maximum length of an array of BasicType.  The length can be passed

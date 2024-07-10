@@ -28,6 +28,7 @@
 #include "gc/shared/partialArrayTaskStepper.hpp"
 
 #include "oops/arrayOop.hpp"
+#include "oops/oop.inline.hpp"
 #include "runtime/atomic.hpp"
 
 PartialArrayTaskStepper::Step
@@ -57,7 +58,10 @@ PartialArrayTaskStepper::start_impl(int length,
 
 PartialArrayTaskStepper::Step
 PartialArrayTaskStepper::start(arrayOop from, arrayOop to, int chunk_size) const {
-  return start_impl(from->length(), to->length_addr(), chunk_size);
+  if (to->size() > 2) {
+    from->set_slice_helper(to->length());
+  }
+  return start_impl(to->length(), to->length_addr(), chunk_size);
 }
 
 PartialArrayTaskStepper::Step
@@ -112,7 +116,7 @@ PartialArrayTaskStepper::next_impl(int length,
 
 PartialArrayTaskStepper::Step
 PartialArrayTaskStepper::next(arrayOop from, arrayOop to, int chunk_size) const {
-  return next_impl(from->length(), to->length_addr(), chunk_size);
+  return next_impl(from->get_slice_helper(), to->length_addr(), chunk_size);
 }
 
 #endif // SHARE_GC_SHARED_PARTIALARRAYTASKSTEPPER_INLINE_HPP
