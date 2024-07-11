@@ -37,6 +37,7 @@
 #include "oops/instanceClassLoaderKlass.inline.hpp"
 #include "oops/instanceRefKlass.inline.hpp"
 #include "oops/instanceStackChunkKlass.inline.hpp"
+#include "oops/klassInfoLUTEntry.inline.hpp"
 #include "oops/objArrayKlass.inline.hpp"
 #include "oops/typeArrayKlass.inline.hpp"
 #include "utilities/debug.hpp"
@@ -304,5 +305,81 @@ template <typename OopClosureType>
 void OopIteratorClosureDispatch::oop_oop_iterate_backwards(OopClosureType* cl, oop obj, Klass* klass) {
   OopOopIterateBackwardsDispatch<OopClosureType>::function(klass)(cl, obj, klass);
 }
+
+
+
+
+
+////////////// KLUTE
+
+
+template <typename KlassType> struct KluteKind { static constexpr int v = -1; };
+template <> struct KluteKind<InstanceKlass> { static constexpr int v = KlassLUTEntry::kind_instance_klass; };
+
+
+
+template <typename OopClosureType>
+class OopOopIterateDispatchWithKlute : public AllStatic {
+private:
+  typedef void (*FunctionType)(OopClosureType*, oop, Klass*, KlassLUTEntry klute);
+
+  class Table {
+  private:
+    template <typename KlassType, typename T>
+    static void oop_oop_iterate(OopClosureType* cl, oop obj, Klass* k, KlassLUTEntry klute) {
+      ((KlassType*)k)->KlassType::template oop_oop_iterate<T>(obj, cl, klute);
+    }
+
+    template <typename KlassType>
+    static void init(OopClosureType* cl, oop obj, Klass* k, KlassLUTEntry klute) {
+      OopOopIterateDispatchWithKlute<OopClosureType>::_table.set_resolve_function_and_execute<KlassType>(cl, obj, k, klute);
+    }
+
+    template <typename KlassType>
+    void set_init_function() {
+      _function[KluteKind<KlassType>::v] = &init<KlassType>;
+    }
+
+    template <typename KlassType>
+    void set_resolve_function() {
+      // Size requirement to prevent word tearing
+      // when functions pointers are updated.
+      STATIC_ASSERT(sizeof(_function[0]) == sizeof(void*));
+      _function[KluteKind<KlassType>::v] =
+          UseCompressedOops ?
+              &oop_oop_iterate<KlassType, narrowOop> : &oop_oop_iterate<KlassType, oop>;
+    }
+
+    template <typename KlassType>
+    void set_resolve_function_and_execute(OopClosureType* cl, oop obj, Klass* k, KlassLUTEntry klute) {
+      set_resolve_function<KlassType>();
+      assert(klute.kind() == KluteKind<KlassType>::v, "sanity");
+      _function[KluteKind<KlassType>::v](cl, obj, k, klute);
+    }
+
+  public:
+    FunctionType _function[KlassLUTEntry::num_kinds];
+
+    Table(){
+      set_init_function<InstanceKlass>();
+    /*  set_init_function<InstanceRefKlass>();
+      set_init_function<InstanceMirrorKlass>();
+      set_init_function<InstanceClassLoaderKlass>();
+      set_init_function<InstanceStackChunkKlass>();
+      set_init_function<ObjArrayKlass>();
+      set_init_function<TypeArrayKlass>(); */
+    }
+  };
+
+  static Table _table;
+public:
+
+  static FunctionType function(KlassLUTEntry klute) {
+    return _table._function[klute.kind()];
+  }
+};
+
+template <typename OopClosureType>
+typename OopOopIterateDispatchWithKlute<OopClosureType>::Table OopOopIterateDispatchWithKlute<OopClosureType>::_table;
 
 #endif // SHARE_MEMORY_ITERATOR_INLINE_HPP

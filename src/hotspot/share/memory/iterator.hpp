@@ -28,6 +28,7 @@
 #include "memory/allocation.hpp"
 #include "memory/memRegion.hpp"
 #include "oops/oopsHierarchy.hpp"
+#include "oops/klassInfoLUT.hpp"
 
 class CodeBlob;
 class nmethod;
@@ -317,6 +318,10 @@ class OopIteratorClosureDispatch {
   template <typename OopClosureType> static void oop_oop_iterate(OopClosureType* cl, oop obj, Klass* klass);
   template <typename OopClosureType> static void oop_oop_iterate(OopClosureType* cl, oop obj, Klass* klass, MemRegion mr);
   template <typename OopClosureType> static void oop_oop_iterate_backwards(OopClosureType* cl, oop obj, Klass* klass);
+
+  // Note: we only need Klass* for later, in the Klass, to optionally do metadata iteration. However, this may hopefully change in the future.
+  template <typename OopClosureType> static void oop_oop_iterate(OopClosureType* cl, oop obj, Klass* klass, KlassLUTEntry klute);
+
 };
 
 #endif // SHARE_MEMORY_ITERATOR_HPP

@@ -48,6 +48,8 @@ class outputStream;
 
 class KlassLUTEntry {
 
+public: // Dispatch needs this
+
   // Since not all kinds of Klass are representable, we omit some of the kinds and get a tighter representation
   // (2 bits instead of 3), a simpler dispatch, and we are able to form the kinds for AK in a way that it matches
   // layouthelper for AK.
@@ -56,7 +58,9 @@ class KlassLUTEntry {
   // kind_objarray_klass and kind_typearray_klass must match the two most significant bits of array-layouthelper
   static constexpr int kind_objarray_klass      = 0b10;  // 0x80
   static constexpr int kind_typearray_klass     = 0b11;  // 0xC0
+  static constexpr int num_kinds = kind_typearray_klass + 1;
 
+private:
   static int kind_to_ourkind(int kind);
   static int ourkind_to_kind(int kind);
 
