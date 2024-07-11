@@ -26,6 +26,7 @@
 #define SHARE_OOPS_TYPEARRAYKLASS_HPP
 
 #include "oops/arrayKlass.hpp"
+#include "oops/klassInfoLUTEntry.hpp"
 
 class ClassLoaderData;
 
@@ -84,6 +85,8 @@ class TypeArrayKlass : public ArrayKlass {
   // Wraps oop_oop_iterate_impl to conform to macros.
   template <typename T, typename OopClosureType>
   inline void oop_oop_iterate(oop obj, OopClosureType* closure);
+  template <typename T, typename OopClosureType>
+  inline void oop_oop_iterate(oop obj, OopClosureType* closure, KlassLUTEntry klute);
 
   // Wraps oop_oop_iterate_impl to conform to macros.
   template <typename T, typename OopClosureType>

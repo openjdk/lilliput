@@ -81,6 +81,13 @@ void ObjArrayKlass::oop_oop_iterate(oop obj, OopClosureType* closure) {
   oop_oop_iterate_elements<T>(a, closure);
 }
 
+// Klute variant does nothing special, since there is nothing in the klute that would help
+// us here. It only exists to make the dispatcher happy.
+template <typename T, typename OopClosureType>
+void ObjArrayKlass::oop_oop_iterate(oop obj, OopClosureType* closure, KlassLUTEntry klute) {
+  oop_oop_iterate<T>(obj, closure);
+}
+
 template <typename T, typename OopClosureType>
 void ObjArrayKlass::oop_oop_iterate_reverse(oop obj, OopClosureType* closure) {
   // No reverse implementation ATM.

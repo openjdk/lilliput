@@ -34,6 +34,8 @@
 #include "oops/arrayOop.hpp"
 #include "oops/compressedKlass.inline.hpp"
 #include "oops/instanceKlass.hpp"
+#include "oops/klassInfoLUT.inline.hpp"
+#include "oops/klassInfoLUTEntry.inline.hpp"
 #include "oops/markWord.inline.hpp"
 #include "oops/oopsHierarchy.hpp"
 #include "runtime/atomic.hpp"
@@ -417,6 +419,17 @@ void oopDesc::incr_age() {
 
 template <typename OopClosureType>
 void oopDesc::oop_iterate(OopClosureType* cl) {
+
+  if (UseKLUT) {
+    const narrowKlass nk = mark().narrow_klass();
+    const KlassLUTEntry klute = KlassInfoLUT::get_entry(nk);
+    if (klute.valid()) {
+      Klass* const k = CompressedKlassPointers::decode_not_null(nk);
+      OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k, klute);
+      return;
+    }
+  }
+
   OopIteratorClosureDispatch::oop_oop_iterate(cl, this, klass());
 }
 

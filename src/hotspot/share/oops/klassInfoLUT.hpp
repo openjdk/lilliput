@@ -45,8 +45,6 @@ class KlassInfoLUT : public AllStatic {
  	f(registered_as_valid)    \
   f(registered_as_invalid)  \
   f(hits)                   \
-  f(hits_ik_omb_zero)       \
-  f(hits_ik_omb_non_zero)   \
   f(misses)
 #define XX(xx) static void inc_##xx();
   STATS_DO(XX)

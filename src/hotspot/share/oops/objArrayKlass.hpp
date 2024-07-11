@@ -26,6 +26,7 @@
 #define SHARE_OOPS_OBJARRAYKLASS_HPP
 
 #include "oops/arrayKlass.hpp"
+#include "oops/klassInfoLUTEntry.hpp"
 #include "utilities/macros.hpp"
 
 class ClassLoaderData;
@@ -131,6 +132,10 @@ class ObjArrayKlass : public ArrayKlass {
   // Iterate over oop elements within [start, end), and metadata.
   template <typename T, class OopClosureType>
   inline void oop_oop_iterate_range(objArrayOop a, OopClosureType* closure, int start, int end);
+
+  // Klute variants
+  template <typename T, typename OopClosureType>
+  inline void oop_oop_iterate(oop obj, OopClosureType* closure, KlassLUTEntry klute);
 
  public:
   // Iterate over all oop elements.

@@ -68,8 +68,9 @@ bool KlassLUTEntry::klass_is_representable(const Klass* k, const char*& err) {
 
   const InstanceKlass* const ik = InstanceKlass::cast(k);
 
-  if (kind != Klass::InstanceKlassKind &&
-      kind != Klass::InstanceRefKlassKind) {
+//  if (kind != Klass::InstanceKlassKind &&
+//      kind != Klass::InstanceRefKlassKind) { // TODO ref classes
+  if (kind != Klass::InstanceKlassKind) {
     NOPE("Unsupported InstanceKlass Kind");
   }
 

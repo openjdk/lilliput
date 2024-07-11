@@ -307,16 +307,13 @@ void OopIteratorClosureDispatch::oop_oop_iterate_backwards(OopClosureType* cl, o
 }
 
 
-
-
-
 ////////////// KLUTE
 
 
 template <typename KlassType> struct KluteKind { static constexpr int v = -1; };
 template <> struct KluteKind<InstanceKlass> { static constexpr int v = KlassLUTEntry::kind_instance_klass; };
-
-
+template <> struct KluteKind<ObjArrayKlass> { static constexpr int v = KlassLUTEntry::kind_objarray_klass; };
+template <> struct KluteKind<TypeArrayKlass> { static constexpr int v = KlassLUTEntry::kind_typearray_klass; };
 
 template <typename OopClosureType>
 class OopOopIterateDispatchWithKlute : public AllStatic {
@@ -360,8 +357,11 @@ private:
   public:
     FunctionType _function[KlassLUTEntry::num_kinds];
 
-    Table(){
+    Table() {
+      memset(_function, 0, sizeof(_function));
       set_init_function<InstanceKlass>();
+      set_init_function<ObjArrayKlass>();
+      set_init_function<TypeArrayKlass>();
     /*  set_init_function<InstanceRefKlass>();
       set_init_function<InstanceMirrorKlass>();
       set_init_function<InstanceClassLoaderKlass>();
@@ -375,11 +375,19 @@ private:
 public:
 
   static FunctionType function(KlassLUTEntry klute) {
-    return _table._function[klute.kind()];
+    const int slot = klute.kind();
+    return _table._function[slot];
   }
 };
 
 template <typename OopClosureType>
 typename OopOopIterateDispatchWithKlute<OopClosureType>::Table OopOopIterateDispatchWithKlute<OopClosureType>::_table;
+
+
+
+template <typename OopClosureType>
+void OopIteratorClosureDispatch::oop_oop_iterate(OopClosureType* cl, oop obj, Klass* klass, KlassLUTEntry klute) {
+  OopOopIterateDispatchWithKlute<OopClosureType>::function(klute)(cl, obj, klass, klute);
+}
 
 #endif // SHARE_MEMORY_ITERATOR_INLINE_HPP
