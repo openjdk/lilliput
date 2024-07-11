@@ -31,6 +31,7 @@
 #include "oops/fieldInfo.hpp"
 #include "oops/instanceKlassFlags.hpp"
 #include "oops/instanceOop.hpp"
+#include "oops/klassInfoLUT.hpp"
 #include "runtime/handles.hpp"
 #include "runtime/javaThread.hpp"
 #include "utilities/accessFlags.hpp"
@@ -1053,6 +1054,20 @@ public:
   static inline void oop_oop_iterate_oop_map_bounded(OopMapBlock* map, oop obj, OopClosureType* closure, MemRegion mr);
   template <typename T, class OopClosureType>
   static inline void oop_oop_iterate_oop_map_bounded(unsigned offset, unsigned count, oop obj, OopClosureType* closure, MemRegion mr);
+
+ public:
+  // oop iteration via klute
+  // Iterate over all oop fields and metadata.
+  template <typename T, class OopClosureType>
+  inline void oop_oop_iterate(oop obj, OopClosureType* closure, KlassLUTEntry klute);
+
+  // Iterate over all oop fields in the oop maps (no metadata traversal)
+  template <typename T, class OopClosureType>
+  inline void oop_oop_iterate_oop_maps_reverse(oop obj, OopClosureType* closure, KlassLUTEntry klute);
+
+  // Iterate over all oop fields and metadata.
+  template <typename T, class OopClosureType>
+  inline void oop_oop_iterate_bounded(oop obj, OopClosureType* closure, KlassLUTEntry klute, MemRegion mr);
 
  public:
   u2 idnum_allocated_count() const      { return _idnum_allocated_count; }

@@ -204,4 +204,37 @@ ALWAYSINLINE void InstanceKlass::oop_oop_iterate_bounded(oop obj, OopClosureType
   oop_oop_iterate_oop_maps_bounded<T>(obj, closure, mr);
 }
 
+// oop iteration via klute
+// Iterate over all oop fields and metadata.
+template <typename T, class OopClosureType>
+ALWAYSINLINE void InstanceKlass::oop_oop_iterate(oop obj, OopClosureType* closure, KlassLUTEntry klute) {
+  if (Devirtualizer::do_metadata(closure)) {
+    Devirtualizer::do_klass(closure, this);
+  }
+
+  assert(klute.valid(), "invalid");
+  oop_oop_iterate_oop_map<T>(klute.ik_first_omb_offset(), klute.ik_first_omb_count(), obj, closure);
+}
+
+// Iterate over all oop fields in the oop maps (no metadata traversal)
+template <typename T, class OopClosureType>
+ALWAYSINLINE void InstanceKlass::oop_oop_iterate_oop_maps_reverse(oop obj, OopClosureType* closure, KlassLUTEntry klute) {
+  assert(!Devirtualizer::do_metadata(closure),
+      "Code to handle metadata is not implemented");
+  assert(klute.valid(), "invalid");
+  oop_oop_iterate_oop_maps_reverse<T>(klute.ik_first_omb_offset(), klute.ik_first_omb_count(), obj, closure);
+}
+
+// Iterate over all oop fields and metadata.
+template <typename T, class OopClosureType>
+ALWAYSINLINE void InstanceKlass::oop_oop_iterate_bounded(oop obj, OopClosureType* closure, KlassLUTEntry klute, MemRegion mr) {
+  if (Devirtualizer::do_metadata(closure)) {
+    if (mr.contains(obj)) {
+      Devirtualizer::do_klass(closure, this);
+    }
+  }
+  assert(klute.valid(), "invalid");
+  oop_oop_iterate_oop_maps_bounded<T>(klute.ik_first_omb_offset(), klute.ik_first_omb_count(), obj, closure, mr);
+}
+
 #endif // SHARE_OOPS_INSTANCEKLASS_INLINE_HPP
