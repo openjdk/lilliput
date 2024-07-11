@@ -84,9 +84,9 @@ inline void InstanceKlass::release_set_methods_jmethod_ids(jmethodID* jmeths) {
 // as the previous macro based implementation.
 
 template <typename T, class OopClosureType>
-ALWAYSINLINE void InstanceKlass::oop_oop_iterate_oop_map(OopMapBlock* map, oop obj, OopClosureType* closure) {
-  T* p         = obj->field_addr<T>(map->offset());
-  T* const end = p + map->count();
+ALWAYSINLINE void InstanceKlass::oop_oop_iterate_oop_map(unsigned offset, unsigned count, oop obj, OopClosureType* closure) {
+  T* p         = obj->field_addr<T>(offset);
+  T* const end = p + count;
 
   for (; p < end; ++p) {
     Devirtualizer::do_oop(closure, p);
@@ -94,9 +94,15 @@ ALWAYSINLINE void InstanceKlass::oop_oop_iterate_oop_map(OopMapBlock* map, oop o
 }
 
 template <typename T, class OopClosureType>
-ALWAYSINLINE void InstanceKlass::oop_oop_iterate_oop_map_reverse(OopMapBlock* map, oop obj, OopClosureType* closure) {
-  T* const start = obj->field_addr<T>(map->offset());
-  T*       p     = start + map->count();
+ALWAYSINLINE void InstanceKlass::oop_oop_iterate_oop_map(OopMapBlock* map, oop obj, OopClosureType* closure) {
+  assert(map->offset() > 0, "must be");
+  oop_oop_iterate_oop_map<T>((unsigned)map->offset(), map->count(), obj, closure);
+}
+
+template <typename T, class OopClosureType>
+ALWAYSINLINE void InstanceKlass::oop_oop_iterate_oop_map_reverse(unsigned offset, unsigned count, oop obj, OopClosureType* closure) {
+  T* const start = obj->field_addr<T>(offset);
+  T*       p     = start + count;
 
   while (start < p) {
     --p;
@@ -105,9 +111,15 @@ ALWAYSINLINE void InstanceKlass::oop_oop_iterate_oop_map_reverse(OopMapBlock* ma
 }
 
 template <typename T, class OopClosureType>
-ALWAYSINLINE void InstanceKlass::oop_oop_iterate_oop_map_bounded(OopMapBlock* map, oop obj, OopClosureType* closure, MemRegion mr) {
-  T* p   = obj->field_addr<T>(map->offset());
-  T* end = p + map->count();
+ALWAYSINLINE void InstanceKlass::oop_oop_iterate_oop_map_reverse(OopMapBlock* map, oop obj, OopClosureType* closure) {
+  assert(map->offset() > 0, "must be");
+  oop_oop_iterate_oop_map_reverse<T>((unsigned)map->offset(), map->count(), obj, closure);
+}
+
+template <typename T, class OopClosureType>
+ALWAYSINLINE void InstanceKlass::oop_oop_iterate_oop_map_bounded(unsigned offset, unsigned count, oop obj, OopClosureType* closure, MemRegion mr) {
+  T* p   = obj->field_addr<T>(offset);
+  T* end = p + count;
 
   T* const l   = (T*)mr.start();
   T* const h   = (T*)mr.end();
@@ -125,6 +137,12 @@ ALWAYSINLINE void InstanceKlass::oop_oop_iterate_oop_map_bounded(OopMapBlock* ma
   for (;p < end; ++p) {
     Devirtualizer::do_oop(closure, p);
   }
+}
+
+template <typename T, class OopClosureType>
+ALWAYSINLINE void InstanceKlass::oop_oop_iterate_oop_map_bounded(OopMapBlock* map, oop obj, OopClosureType* closure, MemRegion mr) {
+  assert(map->offset() > 0, "must be");
+  oop_oop_iterate_oop_map_bounded<T>((unsigned)map->offset(), map->count(), obj, closure, mr);
 }
 
 template <typename T, class OopClosureType>

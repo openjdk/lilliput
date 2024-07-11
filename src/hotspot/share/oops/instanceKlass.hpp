@@ -1018,6 +1018,8 @@ public:
   // Iterate over all oop fields in one oop map.
   template <typename T, class OopClosureType>
   static inline void oop_oop_iterate_oop_map(OopMapBlock* map, oop obj, OopClosureType* closure);
+  template <typename T, class OopClosureType>
+  static inline void oop_oop_iterate_oop_map(unsigned offset, unsigned count, oop obj, OopClosureType* closure);
 
   // Reverse iteration
   // Iterate over all oop fields and metadata.
@@ -1032,7 +1034,8 @@ public:
   // Iterate over all oop fields in one oop map.
   template <typename T, class OopClosureType>
   static inline void oop_oop_iterate_oop_map_reverse(OopMapBlock* map, oop obj, OopClosureType* closure);
-
+  template <typename T, class OopClosureType>
+  static inline void oop_oop_iterate_oop_map_reverse(unsigned offset, unsigned count, oop obj, OopClosureType* closure);
 
   // Bounded range iteration
  public:
@@ -1048,7 +1051,8 @@ public:
   // Iterate over all oop fields in one oop map.
   template <typename T, class OopClosureType>
   static inline void oop_oop_iterate_oop_map_bounded(OopMapBlock* map, oop obj, OopClosureType* closure, MemRegion mr);
-
+  template <typename T, class OopClosureType>
+  static inline void oop_oop_iterate_oop_map_bounded(unsigned offset, unsigned count, oop obj, OopClosureType* closure, MemRegion mr);
 
  public:
   u2 idnum_allocated_count() const      { return _idnum_allocated_count; }
