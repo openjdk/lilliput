@@ -26,6 +26,7 @@
 #define SHARE_OOPS_INSTANCEREFKLASS_HPP
 
 #include "oops/instanceKlass.hpp"
+#include "oops/klassInfoLUTEntry.hpp"
 #include "utilities/macros.hpp"
 
 class ClassFileParser;
@@ -67,6 +68,8 @@ class InstanceRefKlass: public InstanceKlass {
   // Iterate over all oop fields and metadata.
   template <typename T, class OopClosureType>
   inline void oop_oop_iterate(oop obj, OopClosureType* closure);
+  template <typename T, class OopClosureType>
+  inline void oop_oop_iterate(oop obj, OopClosureType* closure, KlassLUTEntry klute);
 
   // Reverse iteration
   // Iterate over all oop fields and metadata.

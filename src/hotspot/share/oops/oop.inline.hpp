@@ -422,10 +422,13 @@ void oopDesc::oop_iterate(OopClosureType* cl) {
 
   if (UseKLUT) {
     const narrowKlass nk = mark().narrow_klass();
+    Klass* const k = CompressedKlassPointers::decode_not_null(nk);
     const KlassLUTEntry klute = KlassInfoLUT::get_entry(nk);
     if (klute.valid()) {
-      Klass* const k = CompressedKlassPointers::decode_not_null(nk);
       OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k, klute);
+      return;
+    } else {
+      OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k);
       return;
     }
   }

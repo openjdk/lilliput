@@ -312,6 +312,7 @@ void OopIteratorClosureDispatch::oop_oop_iterate_backwards(OopClosureType* cl, o
 
 template <typename KlassType> struct KluteKind { static constexpr int v = -1; };
 template <> struct KluteKind<InstanceKlass> { static constexpr int v = KlassLUTEntry::kind_instance_klass; };
+template <> struct KluteKind<InstanceRefKlass> { static constexpr int v = KlassLUTEntry::kind_instance_ref_klass; };
 template <> struct KluteKind<ObjArrayKlass> { static constexpr int v = KlassLUTEntry::kind_objarray_klass; };
 template <> struct KluteKind<TypeArrayKlass> { static constexpr int v = KlassLUTEntry::kind_typearray_klass; };
 
@@ -362,12 +363,7 @@ private:
       set_init_function<InstanceKlass>();
       set_init_function<ObjArrayKlass>();
       set_init_function<TypeArrayKlass>();
-    /*  set_init_function<InstanceRefKlass>();
-      set_init_function<InstanceMirrorKlass>();
-      set_init_function<InstanceClassLoaderKlass>();
-      set_init_function<InstanceStackChunkKlass>();
-      set_init_function<ObjArrayKlass>();
-      set_init_function<TypeArrayKlass>(); */
+      set_init_function<InstanceRefKlass>();
     }
   };
 
