@@ -321,7 +321,7 @@ class OopIteratorClosureDispatch {
 
   // Note: we only need Klass* for later, in the Klass, to optionally do metadata iteration. However, this may hopefully change in the future.
   template <typename OopClosureType> static void oop_oop_iterate(OopClosureType* cl, oop obj, Klass* klass, KlassLUTEntry klute);
-
+  template <typename OopClosureType> static void oop_oop_iterate(OopClosureType* cl, oop obj, Klass* klass, KlassLUTEntry klute, MemRegion mr);
 };
 
 #endif // SHARE_MEMORY_ITERATOR_HPP

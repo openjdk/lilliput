@@ -222,7 +222,7 @@ ALWAYSINLINE void InstanceKlass::oop_oop_iterate_oop_maps_reverse(oop obj, OopCl
   assert(!Devirtualizer::do_metadata(closure),
       "Code to handle metadata is not implemented");
   assert(klute.valid(), "invalid");
-  oop_oop_iterate_oop_maps_reverse<T>(klute.ik_first_omb_offset(), klute.ik_first_omb_count(), obj, closure);
+  oop_oop_iterate_oop_map_reverse<T>(klute.ik_first_omb_offset(), klute.ik_first_omb_count(), obj, closure);
 }
 
 // Iterate over all oop fields and metadata.
@@ -234,7 +234,7 @@ ALWAYSINLINE void InstanceKlass::oop_oop_iterate_bounded(oop obj, OopClosureType
     }
   }
   assert(klute.valid(), "invalid");
-  oop_oop_iterate_oop_maps_bounded<T>(klute.ik_first_omb_offset(), klute.ik_first_omb_count(), obj, closure, mr);
+  oop_oop_iterate_oop_map_bounded<T>(klute.ik_first_omb_offset(), klute.ik_first_omb_count(), obj, closure, mr);
 }
 
 #endif // SHARE_OOPS_INSTANCEKLASS_INLINE_HPP

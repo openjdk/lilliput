@@ -81,13 +81,6 @@ void ObjArrayKlass::oop_oop_iterate(oop obj, OopClosureType* closure) {
   oop_oop_iterate_elements<T>(a, closure);
 }
 
-// Klute variant does nothing special, since there is nothing in the klute that would help
-// us here. It only exists to make the dispatcher happy.
-template <typename T, typename OopClosureType>
-void ObjArrayKlass::oop_oop_iterate(oop obj, OopClosureType* closure, KlassLUTEntry klute) {
-  oop_oop_iterate<T>(obj, closure);
-}
-
 template <typename T, typename OopClosureType>
 void ObjArrayKlass::oop_oop_iterate_reverse(oop obj, OopClosureType* closure) {
   // No reverse implementation ATM.
@@ -104,6 +97,18 @@ void ObjArrayKlass::oop_oop_iterate_bounded(oop obj, OopClosureType* closure, Me
   }
 
   oop_oop_iterate_elements_bounded<T>(a, closure, mr.start(), mr.end());
+}
+
+// The klute variants of OAK::oop_oop_iterate don't do anything special. There is nothing to gain
+// here anymore from the info in the KlassLUTEntry.
+template <typename T, typename OopClosureType>
+void ObjArrayKlass::oop_oop_iterate(oop obj, OopClosureType* closure, KlassLUTEntry ignored) {
+  oop_oop_iterate<T>(obj, closure);
+}
+
+template <typename T, typename OopClosureType>
+void ObjArrayKlass::oop_oop_iterate_bounded(oop obj, OopClosureType* closure, KlassLUTEntry ignored, MemRegion mr) {
+  oop_oop_iterate_bounded<T>(obj, closure, mr);
 }
 
 // Like oop_oop_iterate but only iterates over a specified range and only used

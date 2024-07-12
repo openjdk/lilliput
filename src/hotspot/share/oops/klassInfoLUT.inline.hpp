@@ -32,20 +32,40 @@
 #include "utilities/globalDefinitions.hpp"
 #include "utilities/debug.hpp"
 
+#define ENABLE_EXPENSIVE_STATS 1
+#define ENABLE_EXPENSIVE_LOG 1
+
 inline unsigned KlassInfoLUT::num_entries() {
    return nth_bit(CompressedKlassPointers::narrow_klass_pointer_bits());
 }
 
+ALWAYSINLINE uint32_t KlassInfoLUT::at(unsigned index) {
+  assert(index < num_entries(), "oob (%x vs %x)", index, num_entries());
+  return _entries[index];
+}
+
 ALWAYSINLINE KlassLUTEntry KlassInfoLUT::get_entry(narrowKlass nk) {
-  assert(nk < num_entries(), "oob (%x vs %x)", nk, num_entries());
-  const uint32_t v = _entries[nk];
-#ifdef ASSERT
+
+  const uint32_t v = at(nk);
+#ifdef ENABLE_EXPENSIVE_STATS
   {
     KlassLUTEntry e(v);
     if (e.valid()) {
       inc_hits();
     } else {
       inc_misses();
+    }
+  }
+#endif
+#ifdef ENABLE_EXPENSIVE_LOG
+  {
+    KlassLUTEntry e(v);
+    if (e.invalid()) {
+      const Klass* const k = CompressedKlassPointers::decode(nk);
+      const char* x = "ok";
+      KlassLUTEntry::klass_is_representable(k, x);
+      ResourceMark rm;
+      log_debug(klut)("retrieval: invalid klute: name: %s kind: %d, reason: %s", k->name()->as_C_string(), k->kind(), x);
     }
   }
 #endif

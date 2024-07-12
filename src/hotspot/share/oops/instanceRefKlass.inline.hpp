@@ -175,6 +175,13 @@ void InstanceRefKlass::oop_oop_iterate_bounded(oop obj, OopClosureType* closure,
   oop_oop_iterate_ref_processing_bounded<T>(obj, closure, mr);
 }
 
+template <typename T, class OopClosureType>
+void InstanceRefKlass::oop_oop_iterate_bounded(oop obj, OopClosureType* closure, KlassLUTEntry klute, MemRegion mr) {
+  InstanceKlass::oop_oop_iterate_bounded<T>(obj, closure, klute, mr);
+
+  oop_oop_iterate_ref_processing_bounded<T>(obj, closure, mr);
+}
+
 #ifdef ASSERT
 template <typename T>
 void InstanceRefKlass::trace_reference_gc(const char *s, oop obj) {

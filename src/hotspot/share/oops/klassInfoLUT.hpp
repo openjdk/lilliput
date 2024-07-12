@@ -39,6 +39,8 @@ class KlassInfoLUT : public AllStatic {
 
   static inline unsigned num_entries();
 
+  static inline uint32_t at(unsigned index);
+
 #ifdef ASSERT
   // statistics
 #define STATS_DO(f)         \

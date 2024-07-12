@@ -427,9 +427,6 @@ void oopDesc::oop_iterate(OopClosureType* cl) {
     if (klute.valid()) {
       OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k, klute);
       return;
-    } else {
-      OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k);
-      return;
     }
   }
 
@@ -438,6 +435,17 @@ void oopDesc::oop_iterate(OopClosureType* cl) {
 
 template <typename OopClosureType>
 void oopDesc::oop_iterate(OopClosureType* cl, MemRegion mr) {
+
+  if (UseKLUT) {
+    const narrowKlass nk = mark().narrow_klass();
+    Klass* const k = CompressedKlassPointers::decode_not_null(nk);
+    const KlassLUTEntry klute = KlassInfoLUT::get_entry(nk);
+    if (klute.valid()) {
+      OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k, klute, mr);
+      return;
+    }
+  }
+
   OopIteratorClosureDispatch::oop_oop_iterate(cl, this, klass(), mr);
 }
 

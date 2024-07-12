@@ -3513,6 +3513,9 @@ void InstanceKlass::print_on(outputStream* st) const {
   assert(is_klass(), "must be klass");
   Klass::print_on(st);
 
+  if (UseCompressedClassPointers) {
+    st->print(BULLET"narrow Klass:    %x", CompressedKlassPointers::encode(const_cast<InstanceKlass*>(this))); st->cr();
+  }
   st->print(BULLET"instance size:     %d", size_helper());                        st->cr();
   st->print(BULLET"klass size:        %d", size());                               st->cr();
   st->print(BULLET"klass header size: %d", header_size());                        st->cr();

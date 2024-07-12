@@ -107,11 +107,11 @@ private:
   static constexpr size_t ik_omb_offset_limit = nth_bit(bits_ik_omb_offset);
   static constexpr size_t ik_omb_count_limit = nth_bit(bits_ik_omb_count);
 
+public:
+
   // Helper function. Returns true if k can be represented by a 32-bit entry, false if not.
   // Optionally, returns error string.
   static bool klass_is_representable(const Klass* ik, const char*& err);
-
-public:
 
   static constexpr uint32_t invalid_entry = 0;
 

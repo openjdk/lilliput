@@ -192,7 +192,7 @@ uint32_t KlassLUTEntry::build_from(const Klass* k) {
   const char* err = nullptr;
   if (!klass_is_representable(k, err)) {
     ResourceMark rm;
-    log_info(class, load)("%s: klute invalid (%s)", k->name()->as_C_string(), err);
+    log_info(klut)("registering: %s: klute invalid (%s)", k->name()->as_C_string(), err);
     return invalid_entry;
   }
 

@@ -80,6 +80,8 @@ class InstanceRefKlass: public InstanceKlass {
   // Iterate over all oop fields and metadata.
   template <typename T, class OopClosureType>
   inline void oop_oop_iterate_bounded(oop obj, OopClosureType* closure, MemRegion mr);
+  template <typename T, class OopClosureType>
+  inline void oop_oop_iterate_bounded(oop obj, OopClosureType* closure, KlassLUTEntry klute, MemRegion mr);
 
   private:
 

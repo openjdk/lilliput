@@ -54,7 +54,8 @@ void KlassInfoLUT::register_klass(const Klass* k) {
 #ifdef ASSERT
   // sanity checks
   {
-    KlassLUTEntry e2 = get_entry(nk);
+    // We use at(), not get_entry(), since we don't want to log or count stats
+    KlassLUTEntry e2(at(nk));
     assert(e2.value() == e.value(), "Sanity");
     e2.verify_against(k);
   }

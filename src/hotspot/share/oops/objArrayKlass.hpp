@@ -133,9 +133,14 @@ class ObjArrayKlass : public ArrayKlass {
   template <typename T, class OopClosureType>
   inline void oop_oop_iterate_range(objArrayOop a, OopClosureType* closure, int start, int end);
 
-  // Klute variants
+  // Klute variants. They don't do anything special for OAK; they just have to exist as jump points
+  // for OopIteratexxxDispatchWithKlute.
   template <typename T, typename OopClosureType>
   inline void oop_oop_iterate(oop obj, OopClosureType* closure, KlassLUTEntry klute);
+
+  template <typename T, typename OopClosureType>
+  inline void oop_oop_iterate_bounded(oop obj, OopClosureType* closure, KlassLUTEntry klute, MemRegion mr);
+
 
  public:
   // Iterate over all oop elements.
