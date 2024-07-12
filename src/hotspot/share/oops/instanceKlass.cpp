@@ -3664,7 +3664,7 @@ void InstanceKlass::print_on(outputStream* st) const {
   OopMapBlock* map     = start_of_nonstatic_oop_maps();
   OopMapBlock* end_map = map + nonstatic_oop_map_count();
   while (map < end_map) {
-    st->print("[@%d-@%d) (%d oops) ", map->offset(), map->offset() + heapOopSize * map->count(), map->count());
+    st->print_cr("[@%d-@%d) (%d oops) ", map->offset(), map->offset() + heapOopSize * map->count(), map->count());
     map++;
   }
   st->cr();
