@@ -32,8 +32,10 @@
 #include "utilities/globalDefinitions.hpp"
 #include "utilities/debug.hpp"
 
-#define ENABLE_EXPENSIVE_STATS 1
-#define ENABLE_EXPENSIVE_LOG 1
+#ifdef ASSERT
+//#define ENABLE_EXPENSIVE_STATS
+//#define ENABLE_EXPENSIVE_LOG
+#endif
 
 inline unsigned KlassInfoLUT::num_entries() {
    return nth_bit(CompressedKlassPointers::narrow_klass_pointer_bits());

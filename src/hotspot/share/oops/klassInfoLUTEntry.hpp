@@ -138,6 +138,9 @@ public:
   bool is_array() const     { return (_v.raw >> 31) != 0; }
   bool is_instance() const  { return (_v.raw >> 31) == 0; }
 
+  bool is_objArray() const  { return _v.ake.kind == kind_objarray_klass; }
+  bool is_typeArray() const { return _v.ake.kind == kind_typearray_klass; }
+
   // Following methods only if IK:
 
   // Returns size, in words, of oops of this class
