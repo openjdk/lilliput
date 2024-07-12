@@ -141,6 +141,8 @@ class ObjArrayKlass : public ArrayKlass {
   template <typename T, typename OopClosureType>
   inline void oop_oop_iterate_bounded(oop obj, OopClosureType* closure, KlassLUTEntry klute, MemRegion mr);
 
+  template <typename T, typename OopClosureType>
+  inline void oop_oop_iterate_reverse(oop obj, OopClosureType* closure, KlassLUTEntry klute);
 
  public:
   // Iterate over all oop elements.

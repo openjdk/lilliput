@@ -97,6 +97,8 @@ class TypeArrayKlass : public ArrayKlass {
   // Wraps oop_oop_iterate_impl to conform to macros.
   template <typename T, typename OopClosureType>
   inline void oop_oop_iterate_reverse(oop obj, OopClosureType* closure);
+  template <typename T, typename OopClosureType>
+  inline void oop_oop_iterate_reverse(oop obj, OopClosureType* closure, KlassLUTEntry klute);
 
  public:
   static TypeArrayKlass* cast(Klass* k) {

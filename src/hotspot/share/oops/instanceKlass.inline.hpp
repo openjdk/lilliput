@@ -218,7 +218,7 @@ ALWAYSINLINE void InstanceKlass::oop_oop_iterate(oop obj, OopClosureType* closur
 
 // Iterate over all oop fields in the oop maps (no metadata traversal)
 template <typename T, class OopClosureType>
-ALWAYSINLINE void InstanceKlass::oop_oop_iterate_oop_maps_reverse(oop obj, OopClosureType* closure, KlassLUTEntry klute) {
+ALWAYSINLINE void InstanceKlass::oop_oop_iterate_reverse(oop obj, OopClosureType* closure, KlassLUTEntry klute) {
   assert(!Devirtualizer::do_metadata(closure),
       "Code to handle metadata is not implemented");
   assert(klute.valid(), "invalid");

@@ -451,6 +451,17 @@ void oopDesc::oop_iterate(OopClosureType* cl, MemRegion mr) {
 
 template <typename OopClosureType>
 size_t oopDesc::oop_iterate_size(OopClosureType* cl) {
+
+  if (UseKLUT) {
+    const narrowKlass nk = mark().narrow_klass();
+    Klass* const k = CompressedKlassPointers::decode_not_null(nk);
+    const KlassLUTEntry klute = KlassInfoLUT::get_entry(nk);
+    if (klute.valid()) {
+      OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k, klute);
+      return klute.calculate_oop_wordsize_given_oop(this);
+    }
+  }
+
   Klass* k = klass();
   size_t size = size_given_klass(k);
   OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k);
@@ -459,6 +470,17 @@ size_t oopDesc::oop_iterate_size(OopClosureType* cl) {
 
 template <typename OopClosureType>
 size_t oopDesc::oop_iterate_size(OopClosureType* cl, MemRegion mr) {
+
+  if (UseKLUT) {
+    const narrowKlass nk = mark().narrow_klass();
+    Klass* const k = CompressedKlassPointers::decode_not_null(nk);
+    const KlassLUTEntry klute = KlassInfoLUT::get_entry(nk);
+    if (klute.valid()) {
+      OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k, klute, mr);
+      return klute.calculate_oop_wordsize_given_oop(this);
+    }
+  }
+
   Klass* k = klass();
   size_t size = size_given_klass(k);
   OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k, mr);
@@ -472,8 +494,19 @@ void oopDesc::oop_iterate_backwards(OopClosureType* cl) {
 
 template <typename OopClosureType>
 void oopDesc::oop_iterate_backwards(OopClosureType* cl, Klass* k) {
+
   // In this assert, we cannot safely access the Klass* with compact headers.
   assert(UseCompactObjectHeaders || k == klass(), "wrong klass");
+
+  if (UseKLUT) {
+    const narrowKlass nk = CompressedKlassPointers::encode_not_null(k);
+    const KlassLUTEntry klute = KlassInfoLUT::get_entry(nk);
+    if (klute.valid()) {
+      OopIteratorClosureDispatch::oop_oop_iterate_backwards(cl, this, k, klute);
+      return;
+    }
+  }
+
   OopIteratorClosureDispatch::oop_oop_iterate_backwards(cl, this, k);
 }
 

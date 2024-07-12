@@ -169,6 +169,13 @@ void InstanceRefKlass::oop_oop_iterate_reverse(oop obj, OopClosureType* closure)
 }
 
 template <typename T, class OopClosureType>
+void InstanceRefKlass::oop_oop_iterate_reverse(oop obj, OopClosureType* closure, KlassLUTEntry klute) {
+  InstanceKlass::oop_oop_iterate_reverse<T>(obj, closure, klute);
+
+  oop_oop_iterate_ref_processing<T>(obj, closure);
+}
+
+template <typename T, class OopClosureType>
 void InstanceRefKlass::oop_oop_iterate_bounded(oop obj, OopClosureType* closure, MemRegion mr) {
   InstanceKlass::oop_oop_iterate_bounded<T>(obj, closure, mr);
 

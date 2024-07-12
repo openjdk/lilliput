@@ -75,6 +75,8 @@ class InstanceRefKlass: public InstanceKlass {
   // Iterate over all oop fields and metadata.
   template <typename T, class OopClosureType>
   inline void oop_oop_iterate_reverse(oop obj, OopClosureType* closure);
+  template <typename T, class OopClosureType>
+  inline void oop_oop_iterate_reverse(oop obj, OopClosureType* closure, KlassLUTEntry klute);
 
   // Bounded range iteration
   // Iterate over all oop fields and metadata.

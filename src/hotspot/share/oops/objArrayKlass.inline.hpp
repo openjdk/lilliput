@@ -111,6 +111,12 @@ void ObjArrayKlass::oop_oop_iterate_bounded(oop obj, OopClosureType* closure, Kl
   oop_oop_iterate_bounded<T>(obj, closure, mr);
 }
 
+template <typename T, typename OopClosureType>
+void ObjArrayKlass::oop_oop_iterate_reverse(oop obj, OopClosureType* closure, KlassLUTEntry ignored) {
+  // No reverse implementation ATM.
+  oop_oop_iterate<T>(obj, closure);
+}
+
 // Like oop_oop_iterate but only iterates over a specified range and only used
 // for objArrayOops.
 template <typename T, class OopClosureType>
