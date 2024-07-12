@@ -33,8 +33,8 @@
 #include "utilities/debug.hpp"
 
 #ifdef ASSERT
-//#define ENABLE_EXPENSIVE_STATS
-//#define ENABLE_EXPENSIVE_LOG
+#define ENABLE_EXPENSIVE_STATS
+#define ENABLE_EXPENSIVE_LOG
 #endif
 
 inline unsigned KlassInfoLUT::num_entries() {
