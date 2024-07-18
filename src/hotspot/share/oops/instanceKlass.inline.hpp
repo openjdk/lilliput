@@ -29,6 +29,7 @@
 
 #include "memory/memRegion.hpp"
 #include "oops/fieldInfo.inline.hpp"
+#include "oops/klassInfoLUTEntry.inline.hpp"
 #include "oops/klass.inline.hpp"
 #include "oops/oop.inline.hpp"
 #include "runtime/atomic.hpp"

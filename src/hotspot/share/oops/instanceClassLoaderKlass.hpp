@@ -26,6 +26,7 @@
 #define SHARE_OOPS_INSTANCECLASSLOADERKLASS_HPP
 
 #include "oops/instanceKlass.hpp"
+#include "oops/klassInfoLUTEntry.hpp"
 #include "utilities/macros.hpp"
 
 class ClassFileParser;
@@ -45,6 +46,11 @@ public:
 private:
   InstanceClassLoaderKlass(const ClassFileParser& parser) : InstanceKlass(parser, Kind) {}
 
+  template <typename T, class OopClosureType>
+  inline void oop_oop_iterate_metadata(oop obj, OopClosureType* closure);
+  template <typename T, class OopClosureType>
+  inline void oop_oop_iterate_metadata_bounded(oop obj, OopClosureType* closure, MemRegion mr);
+
 public:
   InstanceClassLoaderKlass();
 
@@ -56,16 +62,22 @@ public:
   // Iterate over the oop fields and metadata.
   template <typename T, class OopClosureType>
   inline void oop_oop_iterate(oop obj, OopClosureType* closure);
+  template <typename T, class OopClosureType>
+  inline void oop_oop_iterate(oop obj, OopClosureType* closure, KlassLUTEntry klute);
 
   // Reverse iteration
   // Iterate over the oop fields and metadata.
   template <typename T, class OopClosureType>
   inline void oop_oop_iterate_reverse(oop obj, OopClosureType* closure);
+  template <typename T, class OopClosureType>
+  inline void oop_oop_iterate_reverse(oop obj, OopClosureType* closure, KlassLUTEntry klute);
 
   // Bounded range iteration
   // Iterate over the oop fields and metadata.
   template <typename T, class OopClosureType>
   inline void oop_oop_iterate_bounded(oop obj, OopClosureType* closure, MemRegion mr);
+  template <typename T, class OopClosureType>
+  inline void oop_oop_iterate_bounded(oop obj, OopClosureType* closure, KlassLUTEntry klute, MemRegion mr);
 };
 
 #endif // SHARE_OOPS_INSTANCECLASSLOADERKLASS_HPP

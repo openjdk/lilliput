@@ -31,28 +31,18 @@
 #include "oops/klassInfoLUTEntry.inline.hpp"
 #include "utilities/debug.hpp"
 
-int KlassLUTEntry::kind_to_ourkind(int kind) {
-  switch (kind) {
-    case Klass::InstanceKlassKind: return kind_instance_klass;
-    case Klass::InstanceRefKlassKind: return kind_instance_ref_klass;
-    case Klass::ObjArrayKlassKind: return kind_objarray_klass;
-    case Klass::TypeArrayKlassKind: return kind_typearray_klass;
-    default: ShouldNotReachHere();
-  }
-  return -1;
-}
-
-int KlassLUTEntry::ourkind_to_kind(int kind) {
-  switch (kind) {
-    case kind_instance_klass: return Klass::InstanceKlassKind;
-    case kind_instance_ref_klass: return Klass::InstanceRefKlassKind;
-    case kind_objarray_klass: return Klass::ObjArrayKlassKind;
-    case kind_typearray_klass: return Klass::TypeArrayKlassKind;
-    default: ShouldNotReachHere();
-  }
-  return Klass::UnknownKlassKind;
-}
-
+// See klass.hpp
+union LayoutHelperHelper {
+  unsigned raw;
+  struct {
+    // lsb
+    unsigned lh_esz : 8; // element size
+    unsigned lh_ebt : 8; // element BasicType (currently unused)
+    unsigned lh_hsz : 8; // header size (offset to first element)
+    unsigned lh_tag : 8; // 0x80 or 0xc0
+    // msb
+  } bytes;
+};
 
 bool KlassLUTEntry::klass_is_representable(const Klass* k, const char*& err) {
 
@@ -121,15 +111,19 @@ void KlassLUTEntry::verify_against(const Klass* k) const {
 
   // General static asserts that need access to private members, but I don't want
   // to place them in a header
-  STATIC_ASSERT(bits_ak_lh == bits_ik_omb_offset + bits_ik_omb_count + bits_ik_wordsize);
+  STATIC_ASSERT(bits_common + bits_specific == bits_total);
+  STATIC_ASSERT(32 == bits_total);
+  STATIC_ASSERT(bits_ik_omb_offset + bits_ik_omb_count + bits_ik_wordsize <= bits_specific);
+  STATIC_ASSERT(bits_ak_lh <= bits_specific);
+
+  STATIC_ASSERT(sizeof(U_K) == sizeof(uint32_t));
   STATIC_ASSERT(sizeof(UAK) == sizeof(uint32_t));
   STATIC_ASSERT(sizeof(UIK) == sizeof(uint32_t));
   STATIC_ASSERT(sizeof(U) == sizeof(uint32_t));
 
-  // We need some things to be true about the kind encoding
-  STATIC_ASSERT(kind_instance_klass == 0);            // most common case, for performance reasons
-  STATIC_ASSERT((kind_objarray_klass << 6)  == 0x80); // to match against lh for AK
-  STATIC_ASSERT((kind_typearray_klass << 6) == 0xC0); // to match against lh for AK
+#define XX(name) STATIC_ASSERT((int)name == (int)Klass::name);
+  ALL_KLASS_KINDS_DO(XX)
+#undef XX
 
   const char* err = nullptr;
   if (!klass_is_representable(k, err)) {
@@ -140,20 +134,25 @@ void KlassLUTEntry::verify_against(const Klass* k) const {
   assert(valid(), "Entry should be valid (%x)", _v.raw);
 
   // kind
-  const int real_kind = k->kind();
+  const unsigned real_kind = (unsigned)k->kind();
   const unsigned our_kind = kind();
-  const int our_kind_translated = ourkind_to_kind((int)our_kind);
-
-  assert(our_kind_translated == real_kind, "kind mismatch");
-
   const int real_lh = k->layout_helper();
 
+  assert(our_kind == real_kind, "kind mismatch");
+
   switch (real_kind) {
+
   case Klass::ObjArrayKlassKind:
-  case Klass::TypeArrayKlassKind:
-    // for AK we keep the layouthelper in the entry. It should match.
-    assert(ak_layouthelper() == real_lh, "lh mismatch");
-    break;
+  case Klass::TypeArrayKlassKind: {
+    const LayoutHelperHelper lhu = { (unsigned) real_lh };
+    assert(lhu.bytes.lh_ebt == ak_layouthelper_ebt() &&
+           lhu.bytes.lh_esz == ak_layouthelper_esz() &&
+           lhu.bytes.lh_hsz == ak_layouthelper_hsz() &&
+           ( (lhu.bytes.lh_tag == 0xC0 && real_kind == Klass::TypeArrayKlassKind) ||
+             (lhu.bytes.lh_tag == 0x80 && real_kind == Klass::ObjArrayKlassKind) ),
+             "layouthelper mismatch (0x%x vs 0x%x)", real_lh, _v.raw);
+  }
+  break;
 
   case Klass::InstanceKlassKind:
   case Klass::InstanceRefKlassKind: {
@@ -196,9 +195,11 @@ uint32_t KlassLUTEntry::build_from(const Klass* k) {
     return invalid_entry;
   }
 
-  uint32_t v = invalid_entry;
+  uint32_t v = 0;
 
   const int kind = k->kind();
+  assert(kind >= 0 && kind <= LastKlassKind, "sanity");
+
   const int lh = k->layout_helper();
 
   constexpr const char* const ok = nullptr;
@@ -209,26 +210,14 @@ uint32_t KlassLUTEntry::build_from(const Klass* k) {
       assert(k->is_array_klass(), "sanity");
       assert(Klass::layout_helper_is_objArray(lh) || Klass::layout_helper_is_typeArray(lh), "unexpected");
 
-      // ArrayKlass:         KKLL LLLL LLLL LLLL LLLL LLLL LLLL LLLL
-
-      // ArrayKlass is always representable with 32 bit. The content is just the klute kind bits overlayed
-      // over the layouthelper. Since for arrays the klute bits are 10 (objarray kind) or 11 (typearray kind),
-      // respectively, and that coincides with 0x80/0xC0 for OAK/TAK, it is really just the layouthelper.
-
-#ifdef ASSERT
-      // Double check that the encoding for our kind is correct - it should match
-      // the upper two bits of the layout helper
+      LayoutHelperHelper lhu = { (unsigned) lh };
       U u(0);
-      u.raw = (uint32_t)lh;
-      if (k->is_typeArray_klass()) {
-        assert(u.ake.kind == kind_typearray_klass, "mismatch");
-      } else {
-        assert(k->is_objArray_klass(), "sanity");
-        assert(u.ake.kind == kind_objarray_klass, "mismatch");
-      }
-#endif // ASSERT
+      u.common.kind = kind;
+      u.ake.lh_ebt = lhu.bytes.lh_ebt;
+      u.ake.lh_esz = lhu.bytes.lh_esz;
+      u.ake.lh_hsz = lhu.bytes.lh_hsz;
 
-      v = (uint32_t) lh;
+      v = u.raw;
     }
     break;
 
@@ -272,7 +261,7 @@ uint32_t KlassLUTEntry::build_from(const Klass* k) {
       //
 
       U u(0);
-      u.ike.kind = kind_to_ourkind(kind);
+      u.common.kind = kind;
       u.ike.wordsize = wordsize;
       u.ike.omb_count = first_omb_count;
       u.ike.omb_offset = first_omb_offset;

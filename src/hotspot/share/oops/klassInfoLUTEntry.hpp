@@ -36,61 +36,91 @@ class outputStream;
 
 //                msb                                          lsb
 // not_in_table:       ---- all bits zero --------------------
-// InstanceKlass:      KKSS SSSS SSSS SSSS CCCC CCCC OOOO OOOO
-// ArrayKlass:         KKLL LLLL LLLL LLLL LLLL LLLL LLLL LLLL
 //
-// K - klass kind (condensed)
-// S - size in words (max 2^13)
-// C - count of first oopmap entry (max 2^8)
-// O - offset of first oopmap entry, in bytes (max 2^8)
-// L - lower 30 bits of layouthelper.
+// InstanceKlass:      KKKS SSSS SSSS SSSS CCCC CCCC OOOO OOOO
 //
+// ArrayKlass:         KKK- ---- hhhh hhhh tttt tttt eeee eeee
+//                               |--- lower 24 bit of lh ----|
+//
+// Legend
+// K : klass kind (3 bits)
+// S : size in words (13 bits)
+// C : count of first oopmap entry (8 bits)
+// O : offset of first oopmap entry, in bytes (8 bits)
+// h : hsz byte from layouthelper    ----------\
+// t : element type byte from layouthelper      (lower 24 byte of layouthelper)
+// e : log2 esz byte from layouthelper --------/
+// - : unused
 
 class KlassLUTEntry {
 
-public: // Dispatch needs this
+#define ALL_KLASS_KINDS_DO(what) \
+		what(InstanceKlassKind) \
+		what(InstanceRefKlassKind) \
+    what(InstanceMirrorKlassKind) \
+    what(InstanceClassLoaderKlassKind) \
+    what(InstanceStackChunkKlassKind) \
+    what(TypeArrayKlassKind) \
+    what(ObjArrayKlassKind) \
+		what(UnknownKlassKind)
 
-  // Since not all kinds of Klass are representable, we omit some of the kinds and get a tighter representation
-  // (2 bits instead of 3), a simpler dispatch, and we are able to form the kinds for AK in a way that it matches
-  // layouthelper for AK.
-  static constexpr int kind_instance_klass      = 0b00; // must be 0
-  static constexpr int kind_instance_ref_klass  = 0b01;
-  // kind_objarray_klass and kind_typearray_klass must match the two most significant bits of array-layouthelper
-  static constexpr int kind_objarray_klass      = 0b10;  // 0x80
-  static constexpr int kind_typearray_klass     = 0b11;  // 0xC0
-  static constexpr int num_kinds = kind_typearray_klass + 1;
+  // Todo: move KlassKind out of Klass
+  // Don't want to include it here for all the baggage it brings
+  enum LocalKlassKind {
+#define XX(name) name,
+    ALL_KLASS_KINDS_DO(XX)
+#undef XX
+    LastKlassKind = ObjArrayKlassKind,
+    FirstArrayKlassKind = TypeArrayKlassKind
+  };
 
-private:
-  static int kind_to_ourkind(int kind);
-  static int ourkind_to_kind(int kind);
+  static constexpr int bits_total      = 32;
 
   // All valid entries:  KK-- ---- ---- ---- ---- ---- ---- ----
-  static constexpr int bits_kind       = 2;
+  static constexpr int bits_kind       = 3;
+  static constexpr int bits_common     = bits_kind; // extend if needed
+  static constexpr int bits_specific   = bits_total - bits_common;
 
-  // InstanceKlass:      KKSS SSSS SSSS SSSS CCCC CCCC OOOO OOOO
+  // All entries
+  struct U_K {
+    // lsb
+    unsigned other_bits : bits_specific;
+    unsigned kind       : bits_kind;
+    // msb
+  };
+
+  // InstanceKlass:      KKKS SSSS SSSS SSSS CCCC CCCC OOOO OOOO
   static constexpr int bits_ik_omb_offset = 8;
   static constexpr int bits_ik_omb_count  = 8;
-  static constexpr int bits_ik_wordsize   = 16 - bits_kind; // 14 -> max representable ik instance size 16383 words = 131KB
+  static constexpr int bits_ik_wordsize   = bits_specific - bits_ik_omb_count - bits_ik_omb_offset;
   struct UIK {
     // lsb
     unsigned omb_offset : bits_ik_omb_offset;
     unsigned omb_count  : bits_ik_omb_count;
     unsigned wordsize   : bits_ik_wordsize;
-    unsigned kind       : bits_kind;
+    unsigned other      : bits_common;
     // msb
   };
 
-  // ArrayKlass:         KKLL LLLL LLLL LLLL LLLL LLLL LLLL LLLL
-  static constexpr int bits_ak_lh         = 32 - bits_kind;
+  // ArrayKlass:         KKKL LLLL LLLL LLLL LLLL LLLL LLLL LLLL
+  static constexpr int bits_ak_lh_esz     = 8;
+  static constexpr int bits_ak_lh_ebt     = 8;
+  static constexpr int bits_ak_lh_hsz     = 8;
+  static constexpr int bits_ak_lh         = bits_ak_lh_esz + bits_ak_lh_ebt + bits_ak_lh_hsz;
   struct UAK {
     // lsb
-    unsigned lh30       : bits_ak_lh;
-    unsigned kind       : bits_kind;
+    // see klass.hpp
+    unsigned lh_esz : bits_ak_lh_esz; // element size
+    unsigned lh_ebt : bits_ak_lh_ebt; // element BasicType (currently unused)
+    unsigned lh_hsz : bits_ak_lh_hsz; // header size (offset to first element)
+    unsigned unused : bits_specific - bits_ak_lh_esz - bits_ak_lh_ebt - bits_ak_lh_hsz;
+    unsigned other  : bits_common;
     // msb
   };
 
   union U {
     uint32_t raw;
+    U_K common;
     UIK ike;
     UAK ake;
     U(uint32_t v) : raw(v) {}
@@ -133,13 +163,13 @@ public:
   // Following methods only if entry is valid:
 
   // Returns (our) kind
-  inline unsigned kind() const { return _v.ake.kind; }
+  inline unsigned kind() const { return _v.common.kind; }
 
-  bool is_array() const     { return (_v.raw >> 31) != 0; }
-  bool is_instance() const  { return (_v.raw >> 31) == 0; }
+  bool is_array() const     { return _v.common.kind >= FirstArrayKlassKind; }
+  bool is_instance() const  { return !is_array(); }
 
-  bool is_objArray() const  { return _v.ake.kind == kind_objarray_klass; }
-  bool is_typeArray() const { return _v.ake.kind == kind_typearray_klass; }
+  bool is_objArray() const  { return _v.common.kind == ObjArrayKlassKind; }
+  bool is_typeArray() const { return _v.common.kind == TypeArrayKlassKind; }
 
   // Following methods only if IK:
 
@@ -154,8 +184,14 @@ public:
 
   // Following methods only if AK:
 
-  // returns layouthelper
-  inline int ak_layouthelper() const;
+  // returns log2 element size
+  inline unsigned ak_layouthelper_esz() const { return _v.ake.lh_esz; }
+
+  // returns ebt byte
+  inline unsigned ak_layouthelper_ebt() const { return _v.ake.lh_ebt; }
+
+  // returns distance to first element
+  inline unsigned ak_layouthelper_hsz() const { return _v.ake.lh_hsz; }
 
   // Valid for all valid entries:
   inline unsigned calculate_oop_wordsize_given_oop(oop obj) const;

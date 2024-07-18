@@ -53,15 +53,6 @@ inline unsigned KlassLUTEntry::ik_first_omb_offset() const {
   return _v.ike.omb_offset;
 }
 
-// Following methods only if AK:
-
-// returns layouthelper, restored to its full value
-inline int KlassLUTEntry::ak_layouthelper() const {
-  assert(is_array(), "only for ak entries");
-  // LH is encoded directly into the value.
-  return (int) _v.raw;
-}
-
 // Valid for all valid entries:
 inline unsigned KlassLUTEntry::calculate_oop_wordsize_given_oop(oop obj) const {
   assert(valid(), "must be valid");
@@ -70,13 +61,9 @@ inline unsigned KlassLUTEntry::calculate_oop_wordsize_given_oop(oop obj) const {
     // For IK, instance word size is stored directly in bits 16-30.
     rc = ik_wordsize();
   } else {
-    // For AK, we calculate it from the layout helper.
-    const union {
-      uint32_t raw;
-      uint8_t u[4];
-    } x = { _v.raw };
-    const int l2esz = x.u[0]; // Klass::layout_helper_log2_element_size
-    const int hsz = x.u[2];   // Klass::layout_helper_header_size
+    // For AK, we calculate it from the layout helper esz and hsz bytes.
+    const unsigned l2esz = ak_layouthelper_esz();
+    const unsigned hsz = ak_layouthelper_hsz();
     const size_t array_length = (size_t) ((arrayOop)obj)->length();
     const size_t size_in_bytes = (array_length << l2esz) + hsz;
     rc = align_up(size_in_bytes, MinObjAlignmentInBytes) / HeapWordSize;

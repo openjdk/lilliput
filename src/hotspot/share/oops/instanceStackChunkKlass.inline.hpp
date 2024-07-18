@@ -87,6 +87,22 @@ void InstanceStackChunkKlass::oop_oop_iterate_bounded(oop obj, OopClosureType* c
   oop_oop_iterate_header_bounded<T>(chunk, closure, mr);
 }
 
+// Klute variants don't do anything else for now. Just exist to make Dispatch happy.
+template <typename T, class OopClosureType>
+void InstanceStackChunkKlass::oop_oop_iterate(oop obj, OopClosureType* closure, KlassLUTEntry klute_ignored) {
+  oop_oop_iterate<T>(obj, closure);
+}
+
+template <typename T, class OopClosureType>
+void InstanceStackChunkKlass::oop_oop_iterate_reverse(oop obj, OopClosureType* closure, KlassLUTEntry klute_ignored) {
+  oop_oop_iterate_reverse<T>(obj, closure);
+}
+
+template <typename T, class OopClosureType>
+void InstanceStackChunkKlass::oop_oop_iterate_bounded(oop obj, OopClosureType* closure, KlassLUTEntry klute_ignored, MemRegion mr) {
+  oop_oop_iterate_bounded<T>(obj, closure, mr);
+}
+
 template <typename T, class OopClosureType>
 void InstanceStackChunkKlass::oop_oop_iterate_header(stackChunkOop chunk, OopClosureType* closure) {
   T* parent_addr = chunk->field_addr<T>(jdk_internal_vm_StackChunk::parent_offset());

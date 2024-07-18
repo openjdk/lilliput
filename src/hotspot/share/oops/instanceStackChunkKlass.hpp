@@ -26,6 +26,7 @@
 #define SHARE_OOPS_INSTANCESTACKCHUNKKLASS_HPP
 
 #include "oops/instanceKlass.hpp"
+#include "oops/klassInfoLUTEntry.hpp"
 #include "oops/oopsHierarchy.hpp"
 #include "utilities/macros.hpp"
 #include "utilities/ostream.hpp"
@@ -150,16 +151,22 @@ public:
   // Iterate over the oop fields and metadata.
   template <typename T, class OopClosureType>
   inline void oop_oop_iterate(oop obj, OopClosureType* closure);
+  template <typename T, class OopClosureType>
+  inline void oop_oop_iterate(oop obj, OopClosureType* closure, KlassLUTEntry klute);
 
   // Reverse iteration
   // Iterate over the oop fields and metadata.
   template <typename T, class OopClosureType>
   inline void oop_oop_iterate_reverse(oop obj, OopClosureType* closure);
+  template <typename T, class OopClosureType>
+  inline void oop_oop_iterate_reverse(oop obj, OopClosureType* closure, KlassLUTEntry klute);
 
   // Bounded range iteration
   // Iterate over the oop fields and metadata.
   template <typename T, class OopClosureType>
   inline void oop_oop_iterate_bounded(oop obj, OopClosureType* closure, MemRegion mr);
+  template <typename T, class OopClosureType>
+  inline void oop_oop_iterate_bounded(oop obj, OopClosureType* closure, KlassLUTEntry klute, MemRegion mr);
 
 private:
   template <typename T, class OopClosureType>

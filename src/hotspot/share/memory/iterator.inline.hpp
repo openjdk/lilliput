@@ -307,14 +307,7 @@ void OopIteratorClosureDispatch::oop_oop_iterate_backwards(OopClosureType* cl, o
 }
 
 
-////////////// KLUTE
-
-
-template <typename KlassType> struct KluteKind { static constexpr int v = -1; };
-template <> struct KluteKind<InstanceKlass> { static constexpr int v = KlassLUTEntry::kind_instance_klass; };
-template <> struct KluteKind<InstanceRefKlass> { static constexpr int v = KlassLUTEntry::kind_instance_ref_klass; };
-template <> struct KluteKind<ObjArrayKlass> { static constexpr int v = KlassLUTEntry::kind_objarray_klass; };
-template <> struct KluteKind<TypeArrayKlass> { static constexpr int v = KlassLUTEntry::kind_typearray_klass; };
+////////////// KLUTE variants /////////////////////
 
 template <typename OopClosureType>
 class OopOopIterateDispatchWithKlute : public AllStatic {
@@ -335,7 +328,7 @@ private:
 
     template <typename KlassType>
     void set_init_function() {
-      _function[KluteKind<KlassType>::v] = &init<KlassType>;
+      _function[KlassType::Kind] = &init<KlassType>;
     }
 
     template <typename KlassType>
@@ -343,7 +336,7 @@ private:
       // Size requirement to prevent word tearing
       // when functions pointers are updated.
       STATIC_ASSERT(sizeof(_function[0]) == sizeof(void*));
-      _function[KluteKind<KlassType>::v] =
+      _function[KlassType::Kind] =
           UseCompressedOops ?
               &oop_oop_iterate<KlassType, narrowOop> : &oop_oop_iterate<KlassType, oop>;
     }
@@ -351,19 +344,22 @@ private:
     template <typename KlassType>
     void set_resolve_function_and_execute(OopClosureType* cl, oop obj, Klass* k, KlassLUTEntry klute) {
       set_resolve_function<KlassType>();
-      assert(klute.kind() == KluteKind<KlassType>::v, "sanity");
-      _function[KluteKind<KlassType>::v](cl, obj, k, klute);
+      assert(klute.kind() == KlassType::Kind, "sanity");
+      _function[KlassType::Kind](cl, obj, k, klute);
     }
 
   public:
-    FunctionType _function[KlassLUTEntry::num_kinds];
+    FunctionType _function[Klass::KLASS_KIND_COUNT];
 
     Table() {
       memset(_function, 0, sizeof(_function));
       set_init_function<InstanceKlass>();
+      set_init_function<InstanceRefKlass>();
+      set_init_function<InstanceMirrorKlass>();
+      set_init_function<InstanceClassLoaderKlass>();
+      set_init_function<InstanceStackChunkKlass>();
       set_init_function<ObjArrayKlass>();
       set_init_function<TypeArrayKlass>();
-      set_init_function<InstanceRefKlass>();
     }
   };
 
@@ -398,7 +394,7 @@ private:
 
     template <typename KlassType>
     void set_init_function() {
-      _function[KluteKind<KlassType>::v] = &init<KlassType>;
+      _function[KlassType::Kind] = &init<KlassType>;
     }
 
     template <typename KlassType>
@@ -406,7 +402,7 @@ private:
       // Size requirement to prevent word tearing
       // when functions pointers are updated.
       STATIC_ASSERT(sizeof(_function[0]) == sizeof(void*));
-      _function[KluteKind<KlassType>::v] =
+      _function[KlassType::Kind] =
           UseCompressedOops ?
               &oop_oop_iterate<KlassType, narrowOop> : &oop_oop_iterate<KlassType, oop>;
     }
@@ -414,19 +410,22 @@ private:
     template <typename KlassType>
     void set_resolve_function_and_execute(OopClosureType* cl, oop obj, Klass* k, KlassLUTEntry klute, MemRegion mr) {
       set_resolve_function<KlassType>();
-      assert(klute.kind() == KluteKind<KlassType>::v, "sanity");
-      _function[KluteKind<KlassType>::v](cl, obj, k, klute, mr);
+      assert(klute.kind() == KlassType::Kind, "sanity");
+      _function[KlassType::Kind](cl, obj, k, klute, mr);
     }
 
   public:
-    FunctionType _function[KlassLUTEntry::num_kinds];
+    FunctionType _function[Klass::KLASS_KIND_COUNT];
 
     Table() {
       memset(_function, 0, sizeof(_function));
       set_init_function<InstanceKlass>();
+      set_init_function<InstanceRefKlass>();
+      set_init_function<InstanceMirrorKlass>();
+      set_init_function<InstanceClassLoaderKlass>();
+      set_init_function<InstanceStackChunkKlass>();
       set_init_function<ObjArrayKlass>();
       set_init_function<TypeArrayKlass>();
-      set_init_function<InstanceRefKlass>();
     }
   };
 
@@ -461,7 +460,7 @@ private:
 
     template <typename KlassType>
     void set_init_function() {
-      _function[KluteKind<KlassType>::v] = &init<KlassType>;
+      _function[KlassType::Kind] = &init<KlassType>;
     }
 
     template <typename KlassType>
@@ -469,7 +468,7 @@ private:
       // Size requirement to prevent word tearing
       // when functions pointers are updated.
       STATIC_ASSERT(sizeof(_function[0]) == sizeof(void*));
-      _function[KluteKind<KlassType>::v] =
+      _function[KlassType::Kind] =
           UseCompressedOops ?
               &oop_oop_iterate<KlassType, narrowOop> : &oop_oop_iterate<KlassType, oop>;
     }
@@ -477,19 +476,22 @@ private:
     template <typename KlassType>
     void set_resolve_function_and_execute(OopClosureType* cl, oop obj, Klass* k, KlassLUTEntry klute) {
       set_resolve_function<KlassType>();
-      assert(klute.kind() == KluteKind<KlassType>::v, "sanity");
-      _function[KluteKind<KlassType>::v](cl, obj, k, klute);
+      assert(klute.kind() == KlassType::Kind, "sanity");
+      _function[KlassType::Kind](cl, obj, k, klute);
     }
 
   public:
-    FunctionType _function[KlassLUTEntry::num_kinds];
+    FunctionType _function[Klass::KLASS_KIND_COUNT];
 
     Table() {
       memset(_function, 0, sizeof(_function));
       set_init_function<InstanceKlass>();
+      set_init_function<InstanceRefKlass>();
+      set_init_function<InstanceMirrorKlass>();
+      set_init_function<InstanceClassLoaderKlass>();
+      set_init_function<InstanceStackChunkKlass>();
       set_init_function<ObjArrayKlass>();
       set_init_function<TypeArrayKlass>();
-      set_init_function<InstanceRefKlass>();
     }
   };
 
