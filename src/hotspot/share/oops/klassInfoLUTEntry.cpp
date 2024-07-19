@@ -44,28 +44,28 @@ union LayoutHelperHelper {
   } bytes;
 };
 
-bool KlassLUTEntry::klass_is_representable(const Klass* k, const char*& err) {
+uint32_t KlassLUTEntry::build_from_ik(const InstanceKlass* ik, const char*& not_encodable_reason) {
 
-#define NOPE(s) err = s; return false;
+  assert(ik->is_instance_klass(), "sanity");
 
-  // Can always represent arrays (obj and type)
-  if (k->is_array_klass()) {
-    return true;
-  }
+  const int kind = ik->kind();
+  const int lh = ik->layout_helper();
 
-  const int kind = k->kind();
-  const int lh = k->layout_helper();
+  U value(0);
 
-  const InstanceKlass* const ik = InstanceKlass::cast(k);
+  // Set common bits, these are always present
+  assert(kind < 0b111, "sanity");
+  value.common.kind = kind;
 
-  if (kind != Klass::InstanceKlassKind &&
-      kind != Klass::InstanceRefKlassKind) {
-    NOPE("Unsupported InstanceKlass Kind");
-  }
+  // We may not be able to encode the IK-specific info; if we can't, those bits are left zero
+  // and we return an error string for logging
+  #define NOPE(s) { not_encodable_reason = s; return value.raw; }
 
   if (Klass::layout_helper_needs_slow_path(lh)) {
     if (ik->is_abstract() || ik->is_interface()) {
       NOPE("Size not trivially computable (klass abstract or interface)");
+      // Please note that we could represent abstract or interface classes, but atm there is not
+      // much of a point.
     } else {
       NOPE("Size not trivially computable");
     }
@@ -101,8 +101,51 @@ bool KlassLUTEntry::klass_is_representable(const Klass* k, const char*& err) {
     }
   }
 
-  // otherwise, this should be fine
-  return true;
+#undef NOPE
+  // Okay, we are good.
+
+  value.ike.wordsize = wordsize;
+  value.ike.omb_count = first_omb_count;
+  value.ike.omb_offset = first_omb_offset;
+
+  return value.raw;
+
+}
+
+uint32_t KlassLUTEntry::build_from_ak(const ArrayKlass* ak) {
+
+  assert(ak->is_array_klass(), "sanity");
+
+  const int kind = ak->kind();
+  const int lh = ak->layout_helper();
+
+  assert(Klass::layout_helper_is_objArray(lh) || Klass::layout_helper_is_typeArray(lh), "unexpected");
+
+  LayoutHelperHelper lhu = { (unsigned) lh };
+  U value(0);
+  value.common.kind = kind;
+  value.ake.lh_ebt = lhu.bytes.lh_ebt;
+  value.ake.lh_esz = lhu.bytes.lh_esz;
+  value.ake.lh_hsz = lhu.bytes.lh_hsz;
+  return value.raw;
+
+}
+
+uint32_t KlassLUTEntry::build_from(const Klass* k) {
+
+  uint32_t value = invalid_entry;
+  if (k->is_array_klass()) {
+    value = build_from_ak(ArrayKlass::cast(k));
+  } else {
+    assert(k->is_instance_klass(), "sanity");
+    const char* not_encodable_reason = nullptr;
+    value = build_from_ik(InstanceKlass::cast(k), not_encodable_reason);
+    if (not_encodable_reason != nullptr) {
+      log_info(klut)("klass klute register: %s cannot be encoded because: %s.", k->name()->as_C_string(), not_encodable_reason);
+    }
+  }
+  return value;
+
 }
 
 #ifdef ASSERT
@@ -116,34 +159,30 @@ void KlassLUTEntry::verify_against(const Klass* k) const {
   STATIC_ASSERT(bits_ik_omb_offset + bits_ik_omb_count + bits_ik_wordsize <= bits_specific);
   STATIC_ASSERT(bits_ak_lh <= bits_specific);
 
-  STATIC_ASSERT(sizeof(U_K) == sizeof(uint32_t));
-  STATIC_ASSERT(sizeof(UAK) == sizeof(uint32_t));
-  STATIC_ASSERT(sizeof(UIK) == sizeof(uint32_t));
+  STATIC_ASSERT(sizeof(KE) == sizeof(uint32_t));
+  STATIC_ASSERT(sizeof(AKE) == sizeof(uint32_t));
+  STATIC_ASSERT(sizeof(IKE) == sizeof(uint32_t));
   STATIC_ASSERT(sizeof(U) == sizeof(uint32_t));
+
+  // Kind must fit into 3 bits
+  STATIC_ASSERT(Klass::KLASS_KIND_COUNT < nth_bit(bits_kind));
 
 #define XX(name) STATIC_ASSERT((int)name == (int)Klass::name);
   ALL_KLASS_KINDS_DO(XX)
 #undef XX
 
-  const char* err = nullptr;
-  if (!klass_is_representable(k, err)) {
-    assert(invalid(), "Klass is invalid (%s), but entry says its valid (%x)", err, _v.raw);
-    return;
-  }
-
-  assert(valid(), "Entry should be valid (%x)", _v.raw);
+  assert(!is_invalid(), "Entry should be valid (%x)", _v.raw);
 
   // kind
   const unsigned real_kind = (unsigned)k->kind();
   const unsigned our_kind = kind();
   const int real_lh = k->layout_helper();
 
-  assert(our_kind == real_kind, "kind mismatch");
+  assert(our_kind == real_kind, "kind mismatch (%d vs %d) (%x)", real_kind, our_kind, _v.raw);
 
-  switch (real_kind) {
+  if (k->is_array_klass()) {
 
-  case Klass::ObjArrayKlassKind:
-  case Klass::TypeArrayKlassKind: {
+    // compare our (truncated) lh with the real one
     const LayoutHelperHelper lhu = { (unsigned) real_lh };
     assert(lhu.bytes.lh_ebt == ak_layouthelper_ebt() &&
            lhu.bytes.lh_esz == ak_layouthelper_esz() &&
@@ -151,131 +190,49 @@ void KlassLUTEntry::verify_against(const Klass* k) const {
            ( (lhu.bytes.lh_tag == 0xC0 && real_kind == Klass::TypeArrayKlassKind) ||
              (lhu.bytes.lh_tag == 0x80 && real_kind == Klass::ObjArrayKlassKind) ),
              "layouthelper mismatch (0x%x vs 0x%x)", real_lh, _v.raw);
-  }
-  break;
 
-  case Klass::InstanceKlassKind:
-  case Klass::InstanceRefKlassKind: {
+  } else {
 
     assert(k->is_instance_klass(), "unexpected");
     const InstanceKlass* const ik = InstanceKlass::cast(k);
 
-    // word size
-    const size_t our_wordsize = ik_wordsize();
-    // (note: lh should not be slow-path, see klass_is_representable)
-    const size_t real_wordsize = Klass::layout_helper_to_size_helper(real_lh);
-    assert(our_wordsize == real_wordsize, "mismatch: wordsize");
+    if (ik_carries_infos()) {
 
-    // omb
-    if (ik->nonstatic_oop_map_count() == 0) {
-      assert(ik_first_omb_count() == 0, "mismatch");
-      assert(ik_first_omb_offset() == 0, "mismatch");
+      // check wordsize
+      assert(Klass::layout_helper_needs_slow_path(real_lh) == false, "LH needs slow path?  (%x)", _v.raw);
+      const int real_wordsize = Klass::layout_helper_to_size_helper(real_lh);
+      assert(real_wordsize == ik_wordsize(), "wordsize mismatch? (%d vs %d) (%x)", real_wordsize, ik_wordsize(), _v.raw);
+
+      // check omb info
+      if (ik->nonstatic_oop_map_count() == 0) {
+        assert(ik_first_omb_offset() == 0 && ik_first_omb_count() == 0, "omb should not be present (%x)", _v.raw);
+      } else if (ik->nonstatic_oop_map_count() == 1) {
+        assert(ik_first_omb_offset() == (unsigned)ik->start_of_nonstatic_oop_maps()[0].offset(), "first omb offset mismatch (%x)", _v.raw);
+        assert(ik_first_omb_count() == ik->start_of_nonstatic_oop_maps()[0].count(), "first omb count mismatch (%x)", _v.raw);
+      } else {
+        fatal("More than one oop maps, IKE should not be encodable");
+      }
+
     } else {
-      assert(ik->nonstatic_oop_map_count() == 1, "must be");
-      assert(ik_first_omb_count() == ik->start_of_nonstatic_oop_maps()->count(), "mismatch");
-      assert(ik_first_omb_offset() == (unsigned)ik->start_of_nonstatic_oop_maps()->offset(), "mismatch");
+      // Check if this Klass should, in fact, have been encodable
+      const bool lh_slow_path = Klass::layout_helper_needs_slow_path(real_lh);
+      const int word_size = (lh_slow_path == false) ? Klass::layout_helper_to_size_helper(real_lh) : -1;
+      const int oop_map_count = ik->nonstatic_oop_map_count();
+      const int first_omb_offset = (oop_map_count == 1) ? ik->start_of_nonstatic_oop_maps()[0].offset() : -1;
+      const int first_omb_count = (oop_map_count == 1) ? ik->start_of_nonstatic_oop_maps()[0].count() : -1;
+
+      assert( lh_slow_path ||
+              (word_size >= (int)ik_wordsize_limit) ||
+              (oop_map_count > 1) ||
+              (first_omb_offset >= (int)ik_omb_offset_limit) ||
+              (first_omb_count >= (int)ik_omb_count_limit),
+              "Klass should have been encodable" );
     }
   }
-  break;
-  default:
-    ShouldNotReachHere();
-  };
 
 } // KlassLUTEntry::verify_against
 
 #endif // ASSERT
-
-uint32_t KlassLUTEntry::build_from(const Klass* k) {
-
-  // First weed out invalid cases
-  const char* err = nullptr;
-  if (!klass_is_representable(k, err)) {
-    ResourceMark rm;
-    log_info(klut)("registering: %s: klute invalid (%s)", k->name()->as_C_string(), err);
-    return invalid_entry;
-  }
-
-  uint32_t v = 0;
-
-  const int kind = k->kind();
-  assert(kind >= 0 && kind <= LastKlassKind, "sanity");
-
-  const int lh = k->layout_helper();
-
-  constexpr const char* const ok = nullptr;
-
-  switch (kind) {
-    case Klass::TypeArrayKlassKind:
-    case Klass::ObjArrayKlassKind: {
-      assert(k->is_array_klass(), "sanity");
-      assert(Klass::layout_helper_is_objArray(lh) || Klass::layout_helper_is_typeArray(lh), "unexpected");
-
-      LayoutHelperHelper lhu = { (unsigned) lh };
-      U u(0);
-      u.common.kind = kind;
-      u.ake.lh_ebt = lhu.bytes.lh_ebt;
-      u.ake.lh_esz = lhu.bytes.lh_esz;
-      u.ake.lh_hsz = lhu.bytes.lh_hsz;
-
-      v = u.raw;
-    }
-    break;
-
-    case Klass::InstanceKlassKind:
-    case Klass::InstanceRefKlassKind: {
-
-      // Not every IK is representable as klute, but since we already filtered out invalid
-      // cases, everything should fit now. We just assert here.
-      const InstanceKlass* const ik = InstanceKlass::cast(k);
-
-      assert(k->is_instance_klass(), "unexpected");
-      assert(Klass::layout_helper_is_instance(lh), "unexpected");
-
-      assert(!Klass::layout_helper_needs_slow_path(lh), "Did check already");
-      const size_t wordsize = lh >> LogHeapWordSize;
-      assert(wordsize < ik_wordsize_limit, "Did check already");
-
-      // Has more than one nonstatic OopMapBlock?
-      const int num_omb = ik->nonstatic_oop_map_count();
-      assert(num_omb <= 1, "Did check already");
-
-      unsigned first_omb_count = 0;
-      int first_omb_offset = 0;
-
-      if (num_omb == 1) {
-        first_omb_count = ik->start_of_nonstatic_oop_maps()->count();
-        assert(first_omb_count > 0, "Unexpected omb count");
-        assert(first_omb_count < ik_omb_count_limit, "Did check already");
-
-        first_omb_offset = ik->start_of_nonstatic_oop_maps()->offset();
-        assert(first_omb_offset >= (oopDesc::header_size() * BytesPerWord), "Unexpected omb offset");
-        assert(first_omb_offset < (int)ik_omb_offset_limit, "Did check already");
-      }
-
-      // InstanceKlass:      KKSS SSSS SSSS SSSS CCCC CCCC OOOO OOOO
-      //
-      // K - klass kind (condensed)
-      // S - size in words (max 2^13)
-      // C - count of first oopmap entry (max 2^8)
-      // O - offset of first oopmap entry, in bytes (max 2^8)
-      //
-
-      U u(0);
-      u.common.kind = kind;
-      u.ike.wordsize = wordsize;
-      u.ike.omb_count = first_omb_count;
-      u.ike.omb_offset = first_omb_offset;
-
-      v = u.raw;
-    }
-    break;
-
-    default:
-      assert(false, "Did check already");
-  };
-
-  return v;
-}
 
 KlassLUTEntry::KlassLUTEntry(const Klass* k) : _v(build_from(k)) {
 }

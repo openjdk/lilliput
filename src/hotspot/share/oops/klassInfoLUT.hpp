@@ -43,11 +43,20 @@ class KlassInfoLUT : public AllStatic {
 
 #ifdef ASSERT
   // statistics
-#define STATS_DO(f)         \
- 	f(registered_as_valid)    \
-  f(registered_as_invalid)  \
-  f(hits)                   \
-  f(misses)
+#define STATS_DO(f)    \
+  f(registered_IK)     \
+  f(registered_IRK)    \
+  f(registered_IMK)    \
+  f(registered_ICLK)   \
+  f(registered_ISCK)   \
+  f(registered_TAK)    \
+  f(registered_OAK)    \
+  f(hits_TAK)          \
+  f(hits_OAK)          \
+  f(hits_IK_haveinfo)           \
+  f(hits_ik_noinfo_IMK)         \
+  f(hits_ik_noinfo_ICLK)        \
+  f(hits_ik_noinfo_IK_other)
 #define XX(xx) static void inc_##xx();
   STATS_DO(XX)
 #undef XX

@@ -32,43 +32,45 @@
 #include "oops/oop.hpp"
 #include "utilities/debug.hpp"
 
-
-// Following methods only if IK:
+// Returns true if entry carries IK-specific info (oop map block info + size).
+// If false, caller needs to look up these infor Klass*.
+inline bool KlassLUTEntry::ik_carries_infos() const {
+  assert(is_instance(), "sanity");
+  return _v.common.kind_specific_bits > 0;
+}
 
 // Returns size, in words, of oops of this class
-inline size_t KlassLUTEntry::ik_wordsize() const {
-  assert(!is_array(), "only for ik entries");
+inline int KlassLUTEntry::ik_wordsize() const {
+  assert(is_instance() && ik_carries_infos(), "only for valid ik entries");
   return _v.ike.wordsize;
 }
 
 // Returns count of first OopMapBlock. Returns 0 if there is no OopMapBlock.
 inline unsigned KlassLUTEntry::ik_first_omb_count() const {
-  assert(!is_array(), "only for ik entries");
+  assert(is_instance() && ik_carries_infos(), "only for valid ik entries");
   return _v.ike.omb_count;
 }
 
 // Returns offset of first OopMapBlock. Only call if count is > 0
 inline unsigned KlassLUTEntry::ik_first_omb_offset() const {
-  assert(!is_array(), "only for ik entries");
+  assert(is_instance() && ik_carries_infos(), "only for valid ik entries");
   return _v.ike.omb_offset;
 }
 
-// Valid for all valid entries:
-inline unsigned KlassLUTEntry::calculate_oop_wordsize_given_oop(oop obj) const {
-  assert(valid(), "must be valid");
+// calculates word size given header size, element size, and array length
+inline unsigned KlassLUTEntry::ak_calculate_wordsize_given_oop(oop obj) const {
+  assert(is_array(), "only for ak entries");
+  // See oopDesc::size_given_klass
+  const unsigned l2esz = ak_layouthelper_esz();
+  const unsigned hsz = ak_layouthelper_hsz();
+  const size_t array_length = (size_t) ((arrayOop)obj)->length();
+  const size_t size_in_bytes = (array_length << l2esz) + hsz;
+  return align_up(size_in_bytes, MinObjAlignmentInBytes) / HeapWordSize;
+}
+
+inline unsigned KlassLUTEntry::calculate_wordsize_given_oop(oop obj) const {
   size_t rc = 0;
-  if (!is_array()) {
-    // For IK, instance word size is stored directly in bits 16-30.
-    rc = ik_wordsize();
-  } else {
-    // For AK, we calculate it from the layout helper esz and hsz bytes.
-    const unsigned l2esz = ak_layouthelper_esz();
-    const unsigned hsz = ak_layouthelper_hsz();
-    const size_t array_length = (size_t) ((arrayOop)obj)->length();
-    const size_t size_in_bytes = (array_length << l2esz) + hsz;
-    rc = align_up(size_in_bytes, MinObjAlignmentInBytes) / HeapWordSize;
-  }
-  return rc;
+  return is_array() ? ak_calculate_wordsize_given_oop(obj) : ik_wordsize();
 }
 
 #endif // SHARE_OOPS_KLASSINFOLUTENTRY_INLINE_HPP

@@ -213,8 +213,12 @@ ALWAYSINLINE void InstanceKlass::oop_oop_iterate(oop obj, OopClosureType* closur
     Devirtualizer::do_klass(closure, this);
   }
 
-  assert(klute.valid(), "invalid");
-  oop_oop_iterate_oop_map<T>(klute.ik_first_omb_offset(), klute.ik_first_omb_count(), obj, closure);
+  if (klute.ik_carries_infos()) {
+    oop_oop_iterate_oop_map<T>(klute.ik_first_omb_offset(), klute.ik_first_omb_count(), obj, closure);
+  } else {
+    // Fall back to normal iteration: read OopMapBlocks from Klass
+    oop_oop_iterate_oop_maps<T>(obj, closure);
+  }
 }
 
 // Iterate over all oop fields in the oop maps (no metadata traversal)
@@ -222,8 +226,13 @@ template <typename T, class OopClosureType>
 ALWAYSINLINE void InstanceKlass::oop_oop_iterate_reverse(oop obj, OopClosureType* closure, KlassLUTEntry klute) {
   assert(!Devirtualizer::do_metadata(closure),
       "Code to handle metadata is not implemented");
-  assert(klute.valid(), "invalid");
-  oop_oop_iterate_oop_map_reverse<T>(klute.ik_first_omb_offset(), klute.ik_first_omb_count(), obj, closure);
+
+  if (klute.ik_carries_infos()) {
+    oop_oop_iterate_oop_map_reverse<T>(klute.ik_first_omb_offset(), klute.ik_first_omb_count(), obj, closure);
+  } else {
+    // Fall back to normal iteration: read OopMapBlocks from Klass
+    oop_oop_iterate_oop_maps_reverse<T>(obj, closure);
+  }
 }
 
 // Iterate over all oop fields and metadata.
@@ -234,8 +243,12 @@ ALWAYSINLINE void InstanceKlass::oop_oop_iterate_bounded(oop obj, OopClosureType
       Devirtualizer::do_klass(closure, this);
     }
   }
-  assert(klute.valid(), "invalid");
-  oop_oop_iterate_oop_map_bounded<T>(klute.ik_first_omb_offset(), klute.ik_first_omb_count(), obj, closure, mr);
+
+  if (klute.ik_carries_infos()) {
+    oop_oop_iterate_oop_map_bounded<T>(klute.ik_first_omb_offset(), klute.ik_first_omb_count(), obj, closure, mr);
+  } else {
+    oop_oop_iterate_oop_maps_bounded<T>(obj, closure, mr);
+  }
 }
 
 #endif // SHARE_OOPS_INSTANCEKLASS_INLINE_HPP

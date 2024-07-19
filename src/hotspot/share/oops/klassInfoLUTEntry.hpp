@@ -34,19 +34,25 @@ class OopMapBlock;
 class Klass;
 class outputStream;
 
-//                msb                                          lsb
-// not_in_table:       ---- all bits zero --------------------
+//                                     msb                                       lsb
 //
-// InstanceKlass:      KKKS SSSS SSSS SSSS CCCC CCCC OOOO OOOO
+// invalid_entry (debug zap):             1111 1111 1111 1111 1111 1111 1111 1111  (relies on kind == 0b111 == 7 being invalid)
 //
-// ArrayKlass:         KKK- ---- hhhh hhhh tttt tttt eeee eeee
-//                               |--- lower 24 bit of lh ----|
+// All valid entries:                     KKK. .... .... .... .... .... .... ....
+//
+// InstanceKlass:                         KKKS SSSS SSSS SSSS oooo oooo cccc cccc
+// InstanceKlass, has_no_addinfo:         KKK0 0000 0000 0000 0000 0000 0000 0000  (all IK specific bits 0) (note: means that "0" is a valid IK entry with no add. info)
+// InstanceKlass, has no oopmap entries:  KKK. .... .... .... .... .... 0000 0000  (omb count bits are 0)   (only valid if !has_no_addinfo)
+//
+// ArrayKlass:                            KKK- ---- hhhh hhhh tttt tttt eeee eeee
+//                                                  |                           |
+//                                                  |____lower 24 bit of lh_____|
 //
 // Legend
 // K : klass kind (3 bits)
 // S : size in words (13 bits)
-// C : count of first oopmap entry (8 bits)
-// O : offset of first oopmap entry, in bytes (8 bits)
+// c : count of first oopmap entry (8 bits)
+// o : offset of first oopmap entry, in bytes (8 bits)
 // h : hsz byte from layouthelper    ----------\
 // t : element type byte from layouthelper      (lower 24 byte of layouthelper)
 // e : log2 esz byte from layouthelper --------/
@@ -78,22 +84,23 @@ class KlassLUTEntry {
 
   // All valid entries:  KK-- ---- ---- ---- ---- ---- ---- ----
   static constexpr int bits_kind       = 3;
-  static constexpr int bits_common     = bits_kind; // extend if needed
+  static constexpr int bits_common     = bits_kind;
   static constexpr int bits_specific   = bits_total - bits_common;
 
-  // All entries
-  struct U_K {
+  // Bits valid for all entries, regardless of Klass kind
+  struct KE {
     // lsb
-    unsigned other_bits : bits_specific;
-    unsigned kind       : bits_kind;
+    unsigned kind_specific_bits : bits_specific;
+    unsigned kind               : bits_kind;
     // msb
   };
 
-  // InstanceKlass:      KKKS SSSS SSSS SSSS CCCC CCCC OOOO OOOO
+  // Bits only valid for InstanceKlass
   static constexpr int bits_ik_omb_offset = 8;
   static constexpr int bits_ik_omb_count  = 8;
-  static constexpr int bits_ik_wordsize   = bits_specific - bits_ik_omb_count - bits_ik_omb_offset;
-  struct UIK {
+  static constexpr int bits_ik_omb_bits   = bits_ik_omb_count + bits_ik_omb_offset;
+  static constexpr int bits_ik_wordsize   = bits_specific - bits_ik_omb_bits;
+  struct IKE {
     // lsb
     unsigned omb_offset : bits_ik_omb_offset;
     unsigned omb_count  : bits_ik_omb_count;
@@ -102,12 +109,12 @@ class KlassLUTEntry {
     // msb
   };
 
-  // ArrayKlass:         KKKL LLLL LLLL LLLL LLLL LLLL LLLL LLLL
+  // Bits only valid for ArrayKlass
   static constexpr int bits_ak_lh_esz     = 8;
   static constexpr int bits_ak_lh_ebt     = 8;
   static constexpr int bits_ak_lh_hsz     = 8;
   static constexpr int bits_ak_lh         = bits_ak_lh_esz + bits_ak_lh_ebt + bits_ak_lh_hsz;
-  struct UAK {
+  struct AKE {
     // lsb
     // see klass.hpp
     unsigned lh_esz : bits_ak_lh_esz; // element size
@@ -120,39 +127,40 @@ class KlassLUTEntry {
 
   union U {
     uint32_t raw;
-    U_K common;
-    UIK ike;
-    UAK ake;
+    KE common;
+    IKE ike;
+    AKE ake;
     U(uint32_t v) : raw(v) {}
   };
 
   const U _v;
-
-  // returns explanation if invalid if error, nullptr if ok
-  static const char* build_from_0(uint32_t& value, const Klass* k);
-  static uint32_t build_from(const Klass* k);
 
   // The limits to what we can numerically represent in an (InstanceKlass) Entry
   static constexpr size_t ik_wordsize_limit = nth_bit(bits_ik_wordsize);
   static constexpr size_t ik_omb_offset_limit = nth_bit(bits_ik_omb_offset);
   static constexpr size_t ik_omb_count_limit = nth_bit(bits_ik_omb_count);
 
+  static uint32_t build_from_ik(const InstanceKlass* k, const char*& not_encodable_reason);
+  static uint32_t build_from_ak(const ArrayKlass* k);
+
+  static uint32_t build_from(const Klass* k);
+
 public:
 
-  // Helper function. Returns true if k can be represented by a 32-bit entry, false if not.
-  // Optionally, returns error string.
-  static bool klass_is_representable(const Klass* ik, const char*& err);
+  // Invalid entries are entries that have not been set yet.
+  // Note: cannot use "0" as invalid_entry, since 0 is valid (interface or abstract InstanceKlass, size = 0 and has no oop map)
+  // We use kind=7=0b111 (invalid), and set the rest of the bits also to 1
+  static constexpr uint32_t invalid_entry = 0xFFFFFFFF;
 
-  static constexpr uint32_t invalid_entry = 0;
-
-  inline KlassLUTEntry() : _v(invalid_entry) {}
+//  inline KlassLUTEntry() : _v(invalid_entry) {}
   inline KlassLUTEntry(uint32_t v) : _v(v) {}
   inline KlassLUTEntry(const KlassLUTEntry& other) : _v(other._v) {}
 
   KlassLUTEntry(const Klass* ik);
 
-  bool valid() const      { return _v.raw != invalid_entry; }
-  bool invalid() const    { return !valid(); }
+  // Note: all entries should be valid. An invalid entry indicates
+  // an error somewhere.
+  bool is_invalid() const { return _v.raw == invalid_entry; }
 
 #ifdef ASSERT
   void verify_against(const Klass* k) const;
@@ -160,23 +168,31 @@ public:
 
   uint32_t value() const { return _v.raw; }
 
-  // Following methods only if entry is valid:
-
-  // Returns (our) kind
+  // Returns kind
   inline unsigned kind() const { return _v.common.kind; }
 
   bool is_array() const     { return _v.common.kind >= FirstArrayKlassKind; }
   bool is_instance() const  { return !is_array(); }
 
-  bool is_objArray() const  { return _v.common.kind == ObjArrayKlassKind; }
-  bool is_typeArray() const { return _v.common.kind == TypeArrayKlassKind; }
+  bool is_obj_array() const  { return _v.common.kind == ObjArrayKlassKind; }
+  bool is_type_array() const { return _v.common.kind == TypeArrayKlassKind; }
+
+  // Calculates the object size. Note, introduces a branch (is_array or not).
+  // If possible, use either ik_wordsize() or ak_calculate_wordsize_given_oop() instead.
+  inline unsigned calculate_wordsize_given_oop(oop obj) const;
 
   // Following methods only if IK:
 
-  // Returns size, in words, of oops of this class
-  inline size_t ik_wordsize() const;
+  // Returns true if entry carries IK-specific info (oop map block info + size).
+  // If false, caller needs to look up these infor Klass*.
+  inline bool ik_carries_infos() const;
 
-  // Returns count of first OopMapBlock. Returns 0 if there is no OopMapBlock.
+  // Following methods only if IK *and* ik_carries_infos() == true:
+
+  // Returns size, in words, of oops of this class
+  inline int ik_wordsize() const;
+
+  // Returns count of first OopMapBlock, 0 if there is no oop map block.
   inline unsigned ik_first_omb_count() const;
 
   // Returns offset of first OopMapBlock. Only call if count is > 0
@@ -193,8 +209,8 @@ public:
   // returns distance to first element
   inline unsigned ak_layouthelper_hsz() const { return _v.ake.lh_hsz; }
 
-  // Valid for all valid entries:
-  inline unsigned calculate_oop_wordsize_given_oop(oop obj) const;
+  // calculates word size given header size, element size, and array length
+  inline unsigned ak_calculate_wordsize_given_oop(oop obj) const;
 
 }; // KlassInfoLUEntryIK
 

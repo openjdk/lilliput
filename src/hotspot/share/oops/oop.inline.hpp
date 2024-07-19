@@ -282,9 +282,7 @@ bool oopDesc::is_array()       const { return klass()->is_array_klass();        
 bool oopDesc::is_objArray() const {
   if (UseKLUT) {
     const KlassLUTEntry klute = KlassInfoLUT::get_entry(mark().narrow_klass());
-    if (klute.valid()) {
-      return klute.is_objArray();
-    }
+    return klute.is_obj_array();
   }
   return klass()->is_objArray_klass();
 }
@@ -292,9 +290,7 @@ bool oopDesc::is_objArray() const {
 bool oopDesc::is_typeArray() const {
   if (UseKLUT) {
     const KlassLUTEntry klute = KlassInfoLUT::get_entry(mark().narrow_klass());
-    if (klute.valid()) {
-      return klute.is_typeArray();
-    }
+    return klute.is_type_array();
   }
   return klass()->is_typeArray_klass();
 }
@@ -442,10 +438,8 @@ void oopDesc::oop_iterate(OopClosureType* cl) {
     const narrowKlass nk = mark().narrow_klass();
     Klass* const k = CompressedKlassPointers::decode_not_null(nk);
     const KlassLUTEntry klute = KlassInfoLUT::get_entry(nk);
-    if (klute.valid()) {
-      OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k, klute);
-      return;
-    }
+    OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k, klute);
+    return;
   }
 
   OopIteratorClosureDispatch::oop_oop_iterate(cl, this, klass());
@@ -458,10 +452,8 @@ void oopDesc::oop_iterate(OopClosureType* cl, MemRegion mr) {
     const narrowKlass nk = mark().narrow_klass();
     Klass* const k = CompressedKlassPointers::decode_not_null(nk);
     const KlassLUTEntry klute = KlassInfoLUT::get_entry(nk);
-    if (klute.valid()) {
-      OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k, klute, mr);
-      return;
-    }
+    OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k, klute, mr);
+    return;
   }
 
   OopIteratorClosureDispatch::oop_oop_iterate(cl, this, klass(), mr);
@@ -474,9 +466,17 @@ size_t oopDesc::oop_iterate_size(OopClosureType* cl) {
     const narrowKlass nk = mark().narrow_klass();
     Klass* const k = CompressedKlassPointers::decode_not_null(nk);
     const KlassLUTEntry klute = KlassInfoLUT::get_entry(nk);
-    if (klute.valid()) {
-      OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k, klute);
-      return klute.calculate_oop_wordsize_given_oop(this);
+    OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k, klute);
+
+    // Size: todo: move into DIspatch?
+    if (klute.is_array()) {
+      return klute.ak_calculate_wordsize_given_oop(this);
+    } else {
+      if (klute.ik_carries_infos()) {
+        return klute.ik_wordsize();
+      } else {
+        return size_given_klass(k);
+      }
     }
   }
 
@@ -493,9 +493,16 @@ size_t oopDesc::oop_iterate_size(OopClosureType* cl, MemRegion mr) {
     const narrowKlass nk = mark().narrow_klass();
     Klass* const k = CompressedKlassPointers::decode_not_null(nk);
     const KlassLUTEntry klute = KlassInfoLUT::get_entry(nk);
-    if (klute.valid()) {
-      OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k, klute, mr);
-      return klute.calculate_oop_wordsize_given_oop(this);
+    OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k, klute, mr);
+    // Size: todo: move into DIspatch?
+    if (klute.is_array()) {
+      return klute.ak_calculate_wordsize_given_oop(this);
+    } else {
+      if (klute.ik_carries_infos()) {
+        return klute.ik_wordsize();
+      } else {
+        return size_given_klass(k);
+      }
     }
   }
 
@@ -519,10 +526,8 @@ void oopDesc::oop_iterate_backwards(OopClosureType* cl, Klass* k) {
   if (UseKLUT) {
     const narrowKlass nk = CompressedKlassPointers::encode_not_null(k);
     const KlassLUTEntry klute = KlassInfoLUT::get_entry(nk);
-    if (klute.valid()) {
-      OopIteratorClosureDispatch::oop_oop_iterate_backwards(cl, this, k, klute);
-      return;
-    }
+    OopIteratorClosureDispatch::oop_oop_iterate_backwards(cl, this, k, klute);
+    return;
   }
 
   OopIteratorClosureDispatch::oop_oop_iterate_backwards(cl, this, k);

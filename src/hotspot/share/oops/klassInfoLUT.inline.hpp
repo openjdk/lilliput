@@ -34,7 +34,7 @@
 
 #ifdef ASSERT
 #define ENABLE_EXPENSIVE_STATS
-#define ENABLE_EXPENSIVE_LOG
+//#define ENABLE_EXPENSIVE_LOG
 #endif
 
 inline unsigned KlassInfoLUT::num_entries() {
@@ -49,29 +49,39 @@ ALWAYSINLINE uint32_t KlassInfoLUT::at(unsigned index) {
 ALWAYSINLINE KlassLUTEntry KlassInfoLUT::get_entry(narrowKlass nk) {
 
   const uint32_t v = at(nk);
+  KlassLUTEntry e(v);
+  assert(!e.is_invalid(), "invalid?");
 #ifdef ENABLE_EXPENSIVE_STATS
   {
-    KlassLUTEntry e(v);
-    if (e.valid()) {
-      inc_hits();
+    // stats
+    if (e.is_array()) {
+      if (e.is_obj_array()) {
+        inc_hits_OAK();
+      } else {
+        assert(e.is_type_array(), "Sanity");
+        inc_hits_TAK();
+      }
     } else {
-      inc_misses();
+      assert(e.is_instance(), "Sanity");
+      if (e.ik_carries_infos()) {
+        inc_hits_IK_haveinfo();
+      } else {
+        switch (e.kind()) {
+        case Klass::InstanceClassLoaderKlassKind: inc_hits_ik_noinfo_ICLK(); break;
+        case Klass::InstanceMirrorKlassKind: inc_hits_ik_noinfo_IMK(); break;
+        default: inc_hits_ik_noinfo_IK_other(); break;
+        }
+      }
     }
   }
 #endif
 #ifdef ENABLE_EXPENSIVE_LOG
   {
     KlassLUTEntry e(v);
-    if (e.invalid()) {
-      const Klass* const k = CompressedKlassPointers::decode(nk);
-      const char* x = "ok";
-      KlassLUTEntry::klass_is_representable(k, x);
-      ResourceMark rm;
-      log_debug(klut)("retrieval: invalid klute: name: %s kind: %d, reason: %s", k->name()->as_C_string(), k->kind(), x);
-    }
+    log_debug(klut)("retrieval: klute: name: %s kind: %d", k->name()->as_C_string(), k->kind());
   }
 #endif
-  return KlassLUTEntry(v);
+  return e;
 }
 
 #endif // SHARE_OOPS_KLASSINFOLUT_INLINE_HPP
