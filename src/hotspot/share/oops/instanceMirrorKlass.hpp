@@ -133,6 +133,11 @@ class InstanceMirrorKlass: public InstanceKlass {
   template <typename T, class OopClosureType>
   inline void oop_oop_iterate_metadata_bounded(oop obj, OopClosureType* closure, MemRegion mr);
 
+ public:
+
+  DEFINE_EXACT_CAST_FUNCTIONS(InstanceMirrorKlass)
+  DEFINE_NARROW_KLASS_TO_KLASS_UTILITY_FUNCTIONS(InstanceMirrorKlass)
+
 };
 
 #endif // SHARE_OOPS_INSTANCEMIRRORKLASS_HPP

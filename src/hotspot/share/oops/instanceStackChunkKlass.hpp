@@ -187,6 +187,12 @@ private:
   void do_methods(stackChunkOop chunk, OopIterateClosure* cl);
 
   void oop_oop_iterate_stack_slow(stackChunkOop chunk, OopIterateClosure* closure, MemRegion mr);
+
+ public:
+
+  DEFINE_EXACT_CAST_FUNCTIONS(InstanceStackChunkKlass)
+  DEFINE_NARROW_KLASS_TO_KLASS_UTILITY_FUNCTIONS(InstanceStackChunkKlass)
+
 };
 
 #endif // SHARE_OOPS_INSTANCESTACKCHUNKKLASS_HPP

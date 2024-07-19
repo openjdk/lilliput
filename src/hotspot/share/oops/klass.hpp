@@ -68,18 +68,67 @@ class Klass : public Metadata {
   friend class JVMCIVMStructs;
  public:
   // Klass Kinds for all subclasses of Klass
+
+#define KLASS_ALL_KINDS_DO(what)  \
+  what(InstanceKlass)             \
+  what(InstanceRefKlass)          \
+  what(InstanceMirrorKlass)       \
+  what(InstanceClassLoaderKlass)  \
+  what(InstanceStackChunkKlass)   \
+  what(TypeArrayKlass)            \
+  what(ObjArrayKlass)
+
   enum KlassKind {
-    InstanceKlassKind,
-    InstanceRefKlassKind,
-    InstanceMirrorKlassKind,
-    InstanceClassLoaderKlassKind,
-    InstanceStackChunkKlassKind,
-    TypeArrayKlassKind,
-    ObjArrayKlassKind,
+#define WHAT(name) name ## Kind,
+    KLASS_ALL_KINDS_DO(WHAT)
+#undef WHAT
     UnknownKlassKind
   };
 
   static const uint KLASS_KIND_COUNT = ObjArrayKlassKind + 1;
+
+  // Define convenience cast functions to subclasses, with exact kind check
+#define WHAT(name) \
+  static const name* cast_exact_to_const_##name(const Klass* k) {  \
+    assert(k != nullptr, "null klass");                            \
+    assert(k->kind() == name ## Kind, "Invalid Klass Kind");       \
+    return static_cast<const name*>(k);                            \
+  }
+  KLASS_ALL_KINDS_DO(WHAT)
+#undef WHAT
+
+#define WHAT(name) \
+  static name* cast_exact_to_##name(Klass* k) {               \
+    return const_cast<name*>(cast_exact_to_const_##name(k));  \
+  }
+  KLASS_ALL_KINDS_DO(WHAT)
+#undef WHAT
+
+  // convenience functions to derive an exact subclass from a narrowKlass
+#define WHAT(name) \
+  static const name* narrowKlass_to_const_##name(narrowKlass nk) {       \
+	  const Klass* const k = CompressedKlassPointers::decode_not_null(nk); \
+    return cast_exact_to_const_##name(k);                                \
+  }
+  KLASS_ALL_KINDS_DO(WHAT)
+#undef WHAT
+
+#define WHAT(name) \
+  static const name* narrowKlass_to_##name(narrowKlass nk) {       \
+    Klass* const k = CompressedKlassPointers::decode_not_null(nk); \
+    return cast_exact_to_##name(k);                                \
+  }
+  KLASS_ALL_KINDS_DO(WHAT)
+#undef WHAT
+
+#define DEFINE_EXACT_CAST_FUNCTIONS(name) \
+  static const name* exact_const_cast(const Klass* k) { return Klass::cast_exact_to_const_##name(k); } \
+  static name* exact_cast(Klass* k)                   { return Klass::cast_exact_to_##name(k); }
+
+#define DEFINE_NARROW_KLASS_TO_KLASS_UTILITY_FUNCTIONS(name) \
+	  static const name* narrowKlass_to_const_klass(narrowKlass nk) { return Klass::narrowKlass_to_const_##name(nk); } \
+    static name* narrowKlass_to_klass(narrowKlass nk)             { return Klass::narrowKlass_to_##name(nk); }
+
  protected:
 
   // If you add a new field that points to any metaspace object, you

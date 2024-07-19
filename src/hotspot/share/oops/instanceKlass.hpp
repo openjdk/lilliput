@@ -916,6 +916,9 @@ public:
     return static_cast<const InstanceKlass*>(k);
   }
 
+  DEFINE_EXACT_CAST_FUNCTIONS(InstanceKlass)
+  DEFINE_NARROW_KLASS_TO_KLASS_UTILITY_FUNCTIONS(InstanceKlass)
+
   virtual InstanceKlass* java_super() const {
     return (super() == nullptr) ? nullptr : cast(super());
   }
