@@ -437,7 +437,9 @@ void oopDesc::oop_iterate(OopClosureType* cl) {
   if (UseKLUT) {
     const narrowKlass nk = mark().narrow_klass();
     const KlassLUTEntry klute = KlassInfoLUT::get_entry(nk);
-    OopIteratorClosureDispatch::oop_oop_iterate(nk, klute, cl, this);
+    if (!klute.is_type_array()) { // no need to iterate TAK
+      OopIteratorClosureDispatch::oop_oop_iterate(nk, klute, cl, this);
+    }
     return;
   }
 
@@ -450,7 +452,9 @@ void oopDesc::oop_iterate(OopClosureType* cl, MemRegion mr) {
   if (UseKLUT) {
     const narrowKlass nk = mark().narrow_klass();
     const KlassLUTEntry klute = KlassInfoLUT::get_entry(nk);
-    OopIteratorClosureDispatch::oop_oop_iterate_bounded(nk, klute, cl, this, mr);
+    if (!klute.is_type_array()) { // no need to iterate TAK
+      OopIteratorClosureDispatch::oop_oop_iterate_bounded(nk, klute, cl, this, mr);
+    }
     return;
   }
 
@@ -463,12 +467,13 @@ size_t oopDesc::oop_iterate_size(OopClosureType* cl) {
   if (UseKLUT) {
     const narrowKlass nk = mark().narrow_klass();
     const KlassLUTEntry klute = KlassInfoLUT::get_entry(nk);
-    OopIteratorClosureDispatch::oop_oop_iterate(nk, klute, cl, this);
-
-    // Size: todo: move into DIspatch?
-    if (klute.is_array()) {
+    if (klute.is_type_array()) {
+      return klute.ak_calculate_wordsize_given_oop(this); // no need to iterate TAK
+    } else if (klute.is_obj_array()) {
+      OopIteratorClosureDispatch::oop_oop_iterate(nk, klute, cl, this);
       return klute.ak_calculate_wordsize_given_oop(this);
     } else {
+      OopIteratorClosureDispatch::oop_oop_iterate(nk, klute, cl, this);
       if (klute.ik_carries_infos()) {
         return klute.ik_wordsize();
       } else {
@@ -490,11 +495,13 @@ size_t oopDesc::oop_iterate_size(OopClosureType* cl, MemRegion mr) {
   if (UseKLUT) {
     const narrowKlass nk = mark().narrow_klass();
     const KlassLUTEntry klute = KlassInfoLUT::get_entry(nk);
-    OopIteratorClosureDispatch::oop_oop_iterate_bounded(nk, klute, cl, this, mr);
-    // Size: todo: move into DIspatch?
-    if (klute.is_array()) {
+    if (klute.is_type_array()) {
+      return klute.ak_calculate_wordsize_given_oop(this); // no need to iterate TAK
+    } else if (klute.is_obj_array()) {
+      OopIteratorClosureDispatch::oop_oop_iterate_bounded(nk, klute, cl, this, mr);
       return klute.ak_calculate_wordsize_given_oop(this);
     } else {
+      OopIteratorClosureDispatch::oop_oop_iterate_bounded(nk, klute, cl, this, mr);
       if (klute.ik_carries_infos()) {
         return klute.ik_wordsize();
       } else {
@@ -524,7 +531,9 @@ void oopDesc::oop_iterate_backwards(OopClosureType* cl, Klass* k) {
   if (UseKLUT) {
     const narrowKlass nk = CompressedKlassPointers::encode_not_null(k);
     const KlassLUTEntry klute = KlassInfoLUT::get_entry(nk);
-    OopIteratorClosureDispatch::oop_oop_iterate_reverse(nk, klute, cl, this);
+    if (!klute.is_type_array()) { // no need to iterate TAK
+      OopIteratorClosureDispatch::oop_oop_iterate_reverse(nk, klute, cl, this);
+    }
     return;
   }
 
