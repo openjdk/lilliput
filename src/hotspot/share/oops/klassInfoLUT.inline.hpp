@@ -32,11 +32,6 @@
 #include "utilities/globalDefinitions.hpp"
 #include "utilities/debug.hpp"
 
-#ifdef ASSERT
-#define ENABLE_EXPENSIVE_STATS
-//#define ENABLE_EXPENSIVE_LOG
-#endif
-
 inline unsigned KlassInfoLUT::num_entries() {
    return nth_bit(CompressedKlassPointers::narrow_klass_pointer_bits());
 }
@@ -51,35 +46,11 @@ ALWAYSINLINE KlassLUTEntry KlassInfoLUT::get_entry(narrowKlass nk) {
   const uint32_t v = at(nk);
   KlassLUTEntry e(v);
   assert(!e.is_invalid(), "invalid?");
-#ifdef ENABLE_EXPENSIVE_STATS
-  {
-    // stats
-    if (e.is_array()) {
-      if (e.is_obj_array()) {
-        inc_hits_OAK();
-      } else {
-        assert(e.is_type_array(), "Sanity");
-        inc_hits_TAK();
-      }
-    } else {
-      assert(e.is_instance(), "Sanity");
-      if (e.ik_carries_infos()) {
-        inc_hits_IK_haveinfo();
-      } else {
-        switch (e.kind()) {
-        case Klass::InstanceClassLoaderKlassKind: inc_hits_ik_noinfo_ICLK(); break;
-        case Klass::InstanceMirrorKlassKind: inc_hits_ik_noinfo_IMK(); break;
-        default: inc_hits_ik_noinfo_IK_other(); break;
-        }
-      }
-    }
-  }
+#ifdef KLUT_ENABLE_EXPENSIVE_STATS
+  update_hit_stats(e);
 #endif
-#ifdef ENABLE_EXPENSIVE_LOG
-  {
-    KlassLUTEntry e(v);
-    log_debug(klut)("retrieval: klute: name: %s kind: %d", k->name()->as_C_string(), k->kind());
-  }
+#ifdef KLUT_ENABLE_EXPENSIVE_LOG
+  log_hit(e);
 #endif
   return e;
 }

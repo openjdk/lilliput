@@ -69,17 +69,17 @@ class Klass : public Metadata {
  public:
   // Klass Kinds for all subclasses of Klass
 
-#define KLASS_ALL_KINDS_DO(what)  \
-  what(InstanceKlass)             \
-  what(InstanceRefKlass)          \
-  what(InstanceMirrorKlass)       \
-  what(InstanceClassLoaderKlass)  \
-  what(InstanceStackChunkKlass)   \
-  what(TypeArrayKlass)            \
-  what(ObjArrayKlass)
+#define KLASS_ALL_KINDS_DO(what)        \
+  what(InstanceKlass, IK)               \
+  what(InstanceRefKlass, IRK)           \
+  what(InstanceMirrorKlass, IMK)        \
+  what(InstanceClassLoaderKlass, ICLK)  \
+  what(InstanceStackChunkKlass, ISCK)   \
+  what(TypeArrayKlass, TAK)             \
+  what(ObjArrayKlass, OAK)
 
   enum KlassKind {
-#define WHAT(name) name ## Kind,
+#define WHAT(name, shortname) name ## Kind,
     KLASS_ALL_KINDS_DO(WHAT)
 #undef WHAT
     UnknownKlassKind

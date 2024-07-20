@@ -61,21 +61,21 @@ class outputStream;
 class KlassLUTEntry {
 
 #define ALL_KLASS_KINDS_DO(what) \
-		what(InstanceKlassKind) \
-		what(InstanceRefKlassKind) \
-    what(InstanceMirrorKlassKind) \
-    what(InstanceClassLoaderKlassKind) \
-    what(InstanceStackChunkKlassKind) \
-    what(TypeArrayKlassKind) \
-    what(ObjArrayKlassKind) \
-		what(UnknownKlassKind)
+		what(InstanceKlass, IK) \
+		what(InstanceRefKlass, IRK) \
+    what(InstanceMirrorKlass, IMK) \
+    what(InstanceClassLoaderKlass, ICLK) \
+    what(InstanceStackChunkKlass, ISCK) \
+    what(TypeArrayKlass, TAK) \
+    what(ObjArrayKlass, OAK) \
 
   // Todo: move KlassKind out of Klass
   // Don't want to include it here for all the baggage it brings
   enum LocalKlassKind {
-#define XX(name) name,
+#define XX(name, ignored) name ## Kind,
     ALL_KLASS_KINDS_DO(XX)
 #undef XX
+    UnknownKlassKind,
     LastKlassKind = ObjArrayKlassKind,
     FirstArrayKlassKind = TypeArrayKlassKind
   };

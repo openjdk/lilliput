@@ -93,4 +93,28 @@ STATS_DO(XX)
 #undef XX
 }
 
+#ifdef KLUT_ENABLE_EXPENSIVE_STATS
+void KlassInfoLUT::update_hit_stats(KlassLUTEntry klute) {
+  switch (klute.kind()) {
+#define XX(name, shortname) case Klass::name ## Kind: inc_hits_ ## shortname(); break;
+  ALL_KLASS_KINDS_DO(XX)
+#undef XX
+  default: ShouldNotReachHere();
+  };
+  if (klute.is_instance() && !klute.ik_carries_infos()) {
+    switch (klute.kind()) {
+      case Klass::InstanceClassLoaderKlassKind: inc_noinfo_ICLK(); break;
+      case Klass::InstanceMirrorKlassKind: inc_noinfo_IMK(); break;
+      default: inc_noinfo_IK_other(); break;
+    }
+  }
+}
+#endif // KLUT_ENABLE_EXPENSIVE_STATS
+
+#ifdef KLUT_ENABLE_EXPENSIVE_LOG
+void KlassInfoLUT::log_hit(KlassLUTEntry klute) {
+  //log_debug(klut)("retrieval: klute: name: %s kind: %d", k->name()->as_C_string(), k->kind());
+}
+#endif
+
 #endif // ASSERT

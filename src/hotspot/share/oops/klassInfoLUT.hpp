@@ -33,6 +33,11 @@
 
 class Klass;
 
+#ifdef ASSERT
+#define KLUT_ENABLE_EXPENSIVE_STATS
+//#define KLUT_ENABLE_EXPENSIVE_LOG
+#endif
+
 class KlassInfoLUT : public AllStatic {
 
   static uint32_t* _entries;
@@ -41,7 +46,8 @@ class KlassInfoLUT : public AllStatic {
 
   static inline uint32_t at(unsigned index);
 
-#ifdef ASSERT
+#ifdef KLUT_ENABLE_EXPENSIVE_STATS
+
   // statistics
 #define STATS_DO(f)    \
   f(registered_IK)     \
@@ -51,16 +57,26 @@ class KlassInfoLUT : public AllStatic {
   f(registered_ISCK)   \
   f(registered_TAK)    \
   f(registered_OAK)    \
+  f(hits_IK)           \
+  f(hits_IRK)          \
+  f(hits_IMK)          \
+  f(hits_ICLK)         \
+  f(hits_ISCK)         \
   f(hits_TAK)          \
   f(hits_OAK)          \
-  f(hits_IK_haveinfo)           \
-  f(hits_ik_noinfo_IMK)         \
-  f(hits_ik_noinfo_ICLK)        \
-  f(hits_ik_noinfo_IK_other)
+  f(noinfo_IMK)        \
+  f(noinfo_ICLK)       \
+  f(noinfo_IK_other)
 #define XX(xx) static void inc_##xx();
   STATS_DO(XX)
 #undef XX
-#endif // ASSERT
+
+  static void update_hit_stats(KlassLUTEntry klute);
+#endif // KLUT_ENABLE_EXPENSIVE_STATS
+
+#ifdef KLUT_ENABLE_EXPENSIVE_LOG
+  static void log_hit(KlassLUTEntry klute);
+#endif
 
 public:
 
@@ -70,9 +86,11 @@ public:
 
   static inline KlassLUTEntry get_entry(narrowKlass k);
 
-#ifdef ASSERT
+#ifdef KLUT_ENABLE_EXPENSIVE_STATS
+
   static void print_statistics(outputStream* out);
-#endif // ASSERT
+
+#endif // KLUT_ENABLE_EXPENSIVE_STATS
 
 };
 

@@ -167,7 +167,7 @@ void KlassLUTEntry::verify_against(const Klass* k) const {
   // Kind must fit into 3 bits
   STATIC_ASSERT(Klass::KLASS_KIND_COUNT < nth_bit(bits_kind));
 
-#define XX(name) STATIC_ASSERT((int)name == (int)Klass::name);
+#define XX(name, ignored) STATIC_ASSERT((int)name ## Kind == (int)Klass::name ## Kind);
   ALL_KLASS_KINDS_DO(XX)
 #undef XX
 
