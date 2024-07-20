@@ -211,4 +211,7 @@ void InstanceRefKlass::trace_reference_gc(const char *s, oop obj) {
 }
 #endif
 
+DEFINE_EXACT_CAST_FUNCTIONS(InstanceRefKlass)
+DEFINE_NARROW_KLASS_UTILITY_FUNCTIONS(InstanceRefKlass)
+
 #endif // SHARE_OOPS_INSTANCEREFKLASS_INLINE_HPP

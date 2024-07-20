@@ -133,8 +133,8 @@ class TypeArrayKlass : public ArrayKlass {
   ModuleEntry* module() const;
   PackageEntry* package() const;
 
-  DEFINE_EXACT_CAST_FUNCTIONS(TypeArrayKlass)
-  DEFINE_NARROW_KLASS_TO_KLASS_UTILITY_FUNCTIONS(TypeArrayKlass)
+  DECLARE_EXACT_CAST_FUNCTIONS(TypeArrayKlass)
+  DECLARE_NARROW_KLASS_UTILITY_FUNCTIONS(TypeArrayKlass)
 
 };
 

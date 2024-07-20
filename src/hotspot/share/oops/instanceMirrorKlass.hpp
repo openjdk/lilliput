@@ -135,8 +135,8 @@ class InstanceMirrorKlass: public InstanceKlass {
 
  public:
 
-  DEFINE_EXACT_CAST_FUNCTIONS(InstanceMirrorKlass)
-  DEFINE_NARROW_KLASS_TO_KLASS_UTILITY_FUNCTIONS(InstanceMirrorKlass)
+  DECLARE_EXACT_CAST_FUNCTIONS(InstanceMirrorKlass)
+  DECLARE_NARROW_KLASS_UTILITY_FUNCTIONS(InstanceMirrorKlass)
 
 };
 

@@ -79,8 +79,8 @@ public:
   template <typename T, class OopClosureType>
   inline void oop_oop_iterate_bounded(oop obj, OopClosureType* closure, KlassLUTEntry klute, MemRegion mr);
 
-  DEFINE_EXACT_CAST_FUNCTIONS(InstanceClassLoaderKlass)
-  DEFINE_NARROW_KLASS_TO_KLASS_UTILITY_FUNCTIONS(InstanceClassLoaderKlass)
+  DECLARE_EXACT_CAST_FUNCTIONS(InstanceClassLoaderKlass)
+  DECLARE_NARROW_KLASS_UTILITY_FUNCTIONS(InstanceClassLoaderKlass)
 
 };
 

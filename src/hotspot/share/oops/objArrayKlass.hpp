@@ -174,8 +174,8 @@ class ObjArrayKlass : public ArrayKlass {
 
   void oop_verify_on(oop obj, outputStream* st);
 
-  DEFINE_EXACT_CAST_FUNCTIONS(ObjArrayKlass)
-  DEFINE_NARROW_KLASS_TO_KLASS_UTILITY_FUNCTIONS(ObjArrayKlass)
+  DECLARE_EXACT_CAST_FUNCTIONS(ObjArrayKlass)
+  DECLARE_NARROW_KLASS_UTILITY_FUNCTIONS(ObjArrayKlass)
 
 };
 

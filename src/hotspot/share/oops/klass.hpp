@@ -87,47 +87,35 @@ class Klass : public Metadata {
 
   static const uint KLASS_KIND_COUNT = ObjArrayKlassKind + 1;
 
-  // Define convenience cast functions to subclasses, with exact kind check
-#define WHAT(name) \
-  static const name* cast_exact_to_const_##name(const Klass* k) {  \
-    assert(k != nullptr, "null klass");                            \
-    assert(k->kind() == name ## Kind, "Invalid Klass Kind");       \
-    return static_cast<const name*>(k);                            \
+#define DECLARE_EXACT_CAST_FUNCTIONS(TYPE)                               \
+  static inline const TYPE* cast_exact(const Klass* k);                  \
+  static inline       TYPE* cast_exact(      Klass* k);
+
+#define DEFINE_EXACT_CAST_FUNCTIONS(TYPE)                                \
+	inline const TYPE* TYPE::cast_exact(const Klass* k) {                  \
+    assert(k != nullptr, "klass null");                                  \
+    assert(k->kind() == Klass::TYPE ## Kind,                             \
+           "Klass @" PTR_FORMAT ": wrong kind %d", p2i(k), k->kind()) ;  \
+    return static_cast<const TYPE*>(k);                                  \
+  }                                                                      \
+  inline TYPE* TYPE::cast_exact(Klass* k) {                              \
+    const TYPE* const ck = TYPE::cast_exact((const Klass*)k);            \
+    return const_cast<TYPE*>(ck);                                        \
   }
-  KLASS_ALL_KINDS_DO(WHAT)
-#undef WHAT
 
-#define WHAT(name) \
-  static name* cast_exact_to_##name(Klass* k) {               \
-    return const_cast<name*>(cast_exact_to_const_##name(k));  \
-  }
-  KLASS_ALL_KINDS_DO(WHAT)
-#undef WHAT
+#define DECLARE_NARROW_KLASS_UTILITY_FUNCTIONS(TYPE)                     \
+  static inline const TYPE* narrow_klass_to_const_klass(narrowKlass nk); \
+  static inline       TYPE* narrow_klass_to_klass(narrowKlass nk);
 
-  // convenience functions to derive an exact subclass from a narrowKlass
-#define WHAT(name) \
-  static const name* narrowKlass_to_const_##name(narrowKlass nk) {       \
-	  const Klass* const k = CompressedKlassPointers::decode_not_null(nk); \
-    return cast_exact_to_const_##name(k);                                \
-  }
-  KLASS_ALL_KINDS_DO(WHAT)
-#undef WHAT
-
-#define WHAT(name) \
-  static const name* narrowKlass_to_##name(narrowKlass nk) {       \
-    Klass* const k = CompressedKlassPointers::decode_not_null(nk); \
-    return cast_exact_to_##name(k);                                \
-  }
-  KLASS_ALL_KINDS_DO(WHAT)
-#undef WHAT
-
-#define DEFINE_EXACT_CAST_FUNCTIONS(name) \
-  static const name* exact_const_cast(const Klass* k) { return Klass::cast_exact_to_const_##name(k); } \
-  static name* exact_cast(Klass* k)                   { return Klass::cast_exact_to_##name(k); }
-
-#define DEFINE_NARROW_KLASS_TO_KLASS_UTILITY_FUNCTIONS(name) \
-	  static const name* narrowKlass_to_const_klass(narrowKlass nk) { return Klass::narrowKlass_to_const_##name(nk); } \
-    static name* narrowKlass_to_klass(narrowKlass nk)             { return Klass::narrowKlass_to_##name(nk); }
+#define DEFINE_NARROW_KLASS_UTILITY_FUNCTIONS(TYPE)                      \
+	inline const TYPE* TYPE::narrow_klass_to_const_klass(narrowKlass nk) { \
+    const Klass* const k = CompressedKlassPointers::decode_not_null(nk); \
+    return cast_exact(k);                                                \
+  }                                                                      \
+  inline TYPE* TYPE::narrow_klass_to_klass(narrowKlass nk) {             \
+    Klass* const k = CompressedKlassPointers::decode_not_null(nk);       \
+    return cast_exact(k);                                                \
+  }                                                                      \
 
  protected:
 

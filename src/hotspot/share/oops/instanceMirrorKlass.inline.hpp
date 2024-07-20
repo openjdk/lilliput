@@ -167,4 +167,7 @@ void InstanceMirrorKlass::oop_oop_iterate_bounded(oop obj, OopClosureType* closu
   oop_oop_iterate_statics_bounded<T>(obj, closure, mr);
 }
 
+DEFINE_EXACT_CAST_FUNCTIONS(InstanceMirrorKlass)
+DEFINE_NARROW_KLASS_UTILITY_FUNCTIONS(InstanceMirrorKlass)
+
 #endif // SHARE_OOPS_INSTANCEMIRRORKLASS_INLINE_HPP

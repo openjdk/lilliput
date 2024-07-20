@@ -137,4 +137,7 @@ void objArrayOopDesc::oop_iterate_range(OopClosureType* blk, int start, int end)
   }
 }
 
+DEFINE_EXACT_CAST_FUNCTIONS(ObjArrayKlass)
+DEFINE_NARROW_KLASS_UTILITY_FUNCTIONS(ObjArrayKlass)
+
 #endif // SHARE_OOPS_OBJARRAYKLASS_INLINE_HPP

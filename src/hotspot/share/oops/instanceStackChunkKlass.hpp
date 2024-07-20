@@ -190,8 +190,8 @@ private:
 
  public:
 
-  DEFINE_EXACT_CAST_FUNCTIONS(InstanceStackChunkKlass)
-  DEFINE_NARROW_KLASS_TO_KLASS_UTILITY_FUNCTIONS(InstanceStackChunkKlass)
+  DECLARE_EXACT_CAST_FUNCTIONS(InstanceStackChunkKlass)
+  DECLARE_NARROW_KLASS_UTILITY_FUNCTIONS(InstanceStackChunkKlass)
 
 };
 

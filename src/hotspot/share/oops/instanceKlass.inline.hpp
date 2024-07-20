@@ -251,4 +251,7 @@ ALWAYSINLINE void InstanceKlass::oop_oop_iterate_bounded(oop obj, OopClosureType
   }
 }
 
+DEFINE_EXACT_CAST_FUNCTIONS(InstanceKlass)
+DEFINE_NARROW_KLASS_UTILITY_FUNCTIONS(InstanceKlass)
+
 #endif // SHARE_OOPS_INSTANCEKLASS_INLINE_HPP

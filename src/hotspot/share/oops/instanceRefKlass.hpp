@@ -135,8 +135,9 @@ class InstanceRefKlass: public InstanceKlass {
   // Verification
   void oop_verify_on(oop obj, outputStream* st);
 
-  DEFINE_EXACT_CAST_FUNCTIONS(InstanceRefKlass)
-  DEFINE_NARROW_KLASS_TO_KLASS_UTILITY_FUNCTIONS(InstanceRefKlass)
+  DECLARE_EXACT_CAST_FUNCTIONS(InstanceRefKlass)
+  DECLARE_NARROW_KLASS_UTILITY_FUNCTIONS(InstanceRefKlass)
+
 };
 
 #endif // SHARE_OOPS_INSTANCEREFKLASS_HPP

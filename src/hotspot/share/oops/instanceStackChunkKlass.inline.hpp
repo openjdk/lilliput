@@ -177,4 +177,7 @@ void InstanceStackChunkKlass::oop_oop_iterate_stack_with_bitmap(stackChunkOop ch
   }
 }
 
+DEFINE_EXACT_CAST_FUNCTIONS(InstanceStackChunkKlass)
+DEFINE_NARROW_KLASS_UTILITY_FUNCTIONS(InstanceStackChunkKlass)
+
 #endif // SHARE_OOPS_INSTANCESTACKCHUNKKLASS_INLINE_HPP

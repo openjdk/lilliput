@@ -73,4 +73,7 @@ inline void TypeArrayKlass::oop_oop_iterate_reverse(oop obj, OopClosureType* clo
   oop_oop_iterate_impl(obj, closure);
 }
 
+DEFINE_EXACT_CAST_FUNCTIONS(TypeArrayKlass)
+DEFINE_NARROW_KLASS_UTILITY_FUNCTIONS(TypeArrayKlass)
+
 #endif // SHARE_OOPS_TYPEARRAYKLASS_INLINE_HPP
