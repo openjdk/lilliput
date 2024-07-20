@@ -164,11 +164,11 @@ public:
 
   // klute variants
   template <typename T, class OopClosureType>
-  inline void oop_oop_iterate(KlassLUTEntry klute, OopClosureType* closure, oop obj);
+  static inline void oop_oop_iterate(narrowKlass nk, KlassLUTEntry klute, OopClosureType* closure, oop obj);
   template <typename T, class OopClosureType>
-  inline void oop_oop_iterate_reverse(KlassLUTEntry klute, OopClosureType* closure, oop obj);
+  static inline void oop_oop_iterate_reverse(narrowKlass nk, KlassLUTEntry klute, OopClosureType* closure, oop obj);
   template <typename T, class OopClosureType>
-  inline void oop_oop_iterate_bounded(KlassLUTEntry klute, OopClosureType* closure, oop obj, MemRegion mr);
+  static inline void oop_oop_iterate_bounded(narrowKlass nk, KlassLUTEntry klute, OopClosureType* closure, oop obj, MemRegion mr);
 
 private:
   template <typename T, class OopClosureType>

@@ -28,6 +28,7 @@
 #include "utilities/devirtualizer.hpp"
 
 #include "classfile/classLoaderData.hpp"
+#include "oops/compressedKlass.inline.hpp"
 #include "oops/access.inline.hpp"
 #include "utilities/debug.hpp"
 
@@ -128,6 +129,13 @@ call_do_klass(void (Receiver::*)(Klass*), void (Base::*)(Klass*), OopClosureType
 
 template <typename OopClosureType>
 inline void Devirtualizer::do_klass(OopClosureType* closure, Klass* k) {
+  call_do_klass(&OopClosureType::do_klass, &OopIterateClosure::do_klass, closure, k);
+}
+
+template <typename OopClosureType>
+inline void Devirtualizer::do_narrow_klass(OopClosureType* closure, narrowKlass nk) {
+  // Todo: optimize
+  Klass* const k = CompressedKlassPointers::decode(nk);
   call_do_klass(&OopClosureType::do_klass, &OopIterateClosure::do_klass, closure, k);
 }
 

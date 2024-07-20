@@ -99,22 +99,23 @@ void ObjArrayKlass::oop_oop_iterate_bounded(oop obj, OopClosureType* closure, Me
   oop_oop_iterate_elements_bounded<T>(a, closure, mr.start(), mr.end());
 }
 
-// The klute variants of OAK::oop_oop_iterate don't do anything special. There is nothing to gain
-// here anymore from the info in the KlassLUTEntry.
+// Klute variants
 template <typename T, typename OopClosureType>
-void ObjArrayKlass::oop_oop_iterate(KlassLUTEntry ignored, OopClosureType* closure, oop obj) {
-  oop_oop_iterate<T>(obj, closure);
+void ObjArrayKlass::oop_oop_iterate(narrowKlass nk, KlassLUTEntry ignored, OopClosureType* closure, oop obj) {
+  // Todo: for now just resolve the Klass. Maybe more parts can be made static.
+  narrow_klass_to_klass(nk)->oop_oop_iterate<T>(obj, closure);
 }
 
 template <typename T, typename OopClosureType>
-void ObjArrayKlass::oop_oop_iterate_bounded(KlassLUTEntry ignored, OopClosureType* closure, oop obj, MemRegion mr) {
-  oop_oop_iterate_bounded<T>(obj, closure, mr);
+void ObjArrayKlass::oop_oop_iterate_bounded(narrowKlass nk, KlassLUTEntry ignored, OopClosureType* closure, oop obj, MemRegion mr) {
+  // Todo: for now just resolve the Klass. Maybe more parts can be made static.
+  narrow_klass_to_klass(nk)->oop_oop_iterate_bounded<T>(obj, closure, mr);
 }
 
 template <typename T, typename OopClosureType>
-void ObjArrayKlass::oop_oop_iterate_reverse(KlassLUTEntry ignored, OopClosureType* closure, oop obj) {
-  // No reverse implementation ATM.
-  oop_oop_iterate<T>(obj, closure);
+void ObjArrayKlass::oop_oop_iterate_reverse(narrowKlass nk, KlassLUTEntry ignored, OopClosureType* closure, oop obj) {
+  // Todo: for now just resolve the Klass. Maybe more parts can be made static.
+  narrow_klass_to_klass(nk)->oop_oop_iterate_reverse<T>(obj, closure);
 }
 
 // Like oop_oop_iterate but only iterates over a specified range and only used

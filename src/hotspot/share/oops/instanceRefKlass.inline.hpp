@@ -171,24 +171,24 @@ void InstanceRefKlass::oop_oop_iterate_bounded(oop obj, OopClosureType* closure,
 
 // klute variants
 template <typename T, class OopClosureType>
-void InstanceRefKlass::oop_oop_iterate(KlassLUTEntry klute, OopClosureType* closure, oop obj) {
-  InstanceKlass::oop_oop_iterate<T>(klute, closure, obj);
-
-  oop_oop_iterate_ref_processing<T>(obj, closure);
+void InstanceRefKlass::oop_oop_iterate(narrowKlass nk, KlassLUTEntry klute, OopClosureType* closure, oop obj) {
+  InstanceKlass::oop_oop_iterate<T>(nk, klute, closure, obj);
+  // Todo: for now just resolve the Klass. Maybe more parts can be made static.
+  narrow_klass_to_klass(nk)->oop_oop_iterate_ref_processing<T>(obj, closure);
 }
 
 template <typename T, class OopClosureType>
-void InstanceRefKlass::oop_oop_iterate_reverse(KlassLUTEntry klute, OopClosureType* closure, oop obj) {
-  InstanceKlass::oop_oop_iterate_reverse<T>(klute, closure, obj);
-
-  oop_oop_iterate_ref_processing<T>(obj, closure);
+void InstanceRefKlass::oop_oop_iterate_reverse(narrowKlass nk, KlassLUTEntry klute, OopClosureType* closure, oop obj) {
+  InstanceKlass::oop_oop_iterate_reverse<T>(nk, klute, closure, obj);
+  // Todo: for now just resolve the Klass. Maybe more parts can be made static.
+  narrow_klass_to_klass(nk)->oop_oop_iterate_ref_processing<T>(obj, closure);
 }
 
 template <typename T, class OopClosureType>
-void InstanceRefKlass::oop_oop_iterate_bounded(KlassLUTEntry klute, OopClosureType* closure, oop obj, MemRegion mr) {
-  InstanceKlass::oop_oop_iterate_bounded<T>(klute, closure, obj, mr);
-
-  oop_oop_iterate_ref_processing_bounded<T>(obj, closure, mr);
+void InstanceRefKlass::oop_oop_iterate_bounded(narrowKlass nk, KlassLUTEntry klute, OopClosureType* closure, oop obj, MemRegion mr) {
+  InstanceKlass::oop_oop_iterate_bounded<T>(nk, klute, closure, obj, mr);
+  // Todo: for now just resolve the Klass. Maybe more parts can be made static.
+  narrow_klass_to_klass(nk)->oop_oop_iterate_ref_processing_bounded<T>(obj, closure, mr);
 }
 
 #ifdef ASSERT

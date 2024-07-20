@@ -79,7 +79,7 @@ class TypeArrayKlass : public ArrayKlass {
 
  private:
   // The implementation used by all oop_oop_iterate functions in TypeArrayKlasses.
-  inline void oop_oop_iterate_impl(oop obj, OopIterateClosure* closure);
+  static inline void oop_oop_iterate_impl(oop obj, OopIterateClosure* closure);
 
  public:
   // Wraps oop_oop_iterate_impl to conform to macros.
@@ -97,11 +97,11 @@ class TypeArrayKlass : public ArrayKlass {
   // Klute variants. They don't do anything special for TAK; they just have to exist as jump points
   // for OopIteratexxxDispatchWithKlute.
   template <typename T, class OopClosureType>
-  inline void oop_oop_iterate(KlassLUTEntry klute, OopClosureType* closure, oop obj);
+  static inline void oop_oop_iterate(narrowKlass nk, KlassLUTEntry klute, OopClosureType* closure, oop obj);
   template <typename T, class OopClosureType>
-  inline void oop_oop_iterate_reverse(KlassLUTEntry klute, OopClosureType* closure, oop obj);
+  static inline void oop_oop_iterate_reverse(narrowKlass nk, KlassLUTEntry klute, OopClosureType* closure, oop obj);
   template <typename T, class OopClosureType>
-  inline void oop_oop_iterate_bounded(KlassLUTEntry klute, OopClosureType* closure, oop obj, MemRegion mr);
+  static inline void oop_oop_iterate_bounded(narrowKlass nk, KlassLUTEntry klute, OopClosureType* closure, oop obj, MemRegion mr);
 
  public:
   static TypeArrayKlass* cast(Klass* k) {
