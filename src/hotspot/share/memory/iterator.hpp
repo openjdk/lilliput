@@ -320,9 +320,9 @@ class OopIteratorClosureDispatch {
   template <typename OopClosureType> static void oop_oop_iterate_backwards(OopClosureType* cl, oop obj, Klass* klass);
 
   // Note: we only need Klass* for later, in the Klass, to optionally do metadata iteration. However, this may hopefully change in the future.
-  template <typename OopClosureType> static void oop_oop_iterate(OopClosureType* cl, oop obj, Klass* klass, KlassLUTEntry klute);
-  template <typename OopClosureType> static void oop_oop_iterate(OopClosureType* cl, oop obj, Klass* klass, KlassLUTEntry klute, MemRegion mr);
-  template <typename OopClosureType> static void oop_oop_iterate_backwards(OopClosureType* cl, oop obj, Klass* klass, KlassLUTEntry klute);
+  template <typename OopClosureType> static void oop_oop_iterate          (Klass* k, KlassLUTEntry klute, OopClosureType* cl, oop obj);
+  template <typename OopClosureType> static void oop_oop_iterate_reverse  (Klass* k, KlassLUTEntry klute, OopClosureType* cl, oop obj);
+  template <typename OopClosureType> static void oop_oop_iterate_bounded  (Klass* k, KlassLUTEntry klute, OopClosureType* cl, oop obj, MemRegion mr);
 
 };
 

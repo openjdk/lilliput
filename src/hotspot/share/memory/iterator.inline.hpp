@@ -312,63 +312,63 @@ void OopIteratorClosureDispatch::oop_oop_iterate_backwards(OopClosureType* cl, o
 template <typename OopClosureType>
 class OopOopIterateDispatchWithKlute : public AllStatic {
 private:
-  typedef void (*FunctionTypeNormalOrBackwards)(OopClosureType*, oop, Klass*, KlassLUTEntry klute);
-  typedef void (*FunctionTypeBounded)(OopClosureType*, oop, Klass*, KlassLUTEntry klute, MemRegion);
+  typedef void (*FunctionTypeNormalOrBackwards)   (Klass*, KlassLUTEntry, OopClosureType*, oop);
+  typedef void (*FunctionTypeBounded)             (Klass*, KlassLUTEntry, OopClosureType*, oop, MemRegion);
 
   class Tables {
 
     // Dispatch functions
 
     template <typename KlassType, typename T>
-    static void oop_oop_iterate(OopClosureType* cl, oop obj, Klass* k, KlassLUTEntry klute) {
-      ((KlassType*)k)->KlassType::template oop_oop_iterate<T>(obj, cl, klute);
+    static void oop_oop_iterate(Klass* k, KlassLUTEntry klute, OopClosureType* cl, oop obj) {
+      ((KlassType*)k)->KlassType::template oop_oop_iterate<T>(klute, cl, obj);
     }
 
     template <typename KlassType, typename T>
-    static void oop_oop_iterate_reverse(OopClosureType* cl, oop obj, Klass* k, KlassLUTEntry klute) {
-      ((KlassType*)k)->KlassType::template oop_oop_iterate_reverse<T>(obj, cl, klute);
+    static void oop_oop_iterate_reverse(Klass* k, KlassLUTEntry klute, OopClosureType* cl, oop obj) {
+      ((KlassType*)k)->KlassType::template oop_oop_iterate_reverse<T>(klute, cl, obj);
     }
 
     template <typename KlassType, typename T>
-    static void oop_oop_iterate_bounded(OopClosureType* cl, oop obj, Klass* k, KlassLUTEntry klute, MemRegion mr) {
-      ((KlassType*)k)->KlassType::template oop_oop_iterate_bounded<T>(obj, cl, klute, mr);
+    static void oop_oop_iterate_bounded(Klass* k, KlassLUTEntry klute, OopClosureType* cl, oop obj, MemRegion mr) {
+      ((KlassType*)k)->KlassType::template oop_oop_iterate_bounded<T>(klute, cl, obj, mr);
     }
 
     // init functions
 
     template <typename KlassType>
-    static void init_normal(OopClosureType* cl, oop obj, Klass* k, KlassLUTEntry klute) {
-      OopOopIterateDispatchWithKlute<OopClosureType>::_tables.oop_oop_iterate_resolve_and_execute<KlassType>(cl, obj, k, klute);
+    static void init_normal(Klass* k, KlassLUTEntry klute, OopClosureType* cl, oop obj) {
+      OopOopIterateDispatchWithKlute<OopClosureType>::_tables.oop_oop_iterate_resolve_and_execute<KlassType>(k, klute, cl, obj);
     }
 
     template <typename KlassType>
-    static void init_reverse(OopClosureType* cl, oop obj, Klass* k, KlassLUTEntry klute) {
-      OopOopIterateDispatchWithKlute<OopClosureType>::_tables.oop_oop_iterate_reverse_resolve_and_execute<KlassType>(cl, obj, k, klute);
+    static void init_reverse(Klass* k, KlassLUTEntry klute, OopClosureType* cl, oop obj) {
+      OopOopIterateDispatchWithKlute<OopClosureType>::_tables.oop_oop_iterate_reverse_resolve_and_execute<KlassType>(k, klute, cl, obj);
     }
 
     template <typename KlassType>
-    static void init_bounded(OopClosureType* cl, oop obj, Klass* k, KlassLUTEntry klute, MemRegion mr) {
-      OopOopIterateDispatchWithKlute<OopClosureType>::_tables.oop_oop_iterate_bounded_resolve_and_execute<KlassType>(cl, obj, k, klute, mr);
+    static void init_bounded(Klass* k, KlassLUTEntry klute, OopClosureType* cl, oop obj, MemRegion mr) {
+      OopOopIterateDispatchWithKlute<OopClosureType>::_tables.oop_oop_iterate_bounded_resolve_and_execute<KlassType>(k, klute, cl, obj, mr);
     }
 
     // First time resolve-and-execute functions
 
     template <typename KlassType>
-    void oop_oop_iterate_resolve_and_execute(OopClosureType* cl, oop obj, Klass* k, KlassLUTEntry klute) {
+    void oop_oop_iterate_resolve_and_execute(Klass* k, KlassLUTEntry klute, OopClosureType* cl, oop obj) {
       set_resolve_functions<KlassType>();
-      _function_normal[KlassType::Kind](cl, obj, k, klute);
+      _function_normal[KlassType::Kind](k, klute, cl, obj);
     }
 
     template <typename KlassType>
-    void oop_oop_iterate_reverse_resolve_and_execute(OopClosureType* cl, oop obj, Klass* k, KlassLUTEntry klute) {
+    void oop_oop_iterate_reverse_resolve_and_execute(Klass* k, KlassLUTEntry klute, OopClosureType* cl, oop obj) {
       set_resolve_functions<KlassType>();
-      _function_reverse[KlassType::Kind](cl, obj, k, klute);
+      _function_reverse[KlassType::Kind](k, klute, cl, obj);
     }
 
     template <typename KlassType>
-    void oop_oop_iterate_bounded_resolve_and_execute(OopClosureType* cl, oop obj, Klass* k, KlassLUTEntry klute, MemRegion mr) {
+    void oop_oop_iterate_bounded_resolve_and_execute(Klass* k, KlassLUTEntry klute, OopClosureType* cl, oop obj, MemRegion mr) {
       set_resolve_functions<KlassType>();
-      _function_bounded[KlassType::Kind](cl, obj, k, klute, mr);
+      _function_bounded[KlassType::Kind](k, klute, cl, obj, mr);
     }
 
     // Set all init functions for one Kind
@@ -411,19 +411,19 @@ private:
 
 public:
 
-  static void dispatch_to_oop_oop_iterate(OopClosureType* cl, oop obj, Klass* klass, KlassLUTEntry klute) {
+  static void dispatch_to_oop_oop_iterate(Klass* k, KlassLUTEntry klute, OopClosureType* cl, oop obj) {
     const int slot = klute.kind();
-    _tables._function_normal[slot](cl, obj, klass, klute);
+    _tables._function_normal[slot](k, klute, cl, obj);
   }
 
-  static void dispatch_to_oop_oop_iterate_reverse(OopClosureType* cl, oop obj, Klass* klass, KlassLUTEntry klute) {
+  static void dispatch_to_oop_oop_iterate_reverse(Klass* k, KlassLUTEntry klute, OopClosureType* cl, oop obj) {
     const int slot = klute.kind();
-    _tables._function_reverse[slot](cl, obj, klass, klute);
+    _tables._function_reverse[slot](k, klute, cl, obj);
   }
 
-  static void dispatch_to_oop_oop_iterate_bounded(OopClosureType* cl, oop obj, Klass* klass, KlassLUTEntry klute, MemRegion mr) {
+  static void dispatch_to_oop_oop_iterate_bounded(Klass* k, KlassLUTEntry klute, OopClosureType* cl, oop obj, MemRegion mr) {
     const int slot = klute.kind();
-    _tables._function_bounded[slot](cl, obj, klass, klute, mr);
+    _tables._function_bounded[slot](k, klute, cl, obj, mr);
   }
 
 };
@@ -433,18 +433,18 @@ typename OopOopIterateDispatchWithKlute<OopClosureType>::Tables OopOopIterateDis
 
 
 template <typename OopClosureType>
-void OopIteratorClosureDispatch::oop_oop_iterate(OopClosureType* cl, oop obj, Klass* klass, KlassLUTEntry klute) {
-  OopOopIterateDispatchWithKlute<OopClosureType>::dispatch_to_oop_oop_iterate(cl, obj, klass, klute);
+void OopIteratorClosureDispatch::oop_oop_iterate(Klass* k, KlassLUTEntry klute, OopClosureType* cl, oop obj) {
+  OopOopIterateDispatchWithKlute<OopClosureType>::dispatch_to_oop_oop_iterate(k, klute, cl, obj);
 }
 
 template <typename OopClosureType>
-void OopIteratorClosureDispatch::oop_oop_iterate_backwards(OopClosureType* cl, oop obj, Klass* klass, KlassLUTEntry klute) {
-  OopOopIterateDispatchWithKlute<OopClosureType>::dispatch_to_oop_oop_iterate_reverse(cl, obj, klass, klute);
+void OopIteratorClosureDispatch::oop_oop_iterate_reverse(Klass* k, KlassLUTEntry klute, OopClosureType* cl, oop obj) {
+  OopOopIterateDispatchWithKlute<OopClosureType>::dispatch_to_oop_oop_iterate_reverse(k, klute, cl, obj);
 }
 
 template <typename OopClosureType>
-void OopIteratorClosureDispatch::oop_oop_iterate(OopClosureType* cl, oop obj, Klass* klass, KlassLUTEntry klute, MemRegion mr) {
-  OopOopIterateDispatchWithKlute<OopClosureType>::dispatch_to_oop_oop_iterate_bounded(cl, obj, klass, klute, mr);
+void OopIteratorClosureDispatch::oop_oop_iterate_bounded(Klass* k, KlassLUTEntry klute, OopClosureType* cl, oop obj, MemRegion mr) {
+  OopOopIterateDispatchWithKlute<OopClosureType>::dispatch_to_oop_oop_iterate_bounded(k, klute, cl, obj, mr);
 }
 
 #endif // SHARE_MEMORY_ITERATOR_INLINE_HPP

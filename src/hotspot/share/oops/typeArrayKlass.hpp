@@ -85,20 +85,23 @@ class TypeArrayKlass : public ArrayKlass {
   // Wraps oop_oop_iterate_impl to conform to macros.
   template <typename T, typename OopClosureType>
   inline void oop_oop_iterate(oop obj, OopClosureType* closure);
-  template <typename T, typename OopClosureType>
-  inline void oop_oop_iterate(oop obj, OopClosureType* closure, KlassLUTEntry klute);
 
   // Wraps oop_oop_iterate_impl to conform to macros.
   template <typename T, typename OopClosureType>
   inline void oop_oop_iterate_bounded(oop obj, OopClosureType* closure, MemRegion mr);
-  template <typename T, typename OopClosureType>
-  inline void oop_oop_iterate_bounded(oop obj, OopClosureType* closure, KlassLUTEntry klute, MemRegion mr);
 
   // Wraps oop_oop_iterate_impl to conform to macros.
   template <typename T, typename OopClosureType>
   inline void oop_oop_iterate_reverse(oop obj, OopClosureType* closure);
-  template <typename T, typename OopClosureType>
-  inline void oop_oop_iterate_reverse(oop obj, OopClosureType* closure, KlassLUTEntry klute);
+
+  // Klute variants. They don't do anything special for TAK; they just have to exist as jump points
+  // for OopIteratexxxDispatchWithKlute.
+  template <typename T, class OopClosureType>
+  inline void oop_oop_iterate(KlassLUTEntry klute, OopClosureType* closure, oop obj);
+  template <typename T, class OopClosureType>
+  inline void oop_oop_iterate_reverse(KlassLUTEntry klute, OopClosureType* closure, oop obj);
+  template <typename T, class OopClosureType>
+  inline void oop_oop_iterate_bounded(KlassLUTEntry klute, OopClosureType* closure, oop obj, MemRegion mr);
 
  public:
   static TypeArrayKlass* cast(Klass* k) {

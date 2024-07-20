@@ -59,17 +59,17 @@ void TypeArrayKlass::oop_oop_iterate_reverse(oop obj, OopClosureType* closure) {
 // Klute variant does nothing special, since there is nothing in the klute that would help
 // us here. It only exists to make the dispatcher happy.
 template <typename T, typename OopClosureType>
-inline void TypeArrayKlass::oop_oop_iterate(oop obj, OopClosureType* closure, KlassLUTEntry klute) {
+inline void TypeArrayKlass::oop_oop_iterate(KlassLUTEntry klute, OopClosureType* closure, oop obj) {
   oop_oop_iterate_impl(obj, closure);
 }
 
 template <typename T, typename OopClosureType>
-void TypeArrayKlass::oop_oop_iterate_bounded(oop obj, OopClosureType* closure, KlassLUTEntry klute, MemRegion mr) {
+inline void TypeArrayKlass::oop_oop_iterate_reverse(KlassLUTEntry klute, OopClosureType* closure, oop obj) {
   oop_oop_iterate_impl(obj, closure);
 }
 
 template <typename T, typename OopClosureType>
-inline void TypeArrayKlass::oop_oop_iterate_reverse(oop obj, OopClosureType* closure, KlassLUTEntry klute) {
+void TypeArrayKlass::oop_oop_iterate_bounded(KlassLUTEntry klute, OopClosureType* closure, oop obj, MemRegion mr) {
   oop_oop_iterate_impl(obj, closure);
 }
 

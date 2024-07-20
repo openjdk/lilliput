@@ -102,17 +102,17 @@ void ObjArrayKlass::oop_oop_iterate_bounded(oop obj, OopClosureType* closure, Me
 // The klute variants of OAK::oop_oop_iterate don't do anything special. There is nothing to gain
 // here anymore from the info in the KlassLUTEntry.
 template <typename T, typename OopClosureType>
-void ObjArrayKlass::oop_oop_iterate(oop obj, OopClosureType* closure, KlassLUTEntry ignored) {
+void ObjArrayKlass::oop_oop_iterate(KlassLUTEntry ignored, OopClosureType* closure, oop obj) {
   oop_oop_iterate<T>(obj, closure);
 }
 
 template <typename T, typename OopClosureType>
-void ObjArrayKlass::oop_oop_iterate_bounded(oop obj, OopClosureType* closure, KlassLUTEntry ignored, MemRegion mr) {
+void ObjArrayKlass::oop_oop_iterate_bounded(KlassLUTEntry ignored, OopClosureType* closure, oop obj, MemRegion mr) {
   oop_oop_iterate_bounded<T>(obj, closure, mr);
 }
 
 template <typename T, typename OopClosureType>
-void ObjArrayKlass::oop_oop_iterate_reverse(oop obj, OopClosureType* closure, KlassLUTEntry ignored) {
+void ObjArrayKlass::oop_oop_iterate_reverse(KlassLUTEntry ignored, OopClosureType* closure, oop obj) {
   // No reverse implementation ATM.
   oop_oop_iterate<T>(obj, closure);
 }

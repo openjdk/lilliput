@@ -438,7 +438,7 @@ void oopDesc::oop_iterate(OopClosureType* cl) {
     const narrowKlass nk = mark().narrow_klass();
     Klass* const k = CompressedKlassPointers::decode_not_null(nk);
     const KlassLUTEntry klute = KlassInfoLUT::get_entry(nk);
-    OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k, klute);
+    OopIteratorClosureDispatch::oop_oop_iterate(k, klute, cl, this);
     return;
   }
 
@@ -452,7 +452,7 @@ void oopDesc::oop_iterate(OopClosureType* cl, MemRegion mr) {
     const narrowKlass nk = mark().narrow_klass();
     Klass* const k = CompressedKlassPointers::decode_not_null(nk);
     const KlassLUTEntry klute = KlassInfoLUT::get_entry(nk);
-    OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k, klute, mr);
+    OopIteratorClosureDispatch::oop_oop_iterate_bounded(k, klute, cl, this, mr);
     return;
   }
 
@@ -466,7 +466,7 @@ size_t oopDesc::oop_iterate_size(OopClosureType* cl) {
     const narrowKlass nk = mark().narrow_klass();
     Klass* const k = CompressedKlassPointers::decode_not_null(nk);
     const KlassLUTEntry klute = KlassInfoLUT::get_entry(nk);
-    OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k, klute);
+    OopIteratorClosureDispatch::oop_oop_iterate(k, klute, cl, this);
 
     // Size: todo: move into DIspatch?
     if (klute.is_array()) {
@@ -493,7 +493,7 @@ size_t oopDesc::oop_iterate_size(OopClosureType* cl, MemRegion mr) {
     const narrowKlass nk = mark().narrow_klass();
     Klass* const k = CompressedKlassPointers::decode_not_null(nk);
     const KlassLUTEntry klute = KlassInfoLUT::get_entry(nk);
-    OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k, klute, mr);
+    OopIteratorClosureDispatch::oop_oop_iterate_bounded(k, klute, cl, this, mr);
     // Size: todo: move into DIspatch?
     if (klute.is_array()) {
       return klute.ak_calculate_wordsize_given_oop(this);
@@ -526,7 +526,7 @@ void oopDesc::oop_iterate_backwards(OopClosureType* cl, Klass* k) {
   if (UseKLUT) {
     const narrowKlass nk = CompressedKlassPointers::encode_not_null(k);
     const KlassLUTEntry klute = KlassInfoLUT::get_entry(nk);
-    OopIteratorClosureDispatch::oop_oop_iterate_backwards(cl, this, k, klute);
+    OopIteratorClosureDispatch::oop_oop_iterate_reverse(k, klute, cl, this);
     return;
   }
 

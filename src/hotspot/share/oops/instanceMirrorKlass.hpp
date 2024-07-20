@@ -102,22 +102,24 @@ class InstanceMirrorKlass: public InstanceKlass {
   // Iterate over the oop fields and metadata.
   template <typename T, class OopClosureType>
   inline void oop_oop_iterate(oop obj, OopClosureType* closure);
-  template <typename T, class OopClosureType>
-  inline void oop_oop_iterate(oop obj, OopClosureType* closure, KlassLUTEntry klute);
 
   // Reverse iteration
   // Iterate over the oop fields and metadata.
   template <typename T, class OopClosureType>
   inline void oop_oop_iterate_reverse(oop obj, OopClosureType* closure);
-  template <typename T, class OopClosureType>
-  inline void oop_oop_iterate_reverse(oop obj, OopClosureType* closure, KlassLUTEntry klute);
 
   // Bounded range iteration
   // Iterate over the oop fields and metadata.
   template <typename T, class OopClosureType>
   inline void oop_oop_iterate_bounded(oop obj, OopClosureType* closure, MemRegion mr);
+
+  // klute variants
   template <typename T, class OopClosureType>
-  inline void oop_oop_iterate_bounded(oop obj, OopClosureType* closure, KlassLUTEntry klute, MemRegion mr);
+  inline void oop_oop_iterate(KlassLUTEntry klute, OopClosureType* closure, oop obj);
+  template <typename T, class OopClosureType>
+  inline void oop_oop_iterate_reverse(KlassLUTEntry klute, OopClosureType* closure, oop obj);
+  template <typename T, class OopClosureType>
+  inline void oop_oop_iterate_bounded(KlassLUTEntry klute, OopClosureType* closure, oop obj, MemRegion mr);
 
  private:
 

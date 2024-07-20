@@ -154,23 +154,10 @@ void InstanceRefKlass::oop_oop_iterate(oop obj, OopClosureType* closure) {
   oop_oop_iterate_ref_processing<T>(obj, closure);
 }
 
-template <typename T, class OopClosureType>
-void InstanceRefKlass::oop_oop_iterate(oop obj, OopClosureType* closure, KlassLUTEntry klute) {
-  InstanceKlass::oop_oop_iterate<T>(obj, closure, klute);
-
-  oop_oop_iterate_ref_processing<T>(obj, closure);
-}
 
 template <typename T, class OopClosureType>
 void InstanceRefKlass::oop_oop_iterate_reverse(oop obj, OopClosureType* closure) {
   InstanceKlass::oop_oop_iterate_reverse<T>(obj, closure);
-
-  oop_oop_iterate_ref_processing<T>(obj, closure);
-}
-
-template <typename T, class OopClosureType>
-void InstanceRefKlass::oop_oop_iterate_reverse(oop obj, OopClosureType* closure, KlassLUTEntry klute) {
-  InstanceKlass::oop_oop_iterate_reverse<T>(obj, closure, klute);
 
   oop_oop_iterate_ref_processing<T>(obj, closure);
 }
@@ -182,9 +169,24 @@ void InstanceRefKlass::oop_oop_iterate_bounded(oop obj, OopClosureType* closure,
   oop_oop_iterate_ref_processing_bounded<T>(obj, closure, mr);
 }
 
+// klute variants
 template <typename T, class OopClosureType>
-void InstanceRefKlass::oop_oop_iterate_bounded(oop obj, OopClosureType* closure, KlassLUTEntry klute, MemRegion mr) {
-  InstanceKlass::oop_oop_iterate_bounded<T>(obj, closure, klute, mr);
+void InstanceRefKlass::oop_oop_iterate(KlassLUTEntry klute, OopClosureType* closure, oop obj) {
+  InstanceKlass::oop_oop_iterate<T>(klute, closure, obj);
+
+  oop_oop_iterate_ref_processing<T>(obj, closure);
+}
+
+template <typename T, class OopClosureType>
+void InstanceRefKlass::oop_oop_iterate_reverse(KlassLUTEntry klute, OopClosureType* closure, oop obj) {
+  InstanceKlass::oop_oop_iterate_reverse<T>(klute, closure, obj);
+
+  oop_oop_iterate_ref_processing<T>(obj, closure);
+}
+
+template <typename T, class OopClosureType>
+void InstanceRefKlass::oop_oop_iterate_bounded(KlassLUTEntry klute, OopClosureType* closure, oop obj, MemRegion mr) {
+  InstanceKlass::oop_oop_iterate_bounded<T>(klute, closure, obj, mr);
 
   oop_oop_iterate_ref_processing_bounded<T>(obj, closure, mr);
 }

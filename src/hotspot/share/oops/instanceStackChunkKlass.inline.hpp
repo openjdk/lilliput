@@ -89,17 +89,17 @@ void InstanceStackChunkKlass::oop_oop_iterate_bounded(oop obj, OopClosureType* c
 
 // Klute variants don't do anything else for now. Just exist to make Dispatch happy.
 template <typename T, class OopClosureType>
-void InstanceStackChunkKlass::oop_oop_iterate(oop obj, OopClosureType* closure, KlassLUTEntry klute_ignored) {
+void InstanceStackChunkKlass::oop_oop_iterate(KlassLUTEntry ignored, OopClosureType* closure, oop obj) {
   oop_oop_iterate<T>(obj, closure);
 }
 
 template <typename T, class OopClosureType>
-void InstanceStackChunkKlass::oop_oop_iterate_reverse(oop obj, OopClosureType* closure, KlassLUTEntry klute_ignored) {
+void InstanceStackChunkKlass::oop_oop_iterate_reverse(KlassLUTEntry ignored, OopClosureType* closure, oop obj) {
   oop_oop_iterate_reverse<T>(obj, closure);
 }
 
 template <typename T, class OopClosureType>
-void InstanceStackChunkKlass::oop_oop_iterate_bounded(oop obj, OopClosureType* closure, KlassLUTEntry klute_ignored, MemRegion mr) {
+void InstanceStackChunkKlass::oop_oop_iterate_bounded(KlassLUTEntry ignored, OopClosureType* closure, oop obj, MemRegion mr) {
   oop_oop_iterate_bounded<T>(obj, closure, mr);
 }
 

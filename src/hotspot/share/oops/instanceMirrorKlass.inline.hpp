@@ -145,24 +145,24 @@ void InstanceMirrorKlass::oop_oop_iterate_bounded(oop obj, OopClosureType* closu
 // Externals, klute variants
 
 template <typename T, class OopClosureType>
-void InstanceMirrorKlass::oop_oop_iterate(oop obj, OopClosureType* closure, KlassLUTEntry klute) {
-  InstanceKlass::oop_oop_iterate<T>(obj, closure, klute);
+void InstanceMirrorKlass::oop_oop_iterate(KlassLUTEntry klute, OopClosureType* closure, oop obj) {
+  InstanceKlass::oop_oop_iterate<T>(klute, closure, obj);
   oop_oop_iterate_metadata<T>(obj, closure);
   oop_oop_iterate_statics<T>(obj, closure);
 
 }
 
 template <typename T, class OopClosureType>
-void InstanceMirrorKlass::oop_oop_iterate_reverse(oop obj, OopClosureType* closure, KlassLUTEntry klute) {
-  InstanceKlass::oop_oop_iterate_reverse<T>(obj, closure, klute);
+void InstanceMirrorKlass::oop_oop_iterate_reverse(KlassLUTEntry klute, OopClosureType* closure, oop obj) {
+  InstanceKlass::oop_oop_iterate_reverse<T>(klute, closure, obj);
 
   InstanceMirrorKlass::oop_oop_iterate_statics<T>(obj, closure);
 }
 
 
 template <typename T, class OopClosureType>
-void InstanceMirrorKlass::oop_oop_iterate_bounded(oop obj, OopClosureType* closure, KlassLUTEntry klute, MemRegion mr) {
-  InstanceKlass::oop_oop_iterate_bounded<T>(obj, closure, klute, mr);
+void InstanceMirrorKlass::oop_oop_iterate_bounded(KlassLUTEntry klute, OopClosureType* closure, oop obj, MemRegion mr) {
+  InstanceKlass::oop_oop_iterate_bounded<T>(klute, closure, obj, mr);
   oop_oop_iterate_metadata_bounded<T>(obj, closure, mr);
   oop_oop_iterate_statics_bounded<T>(obj, closure, mr);
 }

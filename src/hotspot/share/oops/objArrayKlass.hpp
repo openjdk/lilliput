@@ -135,14 +135,12 @@ class ObjArrayKlass : public ArrayKlass {
 
   // Klute variants. They don't do anything special for OAK; they just have to exist as jump points
   // for OopIteratexxxDispatchWithKlute.
-  template <typename T, typename OopClosureType>
-  inline void oop_oop_iterate(oop obj, OopClosureType* closure, KlassLUTEntry klute);
-
-  template <typename T, typename OopClosureType>
-  inline void oop_oop_iterate_bounded(oop obj, OopClosureType* closure, KlassLUTEntry klute, MemRegion mr);
-
-  template <typename T, typename OopClosureType>
-  inline void oop_oop_iterate_reverse(oop obj, OopClosureType* closure, KlassLUTEntry klute);
+  template <typename T, class OopClosureType>
+  inline void oop_oop_iterate(KlassLUTEntry klute, OopClosureType* closure, oop obj);
+  template <typename T, class OopClosureType>
+  inline void oop_oop_iterate_reverse(KlassLUTEntry klute, OopClosureType* closure, oop obj);
+  template <typename T, class OopClosureType>
+  inline void oop_oop_iterate_bounded(KlassLUTEntry klute, OopClosureType* closure, oop obj, MemRegion mr);
 
  public:
   // Iterate over all oop elements.
