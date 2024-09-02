@@ -1023,3 +1023,4 @@ bool Metaspace::is_in_shared_metaspace(const void* ptr) {
 bool Metaspace::is_in_nonclass_metaspace(const void* ptr) {
   return VirtualSpaceList::vslist_nonclass()->contains((MetaWord*)ptr);
 }
+
