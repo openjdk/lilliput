@@ -142,8 +142,7 @@ public class TestFramework {
                     "UseZbb",
                     "UseRVV",
                     "Xlog",
-                    "LogCompilation",
-                    "UseCompactObjectHeaders"
+                    "LogCompilation"
             )
     );
 

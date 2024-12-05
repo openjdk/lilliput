@@ -27,7 +27,6 @@
 #include "gc/g1/g1FullGCCompactionPoint.hpp"
 #include "gc/g1/g1HeapRegion.hpp"
 #include "gc/shared/preservedMarks.inline.hpp"
-#include "gc/shared/slidingForwarding.inline.hpp"
 #include "oops/oop.inline.hpp"
 #include "utilities/debug.hpp"
 
@@ -107,10 +106,10 @@ void G1FullGCCompactionPoint::forward(oop object, size_t size) {
     if (!object->is_forwarded()) {
       preserved_stack()->push_if_necessary(object, object->mark());
     }
-    SlidingForwarding::forward_to(object, cast_to_oop(_compaction_top));
-    assert(SlidingForwarding::is_forwarded(object), "must be forwarded");
+    object->forward_to(cast_to_oop(_compaction_top));
+    assert(object->is_forwarded(), "must be forwarded");
   } else {
-    assert(SlidingForwarding::is_not_forwarded(object), "must not be forwarded");
+    assert(!object->is_forwarded(), "must not be forwarded");
   }
 
   // Update compaction values.
@@ -173,8 +172,8 @@ void G1FullGCCompactionPoint::forward_humongous(G1HeapRegion* hr) {
   preserved_stack()->push_if_necessary(obj, obj->mark());
 
   G1HeapRegion* dest_hr = _compaction_regions->at(range_begin);
-  SlidingForwarding::forward_to(obj, cast_to_oop(dest_hr->bottom()));
-  assert(SlidingForwarding::is_forwarded(obj), "Object must be forwarded!");
+  obj->forward_to(cast_to_oop(dest_hr->bottom()));
+  assert(obj->is_forwarded(), "Object must be forwarded!");
 
   // Add the humongous object regions to the compaction point.
   add_humongous(hr);

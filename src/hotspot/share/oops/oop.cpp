@@ -154,8 +154,7 @@ bool oopDesc::is_typeArray_noinline()   const { return is_typeArray();   }
 
 bool oopDesc::has_klass_gap() {
   // Only has a klass gap when compressed class pointers are used.
-  // Except when using compact headers.
-  return UseCompressedClassPointers && !UseCompactObjectHeaders;
+  return UseCompressedClassPointers;
 }
 
 #if INCLUDE_CDS_JAVA_HEAP
@@ -221,12 +220,12 @@ jdouble oopDesc::double_field_acquire(int offset) const               { return A
 void oopDesc::release_double_field_put(int offset, jdouble value)     { Atomic::release_store(field_addr<jdouble>(offset), value); }
 
 #ifdef ASSERT
-bool oopDesc::size_might_change(Klass* klass) {
+bool oopDesc::size_might_change() {
   // UseParallelGC and UseG1GC can change the length field
   // of an "old copy" of an object array in the young gen so it indicates
   // the grey portion of an already copied array. This will cause the first
   // disjunct below to fail if the two comparands are computed across such
   // a concurrent change.
-  return Universe::heap()->is_stw_gc_active() && klass->is_objArray_klass() && is_forwarded() && (UseParallelGC || UseG1GC);
+  return Universe::heap()->is_stw_gc_active() && is_objArray() && is_forwarded() && (UseParallelGC || UseG1GC);
 }
 #endif

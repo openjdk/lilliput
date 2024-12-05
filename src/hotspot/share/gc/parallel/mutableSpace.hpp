@@ -61,9 +61,6 @@ class MutableSpace: public CHeapObj<mtGC> {
   void set_last_setup_region(MemRegion mr) { _last_setup_region = mr;   }
   MemRegion last_setup_region() const      { return _last_setup_region; }
 
-  template<bool COMPACT_HEADERS>
-  void object_iterate_impl(ObjectClosure* cl);
-
  public:
   virtual ~MutableSpace() = default;
   MutableSpace(size_t page_size);
@@ -132,7 +129,7 @@ class MutableSpace: public CHeapObj<mtGC> {
   // Return true if this space needs to be expanded in order to satisfy an
   // allocation request of the indicated size.  Concurrent allocations and
   // resizes may change the result of a later call.  Used by oldgen allocator.
-  // precondition: holding PSOldGenExpand_lock
+  // precondition: holding PSOldGenExpand_lock if not VM thread
   bool needs_expand(size_t word_size) const;
 
   // Iteration.

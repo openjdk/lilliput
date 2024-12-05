@@ -39,7 +39,6 @@
 #include "memory/metaspace/runningCounters.hpp"
 #include "memory/metaspace/virtualSpaceList.hpp"
 #include "memory/metaspaceUtils.hpp"
-#include "oops/compressedKlass.hpp"
 #include "runtime/os.hpp"
 
 namespace metaspace {
@@ -119,9 +118,6 @@ static void print_settings(outputStream* out, size_t scale) {
   out->cr();
   out->print_cr("CDS: %s", (CDSConfig::is_using_archive() ? "on" : (CDSConfig::is_dumping_static_archive() ? "dump" : "off")));
   Settings::print_on(out);
-#ifdef _LP64
-  CompressedKlassPointers::print_mode(out);
-#endif
 }
 
 // This will print out a basic metaspace usage report but
@@ -329,7 +325,7 @@ void MetaspaceReporter::print_report(outputStream* out, size_t scale, int flags)
   // For all wastages, print percentages from total. As total use the total size of memory committed for metaspace.
   const size_t committed_words = RunningCounters::committed_words();
 
-  out->print(" (percentages refer to total committed size ");
+  out->print("(percentages refer to total committed size ");
   print_scaled_words(out, committed_words, scale);
   out->print_cr("):");
 

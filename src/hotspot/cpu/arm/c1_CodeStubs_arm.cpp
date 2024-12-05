@@ -217,6 +217,7 @@ void MonitorExitStub::emit_code(LIR_Assembler* ce) {
   __ b(_continuation);
 }
 
+
 // Call return is directly after patch word
 int PatchingStub::_patch_info_offset = 0;
 

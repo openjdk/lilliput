@@ -53,7 +53,7 @@ void MutableSpace::numa_setup_pages(MemRegion mr, size_t page_size, bool clear_s
       size_t size = pointer_delta(end, start, sizeof(char));
       if (clear_space) {
         // Prefer page reallocation to migration.
-        os::free_memory((char*)start, size, page_size);
+        os::disclaim_memory((char*)start, size);
       }
       os::numa_make_global((char*)start, size);
     }
@@ -189,7 +189,12 @@ bool MutableSpace::cas_deallocate(HeapWord *obj, size_t size) {
 
 // Only used by oldgen allocation.
 bool MutableSpace::needs_expand(size_t word_size) const {
-  assert_lock_strong(PSOldGenExpand_lock);
+#ifdef ASSERT
+  // If called by VM thread, locking is not needed.
+  if (!Thread::current()->is_VM_thread()) {
+    assert_lock_strong(PSOldGenExpand_lock);
+  }
+#endif
   // Holding the lock means end is stable.  So while top may be advancing
   // via concurrent allocations, there is no need to order the reads of top
   // and end here, unlike in cas_allocate.
@@ -205,8 +210,7 @@ void MutableSpace::oop_iterate(OopIterateClosure* cl) {
   }
 }
 
-template<bool COMPACT_HEADERS>
-void MutableSpace::object_iterate_impl(ObjectClosure* cl) {
+void MutableSpace::object_iterate(ObjectClosure* cl) {
   HeapWord* p = bottom();
   while (p < top()) {
     oop obj = cast_to_oop(p);
@@ -215,26 +219,13 @@ void MutableSpace::object_iterate_impl(ObjectClosure* cl) {
     // They are essentially dead, so skipping them
     if (!obj->is_forwarded()) {
       cl->do_object(obj);
-      p += obj->size();
-    } else {
-      assert(obj->forwardee() != obj, "must not be self-forwarded");
-      if (COMPACT_HEADERS) {
-        // It is safe to use the forwardee here. Parallel GC only uses
-        // header-based forwarding during promotion. Full GC doesn't
-        // use the object header for forwarding at all.
-        p += obj->forwardee()->size();
-      } else {
-        p += obj->size();
-      }
     }
-  }
-}
-
-void MutableSpace::object_iterate(ObjectClosure* cl) {
-  if (UseCompactObjectHeaders) {
-    object_iterate_impl<true>(cl);
-  } else {
-    object_iterate_impl<false>(cl);
+#ifdef ASSERT
+    else {
+      assert(obj->forwardee() != obj, "must not be self-forwarded");
+    }
+#endif
+    p += obj->size();
   }
 }
 

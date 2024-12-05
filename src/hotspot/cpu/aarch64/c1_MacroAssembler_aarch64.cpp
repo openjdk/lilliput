@@ -81,7 +81,7 @@ int C1_MacroAssembler::lock_object(Register hdr, Register obj, Register disp_hdr
   }
 
   if (LockingMode == LM_LIGHTWEIGHT) {
-    lightweight_lock(disp_hdr, obj, hdr, temp, rscratch2, slow_case);
+    lightweight_lock(obj, hdr, temp, rscratch2, slow_case);
   } else if (LockingMode == LM_LEGACY) {
     Label done;
     // Load object header
@@ -175,21 +175,17 @@ void C1_MacroAssembler::try_allocate(Register obj, Register var_size_in_bytes, i
 
 void C1_MacroAssembler::initialize_header(Register obj, Register klass, Register len, Register t1, Register t2) {
   assert_different_registers(obj, klass, len);
+  // This assumes that all prototype bits fit in an int32_t
+  mov(t1, (int32_t)(intptr_t)markWord::prototype().value());
+  str(t1, Address(obj, oopDesc::mark_offset_in_bytes()));
 
-  if (UseCompactObjectHeaders) {
-    ldr(t1, Address(klass, Klass::prototype_header_offset()));
-    str(t1, Address(obj, oopDesc::mark_offset_in_bytes()));
+  if (UseCompressedClassPointers) { // Take care not to kill klass
+    encode_klass_not_null(t1, klass);
+    strw(t1, Address(obj, oopDesc::klass_offset_in_bytes()));
   } else {
-    // This assumes that all prototype bits fit in an int32_t
-    mov(t1, (int32_t)(intptr_t)markWord::prototype().value());
-    str(t1, Address(obj, oopDesc::mark_offset_in_bytes()));
-    if (UseCompressedClassPointers) { // Take care not to kill klass
-      encode_klass_not_null(t1, klass);
-      strw(t1, Address(obj, oopDesc::klass_offset_in_bytes()));
-    } else {
-      str(klass, Address(obj, oopDesc::klass_offset_in_bytes()));
-    }
+    str(klass, Address(obj, oopDesc::klass_offset_in_bytes()));
   }
+
   if (len->is_valid()) {
     strw(len, Address(obj, arrayOopDesc::length_offset_in_bytes()));
     int base_offset = arrayOopDesc::length_offset_in_bytes() + BytesPerInt;
@@ -198,7 +194,7 @@ void C1_MacroAssembler::initialize_header(Register obj, Register klass, Register
       // Clear gap/first 4 bytes following the length field.
       strw(zr, Address(obj, base_offset));
     }
-  } else if (UseCompressedClassPointers && !UseCompactObjectHeaders) {
+  } else if (UseCompressedClassPointers) {
     store_klass_gap(obj, zr);
   }
 }

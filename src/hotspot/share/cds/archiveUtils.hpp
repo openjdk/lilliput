@@ -156,11 +156,10 @@ private:
 public:
   DumpRegion(const char* name, uintx max_delta = 0)
     : _name(name), _base(nullptr), _top(nullptr), _end(nullptr),
-      _max_delta(max_delta), _is_packed(false),
-      _rs(NULL), _vs(NULL) {}
+      _max_delta(max_delta), _is_packed(false) {}
 
   char* expand_top_to(char* newtop);
-  char* allocate(size_t num_bytes, size_t alignment = 0);
+  char* allocate(size_t num_bytes);
 
   void append_intptr_t(intptr_t n, bool need_to_mark = false) NOT_CDS_RETURN;
 

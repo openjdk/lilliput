@@ -102,7 +102,7 @@ size_t Arguments::_default_SharedBaseAddress    = SharedBaseAddress;
 
 bool   Arguments::_enable_preview               = false;
 
-LegacyGCLogging Arguments::_legacyGCLogging     = { 0, 0 };
+LegacyGCLogging Arguments::_legacyGCLogging     = { nullptr, 0 };
 
 // These are not set by the JDK's built-in launchers, but they can be set by
 // programs that embed the JVM using JNI_CreateJavaVM. See comments around
@@ -503,9 +503,8 @@ static SpecialFlag const special_jvm_flags[] = {
   { "RequireSharedSpaces",          JDK_Version::jdk(18), JDK_Version::jdk(19), JDK_Version::undefined() },
   { "UseSharedSpaces",              JDK_Version::jdk(18), JDK_Version::jdk(19), JDK_Version::undefined() },
   { "DontYieldALot",                JDK_Version::jdk(23), JDK_Version::jdk(24), JDK_Version::jdk(25) },
-  { "PreserveAllAnnotations",       JDK_Version::jdk(23), JDK_Version::jdk(24), JDK_Version::jdk(25) },
   { "UseNotificationThread",        JDK_Version::jdk(23), JDK_Version::jdk(24), JDK_Version::jdk(25) },
-  { "UseEmptySlotsInSupers",        JDK_Version::jdk(23), JDK_Version::jdk(24), JDK_Version::jdk(25) },
+  { "LockingMode",                  JDK_Version::jdk(24), JDK_Version::jdk(26), JDK_Version::jdk(27) },
   // --- Deprecated alias flags (see also aliased_jvm_flags) - sorted by obsolete_in then expired_in:
   { "CreateMinidumpOnCrash",        JDK_Version::jdk(9),  JDK_Version::undefined(), JDK_Version::undefined() },
 
@@ -513,6 +512,8 @@ static SpecialFlag const special_jvm_flags[] = {
 
   { "MetaspaceReclaimPolicy",       JDK_Version::undefined(), JDK_Version::jdk(21), JDK_Version::undefined() },
 
+  { "PreserveAllAnnotations",       JDK_Version::jdk(23), JDK_Version::jdk(24), JDK_Version::jdk(25) },
+  { "UseEmptySlotsInSupers",        JDK_Version::jdk(23), JDK_Version::jdk(24), JDK_Version::jdk(25) },
   { "OldSize",                      JDK_Version::jdk(23), JDK_Version::jdk(24), JDK_Version::jdk(25) },
 #if defined(X86)
   { "UseRTMLocking",                JDK_Version::jdk(23), JDK_Version::jdk(24), JDK_Version::jdk(25) },
@@ -520,7 +521,10 @@ static SpecialFlag const special_jvm_flags[] = {
   { "RTMRetryCount",                JDK_Version::jdk(23), JDK_Version::jdk(24), JDK_Version::jdk(25) },
 #endif // X86
 
+
+  { "BaseFootPrintEstimate",           JDK_Version::undefined(), JDK_Version::jdk(24), JDK_Version::jdk(25) },
   { "HeapFirstMaximumCompactionCount", JDK_Version::undefined(), JDK_Version::jdk(24), JDK_Version::jdk(25) },
+  { "UseVtableBasedCHA",               JDK_Version::undefined(), JDK_Version::jdk(24), JDK_Version::jdk(25) },
 #ifdef ASSERT
   { "DummyObsoleteTestFlag",        JDK_Version::undefined(), JDK_Version::jdk(18), JDK_Version::undefined() },
 #endif
@@ -1410,6 +1414,13 @@ void Arguments::set_use_compressed_oops() {
 #endif // _LP64
 }
 
+void Arguments::set_use_compressed_klass_ptrs() {
+#ifdef _LP64
+  assert(!UseCompressedClassPointers || CompressedClassSpaceSize <= KlassEncodingMetaspaceMax,
+         "CompressedClassSpaceSize is too large for UseCompressedClassPointers");
+#endif // _LP64
+}
+
 void Arguments::set_conservative_max_heap_alignment() {
   // The conservative maximum required alignment for the heap is the maximum of
   // the alignments imposed by several sources: any requirements from the heap
@@ -1428,6 +1439,7 @@ jint Arguments::set_ergonomics_flags() {
 
 #ifdef _LP64
   set_use_compressed_oops();
+  set_use_compressed_klass_ptrs();
 
   // Also checks that certain machines are slower with compressed oops
   // in vm_version initialization code.
@@ -1643,9 +1655,6 @@ jint Arguments::set_aggressive_heap_flags() {
 #endif
 
   // Increase some data structure sizes for efficiency
-  if (FLAG_SET_CMDLINE(BaseFootPrintEstimate, MaxHeapSize) != JVMFlag::SUCCESS) {
-    return JNI_EINVAL;
-  }
   if (FLAG_SET_CMDLINE(ResizeTLAB, false) != JVMFlag::SUCCESS) {
     return JNI_EINVAL;
   }
@@ -1840,11 +1849,11 @@ bool Arguments::is_bad_option(const JavaVMOption* option, jboolean ignore,
 }
 
 static const char* user_assertion_options[] = {
-  "-da", "-ea", "-disableassertions", "-enableassertions", 0
+  "-da", "-ea", "-disableassertions", "-enableassertions", nullptr
 };
 
 static const char* system_assertion_options[] = {
-  "-dsa", "-esa", "-disablesystemassertions", "-enablesystemassertions", 0
+  "-dsa", "-esa", "-disablesystemassertions", "-enablesystemassertions", nullptr
 };
 
 bool Arguments::parse_uint(const char* value,
@@ -2926,37 +2935,6 @@ jint Arguments::finalize_vm_init_args(bool patch_mod_javabase) {
   UNSUPPORTED_OPTION(ShowRegistersOnAssert);
 #endif // CAN_SHOW_REGISTERS_ON_ASSERT
 
-  if (UseObjectMonitorTable && LockingMode != LM_LIGHTWEIGHT) {
-    // ObjectMonitorTable requires lightweight locking.
-    FLAG_SET_DEFAULT(LockingMode, LM_LIGHTWEIGHT);
-  }
-
-#ifdef _LP64
-  if (UseCompactObjectHeaders && FLAG_IS_CMDLINE(UseCompressedClassPointers) && !UseCompressedClassPointers) {
-    warning("Compact object headers require compressed class pointers. Disabling compact object headers.");
-    FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
-  }
-  if (UseCompactObjectHeaders && LockingMode != LM_LIGHTWEIGHT) {
-    FLAG_SET_DEFAULT(LockingMode, LM_LIGHTWEIGHT);
-  }
-  if (UseCompactObjectHeaders && !UseObjectMonitorTable) {
-    // If UseCompactObjectHeaders is on the command line, turn on UseObjectMonitorTable.
-    if (FLAG_IS_CMDLINE(UseCompactObjectHeaders)) {
-      FLAG_SET_DEFAULT(UseObjectMonitorTable, true);
-
-    // If UseObjectMonitorTable is on the command line, turn off UseCompactObjectHeaders.
-    } else if (FLAG_IS_CMDLINE(UseObjectMonitorTable)) {
-      FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
-    // If neither on the command line, the defaults are incompatible, but turn on UseObjectMonitorTable.
-    } else {
-      FLAG_SET_DEFAULT(UseObjectMonitorTable, true);
-    }
-  }
-  if (UseCompactObjectHeaders && !UseCompressedClassPointers) {
-    FLAG_SET_DEFAULT(UseCompressedClassPointers, true);
-  }
-#endif
-
   return JNI_OK;
 }
 
@@ -3665,10 +3643,6 @@ jint Arguments::apply_ergo() {
   set_heap_size();
 
   GCConfig::arguments()->initialize();
-
-  if (UseCompressedClassPointers) {
-    CompressedKlassPointers::pre_initialize();
-  }
 
   CDSConfig::initialize();
 

@@ -54,7 +54,6 @@
 #include "gc/shared/oopStorageParState.inline.hpp"
 #include "gc/shared/oopStorageSet.inline.hpp"
 #include "gc/shared/scavengableNMethods.hpp"
-#include "gc/shared/slidingForwarding.hpp"
 #include "gc/shared/space.hpp"
 #include "gc/shared/strongRootsScope.hpp"
 #include "gc/shared/suspendibleThreadSet.hpp"
@@ -93,7 +92,6 @@ SerialHeap::SerialHeap() :
     _old_gen(nullptr),
     _rem_set(nullptr),
     _gc_policy_counters(new GCPolicyCounters("Copy:MSC", 2, 2)),
-    _incremental_collection_failed(false),
     _young_manager(nullptr),
     _old_manager(nullptr),
     _eden_pool(nullptr),
@@ -202,8 +200,6 @@ jint SerialHeap::initialize() {
 
   GCInitLogger::print();
 
-  SlidingForwarding::initialize(_reserved, SpaceAlignment / HeapWordSize);
-
   return JNI_OK;
 }
 
@@ -290,8 +286,7 @@ size_t SerialHeap::max_capacity() const {
 bool SerialHeap::should_try_older_generation_allocation(size_t word_size) const {
   size_t young_capacity = _young_gen->capacity_before_gc();
   return    (word_size > heap_word_size(young_capacity))
-         || GCLocker::is_active_and_needs_gc()
-         || incremental_collection_failed();
+         || GCLocker::is_active_and_needs_gc();
 }
 
 HeapWord* SerialHeap::expand_heap_and_allocate(size_t size, bool is_tlab) {

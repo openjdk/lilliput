@@ -1612,8 +1612,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
   // We have all of the arguments setup at this point. We must not touch any register
   // argument registers at this point (what if we save/restore them there are no oop?
 
-  {
-    SkipIfEqual skip_if(masm, &DTraceMethodProbes, 0, noreg);
+  if (DTraceMethodProbes) {
     __ mov_metadata(rax, method());
     __ call_VM_leaf(
          CAST_FROM_FN_PTR(address, SharedRuntime::dtrace_method_entry),
@@ -1687,8 +1686,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
       __ jcc(Assembler::notEqual, slow_path_lock);
     } else {
       assert(LockingMode == LM_LIGHTWEIGHT, "must be");
-      // Lacking registers and thread on x86_32. Always take slow path.
-      __ jmp(slow_path_lock);
+      __ lightweight_lock(obj_reg, swap_reg, thread, lock_reg, slow_path_lock);
     }
     __ bind(count_mon);
     __ inc_held_monitor_count();
@@ -1858,8 +1856,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     __ bind(fast_done);
   }
 
-  {
-    SkipIfEqual skip_if(masm, &DTraceMethodProbes, 0, noreg);
+  if (DTraceMethodProbes) {
     // Tell dtrace about this method exit
     save_native_result(masm, ret_type, stack_slots);
     __ mov_metadata(rax, method());

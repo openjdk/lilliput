@@ -159,11 +159,6 @@ class Klass : public Metadata {
   // Provide access the corresponding instance java.lang.ClassLoader.
   ClassLoaderData* _class_loader_data;
 
-  // Bitmap and hash code used by hashed secondary supers.
-  uintx    _bitmap;
-  uint8_t  _hash_slot;
-
-  static uint8_t compute_hash_slot(Symbol* s);
 
   int _vtable_len;              // vtable length. This field may be read very often when we
                                 // have lots of itable dispatches (e.g., lambdas and streams).
@@ -171,9 +166,11 @@ class Klass : public Metadata {
                                 // contention that may happen when a nearby object is modified.
   AccessFlags _access_flags;    // Access flags. The class/interface distinction is stored here.
 
-  markWord _prototype_header;   // Used to initialize objects' header
-
   JFR_ONLY(DEFINE_TRACE_ID_FIELD;)
+
+  // Bitmap and hash code used by hashed secondary supers.
+  uintx    _bitmap;
+  uint8_t  _hash_slot;
 
 private:
   // This is an index into FileMapHeader::_shared_path_table[], to
@@ -394,6 +391,7 @@ protected:
   void     set_next_sibling(Klass* s);
 
  private:
+  static uint8_t compute_hash_slot(Symbol* s);
   static void  hash_insert(Klass* klass, GrowableArray<Klass*>* secondaries, uintx& bitmap);
   static uintx hash_secondary_supers(Array<Klass*>* secondaries, bool rewrite);
 
@@ -705,13 +703,6 @@ protected:
 
   bool is_cloneable() const;
   void set_is_cloneable();
-
-  markWord prototype_header() const {
-    assert(UseCompactObjectHeaders, "only use with compact object headers");
-    return _prototype_header;
-  }
-  inline void set_prototype_header(markWord header);
-  static ByteSize prototype_header_offset() { return in_ByteSize(offset_of(Klass, _prototype_header)); }
 
   JFR_ONLY(DEFINE_TRACE_ID_METHODS;)
 

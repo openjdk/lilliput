@@ -33,6 +33,7 @@
 #include "gc/shared/copyFailedInfo.hpp"
 #include "gc/shared/gc_globals.hpp"
 #include "gc/shared/partialArrayTaskStepper.hpp"
+#include "gc/shared/preservedMarks.hpp"
 #include "gc/shared/stringdedup/stringDedup.hpp"
 #include "gc/shared/taskqueue.hpp"
 #include "memory/allocation.hpp"
@@ -46,6 +47,8 @@ class G1EvacuationRootClosures;
 class G1OopStarChunkedList;
 class G1PLABAllocator;
 class G1HeapRegion;
+class PreservedMarks;
+class PreservedMarksSet;
 class outputStream;
 
 class G1ParScanThreadState : public CHeapObj<mtGC> {
@@ -103,6 +106,7 @@ class G1ParScanThreadState : public CHeapObj<mtGC> {
   // Per-thread evacuation failure data structures.
   ALLOCATION_FAILURE_INJECTOR_ONLY(size_t _allocation_failure_inject_counter;)
 
+  PreservedMarks* _preserved_marks;
   EvacuationFailedInfo _evacuation_failed_info;
   G1EvacFailureRegions* _evac_failure_regions;
   // Number of additional cards into evacuation failed regions enqueued into
@@ -121,6 +125,7 @@ class G1ParScanThreadState : public CHeapObj<mtGC> {
 public:
   G1ParScanThreadState(G1CollectedHeap* g1h,
                        G1RedirtyCardsQueueSet* rdcqs,
+                       PreservedMarks* preserved_marks,
                        uint worker_id,
                        uint num_workers,
                        G1CollectionSet* collection_set,
@@ -168,7 +173,7 @@ private:
   void start_partial_objarray(G1HeapRegionAttr dest_dir, oop from, oop to);
 
   HeapWord* allocate_copy_slow(G1HeapRegionAttr* dest_attr,
-                               Klass* klass,
+                               oop old,
                                size_t word_sz,
                                uint age,
                                uint node_index);
@@ -203,7 +208,7 @@ private:
   inline G1HeapRegionAttr next_region_attr(G1HeapRegionAttr const region_attr, markWord const m, uint& age);
 
   void report_promotion_event(G1HeapRegionAttr const dest_attr,
-                              Klass* klass, size_t word_sz, uint age,
+                              oop const old, size_t word_sz, uint age,
                               HeapWord * const obj_ptr, uint node_index) const;
 
   void trim_queue_to_threshold(uint threshold);
@@ -240,6 +245,7 @@ class G1ParScanThreadStateSet : public StackObj {
   G1CollectedHeap* _g1h;
   G1CollectionSet* _collection_set;
   G1RedirtyCardsQueueSet _rdcqs;
+  PreservedMarksSet _preserved_marks_set;
   G1ParScanThreadState** _states;
   BufferNodeList* _rdc_buffers;
   size_t* _surviving_young_words_total;
@@ -256,6 +262,7 @@ class G1ParScanThreadStateSet : public StackObj {
 
   G1RedirtyCardsQueueSet* rdcqs() { return &_rdcqs; }
   BufferNodeList* rdc_buffers() { return _rdc_buffers; }
+  PreservedMarksSet* preserved_marks_set() { return &_preserved_marks_set; }
 
   void flush_stats();
   void record_unused_optional_region(G1HeapRegion* hr);

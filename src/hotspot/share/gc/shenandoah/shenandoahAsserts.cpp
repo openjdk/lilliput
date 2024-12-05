@@ -197,7 +197,7 @@ void ShenandoahAsserts::assert_correct(void* interior_loc, oop obj, const char* 
                   file, line);
   }
 
-  Klass* obj_klass = obj->forward_safe_klass();
+  Klass* obj_klass = obj->klass_or_null();
   if (obj_klass == nullptr) {
     print_failure(_safe_unknown, obj, interior_loc, nullptr, "Shenandoah assert_correct failed",
                   "Object klass pointer should not be null",
@@ -229,7 +229,7 @@ void ShenandoahAsserts::assert_correct(void* interior_loc, oop obj, const char* 
                     file, line);
     }
 
-    if (obj_klass != fwd->forward_safe_klass()) {
+    if (obj_klass != fwd->klass()) {
       print_failure(_safe_oop, obj, interior_loc, nullptr, "Shenandoah assert_correct failed",
                     "Forwardee klass disagrees with object class",
                     file, line);
@@ -247,6 +247,25 @@ void ShenandoahAsserts::assert_correct(void* interior_loc, oop obj, const char* 
     if (fwd != fwd2) {
       print_failure(_safe_all, obj, interior_loc, nullptr, "Shenandoah assert_correct failed",
                     "Multiple forwardings",
+                    file, line);
+    }
+  }
+
+  // Do additional checks for special objects: their fields can hold metadata as well.
+  // We want to check class loading/unloading did not corrupt them.
+
+  if (java_lang_Class::is_instance(obj)) {
+    Metadata* klass = obj->metadata_field(java_lang_Class::klass_offset());
+    if (klass != nullptr && !Metaspace::contains(klass)) {
+      print_failure(_safe_all, obj, interior_loc, nullptr, "Shenandoah assert_correct failed",
+                    "Instance class mirror should point to Metaspace",
+                    file, line);
+    }
+
+    Metadata* array_klass = obj->metadata_field(java_lang_Class::array_klass_offset());
+    if (array_klass != nullptr && !Metaspace::contains(array_klass)) {
+      print_failure(_safe_all, obj, interior_loc, nullptr, "Shenandoah assert_correct failed",
+                    "Array class mirror should point to Metaspace",
                     file, line);
     }
   }

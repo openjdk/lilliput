@@ -26,7 +26,6 @@
 #define SHARE_OOPS_MARKWORD_HPP
 
 #include "metaprogramming/primitiveConversions.hpp"
-#include "oops/compressedKlass.hpp"
 #include "oops/oopsHierarchy.hpp"
 #include "runtime/globals.hpp"
 
@@ -38,15 +37,11 @@
 //
 //  32 bits:
 //  --------
-//             hash:25 ------------>| age:4  self-fwd:1  lock:2 (normal object)
+//             hash:25 ------------>| age:4  unused_gap:1  lock:2 (normal object)
 //
 //  64 bits:
 //  --------
-//  unused:25 hash:31 -->| unused_gap:1  age:4  self-fwd:1  lock:2 (normal object)
-//
-//  64 bits (with compact headers):
-//  -------------------------------
-//  nklass:32 hash:25 -->| unused_gap:1  age:4  self-fwded:1  lock:2 (normal object)
+//  unused:25 hash:31 -->| unused_gap:1  age:4  unused_gap:1  lock:2 (normal object)
 //
 //  - hash contains the identity hash value: largest value is
 //    31 bits, see os::random().  Also, 64-bit vm's require
@@ -108,50 +103,21 @@ class markWord {
   // Constants
   static const int age_bits                       = 4;
   static const int lock_bits                      = 2;
-  static const int self_fwd_bits                  = 1;
-  static const int max_hash_bits                  = BitsPerWord - age_bits - lock_bits - self_fwd_bits;
+  static const int first_unused_gap_bits          = 1;
+  static const int max_hash_bits                  = BitsPerWord - age_bits - lock_bits - first_unused_gap_bits;
   static const int hash_bits                      = max_hash_bits > 31 ? 31 : max_hash_bits;
-  static const int hash_bits_compact              = hash_bits;
-  // Used only without compact headers.
-  static const int unused_gap_bits                = LP64_ONLY(1) NOT_LP64(0);
+  static const int second_unused_gap_bits         = LP64_ONLY(1) NOT_LP64(0);
 
   static const int lock_shift                     = 0;
-  static const int self_fwd_shift                 = lock_shift + lock_bits;
-  static const int age_shift                      = self_fwd_shift + self_fwd_bits;
-  static const int hash_shift                     = age_shift + age_bits + unused_gap_bits;
-  static const int hash_shift_compact             = 11;
+  static const int age_shift                      = lock_bits + first_unused_gap_bits;
+  static const int hash_shift                     = age_shift + age_bits + second_unused_gap_bits;
 
   static const uintptr_t lock_mask                = right_n_bits(lock_bits);
   static const uintptr_t lock_mask_in_place       = lock_mask << lock_shift;
-  static const uintptr_t self_fwd_mask            = right_n_bits(self_fwd_bits);
-  static const uintptr_t self_fwd_mask_in_place   = self_fwd_mask << self_fwd_shift;
   static const uintptr_t age_mask                 = right_n_bits(age_bits);
   static const uintptr_t age_mask_in_place        = age_mask << age_shift;
   static const uintptr_t hash_mask                = right_n_bits(hash_bits);
   static const uintptr_t hash_mask_in_place       = hash_mask << hash_shift;
-  static const uintptr_t hash_mask_compact        = right_n_bits(hash_bits_compact);
-  static const uintptr_t hash_mask_compact_in_place = hash_mask_compact << hash_shift_compact;
-
-#ifdef _LP64
-  // Used only with compact headers:
-  // We store nKlass in the upper 22 bits of the markword. When extracting, we need to read the upper
-  // 32 bits and rightshift by the lower 10 foreign bits.
-
-  // These are for loading the nKlass with a 32-bit load and subsequent masking of the lower
-  // shadow bits
-  static constexpr int klass_load_shift           = 32;
-  static constexpr int klass_load_bits            = 32;
-  static constexpr int klass_shadow_bits          = 10;
-  static constexpr uintptr_t klass_shadow_mask    = right_n_bits(klass_shadow_bits);
-  static constexpr uintptr_t klass_shadow_mask_inplace  = klass_shadow_mask << klass_load_shift;
-
-  // These are for bit-precise extraction of the nKlass from the 64-bit Markword
-  static constexpr int klass_shift                = 42;
-  static constexpr int klass_bits                 = 22;
-  static constexpr uintptr_t klass_mask           = right_n_bits(klass_bits);
-  static constexpr uintptr_t klass_mask_in_place  = klass_mask << klass_shift;
-#endif
-
 
   static const uintptr_t locked_value             = 0;
   static const uintptr_t unlocked_value           = 1;
@@ -177,11 +143,9 @@ class markWord {
   bool is_marked()   const {
     return (mask_bits(value(), lock_mask_in_place) == marked_value);
   }
-  bool is_forwarded() const {
-    // Returns true for normal forwarded (0b011) and self-forwarded (0b1xx).
-    return mask_bits(value(), lock_mask_in_place | self_fwd_mask_in_place) >= static_cast<intptr_t>(marked_value);
+  bool is_forwarded()   const {
+    return (mask_bits(value(), lock_mask_in_place) == marked_value);
   }
-
   bool is_neutral()  const {  // Not locked, or marked - a "clean" neutral state
     return (mask_bits(value(), lock_mask_in_place) == unlocked_value);
   }
@@ -233,30 +197,20 @@ class markWord {
   }
   ObjectMonitor* monitor() const {
     assert(has_monitor(), "check");
-    assert(!UseObjectMonitorTable, "Lightweight locking with OM table does not use markWord for monitors");
     // Use xor instead of &~ to provide one extra tag-bit check.
     return (ObjectMonitor*) (value() ^ monitor_value);
   }
   bool has_displaced_mark_helper() const {
     intptr_t lockbits = value() & lock_mask_in_place;
-    if (LockingMode == LM_LIGHTWEIGHT) {
-      return !UseObjectMonitorTable && lockbits == monitor_value;
-    }
-    // monitor (0b10) | stack-locked (0b00)?
-    return (lockbits & unlocked_value) == 0;
+    return LockingMode == LM_LIGHTWEIGHT  ? lockbits == monitor_value   // monitor?
+                                          : (lockbits & unlocked_value) == 0; // monitor | stack-locked?
   }
   markWord displaced_mark_helper() const;
   void set_displaced_mark_helper(markWord m) const;
   markWord copy_set_hash(intptr_t hash) const {
-    if (UseCompactObjectHeaders) {
-      uintptr_t tmp = value() & (~hash_mask_compact_in_place);
-      tmp |= ((hash & hash_mask_compact) << hash_shift_compact);
-      return markWord(tmp);
-    } else {
-      uintptr_t tmp = value() & (~hash_mask_in_place);
-      tmp |= ((hash & hash_mask) << hash_shift);
-      return markWord(tmp);
-    }
+    uintptr_t tmp = value() & (~hash_mask_in_place);
+    tmp |= ((hash & hash_mask) << hash_shift);
+    return markWord(tmp);
   }
   // it is only used to be stored into BasicLock as the
   // indicator that the lock is using heavyweight monitor
@@ -269,13 +223,8 @@ class markWord {
     return from_pointer(lock);
   }
   static markWord encode(ObjectMonitor* monitor) {
-    assert(!UseObjectMonitorTable, "Lightweight locking with OM table does not use markWord for monitors");
     uintptr_t tmp = (uintptr_t) monitor;
     return markWord(tmp | monitor_value);
-  }
-
-  markWord set_has_monitor() const {
-    return markWord((value() & ~lock_mask_in_place) | monitor_value);
   }
 
   // used to encode pointers during GC
@@ -294,23 +243,12 @@ class markWord {
 
   // hash operations
   intptr_t hash() const {
-    if (UseCompactObjectHeaders) {
-      return mask_bits(value() >> hash_shift_compact, hash_mask_compact);
-    } else {
-      return mask_bits(value() >> hash_shift, hash_mask);
-    }
+    return mask_bits(value() >> hash_shift, hash_mask);
   }
 
   bool has_no_hash() const {
     return hash() == no_hash;
   }
-
-  inline Klass* klass() const;
-  inline Klass* klass_or_null() const;
-  inline Klass* klass_without_asserts() const;
-  inline narrowKlass narrow_klass() const;
-  inline markWord set_narrow_klass(narrowKlass nklass) const;
-  inline markWord set_klass(Klass* klass) const;
 
   // Prototype mark for initialization
   static markWord prototype() {
@@ -325,21 +263,6 @@ class markWord {
 
   // Recover address of oop from encoded form used in mark
   inline void* decode_pointer() const { return (void*)clear_lock_bits().value(); }
-
-  inline bool self_forwarded() const {
-    NOT_LP64(assert(LockingMode != LM_LEGACY, "incorrect with LM_LEGACY on 32 bit");)
-    return mask_bits(value(), self_fwd_mask_in_place) != 0;
-  }
-
-  inline markWord set_self_forwarded() const {
-    NOT_LP64(assert(LockingMode != LM_LEGACY, "incorrect with LM_LEGACY on 32 bit");)
-    return markWord(value() | self_fwd_mask_in_place);
-  }
-
-  inline markWord unset_self_forwarded() const {
-    NOT_LP64(assert(LockingMode != LM_LEGACY, "incorrect with LM_LEGACY on 32 bit");)
-    return markWord(value() & ~self_fwd_mask_in_place);
-  }
 
   inline oop forwardee() const {
     return cast_to_oop(decode_pointer());

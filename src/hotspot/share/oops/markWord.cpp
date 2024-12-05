@@ -24,18 +24,9 @@
 
 #include "precompiled.hpp"
 #include "oops/markWord.hpp"
-#include "runtime/basicLock.inline.hpp"
 #include "runtime/javaThread.hpp"
 #include "runtime/objectMonitor.inline.hpp"
 #include "utilities/ostream.hpp"
-
-#ifdef _LP64
-STATIC_ASSERT((markWord::klass_shadow_mask_inplace & markWord::klass_mask_in_place) == 0);
-STATIC_ASSERT((markWord::klass_load_shift + markWord::klass_shadow_bits) == markWord::klass_shift);
-STATIC_ASSERT(markWord::klass_shift + markWord::klass_bits == 64);
-// The hash (preceding nKlass) shall be a direct neighbor but not interleave
-STATIC_ASSERT(markWord::klass_shift == markWord::hash_bits_compact + markWord::hash_shift_compact);
-#endif
 
 markWord markWord::displaced_mark_helper() const {
   assert(has_displaced_mark_helper(), "check");
@@ -76,7 +67,7 @@ void markWord::print_on(outputStream* st, bool print_monitor_info) const {
   } else if (has_monitor()) {  // last bits = 10
     // have to check has_monitor() before is_locked()
     st->print(" monitor(" INTPTR_FORMAT ")=", value());
-    if (print_monitor_info && !UseObjectMonitorTable) {
+    if (print_monitor_info) {
       ObjectMonitor* mon = monitor();
       if (mon == nullptr) {
         st->print("null (this should never be seen!)");

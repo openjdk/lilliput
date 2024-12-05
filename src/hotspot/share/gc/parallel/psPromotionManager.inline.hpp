@@ -66,7 +66,7 @@ inline void PSPromotionManager::claim_or_forward_depth(T* p) {
   }
 }
 
-inline void PSPromotionManager::promotion_trace_event(oop new_obj, Klass* klass,
+inline void PSPromotionManager::promotion_trace_event(oop new_obj, oop old_obj,
                                                       size_t obj_size,
                                                       uint age, bool tenured,
                                                       const PSPromotionLAB* lab) {
@@ -79,14 +79,14 @@ inline void PSPromotionManager::promotion_trace_event(oop new_obj, Klass* klass,
       if (gc_tracer->should_report_promotion_in_new_plab_event()) {
         size_t obj_bytes = obj_size * HeapWordSize;
         size_t lab_size = lab->capacity();
-        gc_tracer->report_promotion_in_new_plab_event(klass, obj_bytes,
+        gc_tracer->report_promotion_in_new_plab_event(old_obj->klass(), obj_bytes,
                                                       age, tenured, lab_size);
       }
     } else {
       // Promotion of object directly to heap
       if (gc_tracer->should_report_promotion_outside_plab_event()) {
         size_t obj_bytes = obj_size * HeapWordSize;
-        gc_tracer->report_promotion_outside_plab_event(klass, obj_bytes,
+        gc_tracer->report_promotion_outside_plab_event(old_obj->klass(), obj_bytes,
                                                        age, tenured);
       }
     }
@@ -148,12 +148,8 @@ inline oop PSPromotionManager::copy_to_survivor_space(oop o) {
   if (!m.is_forwarded()) {
     return copy_unmarked_to_survivor_space<promote_immediately>(o, m);
   } else {
-    // Ensure any loads from the forwardee follow all changes that precede
-    // the release-cmpxchg that performed the forwarding, possibly in some
-    // other thread.
-    OrderAccess::acquire();
     // Return the already installed forwardee.
-    return o->forwardee(m);
+    return m.forwardee();
   }
 }
 
@@ -169,14 +165,7 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
 
   oop new_obj = nullptr;
   bool new_obj_is_tenured = false;
-  // NOTE: With compact headers, it is not safe to load the Klass* from o, because
-  // that would access the mark-word, and the mark-word might change at any time by
-  // concurrent promotion. The promoted mark-word would point to the forwardee, which
-  // may not yet have completed copying. Therefore we must load the Klass* from
-  // the mark-word that we have already loaded. This is safe, because we have checked
-  // that this is not yet forwarded in the caller.
-  Klass* klass = o->forward_safe_klass(test_mark);
-  size_t new_obj_size = o->size_given_klass(klass);
+  size_t new_obj_size = o->size();
 
   // Find the objects age, MT safe.
   uint age = (test_mark.has_displaced_mark_helper() /* o->has_displaced_mark() */) ?
@@ -191,7 +180,7 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
         if (new_obj_size > (YoungPLABSize / 2)) {
           // Allocate this object directly
           new_obj = cast_to_oop(young_space()->cas_allocate(new_obj_size));
-          promotion_trace_event(new_obj, klass, new_obj_size, age, false, nullptr);
+          promotion_trace_event(new_obj, o, new_obj_size, age, false, nullptr);
         } else {
           // Flush and fill
           _young_lab.flush();
@@ -201,7 +190,7 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
             _young_lab.initialize(MemRegion(lab_base, YoungPLABSize));
             // Try the young lab allocation again.
             new_obj = cast_to_oop(_young_lab.allocate(new_obj_size));
-            promotion_trace_event(new_obj, klass, new_obj_size, age, false, &_young_lab);
+            promotion_trace_event(new_obj, o, new_obj_size, age, false, &_young_lab);
           } else {
             _young_gen_is_full = true;
           }
@@ -227,7 +216,7 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
         if (new_obj_size > (OldPLABSize / 2)) {
           // Allocate this object directly
           new_obj = cast_to_oop(old_gen()->allocate(new_obj_size));
-          promotion_trace_event(new_obj, klass, new_obj_size, age, true, nullptr);
+          promotion_trace_event(new_obj, o, new_obj_size, age, true, nullptr);
         } else {
           // Flush and fill
           _old_lab.flush();
@@ -237,7 +226,7 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
             _old_lab.initialize(MemRegion(lab_base, OldPLABSize));
             // Try the old lab allocation again.
             new_obj = cast_to_oop(_old_lab.allocate(new_obj_size));
-            promotion_trace_event(new_obj, klass, new_obj_size, age, true, &_old_lab);
+            promotion_trace_event(new_obj, o, new_obj_size, age, true, &_old_lab);
           }
         }
       }
@@ -260,25 +249,12 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
   // Copy obj
   Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(o), cast_from_oop<HeapWord*>(new_obj), new_obj_size);
 
-  if (UseCompactObjectHeaders) {
-    // The copy above is not atomic. Make sure we have seen the proper mark
-    // and re-install it into the copy, so that Klass* is guaranteed to be correct.
-    markWord mark = o->mark();
-    if (!mark.is_forwarded()) {
-      new_obj->set_mark(mark);
-      ContinuationGCSupport::transform_stack_chunk(new_obj);
-    } else {
-      // If we copied a mark-word that indicates 'forwarded' state, the object
-      // installation would not succeed. We cannot access Klass* anymore either.
-      // Skip the transformation.
-    }
-  } else {
-    ContinuationGCSupport::transform_stack_chunk(new_obj);
-  }
-
   // Now we have to CAS in the header.
-  // Make copy visible to threads reading the forwardee.
-  oop forwardee = o->forward_to_atomic(new_obj, test_mark, memory_order_release);
+  // Because the forwarding is done with memory_order_relaxed there is no
+  // ordering with the above copy.  Clients that get the forwardee must not
+  // examine its contents without other synchronization, since the contents
+  // may not be up to date for them.
+  oop forwardee = o->forward_to_atomic(new_obj, test_mark, memory_order_relaxed);
   if (forwardee == nullptr) {  // forwardee is null when forwarding is successful
     // We won any races, we "own" this object.
     assert(new_obj == o->forwardee(), "Sanity");
@@ -290,6 +266,8 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
       new_obj->incr_age();
       assert(young_space()->contains(new_obj), "Attempt to push non-promoted obj");
     }
+
+    ContinuationGCSupport::transform_stack_chunk(new_obj);
 
     // Do the size comparison first with new_obj_size, which we
     // already have. Hopefully, only a few objects are larger than
@@ -314,9 +292,6 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
     return new_obj;
   } else {
     // We lost, someone else "owns" this object.
-    // Ensure loads from the forwardee follow all changes that preceded the
-    // release-cmpxchg that performed the forwarding in another thread.
-    OrderAccess::acquire();
 
     assert(o->is_forwarded(), "Object must be forwarded if the cas failed.");
     assert(o->forwardee() == forwardee, "invariant");

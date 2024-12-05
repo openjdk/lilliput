@@ -1706,9 +1706,7 @@ PhaseMacroExpand::initialize_object(AllocateNode* alloc,
   }
   rawmem = make_store(control, rawmem, object, oopDesc::mark_offset_in_bytes(), mark_node, TypeX_X->basic_type());
 
-  if (!UseCompactObjectHeaders) {
-    rawmem = make_store(control, rawmem, object, oopDesc::klass_offset_in_bytes(), klass_node, T_METADATA);
-  }
+  rawmem = make_store(control, rawmem, object, oopDesc::klass_offset_in_bytes(), klass_node, T_METADATA);
   int header_size = alloc->minimum_header_size();  // conservatively small
 
   // Array length
@@ -2047,7 +2045,7 @@ void PhaseMacroExpand::mark_eliminated_box(Node* box, Node* obj) {
 
 //-----------------------mark_eliminated_locking_nodes-----------------------
 void PhaseMacroExpand::mark_eliminated_locking_nodes(AbstractLockNode *alock) {
-  if (alock->box_node()->as_BoxLock()->is_unbalanced()) {
+  if (!alock->is_balanced()) {
     return; // Can't do any more elimination for this locking region
   }
   if (EliminateNestedLocks) {

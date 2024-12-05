@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2024, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,8 +31,17 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
-public class ValueParser {
-    private static final String INFINITY = "infinity";
+public final class ValueParser {
+    public static final String INFINITY = "infinity";
+    public static final long MISSING = Long.MIN_VALUE;
+
+    public static long parseTimespanWithInfinity(String s, long defaultValue) {
+        try {
+            return parseTimespanWithInfinity(s);
+        } catch (NumberFormatException nfe) {
+            return defaultValue;
+        }
+    }
 
     public static long parseTimespanWithInfinity(String s) {
         if (INFINITY.equals(s)) {
