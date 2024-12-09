@@ -82,6 +82,7 @@ class GCMemoryManager;
 class G1HeapRegion;
 class MemoryPool;
 class nmethod;
+class PartialArrayStateManager;
 class ReferenceProcessor;
 class STWGCTimer;
 class WorkerThreads;
@@ -669,10 +670,6 @@ public:
   // Allocates a new heap region instance.
   G1HeapRegion* new_heap_region(uint hrs_index, MemRegion mr);
 
-  // Allocate the highest free region in the reserved heap. This will commit
-  // regions as necessary.
-  G1HeapRegion* alloc_highest_free_region();
-
   // Frees a region by resetting its metadata and adding it to the free list
   // passed as a parameter (this is usually a local list which will be appended
   // to the master free list later or null if free list management is handled
@@ -756,7 +753,6 @@ private:
   // of the incremental collection pause, executed by the vm thread.
   void do_collection_pause_at_safepoint_helper();
 
-  G1HeapVerifier::G1VerifyType young_collection_verify_type() const;
   void verify_before_young_collection(G1HeapVerifier::G1VerifyType type);
   void verify_after_young_collection(G1HeapVerifier::G1VerifyType type);
 
@@ -784,7 +780,19 @@ private:
 
   G1MonotonicArenaFreePool _card_set_freelist_pool;
 
+  // Group cardsets
+  G1CardSetMemoryManager _young_regions_cardset_mm;
+  G1CardSet _young_regions_cardset;
+
 public:
+  G1CardSetConfiguration* card_set_config() { return &_card_set_config; }
+
+  G1CardSet* young_regions_cardset() { return &_young_regions_cardset; };
+
+  G1CardSetMemoryManager* young_regions_card_set_mm() { return &_young_regions_cardset_mm; }
+
+  void prepare_group_cardsets_for_scan();
+
   // After a collection pause, reset eden and the collection set.
   void clear_eden();
   void clear_collection_set();
@@ -800,8 +808,9 @@ public:
   // The concurrent refiner.
   G1ConcurrentRefine* _cr;
 
-  // The parallel task queues
-  G1ScannerTasksQueueSet *_task_queues;
+  // Reusable parallel task queues and partial array manager.
+  G1ScannerTasksQueueSet* _task_queues;
+  PartialArrayStateManager* _partial_array_state_manager;
 
   // ("Weak") Reference processing support.
   //
@@ -866,6 +875,8 @@ public:
 
   G1ScannerTasksQueueSet* task_queues() const;
   G1ScannerTasksQueue* task_queue(uint i) const;
+
+  PartialArrayStateManager* partial_array_state_manager() const;
 
   // Create a G1CollectedHeap.
   // Must call the initialize method afterwards.
