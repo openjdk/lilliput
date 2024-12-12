@@ -100,8 +100,6 @@ void FullGCForwarding::initialize(MemRegion heap) {
   _heap_start_region_bias = (uintptr_t)_heap_start >> BLOCK_SIZE_BYTES_SHIFT;
   _region_mask = ~((uintptr_t(1) << BLOCK_SIZE_BYTES_SHIFT) - 1);
 
-  guarantee((_heap_start_region_bias << BLOCK_SIZE_BYTES_SHIFT) == (uintptr_t)_heap_start, "must be aligned: _heap_start_region_bias: " SIZE_FORMAT ", _region_size_byte_shift: %u, _heap_start: " PTR_FORMAT, _heap_start_region_bias, BLOCK_SIZE_BYTES_SHIFT, p2i(_heap_start));
-
   assert(_bases_table == nullptr, "should not be initialized yet");
   assert(_fallback_table == nullptr, "should not be initialized yet");
 #endif
