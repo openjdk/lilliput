@@ -24,7 +24,6 @@
  */
 
 #include "precompiled.hpp"
-#include "gc/shared/fullGCForwarding.hpp"
 #include "gc/shared/gcArguments.hpp"
 #include "gc/shared/tlab_globals.hpp"
 #include "gc/shared/workerPolicy.hpp"
@@ -186,8 +185,6 @@ void ShenandoahArguments::initialize() {
   if (FLAG_IS_DEFAULT(TLABAllocationWeight)) {
     FLAG_SET_DEFAULT(TLABAllocationWeight, 90);
   }
-
-  FullGCForwarding::initialize_flags(MaxHeapSize);
 }
 
 size_t ShenandoahArguments::conservative_max_heap_alignment() {
