@@ -238,6 +238,9 @@ class InstanceKlass: public Klass {
 
   JavaThread* volatile _init_thread;        // Pointer to current thread doing initialization (to handle recursive initialization)
 
+  int             _hash_offset;             // Offset of hidden field for i-hash
+  int             _static_hash_offset;      // Offset of hidden field for i-hash in corresponding Class
+
   OopMapCache*    volatile _oop_map_cache;   // OopMapCache for all methods in the klass (allocated lazily)
   JNIid*          _jni_ids;                  // First JNI identifier for static fields in this class
   jmethodID* volatile _methods_jmethod_ids;  // jmethodIDs corresponding to method_idnum, or null if none
@@ -946,6 +949,19 @@ public:
   int size_helper() const {
     return layout_helper_to_size_helper(layout_helper());
   }
+
+  virtual int hash_offset_in_bytes(oop obj) const {
+    assert(UseCompactObjectHeaders, "only with compact i-hash");
+    return _hash_offset;
+  }
+  static int hash_offset_offset_in_bytes() {
+    assert(UseCompactObjectHeaders, "only with compact i-hash");
+    return (int)offset_of(InstanceKlass, _hash_offset);
+  }
+  int static_hash_offset_in_bytes() const {
+    return _static_hash_offset;
+  }
+  void fix_static_hash_offset();
 
   // This bit is initialized in classFileParser.cpp.
   // It is false under any of the following conditions:

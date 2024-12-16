@@ -529,7 +529,9 @@ InstanceKlass::InstanceKlass(const ClassFileParser& parser, KlassKind kind, Refe
   _nest_host_index(0),
   _init_state(allocated),
   _reference_type(reference_type),
-  _init_thread(nullptr)
+  _init_thread(nullptr),
+  _hash_offset(parser.hash_offset()),
+  _static_hash_offset(parser.static_hash_offset())
 {
   set_vtable_length(parser.vtable_size());
   set_access_flags(parser.access_flags());
@@ -4538,4 +4540,8 @@ void ClassHierarchyIterator::next() {
   }
   _current = _current->next_sibling();
   return; // visit next sibling subclass
+}
+
+void InstanceKlass::fix_static_hash_offset() {
+  _static_hash_offset += InstanceMirrorKlass::offset_of_static_fields();
 }

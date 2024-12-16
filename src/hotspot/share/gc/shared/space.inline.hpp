@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2001, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2024, 2024, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,28 +22,22 @@
  *
  */
 
-#ifndef SHARE_GC_SHARED_COLLECTEDHEAP_INLINE_HPP
-#define SHARE_GC_SHARED_COLLECTEDHEAP_INLINE_HPP
+#ifndef SHARE_GC_SHARED_SPACE_INLINE_HPP
+#define SHARE_GC_SHARED_SPACE_INLINE_HPP
 
-#include "gc/shared/collectedHeap.hpp"
+#include "gc/shared/space.hpp"
 
-#include "gc/shared/memAllocator.hpp"
-#include "oops/oop.inline.hpp"
-#include "utilities/align.hpp"
-
-inline oop CollectedHeap::obj_allocate(Klass* klass, size_t size, TRAPS) {
-  ObjAllocator allocator(klass, size, THREAD);
-  return allocator.allocate();
+template<class CL>
+void ContiguousSpace::object_iterate_sized(CL* blk) {
+  HeapWord* addr = bottom();
+  oop last = nullptr;
+  while (addr < top()) {
+    oop obj = cast_to_oop(addr);
+    size_t size = blk->do_object(obj);
+    assert(!UseCompactObjectHeaders || obj->mark().narrow_klass() != 0, "null narrow klass, mark: " INTPTR_FORMAT ", last mark: " INTPTR_FORMAT, obj->mark().value(), last->mark().value());
+    addr += size;
+    last = obj;
+  }
 }
 
-inline oop CollectedHeap::array_allocate(Klass* klass, size_t size, int length, bool do_zero, TRAPS) {
-  ObjArrayAllocator allocator(klass, size, length, do_zero, THREAD);
-  return allocator.allocate();
-}
-
-inline oop CollectedHeap::class_allocate(Klass* klass, size_t size, size_t base_size, TRAPS) {
-  ClassAllocator allocator(klass, size, base_size, THREAD);
-  return allocator.allocate();
-}
-
-#endif // SHARE_GC_SHARED_COLLECTEDHEAP_INLINE_HPP
+#endif // SHARE_GC_SHARED_SPACE_INLINE_HPP

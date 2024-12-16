@@ -72,6 +72,8 @@ class FieldLayoutInfo : public ResourceObj {
  public:
   OopMapBlocksBuilder* oop_map_blocks;
   int _instance_size;
+  int _hash_offset;
+  int _static_hash_offset;
   int _nonstatic_field_size;
   int _static_field_size;
   bool  _has_nonstatic_fields;
@@ -500,6 +502,8 @@ class ClassFileParser {
   int static_field_size() const;
   int total_oop_map_count() const;
   jint layout_size() const;
+  int hash_offset() const;
+  int static_hash_offset() const;
 
   int vtable_size() const { return _vtable_size; }
   int itable_size() const { return _itable_size; }
