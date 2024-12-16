@@ -43,6 +43,7 @@
 #include "utilities/debug.hpp"
 #include "utilities/macros.hpp"
 #include "utilities/globalDefinitions.hpp"
+#include "logging/log.hpp"
 
 // Implementation of all inlined member functions defined in oop.hpp
 // We need a separate file to avoid circular references
@@ -59,27 +60,49 @@ markWord* oopDesc::mark_addr() const {
   return (markWord*) &_mark;
 }
 
+static void assert_correct_hash_transition(markWord old_mark, markWord new_mark) {
+#ifdef ASSERT
+  if (UseCompactObjectHeaders) {
+    if (new_mark.is_marked()) return; // Install forwardee.
+    if (old_mark.is_forwarded()) return; // Restoration of forwarded object.
+    assert(!(new_mark.is_hashed_not_expanded() && new_mark.is_hashed_expanded()), "must not be simultaneously hashed and copied state");
+    if (old_mark.is_hashed_not_expanded()) assert(new_mark.is_hashed(), "incorrect hash state transition");
+    if (old_mark.is_hashed_expanded()) assert(new_mark.is_hashed_expanded(), "incorrect hash state transition, old_mark: " INTPTR_FORMAT ", new_mark: " INTPTR_FORMAT, old_mark.value(), new_mark.value());
+  }
+#endif
+}
+
 void oopDesc::set_mark(markWord m) {
+  //assert_correct_hash_transition(mark(), m);
   Atomic::store(&_mark, m);
 }
 
 void oopDesc::set_mark(HeapWord* mem, markWord m) {
+  if (UseCompactObjectHeaders) {
+    assert(!(m.is_hashed_not_expanded() && m.is_hashed_expanded()), "must not be simultaneously hashed and copied state");
+  }
   *(markWord*)(((char*)mem) + mark_offset_in_bytes()) = m;
 }
 
 void oopDesc::release_set_mark(HeapWord* mem, markWord m) {
+  if (UseCompactObjectHeaders) {
+    assert(!(m.is_hashed_not_expanded() && m.is_hashed_expanded()), "must not be simultaneously hashed and copied state");
+  }
   Atomic::release_store((markWord*)(((char*)mem) + mark_offset_in_bytes()), m);
 }
 
 void oopDesc::release_set_mark(markWord m) {
+  assert_correct_hash_transition(mark(), m);
   Atomic::release_store(&_mark, m);
 }
 
 markWord oopDesc::cas_set_mark(markWord new_mark, markWord old_mark) {
+  assert_correct_hash_transition(old_mark, new_mark);
   return Atomic::cmpxchg(&_mark, old_mark, new_mark);
 }
 
 markWord oopDesc::cas_set_mark(markWord new_mark, markWord old_mark, atomic_memory_order order) {
+  assert_correct_hash_transition(old_mark, new_mark);
   return Atomic::cmpxchg(&_mark, old_mark, new_mark, order);
 }
 
@@ -92,7 +115,14 @@ markWord oopDesc::prototype_mark() const {
 }
 
 void oopDesc::init_mark() {
-  set_mark(prototype_mark());
+  if (UseCompactObjectHeaders) {
+    markWord m = prototype_mark().copy_hashctrl_from(mark());
+    //log_info(gc)("Init mark: oop: " PTR_FORMAT ", mark: " INTPTR_FORMAT, p2i(this), m.value());
+    assert(m.is_neutral(), "must be neutral");
+    set_mark(m);
+  } else {
+    set_mark(prototype_mark());
+  }
 }
 
 Klass* oopDesc::klass() const {
@@ -172,11 +202,51 @@ bool oopDesc::is_a(Klass* k) const {
   return klass()->is_subtype_of(k);
 }
 
-size_t oopDesc::size()  {
-  return size_given_klass(klass());
+size_t oopDesc::size_given_mark_and_klass(markWord mrk, const Klass* kls) {
+  size_t sz = base_size_given_klass(kls);
+  if (UseCompactObjectHeaders) {
+    assert(!mrk.has_displaced_mark_helper(), "must not be displaced");
+    if (mrk.is_expanded() && kls->expand_for_hash(cast_to_oop(this))) {
+      log_trace(gc)("Extended size for object: " PTR_FORMAT " base-size: " SIZE_FORMAT ", mark: " PTR_FORMAT ", klass: " PTR_FORMAT ", expand: %s", p2i(this), sz, mrk.value(), p2i(kls), BOOL_TO_STR(kls->expand_for_hash(cast_to_oop(this))));
+      sz = align_object_size(sz + 1);
+    }
+  }
+  return sz;
 }
 
-size_t oopDesc::size_given_klass(Klass* klass)  {
+size_t oopDesc::copy_size(size_t size, markWord mark) const {
+  if (UseCompactObjectHeaders) {
+    assert(!mark.has_displaced_mark_helper(), "must not be displaced");
+    Klass* klass = mark.klass();
+    if (mark.is_hashed_not_expanded() && klass->expand_for_hash(cast_to_oop(this))) {
+      size = align_object_size(size + 1);
+    }
+  }
+  assert(is_object_aligned(size), "Oop size is not properly aligned: " SIZE_FORMAT, size);
+  return size;
+}
+
+#ifdef _LP64
+markWord oopDesc::forward_safe_mark() const {
+  assert(UseCompactObjectHeaders, "Only get here with compact headers");
+  markWord m = mark();
+  if (m.is_marked()) {
+    oop fwd = forwardee(m);
+    markWord m2 = fwd->mark();
+    assert(!m2.is_marked() || m2.is_self_forwarded(), "no double forwarding: this: " PTR_FORMAT " (" INTPTR_FORMAT "), fwd: " PTR_FORMAT " (" INTPTR_FORMAT ")", p2i(this), m.value(), p2i(fwd
+), m2.value());
+    m = m2;
+  }
+  return m;
+}
+#endif
+
+size_t oopDesc::size()  {
+  markWord m = UseCompactObjectHeaders ? mark() : markWord::unused_mark();;
+  return size_given_mark_and_klass(m, klass());
+}
+
+size_t oopDesc::base_size_given_klass(const Klass* klass)  {
   int lh = klass->layout_helper();
   size_t s;
 
@@ -295,10 +365,13 @@ bool oopDesc::is_self_forwarded() const {
 }
 
 // Used by scavengers
-void oopDesc::forward_to(oop p) {
+void oopDesc::forward_to(oop p, bool expanded) {
   assert(cast_from_oop<oopDesc*>(p) != this,
          "must not be used for self-forwarding, use forward_to_self() instead");
   markWord m = markWord::encode_pointer_as_mark(p);
+  if (expanded) {
+    m = m.set_forward_expanded();
+  }
   assert(m.decode_pointer() == p, "encoding must be reversible");
   set_mark(m);
 }
@@ -384,16 +457,19 @@ void oopDesc::oop_iterate(OopClosureType* cl, MemRegion mr) {
 
 template <typename OopClosureType>
 size_t oopDesc::oop_iterate_size(OopClosureType* cl) {
+  markWord m = UseCompactObjectHeaders ? mark() : markWord::unused_mark();
+  assert((!UseCompactObjectHeaders) || m.narrow_klass() != 0, "null narrowKlass: " INTPTR_FORMAT, m.value());
   Klass* k = klass();
-  size_t size = size_given_klass(k);
+  size_t size = size_given_mark_and_klass(m, k);
   OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k);
   return size;
 }
 
 template <typename OopClosureType>
 size_t oopDesc::oop_iterate_size(OopClosureType* cl, MemRegion mr) {
+  markWord m = UseCompactObjectHeaders ? mark() : markWord::unused_mark();
   Klass* k = klass();
-  size_t size = size_given_klass(k);
+  size_t size = size_given_mark_and_klass(m, k);
   OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k, mr);
   return size;
 }
@@ -417,14 +493,23 @@ bool oopDesc::is_instanceof_or_null(oop obj, Klass* klass) {
 intptr_t oopDesc::identity_hash() {
   // Fast case; if the object is unlocked and the hash value is set, no locking is needed
   // Note: The mark must be read into local variable to avoid concurrent updates.
-  markWord mrk = mark();
-  if (mrk.is_unlocked() && !mrk.has_no_hash()) {
-    return mrk.hash();
-  } else if (mrk.is_marked()) {
-    return mrk.hash();
+  if (UseCompactObjectHeaders) {
+    markWord mrk = mark();
+    if (mrk.is_hashed_expanded()) {
+      Klass* klass = mrk.klass();
+      return int_field(klass->hash_offset_in_bytes(cast_to_oop(this)));
+    }
+    // Fall-through to slow-case.
   } else {
-    return slow_identity_hash();
+    markWord mrk = mark();
+    if (mrk.is_unlocked() && !mrk.has_no_hash()) {
+      return mrk.hash();
+    } else if (mrk.is_marked()) {
+      return mrk.hash();
+    }
+    // Fall-through to slow-case.
   }
+  return slow_identity_hash();
 }
 
 // This checks fast simple case of whether the oop has_no_hash,
@@ -432,7 +517,7 @@ intptr_t oopDesc::identity_hash() {
 bool oopDesc::fast_no_hash_check() {
   markWord mrk = mark_acquire();
   assert(!mrk.is_marked(), "should never be marked");
-  return mrk.is_unlocked() && mrk.has_no_hash();
+  return (UseCompactObjectHeaders || mrk.is_unlocked()) && mrk.has_no_hash();
 }
 
 bool oopDesc::has_displaced_mark() const {
@@ -454,5 +539,19 @@ bool oopDesc::mark_must_be_preserved() const {
 bool oopDesc::mark_must_be_preserved(markWord m) const {
   return m.must_be_preserved(this);
 }
+
+inline bool oopDesc::initialize_hash_if_necessary(oop obj) {
+  if (!UseCompactObjectHeaders) {
+    return false;
+  }
+  markWord m = mark();
+  assert(!m.has_displaced_mark_helper(), "must not be displaced header");
+  if (m.is_hashed_not_expanded()) {
+    initialize_hash_if_necessary(obj, m.klass(), m);
+    return true;
+  }
+  return false;
+}
+
 
 #endif // SHARE_OOPS_OOP_INLINE_HPP

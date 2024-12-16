@@ -178,6 +178,7 @@ class ResourceHashtableBase : public STORAGE {
       } else {
         *ptr = new Node(hv, key, value);
       }
+      assert(*ptr != nullptr, "allocation failed");
       _number_of_entries ++;
       return true;
     }

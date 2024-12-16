@@ -92,7 +92,7 @@ TEST_VM(markWord, printing) {
 
   // Hash the object then print it.
   intx hash = h_obj->identity_hash();
-  assert_test_pattern(h_obj, "is_unlocked hash=0x");
+  assert_test_pattern(h_obj, "is_unlocked hash is-hashed=true is-copied=false");
 
   // Wait gets the lock inflated.
   {
