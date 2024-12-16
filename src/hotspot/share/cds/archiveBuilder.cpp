@@ -1298,7 +1298,9 @@ class ArchiveBuilder::CDSMapLogger : AllStatic {
         // Example:
         // 0x00000007ffd27938: @@ Object (0xfffa4f27) java.util.HashMap
         print_oop_info_cr(&st, source_oop, /*print_requested_addr=*/false);
-        byte_size = source_oop->size() * BytesPerWord;
+        size_t old_size = source_oop->size();
+        size_t new_size = source_oop->copy_size_cds(old_size, source_oop->mark());
+        byte_size = new_size * BytesPerWord;
       } else if ((byte_size = ArchiveHeapWriter::get_filler_size_at(start)) > 0) {
         // We have a filler oop, which also does not exist in BufferOffsetToSourceObjectTable.
         // Example:

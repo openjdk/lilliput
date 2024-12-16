@@ -51,6 +51,18 @@
 #include "utilities/concurrentHashTableTasks.inline.hpp"
 #include "utilities/globalDefinitions.hpp"
 
+static uintx objhash(oop obj) {
+  if (UseCompactObjectHeaders) {
+    uintx hash = LightweightSynchronizer::get_hash(obj->mark(), obj);
+    assert(hash != 0, "should have a hash");
+    return hash;
+  } else {
+    uintx hash = obj->mark().hash();
+    assert(hash != 0, "should have a hash");
+    return hash;
+  }
+}
+
 // ConcurrentHashTable storing links from objects to ObjectMonitors
 class ObjectMonitorTable : AllStatic {
   struct Config {
@@ -81,9 +93,7 @@ class ObjectMonitorTable : AllStatic {
     explicit Lookup(oop obj) : _obj(obj) {}
 
     uintx get_hash() const {
-      uintx hash = _obj->mark().hash();
-      assert(hash != 0, "should have a hash");
-      return hash;
+      return objhash(_obj);
     }
 
     bool equals(ObjectMonitor** value) {
@@ -285,6 +295,7 @@ class ObjectMonitorTable : AllStatic {
     Lookup lookup_f(obj);
     auto found_f = [&](ObjectMonitor** found) {
       assert((*found)->object_peek() == obj, "must be");
+      assert(objhash(obj) == (uintx)(*found)->hash(), "hash must match");
       result = *found;
     };
     bool grow;
@@ -317,7 +328,7 @@ class ObjectMonitorTable : AllStatic {
        oop obj = om->object_peek();
        st->print("monitor=" PTR_FORMAT ", ", p2i(om));
        st->print("object=" PTR_FORMAT, p2i(obj));
-       assert(obj->mark().hash() == om->hash(), "hash must match");
+       assert(objhash(obj) == (uintx)om->hash(), "hash must match");
        st->cr();
        return true;
     };
@@ -406,7 +417,7 @@ ObjectMonitor* LightweightSynchronizer::add_monitor(JavaThread* current, ObjectM
   assert(UseObjectMonitorTable, "must be");
   assert(obj == monitor->object(), "must be");
 
-  intptr_t hash = obj->mark().hash();
+  intptr_t hash = objhash(obj);
   assert(hash != 0, "must be set when claiming the object monitor");
   monitor->set_hash(hash);
 
@@ -1216,4 +1227,22 @@ bool LightweightSynchronizer::quick_enter(oop obj, BasicLock* lock, JavaThread* 
 
   // Slow-path.
   return false;
+}
+
+uint32_t LightweightSynchronizer::get_hash(markWord mark, oop obj, Klass* klass) {
+  assert(UseCompactObjectHeaders, "Only with compact i-hash");
+  //assert(mark.is_neutral() | mark.is_fast_locked(), "only from neutral or fast-locked mark: " INTPTR_FORMAT, mark.value());
+  assert(mark.is_hashed(), "only from hashed or copied object");
+  if (mark.is_hashed_expanded()) {
+    return obj->int_field(klass->hash_offset_in_bytes(obj));
+  } else {
+    assert(mark.is_hashed_not_expanded(), "must be hashed");
+    assert(hashCode == 6 || hashCode == 2, "must have idempotent hashCode");
+    // Already marked as hashed, but not yet copied. Recompute hash and return it.
+    return ObjectSynchronizer::get_next_hash(nullptr, obj); // recompute hash
+  }
+}
+
+uint32_t LightweightSynchronizer::get_hash(markWord mark, oop obj) {
+  return get_hash(mark, obj, mark.klass());
 }

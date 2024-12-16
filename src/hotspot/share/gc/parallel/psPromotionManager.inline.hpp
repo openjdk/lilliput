@@ -177,7 +177,8 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
       ? test_mark.klass()
       : o->klass();
 
-  size_t new_obj_size = o->size_given_klass(klass);
+  size_t old_obj_size = o->size_given_mark_and_klass(test_mark, klass);
+  size_t new_obj_size = o->copy_size(old_obj_size, test_mark);
 
   // Find the objects age, MT safe.
   uint age = (test_mark.has_displaced_mark_helper() /* o->has_displaced_mark() */) ?
