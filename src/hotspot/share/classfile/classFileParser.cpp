@@ -4886,6 +4886,14 @@ jint ClassFileParser::layout_size() const {
   return _field_info->_instance_size;
 }
 
+int ClassFileParser::hash_offset() const {
+  return _field_info->_hash_offset;
+}
+
+int ClassFileParser::static_hash_offset() const {
+  return _field_info->_static_hash_offset;
+}
+
 static void check_methods_for_intrinsics(const InstanceKlass* ik,
                                          const Array<Method*>* methods) {
   assert(ik != nullptr, "invariant");

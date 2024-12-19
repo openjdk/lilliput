@@ -120,6 +120,8 @@ public:
 
   // Iteration
   void object_iterate(ObjectClosure* blk);
+  template<class CL>
+  void object_iterate_sized(CL* blk);
 
   // Addresses for inlined allocation
   HeapWord** top_addr() { return &_top; }

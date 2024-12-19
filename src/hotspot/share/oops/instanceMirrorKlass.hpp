@@ -66,6 +66,8 @@ class InstanceMirrorKlass: public InstanceKlass {
 
   // Returns the size of the instance including the extra static fields.
   virtual size_t oop_size(oop obj) const;
+  int hash_offset_in_bytes(oop obj) const;
+  int hash_offset(Klass* klass) const;
 
   // Static field offset is an offset into the Heap, should be converted by
   // based on UseCompressedOop for traversal
@@ -86,10 +88,10 @@ class InstanceMirrorKlass: public InstanceKlass {
   int compute_static_oop_field_count(oop obj);
 
   // Given a Klass return the size of the instance
-  size_t instance_size(Klass* k);
+  size_t instance_size(Klass* k) const ;
 
   // allocation
-  instanceOop allocate_instance(Klass* k, TRAPS);
+  instanceOop allocate_instance(Klass* k, bool extend, TRAPS);
 
   static void serialize_offsets(class SerializeClosure* f) NOT_CDS_RETURN;
 

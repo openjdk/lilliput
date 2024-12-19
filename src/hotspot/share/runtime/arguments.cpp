@@ -3690,6 +3690,9 @@ void Arguments::set_compact_headers_flags() {
   if (UseCompactObjectHeaders && !UseCompressedClassPointers) {
     FLAG_SET_DEFAULT(UseCompressedClassPointers, true);
   }
+  if (UseCompactObjectHeaders && FLAG_IS_DEFAULT(hashCode)) {
+    hashCode = 6;
+  }
 #endif
 }
 
@@ -3810,6 +3813,12 @@ jint Arguments::apply_ergo() {
       LogConfiguration::configure_stdout(LogLevel::Info, true, LOG_TAGS(valuebasedclasses));
     }
   }
+
+  if (UseObjectMonitorTable && LockingMode != LM_LIGHTWEIGHT) {
+    // ObjectMonitorTable requires lightweight locking.
+    FLAG_SET_DEFAULT(LockingMode, LM_LIGHTWEIGHT);
+  }
+
   return JNI_OK;
 }
 

@@ -97,10 +97,13 @@ void ContiguousSpace::verify() const {
 
 void ContiguousSpace::object_iterate(ObjectClosure* blk) {
   HeapWord* addr = bottom();
+  oop last = nullptr;
   while (addr < top()) {
     oop obj = cast_to_oop(addr);
     blk->do_object(obj);
+    assert(!UseCompactObjectHeaders || obj->mark().narrow_klass() != 0, "null narrow klass, mark: " INTPTR_FORMAT ", last mark: " INTPTR_FORMAT, obj->mark().value(), last->mark().value());
     addr += obj->size();
+    last = obj;
   }
 }
 
