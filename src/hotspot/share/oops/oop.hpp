@@ -72,6 +72,7 @@ class oopDesc {
   inline markWord  mark()          const;
   inline markWord  mark_acquire()  const;
   inline markWord* mark_addr() const;
+  inline markWord forward_safe_mark() const;
 
   inline void set_mark(markWord m);
   static inline void set_mark(HeapWord* mem, markWord m);
@@ -116,9 +117,22 @@ class oopDesc {
   // Returns the actual oop size of the object in machine words
   inline size_t size();
 
+  // Returns the size that a copy of this object requires, in machine words.
+  // It can be 1 word larger than its current size to accomodate
+  // an additional 4-byte-field for the identity hash-code.
+  //
+  // size: the current size of this object, we're passing this here for performance
+  //       reasons, because all callers compute this anyway, and we want to avoid
+  //       recomputing it.
+  // mark: the mark-word of this object. Some callers (e.g. G1ParScanThreadState::do_copy_to_survivor_space())
+  //       need to use a known markWord because of racing GC threads that can change
+  //       the markWord at any time.
+  inline size_t copy_size(size_t size, markWord mark) const;
+
   // Sometimes (for complicated concurrency-related reasons), it is useful
   // to be able to figure out the size of an object knowing its klass.
-  inline size_t size_given_klass(Klass* klass);
+  inline size_t base_size_given_klass(const Klass* klass);
+  inline size_t size_given_mark_and_klass(markWord mrk, const Klass* kls);
 
   // type test operations (inlined in oop.inline.hpp)
   inline bool is_instance()    const;
@@ -272,7 +286,7 @@ class oopDesc {
   inline bool is_forwarded() const;
   inline bool is_self_forwarded() const;
 
-  inline void forward_to(oop p);
+  inline void forward_to(oop p, bool expanded = false);
   inline void forward_to_self();
 
   // Like "forward_to", but inserts the forwarding pointer atomically.
@@ -311,10 +325,21 @@ class oopDesc {
 
   inline static bool is_instanceof_or_null(oop obj, Klass* klass);
 
+private:
+  inline intptr_t hash_from_field() const;
+  size_t hash_offset_in_bytes() const;
+
+public:
   // identity hash; returns the identity hash key (computes it if necessary)
   inline intptr_t identity_hash();
   intptr_t slow_identity_hash();
   inline bool fast_no_hash_check();
+
+  // Initialize identity hash code in hash word of object copy from original object.
+  // Returns true if the object has been expanded, false otherwise.
+  inline bool initialize_hash_if_necessary(oop obj);
+  // For CDS only.
+  void initialize_hash_if_necessary(oop obj, Klass* k, markWord m);
 
   // marks are forwarded to stack when object is locked
   inline bool     has_displaced_mark() const;

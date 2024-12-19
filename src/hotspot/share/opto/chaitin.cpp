@@ -281,6 +281,7 @@ PhaseChaitin::PhaseChaitin(uint unique, PhaseCFG &cfg, Matcher &matcher, bool sc
 void PhaseChaitin::Union( const Node *src_n, const Node *dst_n ) {
   uint src = _lrg_map.find(src_n);
   uint dst = _lrg_map.find(dst_n);
+  //if (!src) { src_n->dump(); dst_n->dump();}
   assert(src, "");
   assert(dst, "");
   assert(src < _lrg_map.max_lrg_id(), "oob");
