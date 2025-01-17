@@ -60,19 +60,39 @@ markWord* oopDesc::mark_addr() const {
 }
 
 void oopDesc::set_mark(markWord m) {
+  if (UseCompactObjectHeaders) {
+    Atomic::store(reinterpret_cast<uint32_t volatile*>(&_mark), m.value32());
+  } else {
+    Atomic::store(&_mark, m);
+  }
+}
+
+void oopDesc::set_mark_full(markWord m) {
   Atomic::store(&_mark, m);
 }
 
 void oopDesc::set_mark(HeapWord* mem, markWord m) {
-  *(markWord*)(((char*)mem) + mark_offset_in_bytes()) = m;
+  if (UseCompactObjectHeaders) {
+    *(uint32_t*)(((char*)mem) + mark_offset_in_bytes()) = m.value32();
+  } else {
+    *(markWord*)(((char*)mem) + mark_offset_in_bytes()) = m;
+  }
 }
 
 void oopDesc::release_set_mark(HeapWord* mem, markWord m) {
-  Atomic::release_store((markWord*)(((char*)mem) + mark_offset_in_bytes()), m);
+  if (UseCompactObjectHeaders) {
+    Atomic::release_store((uint32_t*)(((char*)mem) + mark_offset_in_bytes()), m.value32());
+  } else {
+    Atomic::release_store((markWord*)(((char*)mem) + mark_offset_in_bytes()), m);
+  }
 }
 
 void oopDesc::release_set_mark(markWord m) {
-  Atomic::release_store(&_mark, m);
+  if (UseCompactObjectHeaders) {
+    Atomic::release_store(reinterpret_cast<uint32_t volatile*>(&_mark), m.value32());
+  } else {
+    Atomic::release_store(&_mark, m);
+  }
 }
 
 markWord oopDesc::cas_set_mark(markWord new_mark, markWord old_mark) {
@@ -179,7 +199,7 @@ bool oopDesc::is_a(Klass* k) const {
 }
 
 size_t oopDesc::size_given_mark_and_klass(markWord mrk, const Klass* kls) {
-  size_t sz = base_size_given_klass(kls);
+  size_t sz = base_size_given_klass(mrk, kls);
   if (UseCompactObjectHeaders) {
     assert(!mrk.has_displaced_mark_helper(), "must not be displaced");
     if (mrk.is_expanded() && kls->expand_for_hash(cast_to_oop(this))) {
@@ -220,7 +240,7 @@ size_t oopDesc::size()  {
   return size_given_mark_and_klass(mark(), klass());
 }
 
-size_t oopDesc::base_size_given_klass(const Klass* klass)  {
+size_t oopDesc::base_size_given_klass(markWord mrk, const Klass* klass)  {
   int lh = klass->layout_helper();
   size_t s;
 
@@ -239,7 +259,7 @@ size_t oopDesc::base_size_given_klass(const Klass* klass)  {
     if (!Klass::layout_helper_needs_slow_path(lh)) {
       s = lh >> LogHeapWordSize;  // deliver size scaled by wordSize
     } else {
-      s = klass->oop_size(this);
+      s = klass->oop_size(this, mrk);
     }
   } else if (lh <= Klass::_lh_neutral_value) {
     // The most common case is instances; fall through if so.
@@ -248,7 +268,12 @@ size_t oopDesc::base_size_given_klass(const Klass* klass)  {
       // length of the array, shift (multiply) it appropriately,
       // up to wordSize, add the header, and align to object size.
       size_t size_in_bytes;
-      size_t array_length = (size_t) ((arrayOop)this)->length();
+      size_t array_length;
+      if (UseCompactObjectHeaders) {
+        array_length = (size_t) mrk.array_length();
+      } else {
+        array_length = (size_t)((arrayOop)this)->length();
+      }
       size_in_bytes = array_length << Klass::layout_helper_log2_element_size(lh);
       size_in_bytes += Klass::layout_helper_header_size(lh);
 
@@ -256,11 +281,15 @@ size_t oopDesc::base_size_given_klass(const Klass* klass)  {
       // in units of bytes and doing it this way we can round up just once,
       // skipping the intermediate round to HeapWordSize.
       s = align_up(size_in_bytes, MinObjAlignmentInBytes) / HeapWordSize;
-
-      assert(s == klass->oop_size(this), "wrong array object size");
+      if (s != klass->oop_size(this, mrk)) {
+        tty->print_cr("length: " SIZE_FORMAT, array_length);
+        tty->print_cr("log element size: %d", Klass::layout_helper_log2_element_size(lh));
+        tty->print_cr("is_objArray: %s", BOOL_TO_STR(klass->is_objArray_klass()));
+      }
+      assert(s == klass->oop_size(this, mrk), "wrong array object size, s: " SIZE_FORMAT ", oop_size: " SIZE_FORMAT, s, klass->oop_size(this, mrk));
     } else {
       // Must be zero, so bite the bullet and take the virtual call.
-      s = klass->oop_size(this);
+      s = klass->oop_size(this, mrk);
     }
   }
 
@@ -344,7 +373,7 @@ void oopDesc::forward_to(oop p) {
          "must not be used for self-forwarding, use forward_to_self() instead");
   markWord m = markWord::encode_pointer_as_mark(p);
   assert(m.decode_pointer() == p, "encoding must be reversible");
-  set_mark(m);
+  set_mark_full(m);
 }
 
 void oopDesc::forward_to_self() {
@@ -514,6 +543,7 @@ inline void oopDesc::initialize_hash_if_necessary(oop obj) {
   }
   markWord m = mark();
   assert(!m.has_displaced_mark_helper(), "must not be displaced header");
+  assert(!m.is_forwarded(), "must not be forwarded header");
   if (m.is_hashed_not_expanded()) {
     initialize_hash_if_necessary(obj, m.klass(), m);
   }

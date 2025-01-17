@@ -179,4 +179,9 @@ inline bool Klass::needs_narrow_id() const {
   // Note: don't call this function before access flags are initialized.
   return !is_abstract() && !is_interface();
 }
+
+inline size_t Klass::oop_size(oop obj) const {
+  return oop_size(obj, obj->mark());
+}
+
 #endif // SHARE_OOPS_KLASS_INLINE_HPP
