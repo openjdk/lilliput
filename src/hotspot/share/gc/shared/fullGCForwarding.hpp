@@ -118,26 +118,26 @@ class Mutex;
  */
 class FullGCForwarding : public AllStatic {
 private:
-  static const int AVAILABLE_LOW_BITS       = 11;
-  static const int AVAILABLE_BITS_MASK      = right_n_bits(AVAILABLE_LOW_BITS);
+  static constexpr int AVAILABLE_LOW_BITS       = 11;
+  static constexpr int AVAILABLE_BITS_MASK      = right_n_bits(AVAILABLE_LOW_BITS);
   // The offset bits start after the lock-bits, which are currently used by Serial GC
   // for marking objects. Could be 1 for Serial GC when being clever with the bits,
   // and 0 for all other GCs.
-  static const int OFFSET_BITS_SHIFT = markWord::lock_shift + markWord::lock_bits;
+  static constexpr int OFFSET_BITS_SHIFT = markWord::lock_shift + markWord::lock_bits;
 
   // How many bits we use for the offset
-  static const int NUM_OFFSET_BITS = AVAILABLE_LOW_BITS - OFFSET_BITS_SHIFT;
-  static const size_t BLOCK_SIZE_WORDS = 1 << NUM_OFFSET_BITS;
-  static const int BLOCK_SIZE_BYTES_SHIFT = NUM_OFFSET_BITS + LogHeapWordSize;
-  static const size_t MAX_OFFSET = BLOCK_SIZE_WORDS - 2;
-  static const uintptr_t OFFSET_MASK = right_n_bits(NUM_OFFSET_BITS) << OFFSET_BITS_SHIFT;
+  static constexpr int NUM_OFFSET_BITS = AVAILABLE_LOW_BITS - OFFSET_BITS_SHIFT;
+  static constexpr size_t BLOCK_SIZE_WORDS = 1 << NUM_OFFSET_BITS;
+  static constexpr int BLOCK_SIZE_BYTES_SHIFT = NUM_OFFSET_BITS + LogHeapWordSize;
+  static constexpr size_t MAX_OFFSET = BLOCK_SIZE_WORDS - 2;
+  static constexpr uintptr_t OFFSET_MASK = right_n_bits(NUM_OFFSET_BITS) << OFFSET_BITS_SHIFT;
 
   // This offset bit-pattern indicates that the actual mapping is handled by the
   // fallback-table. This also implies that this cannot be used as a valid offset,
   // and we must also use the fallback-table for mappings to the last word of a
   // block.
-  static const uintptr_t FALLBACK_PATTERN = right_n_bits(NUM_OFFSET_BITS);
-  static const uintptr_t FALLBACK_PATTERN_IN_PLACE = FALLBACK_PATTERN << OFFSET_BITS_SHIFT;
+  static constexpr uintptr_t FALLBACK_PATTERN = right_n_bits(NUM_OFFSET_BITS);
+  static constexpr uintptr_t FALLBACK_PATTERN_IN_PLACE = FALLBACK_PATTERN << OFFSET_BITS_SHIFT;
 
   // Indicates an unused base address in the target base table.
   static HeapWord* const UNUSED_BASE;
