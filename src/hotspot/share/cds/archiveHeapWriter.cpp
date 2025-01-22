@@ -421,7 +421,9 @@ void update_buffered_object_field(address buffered_obj, int field_offset, T valu
 
 size_t ArchiveHeapWriter::copy_one_source_obj_to_buffer(oop src_obj) {
   assert(!is_too_large_to_archive(src_obj), "already checked");
-  size_t byte_size = src_obj->size() * HeapWordSize;
+  size_t old_size = src_obj->size();
+  size_t new_size = src_obj->copy_size_cds(old_size, src_obj->mark());
+  size_t byte_size = new_size * HeapWordSize;
   assert(byte_size > 0, "no zero-size objects");
 
   // For region-based collectors such as G1, the archive heap may be mapped into
@@ -442,7 +444,7 @@ size_t ArchiveHeapWriter::copy_one_source_obj_to_buffer(oop src_obj) {
   address to = offset_to_buffered_address<address>(_buffer_used);
   assert(is_object_aligned(_buffer_used), "sanity");
   assert(is_object_aligned(byte_size), "sanity");
-  memcpy(to, from, byte_size);
+  memcpy(to, from, old_size * HeapWordSize);
 
   // These native pointers will be restored explicitly at run time.
   if (java_lang_Module::is_instance(src_obj)) {
@@ -578,6 +580,7 @@ void ArchiveHeapWriter::update_header_for_requested_obj(oop requested_obj, oop s
   oop fake_oop = cast_to_oop(buffered_addr);
   if (UseCompactObjectHeaders) {
     fake_oop->set_mark(markWord::prototype().set_narrow_klass(nk));
+    assert(fake_oop->mark().narrow_klass() != 0, "must not be null");
   } else {
     fake_oop->set_narrow_klass(nk);
   }
@@ -590,14 +593,19 @@ void ArchiveHeapWriter::update_header_for_requested_obj(oop requested_obj, oop s
   if (!src_obj->fast_no_hash_check()) {
     intptr_t src_hash = src_obj->identity_hash();
     if (UseCompactObjectHeaders) {
-      fake_oop->set_mark(markWord::prototype().set_narrow_klass(nk).copy_set_hash(src_hash));
+      markWord m = markWord::prototype().set_narrow_klass(nk);
+      m = m.copy_hashctrl_from(src_obj->mark());
+      fake_oop->set_mark(m);
+      if (m.is_hashed_not_expanded()) {
+        fake_oop->initialize_hash_if_necessary(src_obj, src_klass, m);
+      }
+      assert(!fake_oop->mark().is_not_hashed_expanded() && !fake_oop->mark().is_hashed_not_expanded(), "must not be not-hashed-moved and not be hashed-not-moved");
     } else {
       fake_oop->set_mark(markWord::prototype().copy_set_hash(src_hash));
+      DEBUG_ONLY(intptr_t archived_hash = fake_oop->identity_hash());
+      assert(src_hash == archived_hash, "Different hash codes: original " INTPTR_FORMAT ", archived " INTPTR_FORMAT, src_hash, archived_hash);
     }
     assert(fake_oop->mark().is_unlocked(), "sanity");
-
-    DEBUG_ONLY(intptr_t archived_hash = fake_oop->identity_hash());
-    assert(src_hash == archived_hash, "Different hash codes: original " INTPTR_FORMAT ", archived " INTPTR_FORMAT, src_hash, archived_hash);
   }
   // Strip age bits.
   fake_oop->set_mark(fake_oop->mark().set_age(0));

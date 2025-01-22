@@ -1303,7 +1303,13 @@ oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, ShenandoahHeapReg
   assert(from_region->is_young(), "Only expect evacuations from young in this mode");
   bool alloc_from_lab = true;
   HeapWord* copy = nullptr;
-  size_t size = ShenandoahForwarding::size(p);
+
+  markWord mark = p->mark();
+  if (ShenandoahForwarding::is_forwarded(mark)) {
+    return ShenandoahForwarding::get_forwardee(p);
+  }
+  size_t old_size = ShenandoahForwarding::size(p);
+  size_t size = p->copy_size(old_size, mark);
 
 #ifdef ASSERT
   if (ShenandoahOOMDuringEvacALot &&
@@ -1333,13 +1339,14 @@ oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, ShenandoahHeapReg
   }
 
   // Copy the object:
-  Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(p), copy, size);
+  Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(p), copy, old_size);
 
   // Try to install the new forwarding pointer.
   oop copy_val = cast_to_oop(copy);
   oop result = ShenandoahForwarding::try_update_forwardee(p, copy_val);
   if (result == copy_val) {
     // Successfully evacuated. Our copy is now the public one!
+    copy_val->initialize_hash_if_necessary(p);
     ContinuationGCSupport::relativize_stack_chunk(copy_val);
     shenandoah_assert_correct(nullptr, copy_val);
     return copy_val;
