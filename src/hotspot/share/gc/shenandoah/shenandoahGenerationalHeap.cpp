@@ -240,7 +240,14 @@ oop ShenandoahGenerationalHeap::try_evacuate_object(oop p, Thread* thread, Shena
   bool alloc_from_lab = true;
   bool has_plab = false;
   HeapWord* copy = nullptr;
-  size_t size = ShenandoahForwarding::size(p);
+
+  markWord mark = p->mark();
+  if (ShenandoahForwarding::is_forwarded(mark)) {
+    return ShenandoahForwarding::get_forwardee(p);
+  }
+  size_t old_size = ShenandoahForwarding::size(p);
+  size_t size = p->copy_size(old_size, mark);
+
   bool is_promotion = (target_gen == OLD_GENERATION) && from_region->is_young();
 
 #ifdef ASSERT
@@ -332,7 +339,7 @@ oop ShenandoahGenerationalHeap::try_evacuate_object(oop p, Thread* thread, Shena
 
   // Copy the object:
   NOT_PRODUCT(evac_tracker()->begin_evacuation(thread, size * HeapWordSize));
-  Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(p), copy, size);
+  Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(p), copy, old_size);
   oop copy_val = cast_to_oop(copy);
 
   // Update the age of the evacuated object
@@ -350,6 +357,7 @@ oop ShenandoahGenerationalHeap::try_evacuate_object(oop p, Thread* thread, Shena
     // Secondarily, we do not want to spend cycles relativizing stack chunks for oops
     // that lost the evacuation race (and will therefore not become visible). It is
     // safe to do this on the public copy (this is also done during concurrent mark).
+    copy_val->initialize_hash_if_necessary(p);
     ContinuationGCSupport::relativize_stack_chunk(copy_val);
 
     // Record that the evacuation succeeded
