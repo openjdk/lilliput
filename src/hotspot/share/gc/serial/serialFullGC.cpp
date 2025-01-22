@@ -190,7 +190,8 @@ class Compacter {
     _spaces[index]._first_dead = first_dead;
   }
 
-  HeapWord* alloc(size_t words) {
+  HeapWord* alloc(size_t old_size, size_t new_size, HeapWord* old_obj) {
+    size_t words = (old_obj == _spaces[_index]._compaction_top) ? old_size : new_size;
     while (true) {
       if (words <= pointer_delta(_spaces[_index]._space->end(),
                                  _spaces[_index]._compaction_top)) {
@@ -206,6 +207,7 @@ class Compacter {
       // out-of-memory in this space
       _index++;
       assert(_index < max_num_spaces - 1, "the last space should not be used");
+      words = (old_obj == _spaces[_index]._compaction_top) ? old_size : new_size;
     }
   }
 
@@ -257,12 +259,16 @@ class Compacter {
     oop obj = cast_to_oop(addr);
     oop new_obj = FullGCForwarding::forwardee(obj);
     HeapWord* new_addr = cast_from_oop<HeapWord*>(new_obj);
-    assert(addr != new_addr, "inv");
-    prefetch_write_copy(new_addr);
 
     size_t obj_size = obj->size();
-    Copy::aligned_conjoint_words(addr, new_addr, obj_size);
+    if (addr != new_addr) {
+      prefetch_write_copy(new_addr);
+      Copy::aligned_conjoint_words(addr, new_addr, obj_size);
+    }
     new_obj->init_mark();
+    if (addr != new_addr) {
+      new_obj->initialize_hash_if_necessary(obj);
+    }
 
     return obj_size;
   }
@@ -298,16 +304,19 @@ public:
       while (cur_addr < top) {
         oop obj = cast_to_oop(cur_addr);
         size_t obj_size = obj->size();
+        size_t new_size = obj->copy_size(obj_size, obj->mark());
         if (obj->is_gc_marked()) {
-          HeapWord* new_addr = alloc(obj_size);
+          HeapWord* new_addr = alloc(obj_size, new_size, cur_addr);
           forward_obj(obj, new_addr);
+          assert(obj->size() == obj_size, "size must not change after forwarding");
           cur_addr += obj_size;
         } else {
           // Skipping the current known-unmarked obj
           HeapWord* next_live_addr = find_next_live_addr(cur_addr + obj_size, top);
           if (dead_spacer.insert_deadspace(cur_addr, next_live_addr)) {
             // Register space for the filler obj
-            alloc(pointer_delta(next_live_addr, cur_addr));
+            size_t size = pointer_delta(next_live_addr, cur_addr);
+            alloc(size, size, cur_addr);
           } else {
             if (!record_first_dead_done) {
               record_first_dead(i, cur_addr);
@@ -593,7 +602,7 @@ void SerialFullGC::mark_object(oop obj) {
   // some marks may contain information we need to preserve so we store them away
   // and overwrite the mark.  We'll restore it at the end of serial full GC.
   markWord mark = obj->mark();
-  obj->set_mark(obj->prototype_mark().set_marked());
+  obj->set_mark(mark.set_marked());
 
   ContinuationGCSupport::transform_stack_chunk(obj);
 
