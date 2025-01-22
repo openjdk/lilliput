@@ -75,6 +75,11 @@ class LightweightSynchronizer : AllStatic {
   static bool contains_monitor(Thread* current, ObjectMonitor* monitor);
 
   static bool quick_enter(oop obj, BasicLock* Lock, JavaThread* current);
+
+  // NOTE: May not cause monitor inflation
+  static uint32_t get_hash(markWord mark, oop obj);
+  // For CDS path.
+  static uint32_t get_hash(markWord mark, oop obj, Klass* klass);
 };
 
 #endif // SHARE_RUNTIME_LIGHTWEIGHTSYNCHRONIZER_HPP
