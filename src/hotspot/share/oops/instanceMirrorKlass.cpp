@@ -88,7 +88,7 @@ int InstanceMirrorKlass::hash_offset_in_bytes(oop obj) const {
   // the static fields block.
   // When implementing any change here, make sure that allocate_instance()
   // and corresponding code in InstanceMirrorKlass.java are in sync.
-  return obj->base_size_given_klass(obj->mark(), this) * BytesPerWord;
+  return checked_cast<int>(obj->base_size_given_klass(obj->mark(), this) * BytesPerWord);
 }
 
 #if INCLUDE_CDS
