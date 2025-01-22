@@ -297,6 +297,10 @@ inline void ZPage::inc_live(uint32_t objects, size_t bytes) {
   _livemap.inc_live(objects, bytes);
 }
 
+inline void ZPage::inc_will_expand(uint32_t objects) {
+  _livemap.inc_will_expand(objects);
+}
+
 #define assert_zpage_mark_state()                                                  \
   do {                                                                             \
     assert(is_marked(), "Should be marked");                                       \

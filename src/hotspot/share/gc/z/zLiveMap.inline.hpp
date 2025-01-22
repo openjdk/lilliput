@@ -50,6 +50,10 @@ inline size_t ZLiveMap::live_bytes() const {
   return _live_bytes.load_relaxed();
 }
 
+inline uint32_t ZLiveMap::will_expand_objects() const {
+  return _will_expand_objects.load_relaxed();
+}
+
 inline const BitMapView ZLiveMap::segment_live_bits() const {
   return BitMapView(const_cast<BitMap::bm_word_t*>(&_segment_live_bits), NumSegments);
 }
@@ -117,6 +121,10 @@ inline bool ZLiveMap::set(ZGenerationId id, BitMap::idx_t index, bool finalizabl
 inline void ZLiveMap::inc_live(uint32_t objects, size_t bytes) {
   _live_objects.add_then_fetch(objects);
   _live_bytes.add_then_fetch(bytes);
+}
+
+inline void ZLiveMap::inc_will_expand(uint32_t objects) {
+  _will_expand_objects.add_then_fetch(objects);
 }
 
 inline BitMap::idx_t ZLiveMap::segment_start(BitMap::idx_t segment) const {

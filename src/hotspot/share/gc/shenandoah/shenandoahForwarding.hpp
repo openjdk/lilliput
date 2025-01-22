@@ -30,6 +30,9 @@
 #include "utilities/globalDefinitions.hpp"
 
 class ShenandoahForwarding {
+private:
+  static const uintptr_t FWDED_HASH_TRANSITION = 0b111;
+
 public:
   /* Gets forwardee from the given object. For a self-forwarded object
    * (evacuation failure), returns the object itself.

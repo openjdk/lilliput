@@ -21,6 +21,7 @@
  * questions.
  */
 
+#include "gc/shared/gc_globals.hpp"
 #include "gc/shared/gcLogPrecious.hpp"
 #include "gc/z/zAddress.inline.hpp"
 #include "gc/z/zCollectedHeap.hpp"
@@ -372,6 +373,7 @@ void ZForwarding::verify() const {
 
   uint32_t live_objects = 0;
   size_t live_bytes = 0;
+  uint32_t no_move_expand_count = 0;
 
   for (ZForwardingCursor i = 0; i < _entries.length(); i++) {
     const ZForwardingEntry entry = at(&i);
@@ -395,13 +397,29 @@ void ZForwarding::verify() const {
       guarantee(entry.to_offset() != other.to_offset(), "Duplicate to");
     }
 
+    // Read size from the TO object — always safe after relocation.
     const zaddress to_addr = ZOffset::address(to_zoffset(entry.to_offset()));
     const size_t size = ZUtils::object_size(to_addr);
     const size_t aligned_size = align_up(size, _page->object_alignment());
     live_bytes += aligned_size;
     live_objects++;
+
+    // Detect non-moving in-place objects (from_offset == to_offset): they are counted in
+    // will_expand_objects if they had is_hashed_not_expanded() at mark time, but they did not
+    // actually expand during relocation (size = old_size). Track these so verify_live() can
+    // subtract them from the expected live_bytes adjustment.
+    if (_in_place && UseCompactObjectHeaders) {
+      const zoffset from_offset = start() + (entry.from_index() << object_alignment_shift());
+      if (to_zoffset(entry.to_offset()) == from_offset) {
+        const oop to_obj = to_oop(to_addr);
+        if (to_obj->mark().is_hashed_not_expanded() && to_obj->klass()->expand_for_hash(to_obj)) {
+          no_move_expand_count++;
+        }
+      }
+    }
   }
 
-  // Verify number of live objects and bytes
-  _page->verify_live(live_objects, live_bytes, _in_place);
+  // Verify number of live objects and bytes. live_bytes is computed from TO-space sizes;
+  // verify_live() adjusts for compact hash expansion using the will_expand and no_move counts.
+  _page->verify_live(live_objects, live_bytes, no_move_expand_count, _in_place);
 }
