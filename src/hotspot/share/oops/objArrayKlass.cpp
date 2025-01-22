@@ -147,7 +147,7 @@ size_t ObjArrayKlass::oop_size(oop obj, markWord mark) const {
   // because size_given_klass() calls oop_size() on objects that might be
   // concurrently forwarded, which would overwrite the Klass*.
   assert(UseCompactObjectHeaders || obj->is_objArray(), "must be object array");
-  int length = UseCompactObjectHeaders ? mark.array_length() : objArrayOop(obj)->length();
+  int length = LP64_ONLY(UseCompactObjectHeaders ? mark.array_length() :) objArrayOop(obj)->length();
   return objArrayOop(obj)->object_size(length);
 }
 

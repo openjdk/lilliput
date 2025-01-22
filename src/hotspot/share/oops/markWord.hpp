@@ -365,7 +365,9 @@ class markWord {
   inline narrowKlass narrow_klass() const;
   inline markWord set_narrow_klass(narrowKlass narrow_klass) const;
 
+#ifdef _LP64
   inline int array_length() { return checked_cast<int>(value() >> 32); }
+#endif
 
   // Prototype mark for initialization
   static markWord prototype() {

@@ -174,7 +174,7 @@ size_t TypeArrayKlass::oop_size(oop obj, markWord mark) const {
   // In this assert, we cannot safely access the Klass* with compact headers.
   assert(UseCompactObjectHeaders || obj->is_typeArray(),"must be a type array");
   typeArrayOop t = typeArrayOop(obj);
-  int length = UseCompactObjectHeaders ? mark.array_length() : t->length();
+  int length = LP64_ONLY(UseCompactObjectHeaders ? mark.array_length() :) t->length();
   return t->object_size(this, length);
 }
 
