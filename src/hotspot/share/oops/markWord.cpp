@@ -29,9 +29,9 @@
 #include "utilities/ostream.hpp"
 
 #ifdef _LP64
-STATIC_ASSERT(markWord::klass_shift + markWord::klass_bits == 64);
+STATIC_ASSERT(markWord::klass_shift + markWord::klass_bits == 32);
 // The hash (preceding klass bits) shall be a direct neighbor but not interleave
-STATIC_ASSERT(markWord::klass_shift == markWord::hash_bits + markWord::hash_shift);
+STATIC_ASSERT(markWord::klass_shift == markWord::hashctrl_bits + markWord::hashctrl_shift);
 #endif
 
 markWord markWord::displaced_mark_helper() const {
