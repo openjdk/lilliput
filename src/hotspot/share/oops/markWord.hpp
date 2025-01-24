@@ -118,6 +118,7 @@ class markWord {
 
   // Conversion
   uintptr_t value() const { return _value; }
+  uint32_t value32() const { return (uint32_t)_value; }
 
   // Constants
   static const int age_bits                       = 4;
@@ -152,10 +153,8 @@ class markWord {
   // We store the (narrow) Klass* in the bits 43 to 64.
 
   // These are for bit-precise extraction of the narrow Klass* from the 64-bit Markword
-  static constexpr int klass_offset_in_bytes      = 4;
-  static constexpr int klass_shift                = hash_shift + hash_bits;
-  static constexpr int klass_shift_at_offset      = klass_shift - klass_offset_in_bytes * BitsPerByte;
-  static constexpr int klass_bits                 = 22;
+  static constexpr int klass_shift                = hashctrl_shift + hashctrl_bits;
+  static constexpr int klass_bits                 = 19;
   static constexpr uintptr_t klass_mask           = right_n_bits(klass_bits);
   static constexpr uintptr_t klass_mask_in_place  = klass_mask << klass_shift;
 #endif
@@ -374,6 +373,10 @@ class markWord {
   inline Klass* klass_without_asserts() const;
   inline narrowKlass narrow_klass() const;
   inline markWord set_narrow_klass(narrowKlass narrow_klass) const;
+
+#ifdef _LP64
+  inline int array_length() { return checked_cast<int>(value() >> 32); }
+#endif
 
   // Prototype mark for initialization
   static markWord prototype() {
