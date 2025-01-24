@@ -942,7 +942,7 @@ void Parse::catch_inline_exceptions(SafePointNode* ex_map) {
   // Get the exception oop klass from its header
   Node* ex_klass_node = nullptr;
   if (has_exception_handler() && !ex_type->klass_is_exact()) {
-    Node* p = basic_plus_adr( ex_node, ex_node, oopDesc::klass_offset_in_bytes());
+    Node* p = basic_plus_adr( ex_node, ex_node, Type::klass_offset());
     ex_klass_node = _gvn.transform(LoadKlassNode::make(_gvn, nullptr, immutable_memory(), p, TypeInstPtr::KLASS, TypeInstKlassPtr::OBJECT));
 
     // Compute the exception klass a little more cleverly.
@@ -960,7 +960,7 @@ void Parse::catch_inline_exceptions(SafePointNode* ex_map) {
           ex_klass_node->init_req(i, top());
           continue;
         }
-        Node* p = basic_plus_adr(ex_in, ex_in, oopDesc::klass_offset_in_bytes());
+        Node* p = basic_plus_adr(ex_in, ex_in, Type::klass_offset());
         Node* k = _gvn.transform( LoadKlassNode::make(_gvn, nullptr, immutable_memory(), p, TypeInstPtr::KLASS, TypeInstKlassPtr::OBJECT));
         ex_klass_node->init_req( i, k );
       }

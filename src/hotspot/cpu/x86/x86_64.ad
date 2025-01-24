@@ -4370,11 +4370,16 @@ instruct loadNKlassCompactHeaders(rRegN dst, memory mem, rFlagsReg cr)
   ins_cost(125); // XXX
   format %{
     "movl    $dst, $mem\t# compressed klass ptr, shifted\n\t"
-    "shrl    $dst, markWord::klass_shift_at_offset"
+    "shrl    $dst, markWord::klass_shift"
   %}
   ins_encode %{
-    __ movl($dst$$Register, $mem$$Address);
-    __ shrl($dst$$Register, markWord::klass_shift_at_offset);
+    // The incoming address is pointing into obj-start + klass_offset_in_bytes. We need to extract
+    // obj-start, so that we can load from the object's mark-word instead. Usually the address
+    // comes as obj-start in obj and klass_offset_in_bytes in disp.
+    Register d = $dst$$Register;
+    Address  s = $mem$$Address;
+    __ movl(d, s.plus_disp(-Type::klass_offset()));
+    __ shrl(d, markWord::klass_shift);
   %}
   ins_pipe(ialu_reg_mem); // XXX
 %}

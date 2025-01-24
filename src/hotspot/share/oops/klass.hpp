@@ -645,7 +645,8 @@ public:
   // These functions describe behavior for the oop not the KLASS.
 
   // actual oop size of obj in memory in word size.
-  virtual size_t oop_size(oop obj) const = 0;
+  virtual size_t oop_size(oop obj, markWord mark) const = 0;
+  size_t oop_size(oop obj) const;
 
   // Size of klass in word size.
   virtual int size() const = 0;
