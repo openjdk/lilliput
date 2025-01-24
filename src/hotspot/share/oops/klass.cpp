@@ -1332,20 +1332,6 @@ static NumberSeq seq = NumberSeq();
 
 bool Klass::expand_for_hash(oop obj) const {
   assert(UseCompactObjectHeaders, "only with compact i-hash");
-  assert((size_t)hash_offset_in_bytes(obj) <= (obj->base_size_given_klass(obj->mark(), this) * HeapWordSize), "hash offset must be eq or lt base size: hash offset: %d, base size: " SIZE_FORMAT, hash_offset_in_bytes(obj), obj->base_size_given_klass(obj->mark(), this) * HeapWordSize);
-  bool expand = obj->base_size_given_klass(obj->mark(), this) * HeapWordSize - hash_offset_in_bytes(obj) < (int)sizeof(uint32_t);
-#ifndef PRODUCT
-  if (expand) {
-    expanded++;
-  } else {
-    not_expanded++;
-  }
-  if (((expanded + not_expanded) % 100000) == 0) {
-    double ratio = (double) expanded / (double) not_expanded;
-    seq.add(ratio);
-    expanded = not_expanded = 0;
-    log_trace(ihash)("Current ratio expanded/not_expanded: %f, decaying avg ratio: %f", ratio, seq.davg());
-  }
-#endif
-  return expand;
+  assert((size_t)hash_offset_in_bytes(obj) <= (obj->base_size_given_klass(this) * HeapWordSize), "hash offset must be eq or lt base size: hash offset: %d, base size: " SIZE_FORMAT, hash_offset_in_bytes(obj), obj->base_size_given_klass(this) * HeapWordSize);
+  return obj->base_size_given_klass(this) * HeapWordSize - hash_offset_in_bytes(obj) < (int)sizeof(uint32_t);
 }
