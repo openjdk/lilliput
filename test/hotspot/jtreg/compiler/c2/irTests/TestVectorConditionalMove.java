@@ -408,16 +408,11 @@ public class TestVectorConditionalMove {
                   IRNode.VECTOR_MASK_CMP_F, ">0",
                   IRNode.VECTOR_BLEND_F, ">0",
                   IRNode.STORE_VECTOR, ">0"},
-        applyIfOr = {"UseCompactObjectHeaders", "false", "AlignVector", "false"},
         applyIfCPUFeatureOr = {"avx", "true", "asimd", "true"})
     private static void testCMoveFLTforFConstH2(float[] a, float[] b, float[] c) {
         for (int i = 0; i < a.length; i+=2) {
             c[i+0] = (a[i+0] < b[i+0]) ? 0.1f : -0.1f;
             c[i+1] = (a[i+1] < b[i+1]) ? 0.1f : -0.1f;
-            // With AlignVector, we need 8-byte alignment of vector loads/stores.
-            // UseCompactObjectHeaders=false                        UseCompactObjectHeaders=true
-            // adr = base + 16 + 8*i      ->  always                adr = base + 12 + 8*i      ->  never
-            // -> vectorize                                         -> no vectorization
         }
     }
 
@@ -426,16 +421,11 @@ public class TestVectorConditionalMove {
                   IRNode.VECTOR_MASK_CMP_F, ">0",
                   IRNode.VECTOR_BLEND_F, ">0",
                   IRNode.STORE_VECTOR, ">0"},
-        applyIfOr = {"UseCompactObjectHeaders", "false", "AlignVector", "false"},
         applyIfCPUFeatureOr = {"avx", "true", "asimd", "true"})
     private static void testCMoveFLEforFConstH2(float[] a, float[] b, float[] c) {
         for (int i = 0; i < a.length; i+=2) {
             c[i+0] = (a[i+0] <= b[i+0]) ? 0.1f : -0.1f;
             c[i+1] = (a[i+1] <= b[i+1]) ? 0.1f : -0.1f;
-            // With AlignVector, we need 8-byte alignment of vector loads/stores.
-            // UseCompactObjectHeaders=false                        UseCompactObjectHeaders=true
-            // adr = base + 16 + 8*i      ->  always                adr = base + 12 + 8*i      ->  never
-            // -> vectorize                                         -> no vectorization
         }
     }
 
