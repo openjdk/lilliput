@@ -108,7 +108,7 @@ class CompressedKlassPointers : public AllStatic {
 
   // Narrow klass pointer bits for an unshifted narrow Klass pointer.
   static constexpr int narrow_klass_pointer_bits_noncoh = 32;
-  static constexpr int narrow_klass_pointer_bits_coh = 22;
+  static constexpr int narrow_klass_pointer_bits_coh = 19;
 
   // Bit size of a narrowKlass
   static int _narrow_klass_pointer_bits;

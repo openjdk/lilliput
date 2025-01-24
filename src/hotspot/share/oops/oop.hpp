@@ -75,6 +75,7 @@ class oopDesc {
 
   inline void set_mark(markWord m);
   static inline void set_mark(HeapWord* mem, markWord m);
+  inline void set_mark_full(markWord m);
   static inline void release_set_mark(HeapWord* mem, markWord m);
 
   inline void release_set_mark(markWord m);
@@ -140,7 +141,7 @@ class oopDesc {
 
   // Sometimes (for complicated concurrency-related reasons), it is useful
   // to be able to figure out the size of an object knowing its klass.
-  inline size_t base_size_given_klass(const Klass* klass);
+  inline size_t base_size_given_klass(markWord m, const Klass* klass);
   inline size_t size_given_mark_and_klass(markWord mrk, const Klass* kls);
 
   // type test operations (inlined in oop.inline.hpp)
@@ -362,20 +363,16 @@ class oopDesc {
   // for code generation
   static int mark_offset_in_bytes()      { return (int)offset_of(oopDesc, _mark); }
   static int klass_offset_in_bytes()     {
-#ifdef _LP64
-    if (UseCompactObjectHeaders) {
-      // NOTE: The only places where this is used with compact headers are the C2
-      // compiler and JVMCI.
-      return mark_offset_in_bytes() + markWord::klass_offset_in_bytes;
-    } else
-#endif
-    {
-      return (int)offset_of(oopDesc, _metadata._klass);
-    }
+    assert(!UseCompactObjectHeaders, "don't use this with compact headers");
+    return (int)offset_of(oopDesc, _metadata._klass);
   }
   static int klass_gap_offset_in_bytes() {
     assert(has_klass_gap(), "only applicable to compressed klass pointers");
-    return klass_offset_in_bytes() + sizeof(narrowKlass);
+    if (UseCompactObjectHeaders) {
+      return base_offset_in_bytes();
+    } else {
+      return klass_offset_in_bytes() + sizeof(narrowKlass);
+    }
   }
 
   static int base_offset_in_bytes() {

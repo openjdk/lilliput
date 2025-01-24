@@ -54,6 +54,7 @@
 #include "runtime/handles.inline.hpp"
 #include "runtime/perfData.hpp"
 #include "utilities/macros.hpp"
+#include "utilities/numberSeq.hpp"
 #include "utilities/powerOfTwo.hpp"
 #include "utilities/rotate_bits.hpp"
 #include "utilities/stack.inline.hpp"
@@ -1331,8 +1332,12 @@ void Klass::on_secondary_supers_verification_failure(Klass* super, Klass* sub, b
         msg, sub->external_name(), super->external_name(), linear_result, table_result);
 }
 
+static int expanded = 0;
+static int not_expanded = 0;
+static NumberSeq seq = NumberSeq();
+
 bool Klass::expand_for_hash(oop obj) const {
   assert(UseCompactObjectHeaders, "only with compact i-hash");
-  assert((size_t)hash_offset_in_bytes(obj) <= (obj->base_size_given_klass(this) * HeapWordSize), "hash offset must be eq or lt base size: hash offset: %d, base size: %zu", hash_offset_in_bytes(obj), obj->base_size_given_klass(this) * HeapWordSize);
-  return obj->base_size_given_klass(this) * HeapWordSize - hash_offset_in_bytes(obj) < (int)sizeof(uint32_t);
+  assert((size_t)hash_offset_in_bytes(obj) <= (obj->base_size_given_klass(obj->mark(), this) * HeapWordSize), "hash offset must be eq or lt base size: hash offset: %d, base size: %zu", hash_offset_in_bytes(obj), obj->base_size_given_klass(obj->mark(), this) * HeapWordSize);
+  return obj->base_size_given_klass(obj->mark(), this) * HeapWordSize - hash_offset_in_bytes(obj) < (int)sizeof(uint32_t);
 }

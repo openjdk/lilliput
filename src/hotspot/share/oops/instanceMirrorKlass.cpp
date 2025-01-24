@@ -68,7 +68,7 @@ instanceOop InstanceMirrorKlass::allocate_instance(Klass* k, bool extend, TRAPS)
   return obj;
 }
 
-size_t InstanceMirrorKlass::oop_size(oop obj) const {
+size_t InstanceMirrorKlass::oop_size(oop obj, markWord mark) const {
   return java_lang_Class::oop_size(obj);
 }
 
@@ -87,7 +87,7 @@ int InstanceMirrorKlass::hash_offset_in_bytes(oop obj) const {
   // the static fields block.
   // When implementing any change here, make sure that allocate_instance()
   // and corresponding code in InstanceMirrorKlass.java are in sync.
-  return checked_cast<int>(obj->base_size_given_klass(this) * BytesPerWord);
+  return checked_cast<int>(obj->base_size_given_klass(obj->mark(), this) * BytesPerWord);
 }
 
 #if INCLUDE_CDS
