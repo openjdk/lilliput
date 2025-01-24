@@ -412,7 +412,7 @@ void ZForwarding::verify() const {
       const zoffset from_offset = start() + (entry.from_index() << object_alignment_shift());
       if (to_zoffset(entry.to_offset()) == from_offset) {
         const oop to_obj = to_oop(to_addr);
-        if (to_obj->mark().is_hashed_not_expanded() && to_obj->klass()->expand_for_hash(to_obj)) {
+        if (to_obj->mark().is_hashed_not_expanded() && to_obj->klass()->expand_for_hash(to_obj, to_obj->mark())) {
           no_move_expand_count++;
         }
       }

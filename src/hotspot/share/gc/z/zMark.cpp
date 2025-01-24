@@ -426,7 +426,7 @@ void ZMark::mark_and_follow(ZMarkContext* context, ZMarkStackEntry entry) {
     // Track objects that will expand by one HeapWord during relocation due to compact
     // identity hashcode: their FROM size is one word smaller than their TO size.
     if (UseCompactObjectHeaders && obj->mark().is_hashed_not_expanded()
-        && obj->klass()->expand_for_hash(obj)) {
+        && obj->klass()->expand_for_hash(obj, obj->mark())) {
       page->inc_will_expand(1);
     }
   }

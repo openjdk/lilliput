@@ -225,8 +225,16 @@ bool ShenandoahBarrierSetC2::can_remove_load_barrier(Node* root) {
         }
 
         case Op_LoadRange: {
-          // Array length is the same in all copies.
-          break;
+          // Array length is normally the same in all copies, so it can be read
+          // from a from-space copy without a barrier. With +UCOH, however, the
+          // array length lives in the mark word, which is overwritten by the
+          // forwarding pointer during evacuation, so reading it from a from-space
+          // copy would yield garbage. Keep the barrier in that case.
+          // Mirrors Op_LoadNKlass below.
+          if (!UseCompactObjectHeaders) {
+            break;
+          }
+          return false;
         }
 
         case Op_LoadKlass: {
