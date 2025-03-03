@@ -3662,10 +3662,6 @@ void Arguments::set_compact_headers_flags() {
     warning("Compact object headers require compressed class pointers. Disabling compact object headers.");
     FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
   }
-  if (UseCompactObjectHeaders && UseParallelGC) {
-    warning("Parallel GC is currently not compatible with compact object headers (due to identity hash-code). Disabling compact object headers.");
-    FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
-  }
   if (UseCompactObjectHeaders && !UseObjectMonitorTable) {
     // If UseCompactObjectHeaders is on the command line, turn on UseObjectMonitorTable.
     if (FLAG_IS_CMDLINE(UseCompactObjectHeaders)) {
