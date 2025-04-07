@@ -123,7 +123,7 @@ inline size_t ShenandoahForwarding::size(oop obj) {
     size_t size = fwd->base_size_given_klass(fwd_mark, klass);
     if (UseCompactObjectHeaders) {
       if ((mark.value() & FWDED_HASH_TRANSITION) != FWDED_HASH_TRANSITION) {
-        if (fwd_mark.is_expanded() && klass->expand_for_hash(fwd)) {
+        if (fwd_mark.is_expanded() && klass->expand_for_hash(fwd, fwd_mark)) {
           size = align_object_size(size + 1);
         }
       }

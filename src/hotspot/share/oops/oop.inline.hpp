@@ -202,7 +202,7 @@ size_t oopDesc::size_given_mark_and_klass(markWord mrk, const Klass* kls) {
   size_t sz = base_size_given_klass(mrk, kls);
   if (UseCompactObjectHeaders) {
     assert(!mrk.has_displaced_mark_helper(), "must not be displaced");
-    if (mrk.is_expanded() && kls->expand_for_hash(cast_to_oop(this))) {
+    if (mrk.is_expanded() && kls->expand_for_hash(cast_to_oop(this), mrk)) {
       sz = align_object_size(sz + 1);
     }
   }
@@ -213,7 +213,7 @@ size_t oopDesc::copy_size(size_t size, markWord mark) const {
   if (UseCompactObjectHeaders) {
     assert(!mark.has_displaced_mark_helper(), "must not be displaced");
     Klass* klass = mark.klass();
-    if (mark.is_hashed_not_expanded() && klass->expand_for_hash(cast_to_oop(this))) {
+    if (mark.is_hashed_not_expanded() && klass->expand_for_hash(cast_to_oop(this), mark)) {
       size = align_object_size(size + 1);
     }
   }
@@ -225,10 +225,10 @@ size_t oopDesc::copy_size_cds(size_t size, markWord mark) const {
   if (UseCompactObjectHeaders) {
     assert(!mark.has_displaced_mark_helper(), "must not be displaced");
     Klass* klass = mark.klass();
-    if (mark.is_hashed_not_expanded() && klass->expand_for_hash(cast_to_oop(this))) {
+    if (mark.is_hashed_not_expanded() && klass->expand_for_hash(cast_to_oop(this), mark)) {
       size = align_object_size(size + 1);
     }
-    if (mark.is_not_hashed_expanded() && klass->expand_for_hash(cast_to_oop(this))) {
+    if (mark.is_not_hashed_expanded() && klass->expand_for_hash(cast_to_oop(this), mark)) {
       size = align_object_size(size - ObjectAlignmentInBytes / HeapWordSize);
     }
   }
