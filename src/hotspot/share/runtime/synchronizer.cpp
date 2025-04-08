@@ -996,7 +996,7 @@ static intptr_t install_hash_code(Thread* current, oop obj) {
       markWord new_mark;
       if (mark.is_not_hashed_expanded()) {
         new_mark = mark.set_hashed_expanded();
-        int offset = mark.klass()->hash_offset_in_bytes(obj, mark);
+        int offset = mark.klass()->hash_offset_in_bytes(obj);
         obj->int_field_put(offset, (jint) hash);
       } else {
         new_mark = mark.set_hashed_not_expanded();

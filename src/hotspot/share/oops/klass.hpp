@@ -791,7 +791,7 @@ public:
   // Returns true if this Klass needs to be addressable via narrow Klass ID.
   inline bool needs_narrow_id() const;
 
-  virtual int hash_offset_in_bytes(oop obj, markWord m) const = 0;
+  virtual int hash_offset_in_bytes(oop obj) const = 0;
   static int kind_offset_in_bytes() { return (int)offset_of(Klass, _kind); }
 
   bool expand_for_hash(oop obj, markWord m) const;

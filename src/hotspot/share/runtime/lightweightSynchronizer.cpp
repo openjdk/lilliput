@@ -1232,7 +1232,7 @@ uint32_t LightweightSynchronizer::get_hash(markWord mark, oop obj, Klass* klass)
   //assert(mark.is_neutral() | mark.is_fast_locked(), "only from neutral or fast-locked mark: " INTPTR_FORMAT, mark.value());
   assert(mark.is_hashed(), "only from hashed or copied object");
   if (mark.is_hashed_expanded()) {
-    return obj->int_field(klass->hash_offset_in_bytes(obj, mark));
+    return obj->int_field(klass->hash_offset_in_bytes(obj));
   } else {
     assert(mark.is_hashed_not_expanded(), "must be hashed");
     assert(hashCode == 6 || hashCode == 2, "must have idempotent hashCode");

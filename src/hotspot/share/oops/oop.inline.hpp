@@ -515,7 +515,7 @@ intptr_t oopDesc::identity_hash() {
     markWord mrk = mark();
     if (mrk.is_hashed_expanded()) {
       Klass* klass = mrk.klass();
-      return int_field(klass->hash_offset_in_bytes(cast_to_oop(this), mrk));
+      return int_field(klass->hash_offset_in_bytes(cast_to_oop(this)));
     }
     // Fall-through to slow-case.
   } else {

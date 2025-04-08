@@ -949,7 +949,7 @@ public:
     return layout_helper_to_size_helper(layout_helper());
   }
 
-  virtual int hash_offset_in_bytes(oop obj, markWord m) const {
+  virtual int hash_offset_in_bytes(oop obj) const {
     assert(UseCompactObjectHeaders, "only with compact i-hash");
     return _hash_offset;
   }
