@@ -794,7 +794,7 @@ public:
   virtual int hash_offset_in_bytes(oop obj) const = 0;
   static int kind_offset_in_bytes() { return (int)offset_of(Klass, _kind); }
 
-  bool expand_for_hash(oop obj, markWord m) const;
+  bool expand_for_hash(oop obj) const;
 };
 
 #endif // SHARE_OOPS_KLASS_HPP
