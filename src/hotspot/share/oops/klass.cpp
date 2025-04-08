@@ -1336,8 +1336,11 @@ static int expanded = 0;
 static int not_expanded = 0;
 static NumberSeq seq = NumberSeq();
 
-bool Klass::expand_for_hash(oop obj) const {
+bool Klass::expand_for_hash(oop obj, markWord m) const {
   assert(UseCompactObjectHeaders, "only with compact i-hash");
-  assert((size_t)hash_offset_in_bytes(obj) <= (obj->base_size_given_klass(obj->mark(), this) * HeapWordSize), "hash offset must be eq or lt base size: hash offset: %d, base size: %zu", hash_offset_in_bytes(obj), obj->base_size_given_klass(obj->mark(), this) * HeapWordSize);
-  return obj->base_size_given_klass(obj->mark(), this) * HeapWordSize - hash_offset_in_bytes(obj) < (int)sizeof(uint32_t);
+  {
+    ResourceMark rm;
+    assert((size_t)hash_offset_in_bytes(obj,m ) <= (obj->base_size_given_klass(m, this) * HeapWordSize), "hash offset must be eq or lt base size: hash offset: %d, base size: %zu, class-name: %s", hash_offset_in_bytes(obj, m), obj->base_size_given_klass(m, this) * HeapWordSize, external_name());
+  }
+  return obj->base_size_given_klass(m, this) * HeapWordSize - hash_offset_in_bytes(obj, m) < (int)sizeof(uint32_t);
 }

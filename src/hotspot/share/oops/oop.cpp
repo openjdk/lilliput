@@ -135,7 +135,7 @@ void oopDesc::initialize_hash_if_necessary(oop obj, Klass* k, markWord m) {
   assert(m.is_hashed_not_expanded(), "must be hashed but not moved");
   assert(!m.is_hashed_expanded(), "must not be moved: " INTPTR_FORMAT, m.value());
   uint32_t hash = static_cast<uint32_t>(ObjectSynchronizer::get_next_hash(nullptr, obj));
-  int offset = k->hash_offset_in_bytes(cast_to_oop(this));
+  int offset = k->hash_offset_in_bytes(cast_to_oop(this), m);
   assert(offset >= 4, "hash offset must not be in header");
 #ifndef PRODUCT
   log_trace(ihash)("Initializing hash for " PTR_FORMAT ", old: " PTR_FORMAT ", hash: %d, offset: %d", p2i(this), p2i(obj), hash, offset);
