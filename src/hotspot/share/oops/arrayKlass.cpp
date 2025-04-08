@@ -305,5 +305,6 @@ int ArrayKlass::hash_offset_in_bytes(oop obj, markWord m) const {
   assert(UseCompactObjectHeaders, "only with compact i-hash");
   arrayOop ary = arrayOop(obj);
   BasicType type = element_type();
-  return ary->base_offset_in_bytes(type) + (m.array_length() << log2_element_size());
+  int length = LP64_ONLY(m.array_length()) NOT_LP64(ary.length());
+  return ary->base_offset_in_bytes(type) + (length << log2_element_size());
 }
