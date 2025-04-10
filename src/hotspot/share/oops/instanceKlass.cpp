@@ -2700,7 +2700,7 @@ void InstanceKlass::remove_unshareable_info() {
   _methods_jmethod_ids = nullptr;
   _jni_ids = nullptr;
   _oop_map_cache = nullptr;
-  if (CDSConfig::is_dumping_invokedynamic() && HeapShared::is_lambda_proxy_klass(this)) {
+  if (CDSConfig::is_dumping_method_handles() && HeapShared::is_lambda_proxy_klass(this)) {
     // keep _nest_host
   } else {
     // clear _nest_host to ensure re-load at runtime
@@ -2708,6 +2708,7 @@ void InstanceKlass::remove_unshareable_info() {
   }
   init_shared_package_entry();
   _dep_context_last_cleaned = 0;
+  DEBUG_ONLY(_shared_class_load_count = 0);
 
   remove_unshareable_flags();
 }
@@ -3503,7 +3504,7 @@ void InstanceKlass::add_osr_nmethod(nmethod* n) {
   for (int l = CompLevel_limited_profile; l < n->comp_level(); l++) {
     nmethod *inv = lookup_osr_nmethod(n->method(), n->osr_entry_bci(), l, true);
     if (inv != nullptr && inv->is_in_use()) {
-      inv->make_not_entrant();
+      inv->make_not_entrant("OSR invalidation of lower levels");
     }
   }
 }

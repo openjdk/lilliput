@@ -165,7 +165,7 @@ public class TestVectorizationMismatchedAccess {
 
     @Test
     @IR(counts = { IRNode.LOAD_VECTOR_L, ">=1", IRNode.STORE_VECTOR, ">=1" },
-        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true"},
+        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true", "rvv", "true"},
         applyIfPlatform = {"64-bit", "true"})
     // 32-bit: offsets are badly aligned (UNSAFE.ARRAY_BYTE_BASE_OFFSET is 4 byte aligned, but not 8 byte aligned).
     //         might get fixed with JDK-8325155.
@@ -177,7 +177,7 @@ public class TestVectorizationMismatchedAccess {
 
     @Test
     @IR(counts = { IRNode.LOAD_VECTOR_L, ">=1", IRNode.STORE_VECTOR, ">=1" },
-        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true"},
+        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true", "rvv", "true"},
         applyIfPlatform = {"64-bit", "true"})
     // 32-bit: address has ConvL2I for cast of long to address, not supported.
     public static void testByteLong1b(byte[] dest, long[] src) {
@@ -188,7 +188,7 @@ public class TestVectorizationMismatchedAccess {
 
     @Test
     @IR(counts = { IRNode.LOAD_VECTOR_L, ">=1", IRNode.STORE_VECTOR, ">=1" },
-        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true"})
+        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true", "rvv", "true"})
     public static void testByteLong1c(byte[] dest, long[] src) {
         long base = 64; // make sure it is big enough and 8 byte aligned (required for 32-bit)
         for (int i = 0; i < src.length - 8; i++) {
@@ -198,7 +198,7 @@ public class TestVectorizationMismatchedAccess {
 
     @Test
     @IR(counts = { IRNode.LOAD_VECTOR_L, ">=1", IRNode.STORE_VECTOR, ">=1" },
-        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true"},
+        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true", "rvv", "true"},
         applyIfPlatform = {"64-bit", "true"})
     // 32-bit: address has ConvL2I for cast of long to address, not supported.
     public static void testByteLong1d(byte[] dest, long[] src) {
@@ -218,7 +218,7 @@ public class TestVectorizationMismatchedAccess {
 
     @Test
     @IR(counts = { IRNode.LOAD_VECTOR_L, ">=1", IRNode.STORE_VECTOR, ">=1" },
-        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true"},
+        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true", "rvv", "true"},
         applyIfPlatform = {"64-bit", "true"})
     // 32-bit: offsets are badly aligned (UNSAFE.ARRAY_BYTE_BASE_OFFSET is 4 byte aligned, but not 8 byte aligned).
     //         might get fixed with JDK-8325155.
@@ -230,7 +230,7 @@ public class TestVectorizationMismatchedAccess {
 
     @Test
     @IR(counts = { IRNode.LOAD_VECTOR_L, ">=1", IRNode.STORE_VECTOR, ">=1" },
-        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true"},
+        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true", "rvv", "true"},
         applyIfPlatform = {"64-bit", "true"})
     // 32-bit: address has ConvL2I for cast of long to address, not supported.
     public static void testByteLong2b(byte[] dest, long[] src) {
@@ -247,7 +247,7 @@ public class TestVectorizationMismatchedAccess {
 
     @Test
     @IR(counts = { IRNode.LOAD_VECTOR_L, ">=1", IRNode.STORE_VECTOR, ">=1" },
-        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true"},
+        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true", "rvv", "true"},
         applyIfPlatform = {"64-bit", "true"})
     // 32-bit: offsets are badly aligned (UNSAFE.ARRAY_BYTE_BASE_OFFSET is 4 byte aligned, but not 8 byte aligned).
     //         might get fixed with JDK-8325155.
@@ -259,7 +259,7 @@ public class TestVectorizationMismatchedAccess {
 
     @Test
     @IR(counts = { IRNode.LOAD_VECTOR_L, ">=1", IRNode.STORE_VECTOR, ">=1" },
-        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true"},
+        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true", "rvv", "true"},
         applyIfPlatform = {"64-bit", "true"})
     // 32-bit: address has ConvL2I for cast of long to address, not supported.
     public static void testByteLong3b(byte[] dest, long[] src) {
@@ -276,7 +276,7 @@ public class TestVectorizationMismatchedAccess {
 
     @Test
     @IR(counts = { IRNode.LOAD_VECTOR_L, ">=1", IRNode.STORE_VECTOR, ">=1" },
-        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true"},
+        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true", "rvv", "true"},
         applyIfPlatform = {"64-bit", "true"},
         applyIf = {"AlignVector", "false"})
     // 32-bit: offsets are badly aligned (UNSAFE.ARRAY_BYTE_BASE_OFFSET is 4 byte aligned, but not 8 byte aligned).
@@ -290,7 +290,7 @@ public class TestVectorizationMismatchedAccess {
 
     @Test
     @IR(counts = { IRNode.LOAD_VECTOR_L, ">=1", IRNode.STORE_VECTOR, ">=1" },
-        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true"},
+        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true", "rvv", "true"},
         applyIfPlatform = {"64-bit", "true"},
         applyIf = {"AlignVector", "false"})
     // 32-bit: address has ConvL2I for cast of long to address, not supported.
@@ -310,7 +310,7 @@ public class TestVectorizationMismatchedAccess {
 
     @Test
     @IR(counts = { IRNode.LOAD_VECTOR_L, ">=1", IRNode.STORE_VECTOR, ">=1" },
-        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true"},
+        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true", "rvv", "true"},
         applyIfPlatform = {"64-bit", "true"})
     // 32-bit: offsets are badly aligned (UNSAFE.ARRAY_BYTE_BASE_OFFSET is 4 byte aligned, but not 8 byte aligned).
     //         might get fixed with JDK-8325155.
@@ -322,7 +322,7 @@ public class TestVectorizationMismatchedAccess {
 
     @Test
     @IR(counts = { IRNode.LOAD_VECTOR_L, ">=1", IRNode.STORE_VECTOR, ">=1" },
-        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true"},
+        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true", "rvv", "true"},
         applyIfPlatform = {"64-bit", "true"})
     // 32-bit: address has ConvL2I for cast of long to address, not supported.
     public static void testByteLong5b(byte[] dest, long[] src, int start, int stop) {
@@ -340,7 +340,7 @@ public class TestVectorizationMismatchedAccess {
 
     @Test
     @IR(counts = { IRNode.LOAD_VECTOR_L, ">=1", IRNode.STORE_VECTOR, ">=1" },
-        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true"},
+        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true", "rvv", "true"},
         applyIfPlatform = {"64-bit", "true"})
     // 32-bit: offsets are badly aligned (UNSAFE.ARRAY_BYTE_BASE_OFFSET is 4 byte aligned, but not 8 byte aligned).
     //         might get fixed with JDK-8325155.
@@ -352,7 +352,7 @@ public class TestVectorizationMismatchedAccess {
 
     @Test
     @IR(counts = { IRNode.LOAD_VECTOR_L, ">=1", IRNode.STORE_VECTOR, ">=1" },
-        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true"},
+        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true", "rvv", "true"},
         applyIfPlatform = {"64-bit", "true"})
     // 32-bit: address has ConvL2I for cast of long to address, not supported.
     public static void testByteByte1b(byte[] dest, byte[] src) {
@@ -369,7 +369,7 @@ public class TestVectorizationMismatchedAccess {
 
     @Test
     @IR(counts = { IRNode.LOAD_VECTOR_L, ">=1", IRNode.STORE_VECTOR, ">=1" },
-        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true"},
+        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true", "rvv", "true"},
         applyIfPlatform = {"64-bit", "true"})
     // 32-bit: offsets are badly aligned (UNSAFE.ARRAY_BYTE_BASE_OFFSET is 4 byte aligned, but not 8 byte aligned).
     //         might get fixed with JDK-8325155.
@@ -381,7 +381,7 @@ public class TestVectorizationMismatchedAccess {
 
     @Test
     @IR(counts = { IRNode.LOAD_VECTOR_L, ">=1", IRNode.STORE_VECTOR, ">=1" },
-        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true"},
+        applyIfCPUFeatureOr = {"sse2", "true", "asimd", "true", "rvv", "true"},
         applyIfPlatform = {"64-bit", "true"})
     // 32-bit: address has ConvL2I for cast of long to address, not supported.
     public static void testByteByte2b(byte[] dest, byte[] src) {

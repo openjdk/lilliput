@@ -111,7 +111,7 @@ public class LoopCombinedOpTest extends VectorizationTestRunner {
     }
 
     @Test
-    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse2", "true"},
+    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse2", "true", "rvv", "true"},
         counts = {IRNode.STORE_VECTOR, ">0",
                   IRNode.LOAD_VECTOR_I, "> 0"})
     public int[] opWithConstant() {
@@ -123,7 +123,7 @@ public class LoopCombinedOpTest extends VectorizationTestRunner {
     }
 
     @Test
-    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse4.1", "true"},
+    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse4.1", "true", "rvv", "true"},
         counts = {IRNode.STORE_VECTOR, ">0",
                   IRNode.LOAD_VECTOR_I, "> 0"})
     public int[] opWithLoopInvariant() {
@@ -135,7 +135,7 @@ public class LoopCombinedOpTest extends VectorizationTestRunner {
     }
 
     @Test
-    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse4.1", "true"},
+    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse4.1", "true", "rvv", "true"},
         counts = {IRNode.STORE_VECTOR, ">0",
                   IRNode.LOAD_VECTOR_I, "> 0"})
     public int[] opWithConstantAndLoopInvariant() {
@@ -147,7 +147,7 @@ public class LoopCombinedOpTest extends VectorizationTestRunner {
     }
 
     @Test
-    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse2", "true"},
+    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse2", "true", "rvv", "true"},
         counts = {IRNode.STORE_VECTOR, ">0",
                   IRNode.LOAD_VECTOR_I, "> 0"})
     public int[] multipleOps() {
@@ -159,7 +159,7 @@ public class LoopCombinedOpTest extends VectorizationTestRunner {
     }
 
     @Test
-    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse4.1", "true"},
+    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse4.1", "true", "rvv", "true"},
         counts = {IRNode.STORE_VECTOR, ">0",
                   IRNode.LOAD_VECTOR_I, "> 0"})
     public int[] multipleOpsWithMultipleConstants() {
@@ -171,7 +171,7 @@ public class LoopCombinedOpTest extends VectorizationTestRunner {
     }
 
     @Test
-    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse4.1", "true"},
+    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse4.1", "true", "rvv", "true"},
         counts = {IRNode.STORE_VECTOR, ">0",
                   IRNode.LOAD_VECTOR_I, "> 0"})
     // With sse2, the MulI does not vectorize. This means we have vectorized stores
@@ -190,7 +190,7 @@ public class LoopCombinedOpTest extends VectorizationTestRunner {
     }
 
     @Test
-    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse4.1", "true"},
+    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse4.1", "true", "rvv", "true"},
         counts = {IRNode.STORE_VECTOR, ">0",
                   IRNode.LOAD_VECTOR_I, "> 0"})
     public int[] multipleStoresWithCommonSubExpression() {
@@ -206,7 +206,7 @@ public class LoopCombinedOpTest extends VectorizationTestRunner {
     }
 
     @Test
-    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse2", "true"},
+    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse2", "true", "rvv", "true"},
         counts = {IRNode.STORE_VECTOR, ">0",
                   IRNode.LOAD_VECTOR_S, "> 0",
                   IRNode.LOAD_VECTOR_I, "> 0"})
@@ -221,7 +221,7 @@ public class LoopCombinedOpTest extends VectorizationTestRunner {
     }
 
     @Test
-    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse2", "true"},
+    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse2", "true", "rvv", "true"},
         counts = {IRNode.STORE_VECTOR, ">0",
                   IRNode.LOAD_VECTOR_I, IRNode.VECTOR_SIZE_ANY, "> 0",
                   IRNode.LOAD_VECTOR_L,                         "> 0"})
@@ -238,7 +238,7 @@ public class LoopCombinedOpTest extends VectorizationTestRunner {
     }
 
     @Test
-    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse2", "true"},
+    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse2", "true", "rvv", "true"},
         counts = {IRNode.STORE_VECTOR, ">0",
                   IRNode.LOAD_VECTOR_S, IRNode.VECTOR_SIZE_ANY, "> 0",
                   IRNode.LOAD_VECTOR_L,                         "> 0"})
@@ -253,7 +253,7 @@ public class LoopCombinedOpTest extends VectorizationTestRunner {
     }
 
     @Test
-    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse2", "true"},
+    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse2", "true", "rvv", "true"},
         counts = {IRNode.STORE_VECTOR, ">0",
                   IRNode.LOAD_VECTOR_S, "> 0",
                   IRNode.LOAD_VECTOR_I, "> 0"})
@@ -268,7 +268,7 @@ public class LoopCombinedOpTest extends VectorizationTestRunner {
     }
 
     @Test
-    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse4.1", "true"},
+    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse4.1", "true", "rvv", "true"},
         counts = {IRNode.STORE_VECTOR, ">0",
                   IRNode.LOAD_VECTOR_S, "> 0",
                   IRNode.LOAD_VECTOR_I, "> 0"})
@@ -283,7 +283,7 @@ public class LoopCombinedOpTest extends VectorizationTestRunner {
     }
 
     @Test
-    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse4.1", "true"},
+    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse4.1", "true", "rvv", "true"},
         counts = {IRNode.STORE_VECTOR, ">0",
                   IRNode.LOAD_VECTOR_S, "> 0",
                   IRNode.LOAD_VECTOR_I, "> 0"})
@@ -298,7 +298,7 @@ public class LoopCombinedOpTest extends VectorizationTestRunner {
     }
 
     @Test
-    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse3", "true"},
+    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse3", "true", "rvv", "true"},
         counts = {IRNode.STORE_VECTOR, ">0",
                   IRNode.LOAD_VECTOR_S, "> 0",
                   IRNode.LOAD_VECTOR_I, "> 0"})
@@ -354,7 +354,7 @@ public class LoopCombinedOpTest extends VectorizationTestRunner {
     }
 
     @Test
-    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse4.1", "true"},
+    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse4.1", "true", "rvv", "true"},
         counts = {IRNode.STORE_VECTOR, ">0"})
     public int[] manuallyUnrolledStride2() {
         int[] res = new int[SIZE];
@@ -366,7 +366,7 @@ public class LoopCombinedOpTest extends VectorizationTestRunner {
     }
 
     @Test
-    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse4.1", "true"},
+    @IR(applyIfCPUFeatureOr = {"asimd", "true", "sse4.1", "true", "rvv", "true"},
         counts = {IRNode.STORE_VECTOR, ">0",
                   IRNode.LOAD_VECTOR_I, "> 0"})
     public int partialVectorizableLoop() {
