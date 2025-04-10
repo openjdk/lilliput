@@ -280,6 +280,8 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
       assert(young_space()->contains(new_obj), "Attempt to push non-promoted obj");
     }
 
+    new_obj->initialize_hash_if_necessary(o);
+
     ContinuationGCSupport::transform_stack_chunk(new_obj);
 
     // Do the size comparison first with new_obj_size, which we
