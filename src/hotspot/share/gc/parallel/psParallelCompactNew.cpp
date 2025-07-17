@@ -207,7 +207,7 @@ void PSParallelCompactNew::pre_compact()
 
   CodeCache::on_gc_marking_cycle_start();
 
-  heap->print_heap_before_gc();
+  heap->print_before_gc();
   heap->trace_heap_before_gc(&_gc_tracer);
 
   // Fill in TLABs
@@ -684,7 +684,7 @@ bool PSParallelCompactNew::invoke_no_policy(bool clear_all_soft_refs, bool seria
     Universe::verify("After GC");
   }
 
-  heap->print_heap_after_gc();
+  heap->print_after_gc();
   heap->trace_heap_after_gc(&_gc_tracer);
 
   AdaptiveSizePolicyOutput::print(size_policy, heap->total_collections());
@@ -818,9 +818,8 @@ void PSParallelCompactNew::marking_phase(ParallelOldTracer *gc_tracer) {
     ReferenceProcessorStats stats;
     ReferenceProcessorPhaseTimes pt(&_gc_timer, ref_processor()->max_num_queues());
 
-    ref_processor()->set_active_mt_degree(active_gc_threads);
     ParallelCompactRefProcProxyTaskNew task(ref_processor()->max_num_queues());
-    stats = ref_processor()->process_discovered_references(task, pt);
+    stats = ref_processor()->process_discovered_references(task, &ParallelScavengeHeap::heap()->workers(), pt);
 
     gc_tracer->report_gc_reference_stats(stats);
     pt.print_all_references();

@@ -24,7 +24,6 @@
 
 #include "gc/serial/serialArguments.hpp"
 #include "gc/serial/serialHeap.hpp"
-#include "gc/shared/fullGCForwarding.hpp"
 #include "gc/shared/gcArguments.hpp"
 
 CollectedHeap* SerialArguments::create_heap() {

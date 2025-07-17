@@ -23,8 +23,8 @@
  */
 
 #include "asm/macroAssembler.hpp"
-#include "ci/ciUtilities.inline.hpp"
 #include "ci/ciSymbols.hpp"
+#include "ci/ciUtilities.inline.hpp"
 #include "classfile/vmIntrinsics.hpp"
 #include "compiler/compileBroker.hpp"
 #include "compiler/compileLog.hpp"
@@ -47,8 +47,8 @@
 #include "opto/narrowptrnode.hpp"
 #include "opto/opaquenode.hpp"
 #include "opto/parse.hpp"
-#include "opto/runtime.hpp"
 #include "opto/rootnode.hpp"
+#include "opto/runtime.hpp"
 #include "opto/subnode.hpp"
 #include "opto/vectornode.hpp"
 #include "prims/jvmtiExport.hpp"
@@ -245,6 +245,7 @@ bool LibraryCallKit::try_to_inline(int predicate) {
   case vmIntrinsics::_dcos:
   case vmIntrinsics::_dtan:
   case vmIntrinsics::_dtanh:
+  case vmIntrinsics::_dcbrt:
   case vmIntrinsics::_dabs:
   case vmIntrinsics::_fabs:
   case vmIntrinsics::_iabs:
@@ -563,7 +564,7 @@ bool LibraryCallKit::try_to_inline(int predicate) {
 
   case vmIntrinsics::_getCallerClass:           return inline_native_Reflection_getCallerClass();
 
-  case vmIntrinsics::_Reference_get:            return inline_reference_get();
+  case vmIntrinsics::_Reference_get0:           return inline_reference_get0();
   case vmIntrinsics::_Reference_refersTo0:      return inline_reference_refersTo0(false);
   case vmIntrinsics::_PhantomReference_refersTo0: return inline_reference_refersTo0(true);
   case vmIntrinsics::_Reference_clear0:         return inline_reference_clear0(false);
@@ -1574,9 +1575,14 @@ bool LibraryCallKit::inline_string_toBytesU() {
     Node* src_start = array_element_address(value, offset, T_CHAR);
     Node* dst_start = basic_plus_adr(newcopy, arrayOopDesc::base_offset_in_bytes(T_BYTE));
 
-    // Check if src array address is aligned to HeapWordSize (dst is always aligned)
-    const TypeInt* toffset = gvn().type(offset)->is_int();
-    bool aligned = toffset->is_con() && ((toffset->get_con() * type2aelembytes(T_CHAR)) % HeapWordSize == 0);
+    // Check if dst array address is aligned to HeapWordSize
+    bool aligned = (arrayOopDesc::base_offset_in_bytes(T_BYTE) % HeapWordSize == 0);
+    // If true, then check if src array address is aligned to HeapWordSize
+    if (aligned) {
+      const TypeInt* toffset = gvn().type(offset)->is_int();
+      aligned = toffset->is_con() && ((arrayOopDesc::base_offset_in_bytes(T_CHAR) +
+                                       toffset->get_con() * type2aelembytes(T_CHAR)) % HeapWordSize == 0);
+    }
 
     // Figure out which arraycopy runtime method to call (disjoint, uninitialized).
     const char* copyfunc_name = "arraycopy";
@@ -1657,8 +1663,8 @@ bool LibraryCallKit::inline_string_getCharsU() {
     // Check if array addresses are aligned to HeapWordSize
     const TypeInt* tsrc = gvn().type(src_begin)->is_int();
     const TypeInt* tdst = gvn().type(dst_begin)->is_int();
-    bool aligned = tsrc->is_con() && ((tsrc->get_con() * type2aelembytes(T_BYTE)) % HeapWordSize == 0) &&
-                   tdst->is_con() && ((tdst->get_con() * type2aelembytes(T_CHAR)) % HeapWordSize == 0);
+    bool aligned = tsrc->is_con() && ((arrayOopDesc::base_offset_in_bytes(T_BYTE) + tsrc->get_con() * type2aelembytes(T_BYTE)) % HeapWordSize == 0) &&
+                   tdst->is_con() && ((arrayOopDesc::base_offset_in_bytes(T_CHAR) + tdst->get_con() * type2aelembytes(T_CHAR)) % HeapWordSize == 0);
 
     // Figure out which arraycopy runtime method to call (disjoint, uninitialized).
     const char* copyfunc_name = "arraycopy";
@@ -1886,6 +1892,9 @@ bool LibraryCallKit::inline_math_native(vmIntrinsics::ID id) {
   case vmIntrinsics::_dtanh:
     return StubRoutines::dtanh() != nullptr ?
       runtime_math(OptoRuntime::Math_D_D_Type(), StubRoutines::dtanh(), "dtanh") : false;
+  case vmIntrinsics::_dcbrt:
+    return StubRoutines::dcbrt() != nullptr ?
+      runtime_math(OptoRuntime::Math_D_D_Type(), StubRoutines::dcbrt(), "dcbrt") : false;
   case vmIntrinsics::_dexp:
     return StubRoutines::dexp() != nullptr ?
       runtime_math(OptoRuntime::Math_D_D_Type(), StubRoutines::dexp(),  "dexp") :
@@ -4814,57 +4823,57 @@ bool LibraryCallKit::inline_native_hashcode(bool is_virtual, bool is_static) {
 
     // Hashed-only path: recompute hash-code from object address.
     set_control(if_false);
-    // Our constants.
-    Node* M = _gvn.intcon(0x337954D5);
-    Node* A = _gvn.intcon(0xAAAAAAAA);
-    // Split object address into lo and hi 32 bits.
-    Node* obj_addr = _gvn.transform(new CastP2XNode(nullptr, obj));
-    Node* x = _gvn.transform(new ConvL2INode(obj_addr));
-    Node* upper_addr = _gvn.transform(new URShiftLNode(obj_addr, _gvn.intcon(32)));
-    Node* y = _gvn.transform(new ConvL2INode(upper_addr));
+    if (hashCode == 6) {
+      // Our constants.
+      Node* M = _gvn.intcon(0x337954D5);
+      Node* A = _gvn.intcon(0xAAAAAAAA);
+      // Split object address into lo and hi 32 bits.
+      Node* obj_addr = _gvn.transform(new CastP2XNode(nullptr, obj));
+      Node* x = _gvn.transform(new ConvL2INode(obj_addr));
+      Node* upper_addr = _gvn.transform(new URShiftLNode(obj_addr, _gvn.intcon(32)));
+      Node* y = _gvn.transform(new ConvL2INode(upper_addr));
 
-    Node* H0 = _gvn.transform(new XorINode(x, y));
-    Node* L0 = _gvn.transform(new XorINode(x, A));
+      Node* H0 = _gvn.transform(new XorINode(x, y));
+      Node* L0 = _gvn.transform(new XorINode(x, A));
 
-    // Full multiplication of two 32 bit values L0 and M into a hi/lo result in two 32 bit values V0 and U0.
-    Node* L0_64 = _gvn.transform(new ConvI2LNode(L0));
-    L0_64 = _gvn.transform(new AndLNode(L0_64, _gvn.longcon(0xFFFFFFFF)));
-    Node* M_64 = _gvn.transform(new ConvI2LNode(M));
-    // M_64 = _gvn.transform(new AndLNode(M_64, _gvn.longcon(0xFFFFFFFF)));
-    Node* prod64 = _gvn.transform(new MulLNode(L0_64, M_64));
-    Node* V0 = _gvn.transform(new ConvL2INode(prod64));
-    Node* prod_upper = _gvn.transform(new URShiftLNode(prod64, _gvn.intcon(32)));
-    Node* U0 = _gvn.transform(new ConvL2INode(prod_upper));
+      // Full multiplication of two 32 bit values L0 and M into a hi/lo result in two 32 bit values V0 and U0.
+      Node* L0_64 = _gvn.transform(new ConvI2LNode(L0));
+      L0_64 = _gvn.transform(new AndLNode(L0_64, _gvn.longcon(0xFFFFFFFF)));
+      Node* M_64 = _gvn.transform(new ConvI2LNode(M));
+      // M_64 = _gvn.transform(new AndLNode(M_64, _gvn.longcon(0xFFFFFFFF)));
+      Node* prod64 = _gvn.transform(new MulLNode(L0_64, M_64));
+      Node* V0 = _gvn.transform(new ConvL2INode(prod64));
+      Node* prod_upper = _gvn.transform(new URShiftLNode(prod64, _gvn.intcon(32)));
+      Node* U0 = _gvn.transform(new ConvL2INode(prod_upper));
 
-    Node* Q0 = _gvn.transform(new MulINode(H0, M));
-    Node* L1 = _gvn.transform(new XorINode(Q0, U0));
+      Node* Q0 = _gvn.transform(new MulINode(H0, M));
+      Node* L1 = _gvn.transform(new XorINode(Q0, U0));
 
-    // Full multiplication of two 32 bit values L1 and M into a hi/lo result in two 32 bit values V1 and U1.
-    Node* L1_64 = _gvn.transform(new ConvI2LNode(L1));
-    L1_64 = _gvn.transform(new AndLNode(L1_64, _gvn.longcon(0xFFFFFFFF)));
-    prod64 = _gvn.transform(new MulLNode(L1_64, M_64));
-    Node* V1 = _gvn.transform(new ConvL2INode(prod64));
-    prod_upper = _gvn.transform(new URShiftLNode(prod64, _gvn.intcon(32)));
-    Node* U1 = _gvn.transform(new ConvL2INode(prod_upper));
+      // Full multiplication of two 32 bit values L1 and M into a hi/lo result in two 32 bit values V1 and U1.
+      Node* L1_64 = _gvn.transform(new ConvI2LNode(L1));
+      L1_64 = _gvn.transform(new AndLNode(L1_64, _gvn.longcon(0xFFFFFFFF)));
+      prod64 = _gvn.transform(new MulLNode(L1_64, M_64));
+      Node* V1 = _gvn.transform(new ConvL2INode(prod64));
+      prod_upper = _gvn.transform(new URShiftLNode(prod64, _gvn.intcon(32)));
+      Node* U1 = _gvn.transform(new ConvL2INode(prod_upper));
 
-    Node* P1 = _gvn.transform(new XorINode(V0, M));
+      Node* P1 = _gvn.transform(new XorINode(V0, M));
 
-    // Right rotate P1 by distance L1.
-    Node* distance = _gvn.transform(new AndINode(L1, _gvn.intcon(32 - 1)));
-    Node* inverse_distance = _gvn.transform(new SubINode(_gvn.intcon(32), distance));
-    Node* ror_part1 = _gvn.transform(new URShiftINode(P1, distance));
-    Node* ror_part2 = _gvn.transform(new LShiftINode(P1, inverse_distance));
-    Node* Q1 = _gvn.transform(new OrINode(ror_part1, ror_part2));
+      // Right rotate P1 by distance L1.
+      Node* distance = _gvn.transform(new AndINode(L1, _gvn.intcon(32 - 1)));
+      Node* inverse_distance = _gvn.transform(new SubINode(_gvn.intcon(32), distance));
+      Node* ror_part1 = _gvn.transform(new URShiftINode(P1, distance));
+      Node* ror_part2 = _gvn.transform(new LShiftINode(P1, inverse_distance));
+      Node* Q1 = _gvn.transform(new OrINode(ror_part1, ror_part2));
 
-    Node* L2 = _gvn.transform(new XorINode(Q1, U1));
-    Node* hash = _gvn.transform(new XorINode(V1, L2));
-    Node* hash_truncated = _gvn.transform(new AndINode(hash, _gvn.intcon(markWord::hash_mask)));
+      Node* L2 = _gvn.transform(new XorINode(Q1, U1));
+      Node* hash = _gvn.transform(new XorINode(V1, L2));
+      Node* hash_truncated = _gvn.transform(new AndINode(hash, _gvn.intcon(markWord::hash_mask)));
 
-    // TODO: We could generate a fast case here under the following conditions:
-    // - The hashctrl is set to hash_is_copied (see markWord::hash_is_copied())
-    // - The type of the object is known
-    // Then we can load the identity hashcode from the int field at Klass::hash_offset_in_bytes() of the object.
-    result_val->init_req(_fast_path, hash_truncated);
+      result_val->init_req(_fast_path, hash_truncated);
+    } else if (hashCode == 2) {
+      result_val->init_req(_fast_path, _gvn.intcon(1));
+    }
   } else {
     // Get the header out of the object, use LoadMarkNode when available
     Node* header_addr = basic_plus_adr(obj, oopDesc::mark_offset_in_bytes());
@@ -6722,6 +6731,10 @@ bool LibraryCallKit::inline_vectorizedMismatch() {
   memory_phi = _gvn.transform(memory_phi);
   result_phi = _gvn.transform(result_phi);
 
+  record_for_igvn(exit_block);
+  record_for_igvn(memory_phi);
+  record_for_igvn(result_phi);
+
   set_control(exit_block);
   set_all_memory(memory_phi);
   set_result(result_phi);
@@ -7056,9 +7069,9 @@ bool LibraryCallKit::inline_updateByteBufferAdler32() {
   return true;
 }
 
-//----------------------------inline_reference_get----------------------------
+//----------------------------inline_reference_get0----------------------------
 // public T java.lang.ref.Reference.get();
-bool LibraryCallKit::inline_reference_get() {
+bool LibraryCallKit::inline_reference_get0() {
   const int referent_offset = java_lang_ref_Reference::referent_offset();
 
   // Get the argument:
@@ -7887,6 +7900,7 @@ bool LibraryCallKit::inline_kyberNttMult() {
   ntta = must_be_not_null(ntta, true);
   nttb = must_be_not_null(nttb, true);
   zetas = must_be_not_null(zetas, true);
+
   Node* result_start  = array_element_address(result, intcon(0), T_SHORT);
   assert(result_start, "result is null");
   Node* ntta_start  = array_element_address(ntta, intcon(0), T_SHORT);

@@ -229,14 +229,19 @@ class Compacter {
     }
   }
 
-  static void forward_obj(oop obj, HeapWord* new_addr) {
+  static void forward_obj(oop obj, HeapWord* new_addr, bool after_first_dead) {
     prefetch_write_scan(obj);
     if (cast_from_oop<HeapWord*>(obj) != new_addr) {
       FullGCForwarding::forward_to(obj, cast_to_oop(new_addr));
     } else {
       assert(obj->is_gc_marked(), "inv");
-      // This obj will stay in-place. Fix the markword.
-      obj->init_mark();
+      if (!after_first_dead) {
+        // This obj will stay in-place and we'll not see it during relocation.
+        // Fix the markword.
+        obj->init_mark();
+      } else {
+        FullGCForwarding::forward_to(obj, cast_to_oop(new_addr));
+      }
     }
   }
 
@@ -307,7 +312,7 @@ public:
         size_t new_size = obj->copy_size(obj_size, obj->mark());
         if (obj->is_gc_marked()) {
           HeapWord* new_addr = alloc(obj_size, new_size, cur_addr);
-          forward_obj(obj, new_addr);
+          forward_obj(obj, new_addr, record_first_dead_done);
           assert(obj->size() == obj_size, "size must not change after forwarding");
           cur_addr += obj_size;
         } else {
@@ -507,7 +512,7 @@ void SerialFullGC::phase1_mark(bool clear_all_softrefs) {
 
     ReferenceProcessorPhaseTimes pt(_gc_timer, ref_processor()->max_num_queues());
     SerialGCRefProcProxyTask task(is_alive, keep_alive, follow_stack_closure);
-    const ReferenceProcessorStats& stats = ref_processor()->process_discovered_references(task, pt);
+    const ReferenceProcessorStats& stats = ref_processor()->process_discovered_references(task, nullptr, pt);
     pt.print_all_references();
     gc_tracer()->report_gc_reference_stats(stats);
   }

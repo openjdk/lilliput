@@ -64,6 +64,7 @@ instanceOop InstanceMirrorKlass::allocate_instance(Klass* k, bool extend, TRAPS)
   instanceOop obj = (instanceOop)Universe::heap()->class_allocate(this, size, base_size, THREAD);
   if (extend && UseCompactObjectHeaders) {
     obj->set_mark(obj->mark().set_not_hashed_expanded());
+    assert(expand_for_hash(obj, obj->mark()), "must expand for hash");
   }
   return obj;
 }
