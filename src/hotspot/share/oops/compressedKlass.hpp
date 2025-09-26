@@ -190,6 +190,9 @@ public:
   // Returns the maximum encoding range, given the current geometry (narrow klass bit size and shift)
   static size_t max_encoding_range_size() { return nth_bit(narrow_klass_pointer_bits() + max_shift()); }
 
+  // For use before pre-initialization
+  static constexpr size_t max_klass_range_size_coh = nth_bit(narrow_klass_pointer_bits_coh + max_shift_coh);
+
   // Returns the maximum allowed klass range size.
   static size_t max_klass_range_size();
 

@@ -3769,7 +3769,7 @@ void Arguments::set_compact_headers_flags() {
     hashCode = 6;
   }
   if (UseCompactObjectHeaders && FLAG_IS_DEFAULT(CompressedClassSpaceSize)) {
-    FLAG_SET_DEFAULT(CompressedClassSpaceSize, 512 * M);
+    FLAG_SET_DEFAULT(CompressedClassSpaceSize, CompressedKlassPointers::max_klass_range_size_coh);
   }
 #endif
 }
