@@ -47,12 +47,19 @@ size_t CompressedKlassPointers::_protection_zone_size = 0;
 #ifdef _LP64
 
 size_t CompressedKlassPointers::max_klass_range_size() {
-  // We disallow klass range sizes larger than 4GB even if the encoding
-  // range would allow for a larger Klass range (e.g. Base=zero, shift=3 -> 32GB).
-  // That is because many CPU-specific compiler decodings do not want the
-  // shifted narrow Klass to spill over into the third quadrant of the 64-bit target
-  // address, e.g. to use a 16-bit move for a simplified base addition.
-  return MIN2(4 * G, max_encoding_range_size());
+ #ifdef _LP64
+   const size_t encoding_allows = nth_bit(narrow_klass_pointer_bits() + max_shift());
+   assert(!UseCompactObjectHeaders || max_klass_range_size_coh == encoding_allows, "Sanity");
+   constexpr size_t cap = 4 * G;
+   return MIN2(encoding_allows, cap);
+ #else
+  // 32-bit: only 32-bit "narrow" Klass pointers allowed. If we ever support smaller narrow
+  // Klass pointers here, coding needs to be revised.
+  // We keep one page safety zone free to guard against size_t overflows on 32-bit. In practice
+  // this is irrelevant because these upper address space parts are not user-addressable on
+  // any of our 32-bit platforms.
+  return align_down(UINT_MAX, os::vm_page_size());
+#endif
 }
 
 void CompressedKlassPointers::pre_initialize() {
