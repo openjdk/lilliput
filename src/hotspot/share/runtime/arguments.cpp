@@ -3768,6 +3768,9 @@ void Arguments::set_compact_headers_flags() {
   if (UseCompactObjectHeaders && FLAG_IS_DEFAULT(hashCode)) {
     hashCode = 6;
   }
+  if (UseCompactObjectHeaders && FLAG_IS_DEFAULT(CompressedClassSpaceSize)) {
+    FLAG_SET_DEFAULT(CompressedClassSpaceSize, 512 * M);
+  }
 #endif
 }
 
