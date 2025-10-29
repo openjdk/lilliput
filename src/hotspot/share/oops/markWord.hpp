@@ -46,7 +46,9 @@
 //
 //  64 bits (with compact headers):
 //  -------------------------------
-//  klass:22  unused_gap:29 hash:2 -->| unused_gap:4  age:4  self-fwd:1  lock:2 (normal object)
+//  unused:32 klass:19 hashctrl:2 -->| unused_gap:4  age:4  self-fwd:1  lock:2 (normal object)
+//  
+//  Note: klass occupies bits 13-31 (19 bits), hashctrl occupies bits 11-12 (2 bits)
 //
 //  - hash contains the identity hash value: largest value is
 //    31 bits, see os::random().  Also, 64-bit vm's require
@@ -150,9 +152,21 @@ class markWord {
 
 #ifdef _LP64
   // Used only with compact headers:
-  // We store the (narrow) Klass* in the bits 43 to 64.
+  // With UseCompactObjectHeaders: We store the (narrow) Klass* in bits 13-31 (19 bits total).
+  // Without UseCompactObjectHeaders: Klass* is stored separately in object header, not in markword.
 
-  // These are for bit-precise extraction of the narrow Klass* from the 64-bit Markword
+  // These are for bit-precise extraction of the narrow Klass* from the markword (UseCompactObjectHeaders only)
+  //
+  // Bit position summary for UseCompactObjectHeaders:
+  // Bits  0- 1: lock (2 bits)
+  // Bit   2   : self-fwd (1 bit) 
+  // Bits  3- 6: age (4 bits)
+  // Bits  7-10: unused_gap (4 bits)
+  // Bits 11-12: hashctrl (2 bits) - hash control state
+  // Bits 13-31: klass (19 bits) - narrow klass pointer
+  // Bits 32-63: unused (32 bits)
+  //
+  // Without UseCompactObjectHeaders, klass is stored separately in object header
   static constexpr int klass_shift                = hashctrl_shift + hashctrl_bits;
   static constexpr int klass_bits                 = 19;
   static constexpr uintptr_t klass_mask           = right_n_bits(klass_bits);
