@@ -54,7 +54,7 @@ public class TestObjectAllocationSampleEventThrottling {
 
     private static final Boolean COMPRESSED_CLASS_PTRS = WhiteBox.getWhiteBox().getBooleanVMFlag("UseCompressedClassPointers");
     private static final Boolean COMPACT_HEADERS = WhiteBox.getWhiteBox().getBooleanVMFlag("UseCompactObjectHeaders");
- 
+
     private static final int BYTE_ARRAY_OVERHEAD = COMPACT_HEADERS ? 12 : ((Platform.is64bit() && !COMPRESSED_CLASS_PTRS) ? 24 : 16);
     private static final int OBJECT_SIZE = 128 * 1024;
 

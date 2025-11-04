@@ -47,7 +47,7 @@
 //  64 bits (with compact headers):
 //  -------------------------------
 //  unused:32 klass:19 hashctrl:2 -->| unused_gap:4  age:4  self-fwd:1  lock:2 (normal object)
-//  
+//
 //  Note: klass occupies bits 13-31 (19 bits), hashctrl occupies bits 11-12 (2 bits)
 //
 //  - hash contains the identity hash value: largest value is
@@ -159,7 +159,7 @@ class markWord {
   //
   // Bit position summary for UseCompactObjectHeaders:
   // Bits  0- 1: lock (2 bits)
-  // Bit   2   : self-fwd (1 bit) 
+  // Bit   2   : self-fwd (1 bit)
   // Bits  3- 6: age (4 bits)
   // Bits  7-10: unused_gap (4 bits)
   // Bits 11-12: hashctrl (2 bits) - hash control state
