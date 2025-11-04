@@ -42,6 +42,7 @@ import jdk.test.lib.jfr.Events;
  * @requires vm.flagless
  * @requires vm.hasJFR
  * @requires vm.gc != "Shenandoah"
+ * @requires vm.opt.final.UseCompactObjectHeaders == false
  * @requires vm.flagless
  * @comment Marked as flagless until JDK-8344015 is fixed
  * @library /test/lib /test/jdk

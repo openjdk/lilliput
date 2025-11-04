@@ -42,6 +42,7 @@ import jdk.test.lib.jfr.Events;
  * @requires vm.hasJFR
  * @requires vm.flagless
  * @comment Marked as flagless until JDK-8322597 is fixed
+ * @requires !(vm.opt.final.UseCompactObjectHeaders == true | vm.opt.final.UseShenandoahGC == true)
  * @library /test/lib /test/jdk
  * @modules jdk.jfr/jdk.jfr.internal.test
  * @run main/othervm -XX:TLABSize=2k -Xmx64m jdk.jfr.event.oldobject.TestClassLoaderLeak
