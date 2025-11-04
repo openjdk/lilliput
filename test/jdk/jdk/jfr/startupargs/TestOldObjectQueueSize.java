@@ -34,8 +34,8 @@ import jdk.test.lib.jfr.Events;
 
 /**
  * @test
- * @requires vm.hasJFR
  * @requires vm.flagless
+ * @requires vm.hasJFR
  * @requires !(vm.opt.final.UseCompactObjectHeaders == true | vm.opt.final.UseShenandoahGC == true)
  * @summary Test -XX:FlightRecorderOptions:old-object-queue-size
  * @modules jdk.jfr/jdk.jfr.internal.test
