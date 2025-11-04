@@ -42,9 +42,9 @@ import jdk.test.lib.jfr.TestClassLoader;
 /**
  * @test
  * @summary The test verifies that an old object sample maintains references to "stale" metadata
- * @requires vm.hasJFR
  * @requires vm.flagless
- * @requires !(vm.opt.final.UseCompressedObjectHeaders == true | vm.opt.final.UseShenandoahGC == true)
+ * @requires vm.hasJFR
+ * @requires !(vm.opt.final.UseCompactObjectHeaders == true | vm.opt.final.UseShenandoahGC == true)
  * @modules jdk.jfr/jdk.jfr.internal.test
  * @library /test/lib /test/jdk
  * @build jdk.jfr.event.oldobject.TestMetadataObject
