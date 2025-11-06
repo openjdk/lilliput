@@ -250,7 +250,7 @@ const StoredEdge* EdgeStore::get(const ObjectSample* sample) const {
     assert(SafepointSynchronize::is_at_safepoint(), "invariant");
     const int idx = leak_context_edge_idx(sample);
     if (idx > 0) {
-      assert(idx < _leak_context_edges->length(), "invariant");
+      assert(idx < _leak_context_edges->length(), "invariant idx: %d >= length: %d", idx, _leak_context_edges->length());
       const StoredEdge* const edge =_leak_context_edges->at(idx);
       assert(edge != nullptr, "invariant");
       return edge;
@@ -268,6 +268,8 @@ static void store_idx_precondition(oop sample_object, int idx) {
   assert(sample_object->mark().is_marked(), "invariant");
   assert(idx > 0, "invariant");
   assert(idx <= max_idx, "invariant");
+  const int upper_bits = sample_object->mark().value() >> markWord::lock_bits;
+  assert((upper_bits | idx) == idx, "idx codec error : (%d | %d) != %d", upper_bits, idx, idx);
 }
 #endif
 
