@@ -882,7 +882,10 @@ void BarrierSetC2::clone_in_runtime(PhaseMacroExpand* phase, ArrayCopyNode* ac,
 
   // The native clone we are calling here expects the object size in words.
   // Add header/offset size to payload size to get object size.
-  Node* const base_offset = phase->MakeConX(arraycopy_payload_base_offset(ac->is_clone_array()) >> LogBytesPerLong);
+  // Use the actual offset stored in the ArrayCopyNode (in bytes), not
+  // arraycopy_payload_base_offset(), because clone() may have bumped the
+  // offset past a 4-byte pre-copy for compact object headers.
+  Node* const base_offset = phase->transform_later(new URShiftXNode(ac->in(ArrayCopyNode::SrcPos), phase->intcon(LogBytesPerLong)));
   Node* const full_size = phase->transform_later(new AddXNode(size, base_offset));
   // HeapAccess<>::clone expects size in heap words.
   // For 64-bits platforms, this is a no-operation.
