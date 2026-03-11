@@ -142,6 +142,11 @@ class oopDesc {
   inline size_t base_size_given_klass(markWord m, const Klass* klass);
   inline size_t size_given_mark_and_klass(markWord mrk, const Klass* kls);
 
+  // Returns the size of a forwarded object in its original (source) space.
+  // The forwardee may have been expanded for identity hash during copy,
+  // but the original was not; forward_expanded distinguishes the two cases.
+  inline size_t size_forwarded();
+
   // type test operations (inlined in oop.inline.hpp)
   inline bool is_instance()    const;
   inline bool is_instanceRef() const;

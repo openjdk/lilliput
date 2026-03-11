@@ -219,6 +219,21 @@ size_t oopDesc::size_given_mark_and_klass(markWord mrk, const Klass* kls) {
   return sz;
 }
 
+size_t oopDesc::size_forwarded() {
+  assert(is_forwarded(), "must be forwarded");
+  markWord m = mark();
+  oop fwd = forwardee(m);
+  markWord fm = fwd->mark();
+  Klass* klass = UseCompactObjectHeaders ? fm.klass() : fwd->klass();
+  size_t sz = fwd->base_size_given_klass(fm, klass);
+  if (UseCompactObjectHeaders && !m.is_forward_expanded()) {
+    if (fm.is_expanded() && klass->expand_for_hash(fwd, fm)) {
+      sz = align_object_size(sz + 1);
+    }
+  }
+  return sz;
+}
+
 size_t oopDesc::copy_size(size_t size, markWord mark) const {
   if (UseCompactObjectHeaders) {
     assert(!mark.has_displaced_mark_helper(), "must not be displaced");
@@ -428,6 +443,9 @@ oop oopDesc::forward_to_atomic(oop p, markWord compare, atomic_memory_order orde
   assert(cast_from_oop<oopDesc*>(p) != this,
          "must not be used for self-forwarding, use forward_to_self_atomic() instead");
   markWord m = markWord::encode_pointer_as_mark(p);
+  if (UseCompactObjectHeaders && compare.is_hashed_not_expanded()) {
+    m = m.set_forward_expanded();
+  }
   assert(forwardee(m) == p, "encoding must be reversible");
   return cas_set_forwardee(m, compare, order);
 }
