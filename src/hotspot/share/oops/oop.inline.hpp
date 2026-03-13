@@ -223,15 +223,18 @@ size_t oopDesc::size_forwarded() {
   assert(is_forwarded(), "must be forwarded");
   markWord m = mark();
   oop fwd = forwardee(m);
-  markWord fm = fwd->mark();
-  Klass* klass = UseCompactObjectHeaders ? fm.klass() : fwd->klass();
-  size_t sz = fwd->base_size_given_klass(fm, klass);
-  if (UseCompactObjectHeaders && !m.is_forward_expanded()) {
-    if (fm.is_expanded() && klass->expand_for_hash(fwd, fm)) {
-      sz = align_object_size(sz + 1);
-    }
+  if (!UseCompactObjectHeaders) {
+    return fwd->size();
   }
-  return sz;
+  markWord fm = fwd->mark();
+  Klass* klass = fm.klass();
+  if (m.is_forward_expanded()) {
+    // Forwardee was expanded during copy but the original was not.
+    // Original must have base size.
+    return fwd->base_size_given_klass(fm, klass);
+  }
+  // Original and copy have same size (whether expanded or not).
+  return fwd->size_given_mark_and_klass(fm, klass);
 }
 
 size_t oopDesc::copy_size(size_t size, markWord mark) const {

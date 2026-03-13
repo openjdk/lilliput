@@ -143,8 +143,9 @@ class oopDesc {
   inline size_t size_given_mark_and_klass(markWord mrk, const Klass* kls);
 
   // Returns the size of a forwarded object in its original (source) space.
-  // The forwardee may have been expanded for identity hash during copy,
-  // but the original was not; forward_expanded distinguishes the two cases.
+  // Only valid for scavenge-style forwarding (oopDesc::forward_to(/_atomic)), where the
+  // forwardee is a real copied object. Not valid for full GC sliding forwarding,
+  // which encodes the destination differently in the mark word.
   inline size_t size_forwarded();
 
   // type test operations (inlined in oop.inline.hpp)
