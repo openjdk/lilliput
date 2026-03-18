@@ -1298,6 +1298,15 @@ oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, ShenandoahHeapReg
   size_t old_size = ShenandoahForwarding::size(p);
   size_t size = p->copy_size(old_size, mark);
 
+  // Simulate a mutator concurrently hashing the object between the mark capture
+  // and the object copy. This deterministically triggers the race that would
+  // otherwise require a mutator thread to call identityHashCode() on a from-space
+  // reference in a narrow window during concurrent evacuation.
+  if (ShenandoahHashEvacBeforeCopy && !mark.is_hashed()) {
+    markWord new_mark = mark.set_hashed_not_expanded();
+    p->cas_set_mark(new_mark, mark);
+  }
+
 #ifdef ASSERT
   if (ShenandoahOOMDuringEvacALot &&
       (os::random() & 1) == 0) { // Simulate OOM every ~2nd slow-path call
@@ -1332,8 +1341,20 @@ oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, ShenandoahHeapReg
   // Copy the object:
   Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(p), copy, old_size);
 
-  // Try to install the new forwarding pointer.
+  // Restore the copy's mark word to the one we captured before the copy.
+  // A mutator thread may have concurrently hashed the original (changing its
+  // mark from no_hash to is_hashed_not_expanded) between our mark capture
+  // and the copy. The copy would then carry the updated mark, but the
+  // allocation size was computed from the captured mark and may not include
+  // the extra word needed for hash expansion. Restoring the captured mark
+  // ensures initialize_hash_if_necessary() below will not write a hash
+  // beyond the allocated space.
   oop copy_val = cast_to_oop(copy);
+  if (UseCompactObjectHeaders) {
+    copy_val->set_mark(mark);
+  }
+
+  // Try to install the new forwarding pointer.
   oop result = ShenandoahForwarding::try_update_forwardee(p, copy_val);
   if (result == copy_val) {
     // Successfully evacuated. Our copy is now the public one!

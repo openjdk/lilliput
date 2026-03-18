@@ -467,6 +467,11 @@
   product(bool, ShenandoahAllocFailureALot, false, DIAGNOSTIC,              \
           "Testing: make lots of artificial allocation failures.")          \
                                                                             \
+  develop(bool, ShenandoahHashEvacBeforeCopy, false,                        \
+          "Testing: simulate concurrent identity hashing of the "          \
+          "original object between mark capture and object copy "          \
+          "during evacuation.")                                            \
+                                                                            \
   product(uintx, ShenandoahCoalesceChance, 0, DIAGNOSTIC,                   \
           "Testing: Abandon remaining mixed collections with this "         \
           "likelihood. Following each mixed collection, abandon all "       \
