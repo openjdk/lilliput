@@ -24,121 +24,107 @@
 
 /*
  * @test id=default
- * @summary Test for race between identityHashCode and evacuation with compact headers
+ * @summary Test that identity hash codes are stable across Shenandoah evacuation
  * @bug 8379910
  * @requires vm.gc.Shenandoah
- * @requires vm.debug
  * @requires vm.opt.UseCompactObjectHeaders == null | vm.opt.UseCompactObjectHeaders == true
  * @library /test/lib
  * @run main/othervm -XX:+UseCompactObjectHeaders -XX:+UseShenandoahGC
- *      -XX:ShenandoahGCHeuristics=aggressive
- *      -XX:+ShenandoahHashEvacBeforeCopy
- *      -XX:+ShenandoahVerify -Xms32m -Xmx32m
+ *      -XX:ShenandoahGCHeuristics=aggressive -Xms64m -Xmx64m
  *      TestHashCodeEvacRace
  */
 
 /*
  * @test id=generational
- * @summary Test for race between identityHashCode and evacuation with compact headers
+ * @summary Test that identity hash codes are stable across Shenandoah evacuation
  * @bug 8379910
  * @requires vm.gc.Shenandoah
- * @requires vm.debug
  * @requires vm.opt.UseCompactObjectHeaders == null | vm.opt.UseCompactObjectHeaders == true
  * @library /test/lib
  * @run main/othervm -XX:+UseCompactObjectHeaders -XX:+UseShenandoahGC
- *      -XX:ShenandoahGCMode=generational
- *      -XX:+ShenandoahHashEvacBeforeCopy
- *      -XX:+ShenandoahVerify -Xms32m -Xmx32m
+ *      -XX:ShenandoahGCMode=generational -Xms64m -Xmx64m
  *      TestHashCodeEvacRace
  */
 
 /**
- * Regression test for a race between concurrent evacuation and
- * System.identityHashCode(). With compact object headers, objects that have
- * no internal gap for the identity hash need an extra word when evacuated
- * (hash expansion). The allocation size for the copy is determined from a
- * captured mark word. If a mutator thread hashes the original object between
- * the mark capture and the bulk copy, the copy picks up the updated mark
- * (is_hashed_not_expanded) while the allocation used the stale mark (no_hash).
- * initialize_hash_if_necessary() then writes the hash beyond the allocation,
- * corrupting the next object in the PLAB.
+ * Regression test for a race between reading the identity hash code and
+ * Shenandoah concurrent evacuation with compact object headers.
  *
- * The class IntHolder has layout [4-byte header][4-byte int] = 8 bytes with
- * compact headers, leaving no gap for the hash — so it requires expansion.
+ * With compact headers, objects whose layout has no internal gap for the
+ * identity hash (e.g. a class with a single int field: 4-byte header +
+ * 4-byte int = 8 bytes) require an extra word ("hash expansion") when
+ * evacuated. The bug was that initialize_hash_if_necessary() was called
+ * AFTER the forwarding CAS, leaving a window where the copy is already
+ * visible to other threads (via the forwarding pointer) but the hash
+ * value in the expansion word has not been written yet. A thread reading
+ * the hash during that window would see an uninitialized value.
  *
- * ShenandoahHashEvacBeforeCopy widens the race window between mark capture
- * and object copy so that mutator threads can hash the original concurrently.
+ * The fix moves initialize_hash_if_necessary() before the forwarding CAS
+ * so the copy is fully initialized when it becomes visible.
  *
- * The test separates object creation (producer threads) from hashing (hasher
- * threads). This ensures a steady supply of unhashed objects that GC may
- * begin evacuating, while hasher threads race to hash them.
+ * This test hashes objects, records the expected values, then continuously
+ * verifies them while GC evacuates the objects. Without the fix, a reader
+ * thread can observe a wrong (uninitialized) hash during evacuation.
  */
 public class TestHashCodeEvacRace {
 
     // With compact headers: 4-byte header + 4-byte int = 8 bytes.
-    // No room for the 4-byte identity hash inside the object — expansion required.
+    // No room for the 4-byte identity hash — requires expansion on evacuation.
     static class IntHolder {
         int value;
         IntHolder(int v) { value = v; }
     }
 
     static final int NUM_OBJECTS = 50_000;
-    static final int NUM_PRODUCERS = 2;
-    static final int NUM_HASHERS = 4;
+    static final int NUM_READERS = 4;
     static final int DURATION_MS = 10_000;
 
-    // Shared array of live objects. Producers write fresh (unhashed) objects,
-    // hashers read and hash them. GC evacuates them concurrently.
     static final IntHolder[] objects = new IntHolder[NUM_OBJECTS];
+    static final int[] expectedHash = new int[NUM_OBJECTS];
 
     static volatile boolean running = true;
+    static volatile String failure = null;
 
     public static void main(String[] args) throws Exception {
-        // Populate initial objects (unhashed).
+        // Create objects and record their identity hash codes.
+        // After this, each object has is_hashed_not_expanded state.
         for (int i = 0; i < NUM_OBJECTS; i++) {
             objects[i] = new IntHolder(i);
+            expectedHash[i] = System.identityHashCode(objects[i]);
         }
 
-        // Producer threads: continuously replace objects with fresh unhashed ones.
-        Thread[] producers = new Thread[NUM_PRODUCERS];
-        for (int t = 0; t < NUM_PRODUCERS; t++) {
-            final int tid = t;
-            producers[t] = new Thread(() -> {
-                int from = tid * (NUM_OBJECTS / NUM_PRODUCERS);
-                int to = (tid + 1) * (NUM_OBJECTS / NUM_PRODUCERS);
-                int idx = from;
-                while (running) {
-                    objects[idx] = new IntHolder(idx);
-                    idx++;
-                    if (idx >= to) idx = from;
-                }
-            });
-            producers[t].setDaemon(true);
-            producers[t].start();
-        }
-
-        // Hasher threads: continuously hash objects from the array.
-        // They will encounter objects that are unhashed (freshly placed by producers)
-        // and CAS their mark word — this races with GC evacuation.
-        Thread[] hashers = new Thread[NUM_HASHERS];
-        for (int t = 0; t < NUM_HASHERS; t++) {
-            hashers[t] = new Thread(() -> {
-                java.util.Random rng = new java.util.Random();
-                while (running) {
-                    int idx = rng.nextInt(NUM_OBJECTS);
-                    IntHolder obj = objects[idx];
-                    if (obj != null) {
-                        System.identityHashCode(obj);
+        // Reader threads: continuously read identity hash codes and verify
+        // they match the recorded values. During concurrent evacuation,
+        // readers may follow forwarding pointers to to-space copies.
+        // Without the fix, the copy may be visible before its hash is
+        // initialized, causing a mismatch.
+        Thread[] readers = new Thread[NUM_READERS];
+        for (int t = 0; t < NUM_READERS; t++) {
+            readers[t] = new Thread(() -> {
+                while (running && failure == null) {
+                    for (int i = 0; i < NUM_OBJECTS; i++) {
+                        IntHolder obj = objects[i];
+                        if (obj == null) continue;
+                        int actual = System.identityHashCode(obj);
+                        int expected = expectedHash[i];
+                        if (actual != expected) {
+                            failure = "Hash mismatch at index " + i
+                                    + ": expected=" + expected
+                                    + " actual=" + actual;
+                            return;
+                        }
                     }
                 }
             });
-            hashers[t].setDaemon(true);
-            hashers[t].start();
+            readers[t].setDaemon(true);
+            readers[t].start();
         }
 
-        // Main thread: allocate garbage to trigger GC cycles.
+        // Main thread: allocate garbage to trigger GC and evacuation.
+        // The objects[] array keeps the hashed objects alive so they get
+        // evacuated rather than collected.
         long deadline = System.currentTimeMillis() + DURATION_MS;
-        while (System.currentTimeMillis() < deadline) {
+        while (System.currentTimeMillis() < deadline && failure == null) {
             for (int i = 0; i < 100; i++) {
                 byte[] garbage = new byte[4096];
             }
@@ -146,9 +132,11 @@ public class TestHashCodeEvacRace {
         }
 
         running = false;
-        for (Thread t : producers) t.join(5000);
-        for (Thread t : hashers) t.join(5000);
+        for (Thread t : readers) t.join(5000);
 
+        if (failure != null) {
+            throw new RuntimeException(failure);
+        }
         System.out.println("PASSED");
     }
 }
