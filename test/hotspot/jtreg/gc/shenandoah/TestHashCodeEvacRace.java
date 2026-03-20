@@ -1,5 +1,5 @@
 /*
- * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
+ * Copyright (c) 2026, Datadog, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,7 +30,7 @@
  * @requires vm.opt.UseCompactObjectHeaders == null | vm.opt.UseCompactObjectHeaders == true
  * @library /test/lib
  * @run main/othervm -XX:+UseCompactObjectHeaders -XX:+UseShenandoahGC
- *      -XX:ShenandoahGCHeuristics=aggressive -Xms64m -Xmx64m
+ *      -Xms64m -Xmx64m
  *      TestHashCodeEvacRace
  */
 
