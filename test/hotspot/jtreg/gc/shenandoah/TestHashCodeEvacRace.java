@@ -46,6 +46,54 @@
  *      TestHashCodeEvacRace
  */
 
+/*
+ * @test id=serial
+ * @summary Test that identity hash codes are stable across Serial GC
+ * @bug 8379910
+ * @requires vm.gc.Serial
+ * @requires vm.opt.UseCompactObjectHeaders == null | vm.opt.UseCompactObjectHeaders == true
+ * @library /test/lib
+ * @run main/othervm -XX:+UseCompactObjectHeaders -XX:+UseSerialGC
+ *      -Xms64m -Xmx64m
+ *      TestHashCodeEvacRace
+ */
+
+/*
+ * @test id=parallel
+ * @summary Test that identity hash codes are stable across Parallel GC
+ * @bug 8379910
+ * @requires vm.gc.Parallel
+ * @requires vm.opt.UseCompactObjectHeaders == null | vm.opt.UseCompactObjectHeaders == true
+ * @library /test/lib
+ * @run main/othervm -XX:+UseCompactObjectHeaders -XX:+UseParallelGC
+ *      -Xms64m -Xmx64m
+ *      TestHashCodeEvacRace
+ */
+
+/*
+ * @test id=g1
+ * @summary Test that identity hash codes are stable across G1 GC
+ * @bug 8379910
+ * @requires vm.gc.G1
+ * @requires vm.opt.UseCompactObjectHeaders == null | vm.opt.UseCompactObjectHeaders == true
+ * @library /test/lib
+ * @run main/othervm -XX:+UseCompactObjectHeaders -XX:+UseG1GC
+ *      -Xms64m -Xmx64m
+ *      TestHashCodeEvacRace
+ */
+
+/*
+ * @test id=zgc
+ * @summary Test that identity hash codes are stable across ZGC
+ * @bug 8379910
+ * @requires vm.gc.Z
+ * @requires vm.opt.UseCompactObjectHeaders == null | vm.opt.UseCompactObjectHeaders == true
+ * @library /test/lib
+ * @run main/othervm -XX:+UseCompactObjectHeaders -XX:+UseZGC
+ *      -Xms64m -Xmx64m
+ *      TestHashCodeEvacRace
+ */
+
 /**
  * Regression test for a race between reading the identity hash code and
  * Shenandoah concurrent evacuation with compact object headers.
