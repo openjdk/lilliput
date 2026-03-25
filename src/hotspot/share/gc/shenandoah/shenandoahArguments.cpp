@@ -24,7 +24,6 @@
  *
  */
 
-#include "gc/shared/fullGCForwarding.hpp"
 #include "gc/shared/gcArguments.hpp"
 #include "gc/shared/tlab_globals.hpp"
 #include "gc/shared/workerPolicy.hpp"
@@ -207,8 +206,6 @@ void ShenandoahArguments::initialize() {
         ShenandoahMomentaryAllocRateSampleWindow, ShenandoahRecentAllocRateSampleWindow,
         ShenandoahAllocRateSampleWindow));
   }
-
-  FullGCForwarding::initialize_flags(MaxHeapSize);
 }
 
 size_t ShenandoahArguments::conservative_max_heap_alignment() {
