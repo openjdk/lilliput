@@ -161,7 +161,7 @@ static int archive_array_length(oopDesc* archive_array) {
 // triggers oop verification.  ZGC's verifier rejects non-heap addresses,
 // so we must suspend the check for that call.
 #ifdef CHECK_UNHANDLED_OOPS
-class SuspendCheckOopFunction {
+class SuspendCheckOopFunction : public StackObj {
   CheckOopFunctionPointer _saved;
 public:
   SuspendCheckOopFunction()  : _saved(check_oop_function) { check_oop_function = nullptr; }
@@ -170,7 +170,7 @@ public:
 #endif
 
 static bool archive_expand_for_hash(Klass* klass, oopDesc* archive_object) {
-  DEBUG_ONLY(SuspendCheckOopFunction suspend;)
+  CHECK_UNHANDLED_OOPS_ONLY(SuspendCheckOopFunction suspend;)
   return klass->expand_for_hash(archive_object, archive_object->mark());
 }
 
