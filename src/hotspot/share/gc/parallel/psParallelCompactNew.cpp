@@ -425,7 +425,6 @@ void PSParallelCompactNew::setup_regions_parallel() {
 size_t PSParallelCompactNew::compute_region_size() {
   // Default 0.5MB Region Size
   const size_t FLOOR_REGION_SIZE_WORDS = (SpaceAlignment / HeapWordSize);
-  
   size_t total_heap_words = 0;
   for (uint i = old_space_id; i < last_space_id; ++i) {
     total_heap_words += _space_info[i].space()->capacity_in_words();
@@ -437,7 +436,6 @@ size_t PSParallelCompactNew::compute_region_size() {
   const uint max_workers = ParallelScavengeHeap::heap()->workers().max_workers();
   const size_t total_regions_count = (size_t)max_workers * RegionsPerWorker;
   const size_t DYNAMIC_REGION_SIZE_WORDS = round_up_power_of_2(total_heap_words / total_regions_count);
-  
   return MAX2(DYNAMIC_REGION_SIZE_WORDS, FLOOR_REGION_SIZE_WORDS);
 }
 
