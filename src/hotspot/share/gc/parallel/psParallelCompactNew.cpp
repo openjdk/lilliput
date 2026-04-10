@@ -374,7 +374,6 @@ void PSParallelCompactNew::post_compact()
 }
 
 void PSParallelCompactNew::setup_regions_parallel() {
-
   static const size_t REGION_SIZE_WORDS = compute_region_size();
   log_debug(gc, compaction)("RegionSizeBytes: %zu bytes (%.2f MB)", REGION_SIZE_WORDS * HeapWordSize, (double)(REGION_SIZE_WORDS * HeapWordSize) / (1024.0 * 1024.0));
 
@@ -424,7 +423,6 @@ void PSParallelCompactNew::setup_regions_parallel() {
 }
 
 size_t PSParallelCompactNew::compute_region_size() {
-  
   // Default 0.5MB Region Size
   const size_t FLOOR_REGION_SIZE_WORDS = (SpaceAlignment / HeapWordSize);
   
@@ -441,7 +439,6 @@ size_t PSParallelCompactNew::compute_region_size() {
   const size_t DYNAMIC_REGION_SIZE_WORDS = round_up_power_of_2(total_heap_words / total_regions_count);
   
   return MAX2(DYNAMIC_REGION_SIZE_WORDS, FLOOR_REGION_SIZE_WORDS);
-
 }
 
 void PSParallelCompactNew::setup_regions_serial() {
