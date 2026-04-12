@@ -374,7 +374,7 @@ void PSParallelCompactNew::post_compact()
 }
 
 void PSParallelCompactNew::setup_regions_parallel() {
-  static const size_t REGION_SIZE_WORDS = compute_region_size();
+  const size_t REGION_SIZE_WORDS = compute_region_size();
   log_debug(gc, compaction)("Region size: %zu bytes (%.2f MB)", REGION_SIZE_WORDS * HeapWordSize, (double)(REGION_SIZE_WORDS * HeapWordSize) / (1024.0 * 1024.0));
 
   size_t num_regions = 0;
