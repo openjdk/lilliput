@@ -375,7 +375,6 @@ void PSParallelCompactNew::post_compact()
 
 void PSParallelCompactNew::setup_regions_parallel() {
   const size_t REGION_SIZE_WORDS = compute_region_size();
-  log_debug(gc, compaction)("Region size: %zu bytes (%.2f MB)", REGION_SIZE_WORDS * HeapWordSize, (double)(REGION_SIZE_WORDS * HeapWordSize) / (1024.0 * 1024.0));
 
   size_t num_regions = 0;
   for (uint i = old_space_id; i < last_space_id; ++i) {
@@ -419,23 +418,23 @@ void PSParallelCompactNew::setup_regions_parallel() {
     }
   }
   _num_regions = region_idx;
-  log_info(gc)("Number of regions: %zu", _num_regions);
+  log_info(gc)("Number of regions: %zu, region size: " EXACTFMT, _num_regions, EXACTFMTARGS(REGION_SIZE_WORDS * HeapWordSize));
 }
 
 size_t PSParallelCompactNew::compute_region_size() {
-  // Minimum 0.5MB Region Size
-  const size_t FLOOR_REGION_SIZE_WORDS = (SpaceAlignment / HeapWordSize);
+  // Minimum 0.5MB region size
+  const size_t floor_region_size_words = (SpaceAlignment / HeapWordSize);
   size_t total_heap_words = 0;
   for (uint i = old_space_id; i < last_space_id; ++i) {
     total_heap_words += _space_info[i].space()->capacity_in_words();
   }
 
   // Per-worker region count for dynamic region sizing
-  const uint RegionsPerWorker = 20;  // Based on 5% boundary waste threshold
+  const uint regions_per_worker = 20;  // Based on 5% boundary waste threshold
   const uint max_workers = ParallelScavengeHeap::heap()->workers().max_workers();
-  const size_t total_regions_count = (size_t)max_workers * RegionsPerWorker;
-  const size_t DYNAMIC_REGION_SIZE_WORDS = total_heap_words / total_regions_count;
-  return round_up_power_of_2(MAX2(DYNAMIC_REGION_SIZE_WORDS, FLOOR_REGION_SIZE_WORDS));
+  const size_t total_regions_count = (size_t)max_workers * regions_per_worker;
+  const size_t dynamic_region_size_words = total_heap_words / total_regions_count;
+  return round_up_power_of_2(MAX2(dynamic_region_size_words, floor_region_size_words));
 }
 
 void PSParallelCompactNew::setup_regions_serial() {
