@@ -374,13 +374,13 @@ void PSParallelCompactNew::post_compact()
 }
 
 void PSParallelCompactNew::setup_regions_parallel() {
-  const size_t REGION_SIZE_WORDS = compute_region_size();
+  const size_t region_size_words = calculate_region_size();
 
   size_t num_regions = 0;
   for (uint i = old_space_id; i < last_space_id; ++i) {
     MutableSpace* const space = _space_info[i].space();
     size_t const space_size_words = space->capacity_in_words();
-    num_regions += align_up(space_size_words, REGION_SIZE_WORDS) / REGION_SIZE_WORDS;
+    num_regions += align_up(space_size_words, region_size_words) / region_size_words;
   }
   _region_data_array = NEW_C_HEAP_ARRAY(PCRegionData, num_regions, mtGC);
 
@@ -391,7 +391,7 @@ void PSParallelCompactNew::setup_regions_parallel() {
     HeapWord* sp_end = space->end();
     HeapWord* sp_top = space->top();
     while (addr < sp_end) {
-      HeapWord* end = MIN2(align_up(addr + REGION_SIZE_WORDS, REGION_SIZE_WORDS), space->end());
+      HeapWord* end = MIN2(align_up(addr + region_size_words, region_size_words), space->end());
       if (addr < sp_top) {
         HeapWord* prev_obj_start = _mark_bitmap.find_obj_beg_reverse(addr, end);
         if (prev_obj_start < end) {
@@ -418,10 +418,10 @@ void PSParallelCompactNew::setup_regions_parallel() {
     }
   }
   _num_regions = region_idx;
-  log_info(gc)("Number of regions: %zu, region size: " EXACTFMT, _num_regions, EXACTFMTARGS(REGION_SIZE_WORDS * HeapWordSize));
+  log_info(gc)("Number of regions: %zu, region size: " EXACTFMT, _num_regions, EXACTFMTARGS(region_size_words * HeapWordSize));
 }
 
-size_t PSParallelCompactNew::compute_region_size() {
+size_t PSParallelCompactNew::calculate_region_size() {
   // Minimum 0.5MB region size
   const size_t floor_region_size_words = (SpaceAlignment / HeapWordSize);
   size_t total_heap_words = 0;
