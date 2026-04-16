@@ -423,18 +423,18 @@ void PSParallelCompactNew::setup_regions_parallel() {
 
 size_t PSParallelCompactNew::calculate_region_size() {
   // Minimum 0.5MB region size
-  const size_t floor_region_size_words = (SpaceAlignment / HeapWordSize);
+  static const size_t FLOOR_REGION_SIZE_WORDS = (SpaceAlignment / HeapWordSize);
   size_t total_heap_words = 0;
   for (uint i = old_space_id; i < last_space_id; ++i) {
     total_heap_words += _space_info[i].space()->capacity_in_words();
   }
 
   // Per-worker region count for dynamic region sizing
-  const uint regions_per_worker = 20;  // Based on 5% boundary waste threshold
+  static const uint REGIONS_PER_WORKER = 20;  // Based on 5% boundary waste threshold
   const uint max_workers = ParallelScavengeHeap::heap()->workers().max_workers();
-  const size_t total_regions_count = (size_t)max_workers * regions_per_worker;
+  const size_t total_regions_count = (size_t)max_workers * REGIONS_PER_WORKER;
   const size_t dynamic_region_size_words = total_heap_words / total_regions_count;
-  return round_up_power_of_2(MAX2(dynamic_region_size_words, floor_region_size_words));
+  return round_up_power_of_2(MAX2(dynamic_region_size_words, FLOOR_REGION_SIZE_WORDS));
 }
 
 void PSParallelCompactNew::setup_regions_serial() {
