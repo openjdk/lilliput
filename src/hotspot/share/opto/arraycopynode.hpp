@@ -63,6 +63,7 @@ private:
   // LibraryCallKit::tightly_coupled_allocation() is called.
   bool _alloc_tightly_coupled;
   bool _has_negative_length_guard;
+  bool _should_copy_int_prefix;
 
   bool _arguments_validated;
 
@@ -96,7 +97,7 @@ public:
   }
 
 private:
-  ArrayCopyNode(Compile* C, bool alloc_tightly_coupled, bool has_negative_length_guard);
+  ArrayCopyNode(Compile* C, bool alloc_tightly_coupled, bool has_negative_length_guard, bool should_copy_int_prefix);
 
   intptr_t get_length_if_constant(PhaseGVN *phase) const;
   int get_count(PhaseGVN *phase) const;
@@ -153,7 +154,8 @@ public:
                              bool alloc_tightly_coupled,
                              bool has_negative_length_guard,
                              Node* src_klass = nullptr, Node* dest_klass = nullptr,
-                             Node* src_length = nullptr, Node* dest_length = nullptr);
+                             Node* src_length = nullptr, Node* dest_length = nullptr,
+                             bool should_copy_int_prefix = false);
 
   void connect_outputs(GraphKit* kit, bool deoptimize_on_exception = false);
 
@@ -188,6 +190,8 @@ public:
   bool is_alloc_tightly_coupled() const { return _alloc_tightly_coupled; }
 
   bool has_negative_length_guard() const { return _has_negative_length_guard; }
+
+  bool should_copy_int_prefix() const { return _should_copy_int_prefix; }
 
   static bool may_modify(const TypeOopPtr* t_oop, MemBarNode* mb, PhaseValues* phase, ArrayCopyNode*& ac);
 

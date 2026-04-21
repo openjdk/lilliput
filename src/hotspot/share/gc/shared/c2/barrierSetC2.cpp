@@ -726,42 +726,14 @@ int BarrierSetC2::arraycopy_payload_base_offset(bool is_array) {
 
 void BarrierSetC2::clone(GraphKit* kit, Node* src_base, Node* dst_base, Node* size, bool is_array) const {
   int base_off = arraycopy_payload_base_offset(is_array);
-  if (UseCompactObjectHeaders && !is_aligned(base_off, BytesPerLong) &&
-      !kit->gvn().type(src_base)->isa_aryptr()) {
+
+  // UseCOH, and looks like an instance (could still be reflective clone of array)
+  bool should_copy_prefix = UseNewCode && UseCompactObjectHeaders && !is_aligned(base_off, BytesPerLong) && !kit->gvn().type(src_base)->isa_aryptr();
+  if (should_copy_prefix) {
     guarantee(is_aligned(base_off, BytesPerInt), "must be 4-bytes aligned");
     // The optimized copy routine only copies 8-byte words. For this reason, we must
     // copy the 4 bytes at offset 4 separately.
-    // Use the correct field-specific alias derived from the typed address, matching
-    // the pattern in PhaseMacroExpand::generate_arraycopy (macroArrayCopy.cpp).
-    // Using AliasIdxRaw would create a mismatch between the typed address and the
-    // raw memory chain, causing an escape analysis assertion failure.
-    //
-    // Skip this when src_base has an array type. With StressReflectiveCode, the
-    // instance path of the clone can be live in the IR even when the type system
-    // knows src_base is an array. The pre-copy is unnecessary on such paths (they
-    // are unreachable at runtime), and creating a LoadNode at the array length
-    // offset would assert (LoadRangeNode required).
-    Node* sptr = kit->basic_plus_adr(src_base, base_off);
-    Node* dptr = kit->basic_plus_adr(dst_base, base_off);
-    const TypePtr* s_adr_type = kit->gvn().type(sptr)->is_ptr();
-    const TypePtr* d_adr_type = kit->gvn().type(dptr)->is_ptr();
-    uint s_alias_idx = Compile::current()->get_alias_index(s_adr_type);
-    uint d_alias_idx = Compile::current()->get_alias_index(d_adr_type);
-    // This copies the first 4 bytes after the compact header (hash field
-    // or first instance field) as a raw int.  The actual field at this
-    // offset may be a narrowOop, so the load/store must be marked as
-    // mismatched to avoid StoreN-vs-StoreI assertion failures during IGVN.
-    Node* first = kit->gvn().transform(LoadNode::make(kit->gvn(), kit->control(), kit->memory(s_alias_idx),
-                                       sptr, s_adr_type, TypeInt::INT, T_INT,
-                                       MemNode::unordered, LoadNode::DependsOnlyOnTest,
-                                       false /*require_atomic_access*/, false /*unaligned*/,
-                                       true /*mismatched*/));
-    Node* st = kit->gvn().transform(StoreNode::make(kit->gvn(), kit->control(), kit->memory(d_alias_idx),
-                                                    dptr, d_adr_type,
-                                                    first, T_INT, MemNode::unordered));
-    st->as_Store()->set_mismatched_access();
-    kit->set_memory(st, d_alias_idx);
-    kit->record_for_igvn(st);
+    // base_off += sizeof(jint);
     base_off += sizeof(jint);
     guarantee(is_aligned(base_off, BytesPerLong), "must be 8-bytes aligned");
   }
@@ -777,11 +749,33 @@ void BarrierSetC2::clone(GraphKit* kit, Node* src_base, Node* dst_base, Node* si
     payload_size = kit->gvn().transform(new AddXNode(payload_size, kit->MakeConX(BytesPerLong - 1)));
   }
   payload_size = kit->gvn().transform(new URShiftXNode(payload_size, kit->intcon(LogBytesPerLong)));
-  ArrayCopyNode* ac = ArrayCopyNode::make(kit, false, src_base, offset, dst_base, offset, payload_size, true, false);
+  ArrayCopyNode* ac = ArrayCopyNode::make(kit, false, src_base, offset, dst_base, offset, payload_size, true, false, nullptr, nullptr, nullptr, nullptr, should_copy_prefix);
   if (is_array) {
     ac->set_clone_array();
   } else {
     ac->set_clone_inst();
+  }
+
+  {
+    const Type* src_type = kit->gvn().type(src_base);
+    const TypeOopPtr* oopptr = src_type->isa_oopptr();
+    const char* klass_name = "unknown";
+    if (oopptr != nullptr) {
+      const TypeInstPtr* instptr = oopptr->isa_instptr();
+      const TypeAryPtr* aryptr = oopptr->isa_aryptr();
+      if (instptr != nullptr) {
+        klass_name = instptr->instance_klass()->external_name();
+      } else if (aryptr != nullptr && aryptr->klass_is_exact()) {
+        klass_name = aryptr->exact_klass()->external_name();
+      }
+    }
+    tty->print("BarrierSetC2::clone: is_array=%d base_off=%d klass=%s payload_size_in_longs=",
+        is_array, base_off, klass_name);
+    if (payload_size->is_Con()) {
+      tty->print_cr("%ld", payload_size->get_long());
+    } else {
+      tty->print_cr("non-const");
+    }
   }
   Node* n = kit->gvn().transform(ac);
   if (n == ac) {
@@ -929,14 +923,44 @@ void BarrierSetC2::clone_at_expansion(PhaseMacroExpand* phase, ArrayCopyNode* ac
 
   Node* payload_src = phase->basic_plus_adr(src, src_offset);
   Node* payload_dst = phase->basic_plus_adr(dest, dest_offset);
+  MergeMemNode* mm = MergeMemNode::make(mem);
+
+  if (ac->should_copy_int_prefix()) {
+      // Copied from PhaseMacroExpand::generate_block_arraycopy() which does a 4-byte prefix copy if not aligned
+      Node* sptr = phase->basic_plus_adr(payload_src, -4);
+      Node* dptr = phase->basic_plus_adr(payload_dst, -4); // TODO - should this be raw or not?
+      const TypePtr* s_adr_type = phase->igvn().type(sptr)->is_ptr();
+      const TypePtr* d_adr_type = phase->igvn().type(dptr)->is_ptr();
+      uint s_alias_idx = phase->C->get_alias_index(s_adr_type);
+      uint d_alias_idx = phase->C->get_alias_index(d_adr_type);
+      bool is_mismatched = true; //(basic_elem_type != T_INT); // TODO: ?
+      Node* sval = phase->transform_later(
+          LoadNode::make(phase->igvn(), ctrl, mm->memory_at(s_alias_idx), sptr, s_adr_type,
+                         TypeInt::INT, T_INT, MemNode::unordered, LoadNode::DependsOnlyOnTest,
+                         false /*require_atomic_access*/, false /*unaligned*/, is_mismatched));
+      Node* st = phase->transform_later(
+          StoreNode::make(phase->igvn(), ctrl, mm->memory_at(d_alias_idx), dptr, d_adr_type,
+                          sval, T_INT, MemNode::unordered));
+      if (is_mismatched) {
+        st->as_Store()->set_mismatched_access();
+      }
+      mm->set_memory_at(d_alias_idx, st);
+  }
 
   const char* copyfunc_name = "arraycopy";
   address     copyfunc_addr = phase->basictype2arraycopy(T_LONG, nullptr, nullptr, true, copyfunc_name, true);
 
+  tty->print("clone_at_expansion: should_copy_int_prefix=%d", ac->should_copy_int_prefix());
+  if (src_offset->is_Con()) tty->print(" src_off=%ld", src_offset->get_long());
+  else tty->print(" src_off=non-const");
+  if (length->is_Con()) tty->print(" length_longs=%ld", length->get_long());
+  else tty->print(" length_longs=non-const");
+  tty->print_cr(" copyfunc=%s", copyfunc_name);
+
   const TypePtr* raw_adr_type = TypeRawPtr::BOTTOM;
   const TypeFunc* call_type = OptoRuntime::fast_arraycopy_Type();
 
-  Node* call = phase->make_leaf_call(ctrl, mem, call_type, copyfunc_addr, copyfunc_name, raw_adr_type, payload_src, payload_dst, length XTOP);
+  Node* call = phase->make_leaf_call(ctrl, mm, call_type, copyfunc_addr, copyfunc_name, raw_adr_type, payload_src, payload_dst, length XTOP);
   phase->transform_later(call);
 
   phase->igvn().replace_node(ac, call);

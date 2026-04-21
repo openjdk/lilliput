@@ -955,6 +955,11 @@ void ShenandoahBarrierSetC2::clone_at_expansion(PhaseMacroExpand* phase, ArrayCo
     ctrl = phase->transform_later(region);
     mem = phase->transform_later(mem_phi);
 
+    // Handle prefix
+    if (ac->should_copy_int_prefix()) {
+      // TODO
+    }
+
     const char* name = "arraycopy";
     call = phase->make_leaf_call(ctrl, mem,
                                  OptoRuntime::fast_arraycopy_Type(),

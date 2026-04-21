@@ -32,11 +32,12 @@
 
 const TypeFunc* ArrayCopyNode::_arraycopy_type_Type = nullptr;
 
-ArrayCopyNode::ArrayCopyNode(Compile* C, bool alloc_tightly_coupled, bool has_negative_length_guard)
+ArrayCopyNode::ArrayCopyNode(Compile* C, bool alloc_tightly_coupled, bool has_negative_length_guard, bool should_copy_int_prefix)
   : CallNode(arraycopy_type(), nullptr, TypePtr::BOTTOM),
     _kind(None),
     _alloc_tightly_coupled(alloc_tightly_coupled),
     _has_negative_length_guard(has_negative_length_guard),
+    _should_copy_int_prefix(should_copy_int_prefix),
     _arguments_validated(false),
     _src_type(TypeOopPtr::BOTTOM),
     _dest_type(TypeOopPtr::BOTTOM) {
@@ -54,9 +55,10 @@ ArrayCopyNode* ArrayCopyNode::make(GraphKit* kit, bool may_throw,
                                    bool alloc_tightly_coupled,
                                    bool has_negative_length_guard,
                                    Node* src_klass, Node* dest_klass,
-                                   Node* src_length, Node* dest_length) {
+                                   Node* src_length, Node* dest_length,
+                                   bool should_copy_int_prefix) {
 
-  ArrayCopyNode* ac = new ArrayCopyNode(kit->C, alloc_tightly_coupled, has_negative_length_guard);
+  ArrayCopyNode* ac = new ArrayCopyNode(kit->C, alloc_tightly_coupled, has_negative_length_guard, should_copy_int_prefix);
   kit->set_predefined_input_for_runtime_call(ac);
 
   ac->init_req(ArrayCopyNode::Src, src);
@@ -588,6 +590,10 @@ Node *ArrayCopyNode::Ideal(PhaseGVN *phase, bool can_reshape) {
 
   if (count < 0 || count > ArrayCopyLoadStoreMaxElem) {
     return nullptr;
+  }
+
+  if (is_clonebasic()) {
+    tty->print_cr("ArrayCopyNode::Ideal: inlining clone as %d load/store pairs", count);
   }
 
   Node* mem = try_clone_instance(phase, can_reshape, count);
