@@ -959,7 +959,6 @@ void ShenandoahBarrierSetC2::clone_at_expansion(PhaseMacroExpand* phase, ArrayCo
     int base_off = arraycopy_payload_base_offset(ac->is_clone_array());
     MergeMemNode* mm = MergeMemNode::make(mem);
     if (!is_aligned(base_off, BytesPerLong)) {
-      tty->print_cr("shenandoah clone_at_expansion unaligned, base_offset=%d: ", base_off);
       guarantee(is_aligned(base_off, BytesPerInt), "must be 4-bytes aligned");
 
       // Manual load/store of one int.
@@ -983,7 +982,7 @@ void ShenandoahBarrierSetC2::clone_at_expansion(PhaseMacroExpand* phase, ArrayCo
 
       // We've copied the prefix, bump the pointers.
       src = phase->basic_plus_adr(src_base, src, BytesPerInt);
-      dest = phase->basic_plus_adr(dest_base, dest, BytesPerInt);      
+      dest = phase->basic_plus_adr(dest_base, dest, BytesPerInt);
     }
 
     const char* name = "arraycopy";

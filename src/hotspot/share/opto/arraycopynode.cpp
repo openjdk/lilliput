@@ -590,10 +590,6 @@ Node *ArrayCopyNode::Ideal(PhaseGVN *phase, bool can_reshape) {
     return nullptr;
   }
 
-  if (is_clonebasic()) {
-    tty->print_cr("ArrayCopyNode::Ideal: inlining clone as %d load/store pairs", count);
-  }
-
   Node* mem = try_clone_instance(phase, can_reshape, count);
   if (mem != nullptr) {
     return (mem == NodeSentinel) ? nullptr : mem;

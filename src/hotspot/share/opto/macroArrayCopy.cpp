@@ -1248,16 +1248,10 @@ void PhaseMacroExpand::expand_arraycopy_node(ArrayCopyNode *ac) {
   MergeMemNode* merge_mem = nullptr;
 
   if (ac->is_clonebasic()) {
-    if (UseNewCode2) {
-      tty->print_cr("expand_arraycopy_node: clone_at_expansion (clonebasic)");
-    }
     BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
     bs->clone_at_expansion(this, ac);
     return;
   } else if (ac->is_copyof() || ac->is_copyofrange() || ac->is_clone_oop_array()) {
-    if (UseNewCode2) {
-      tty->print_cr("expand_arraycopy_node: generate_arraycopy (copyof/copyofrange/clone_oop_array)");
-    }
     Node* mem = ac->in(TypeFunc::Memory);
     merge_mem = MergeMemNode::make(mem);
     transform_later(merge_mem);

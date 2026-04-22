@@ -727,12 +727,6 @@ int BarrierSetC2::arraycopy_payload_base_offset(bool is_array) {
 void BarrierSetC2::clone(GraphKit* kit, Node* src_base, Node* dst_base, Node* size, bool is_array) const {
   int base_off = arraycopy_payload_base_offset(is_array);
 
-  // UseCOH, and looks like an instance (could still be reflective clone of array)
-  bool should_copy_prefix = UseNewCode && UseCompactObjectHeaders && !is_aligned(base_off, BytesPerLong) && !kit->gvn().type(src_base)->isa_aryptr();
-  if (should_copy_prefix) {
-    guarantee(is_aligned(base_off, BytesPerInt), "must be 4-bytes aligned");
-  }
-
   Node* payload_size = size;
   Node* offset = kit->MakeConX(base_off);
   payload_size = kit->gvn().transform(new SubXNode(payload_size, offset));
@@ -749,28 +743,6 @@ void BarrierSetC2::clone(GraphKit* kit, Node* src_base, Node* dst_base, Node* si
     ac->set_clone_array();
   } else {
     ac->set_clone_inst();
-  }
-
-  {
-    const Type* src_type = kit->gvn().type(src_base);
-    const TypeOopPtr* oopptr = src_type->isa_oopptr();
-    const char* klass_name = "unknown";
-    if (oopptr != nullptr) {
-      const TypeInstPtr* instptr = oopptr->isa_instptr();
-      const TypeAryPtr* aryptr = oopptr->isa_aryptr();
-      if (instptr != nullptr) {
-        klass_name = instptr->instance_klass()->external_name();
-      } else if (aryptr != nullptr && aryptr->klass_is_exact()) {
-        klass_name = aryptr->exact_klass()->external_name();
-      }
-    }
-    tty->print("BarrierSetC2::clone: is_array=%d base_off=%d klass=%s payload_size_in_longs=",
-        is_array, base_off, klass_name);
-    if (payload_size->is_Con()) {
-      tty->print_cr("%ld", payload_size->get_long());
-    } else {
-      tty->print_cr("non-const");
-    }
   }
   Node* n = kit->gvn().transform(ac);
   if (n == ac) {
@@ -886,17 +858,11 @@ void BarrierSetC2::clone_in_runtime(PhaseMacroExpand* phase, ArrayCopyNode* ac,
 
   // The native clone we are calling here expects the object size in words.
   // Add header/offset size to payload size to get object size.
-  
+
   // If not aligned, round *up*.
-  // TODO: get the correct length when not aligned.
+  // TODO: check this.
   Node* const base_offset = phase->MakeConX((arraycopy_payload_base_offset(ac->is_clone_array()) + 7) >> LogBytesPerLong);
   Node* full_size = phase->transform_later(new AddXNode(size, base_offset));
-
-
-  tty->print_cr("clone_in_runtime (base_offset=%d, adjusted=%d)", 
-    arraycopy_payload_base_offset(ac->is_clone_array()), 
-    (arraycopy_payload_base_offset(ac->is_clone_array()) + 7) >> LogBytesPerLong);
-
 
   // HeapAccess<>::clone expects size in heap words.
   // For 64-bits platforms, this is a no-operation.
@@ -923,22 +889,13 @@ void BarrierSetC2::clone_at_expansion(PhaseMacroExpand* phase, ArrayCopyNode* ac
   Node* dest_offset = ac->in(ArrayCopyNode::DestPos);
   Node* length = ac->in(ArrayCopyNode::Length);
 
-  Node* payload_src = phase->basic_plus_adr(src, src, src_offset);
-  Node* payload_dst = phase->basic_plus_adr(dest, dest, dest_offset);
-
-  if (UseNewCode2) {
-    tty->print("clone_at_expansion (before prefix) (aligned=%d): ", is_aligned(arraycopy_payload_base_offset(false), BytesPerLong));
-    if (src_offset->is_Con()) tty->print(" src_off=%ld", src_offset->get_long());
-    else tty->print(" src_off=non-const");
-    if (length->is_Con()) tty->print_cr(" length_ints=%ld", length->get_long());
-    else tty->print_cr(" length_ints=non-const");
-  }
+  Node* payload_src = phase->basic_plus_adr(src, src_offset);
+  Node* payload_dst = phase->basic_plus_adr(dest, dest_offset);
 
   // We do our bulk copy in longs. If base offset is not aligned, then we must copy the prefix separately.
   MergeMemNode* mm = MergeMemNode::make(mem);
   int base_off = arraycopy_payload_base_offset(ac->is_clone_array());
   if (!is_aligned(base_off, BytesPerLong)) {
-    tty->print_cr("clone_at_expansion unaligned, base_offset=%d: ", base_off);
     guarantee(is_aligned(base_off, BytesPerInt), "must be 4-bytes aligned");
 
     // Manual load/store of one int.
@@ -967,16 +924,6 @@ void BarrierSetC2::clone_at_expansion(PhaseMacroExpand* phase, ArrayCopyNode* ac
 
   const char* copyfunc_name = "arraycopy";
   address     copyfunc_addr = phase->basictype2arraycopy(T_LONG, nullptr, nullptr, true, copyfunc_name, true);
-
-  if (UseNewCode2) {
-    tty->print("clone_at_expansion: ");
-    if (src_offset->is_Con()) tty->print(" src_off=%ld", src_offset->get_long());
-    else tty->print(" src_off=non-const");
-    if (length->is_Con()) tty->print(" length_longs=%ld", length->get_long());
-    else tty->print(" length_longs=non-const");
-    tty->print_cr(" copyfunc=%s", copyfunc_name);
-  }
-
 
   const TypePtr* raw_adr_type = TypeRawPtr::BOTTOM;
   const TypeFunc* call_type = OptoRuntime::fast_arraycopy_Type();
