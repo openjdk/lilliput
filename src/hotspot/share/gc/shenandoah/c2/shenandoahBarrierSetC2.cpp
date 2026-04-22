@@ -955,13 +955,39 @@ void ShenandoahBarrierSetC2::clone_at_expansion(PhaseMacroExpand* phase, ArrayCo
     ctrl = phase->transform_later(region);
     mem = phase->transform_later(mem_phi);
 
-    // Handle prefix
-    if (ac->should_copy_int_prefix()) {
-      // TODO
+    // We do our bulk copy in longs. If base offset is not aligned, then we must copy the prefix separately.
+    int base_off = arraycopy_payload_base_offset(ac->is_clone_array());
+    MergeMemNode* mm = MergeMemNode::make(mem);
+    if (!is_aligned(base_off, BytesPerLong)) {
+      tty->print_cr("shenandoah clone_at_expansion unaligned, base_offset=%d: ", base_off);
+      guarantee(is_aligned(base_off, BytesPerInt), "must be 4-bytes aligned");
+
+      // Manual load/store of one int.
+      // Copied from PhaseMacroExpand::generate_block_arraycopy() which does a 4-byte prefix copy if not aligned.
+      const TypePtr* s_adr_type = phase->igvn().type(src)->is_ptr();
+      const TypePtr* d_adr_type = phase->igvn().type(dest)->is_ptr();
+      uint s_alias_idx = phase->C->get_alias_index(s_adr_type);
+      uint d_alias_idx = phase->C->get_alias_index(d_adr_type);
+      bool is_mismatched = true; //(basic_elem_type != T_INT); // TODO: ?
+      Node* sval = phase->transform_later(
+          LoadNode::make(phase->igvn(), ctrl, mm->memory_at(s_alias_idx), src, s_adr_type,
+                          TypeInt::INT, T_INT, MemNode::unordered, LoadNode::DependsOnlyOnTest,
+                          false /*require_atomic_access*/, false /*unaligned*/, is_mismatched));
+      Node* st = phase->transform_later(
+          StoreNode::make(phase->igvn(), ctrl, mm->memory_at(d_alias_idx), dest, d_adr_type,
+                          sval, T_INT, MemNode::unordered));
+      if (is_mismatched) {
+        st->as_Store()->set_mismatched_access();
+      }
+      mm->set_memory_at(d_alias_idx, st);
+
+      // We've copied the prefix, bump the pointers.
+      src = phase->basic_plus_adr(src_base, src, BytesPerInt);
+      dest = phase->basic_plus_adr(dest_base, dest, BytesPerInt);      
     }
 
     const char* name = "arraycopy";
-    call = phase->make_leaf_call(ctrl, mem,
+    call = phase->make_leaf_call(ctrl, mm,
                                  OptoRuntime::fast_arraycopy_Type(),
                                  phase->basictype2arraycopy(T_LONG, nullptr, nullptr, true, name, true),
                                  name, TypeRawPtr::BOTTOM,

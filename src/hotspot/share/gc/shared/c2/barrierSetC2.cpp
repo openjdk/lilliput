@@ -731,11 +731,6 @@ void BarrierSetC2::clone(GraphKit* kit, Node* src_base, Node* dst_base, Node* si
   bool should_copy_prefix = UseNewCode && UseCompactObjectHeaders && !is_aligned(base_off, BytesPerLong) && !kit->gvn().type(src_base)->isa_aryptr();
   if (should_copy_prefix) {
     guarantee(is_aligned(base_off, BytesPerInt), "must be 4-bytes aligned");
-    // The optimized copy routine only copies 8-byte words. For this reason, we must
-    // copy the 4 bytes at offset 4 separately.
-    // base_off += sizeof(jint);
-    base_off += sizeof(jint);
-    guarantee(is_aligned(base_off, BytesPerLong), "must be 8-bytes aligned");
   }
 
   Node* payload_size = size;
@@ -749,7 +744,7 @@ void BarrierSetC2::clone(GraphKit* kit, Node* src_base, Node* dst_base, Node* si
     payload_size = kit->gvn().transform(new AddXNode(payload_size, kit->MakeConX(BytesPerLong - 1)));
   }
   payload_size = kit->gvn().transform(new URShiftXNode(payload_size, kit->intcon(LogBytesPerLong)));
-  ArrayCopyNode* ac = ArrayCopyNode::make(kit, false, src_base, offset, dst_base, offset, payload_size, true, false, nullptr, nullptr, nullptr, nullptr, should_copy_prefix);
+  ArrayCopyNode* ac = ArrayCopyNode::make(kit, false, src_base, offset, dst_base, offset, payload_size, true, false);
   if (is_array) {
     ac->set_clone_array();
   } else {
@@ -891,11 +886,18 @@ void BarrierSetC2::clone_in_runtime(PhaseMacroExpand* phase, ArrayCopyNode* ac,
 
   // The native clone we are calling here expects the object size in words.
   // Add header/offset size to payload size to get object size.
-  // Use the actual offset stored in the ArrayCopyNode (in bytes), not
-  // arraycopy_payload_base_offset(), because clone() may have bumped the
-  // offset past a 4-byte pre-copy for compact object headers.
-  Node* const base_offset = phase->transform_later(new URShiftXNode(ac->in(ArrayCopyNode::SrcPos), phase->intcon(LogBytesPerLong)));
-  Node* const full_size = phase->transform_later(new AddXNode(size, base_offset));
+  
+  // If not aligned, round *up*.
+  // TODO: get the correct length when not aligned.
+  Node* const base_offset = phase->MakeConX((arraycopy_payload_base_offset(ac->is_clone_array()) + 7) >> LogBytesPerLong);
+  Node* full_size = phase->transform_later(new AddXNode(size, base_offset));
+
+
+  tty->print_cr("clone_in_runtime (base_offset=%d, adjusted=%d)", 
+    arraycopy_payload_base_offset(ac->is_clone_array()), 
+    (arraycopy_payload_base_offset(ac->is_clone_array()) + 7) >> LogBytesPerLong);
+
+
   // HeapAccess<>::clone expects size in heap words.
   // For 64-bits platforms, this is a no-operation.
   // For 32-bits platforms, we need to multiply full_size by HeapWordsPerLong (2).
@@ -921,41 +923,60 @@ void BarrierSetC2::clone_at_expansion(PhaseMacroExpand* phase, ArrayCopyNode* ac
   Node* dest_offset = ac->in(ArrayCopyNode::DestPos);
   Node* length = ac->in(ArrayCopyNode::Length);
 
-  Node* payload_src = phase->basic_plus_adr(src, src_offset);
-  Node* payload_dst = phase->basic_plus_adr(dest, dest_offset);
-  MergeMemNode* mm = MergeMemNode::make(mem);
+  Node* payload_src = phase->basic_plus_adr(src, src, src_offset);
+  Node* payload_dst = phase->basic_plus_adr(dest, dest, dest_offset);
 
-  if (ac->should_copy_int_prefix()) {
-      // Copied from PhaseMacroExpand::generate_block_arraycopy() which does a 4-byte prefix copy if not aligned
-      Node* sptr = phase->basic_plus_adr(payload_src, -4);
-      Node* dptr = phase->basic_plus_adr(payload_dst, -4); // TODO - should this be raw or not?
-      const TypePtr* s_adr_type = phase->igvn().type(sptr)->is_ptr();
-      const TypePtr* d_adr_type = phase->igvn().type(dptr)->is_ptr();
-      uint s_alias_idx = phase->C->get_alias_index(s_adr_type);
-      uint d_alias_idx = phase->C->get_alias_index(d_adr_type);
-      bool is_mismatched = true; //(basic_elem_type != T_INT); // TODO: ?
-      Node* sval = phase->transform_later(
-          LoadNode::make(phase->igvn(), ctrl, mm->memory_at(s_alias_idx), sptr, s_adr_type,
-                         TypeInt::INT, T_INT, MemNode::unordered, LoadNode::DependsOnlyOnTest,
-                         false /*require_atomic_access*/, false /*unaligned*/, is_mismatched));
-      Node* st = phase->transform_later(
-          StoreNode::make(phase->igvn(), ctrl, mm->memory_at(d_alias_idx), dptr, d_adr_type,
-                          sval, T_INT, MemNode::unordered));
-      if (is_mismatched) {
-        st->as_Store()->set_mismatched_access();
-      }
-      mm->set_memory_at(d_alias_idx, st);
+  if (UseNewCode2) {
+    tty->print("clone_at_expansion (before prefix) (aligned=%d): ", is_aligned(arraycopy_payload_base_offset(false), BytesPerLong));
+    if (src_offset->is_Con()) tty->print(" src_off=%ld", src_offset->get_long());
+    else tty->print(" src_off=non-const");
+    if (length->is_Con()) tty->print_cr(" length_ints=%ld", length->get_long());
+    else tty->print_cr(" length_ints=non-const");
+  }
+
+  // We do our bulk copy in longs. If base offset is not aligned, then we must copy the prefix separately.
+  MergeMemNode* mm = MergeMemNode::make(mem);
+  int base_off = arraycopy_payload_base_offset(ac->is_clone_array());
+  if (!is_aligned(base_off, BytesPerLong)) {
+    tty->print_cr("clone_at_expansion unaligned, base_offset=%d: ", base_off);
+    guarantee(is_aligned(base_off, BytesPerInt), "must be 4-bytes aligned");
+
+    // Manual load/store of one int.
+    // Copied from PhaseMacroExpand::generate_block_arraycopy() which does a 4-byte prefix copy if not aligned.
+    const TypePtr* s_adr_type = phase->igvn().type(payload_src)->is_ptr();
+    const TypePtr* d_adr_type = phase->igvn().type(payload_dst)->is_ptr();
+    uint s_alias_idx = phase->C->get_alias_index(s_adr_type);
+    uint d_alias_idx = phase->C->get_alias_index(d_adr_type);
+    bool is_mismatched = true; //(basic_elem_type != T_INT); // TODO: ?
+    Node* sval = phase->transform_later(
+        LoadNode::make(phase->igvn(), ctrl, mm->memory_at(s_alias_idx), payload_src, s_adr_type,
+                        TypeInt::INT, T_INT, MemNode::unordered, LoadNode::DependsOnlyOnTest,
+                        false /*require_atomic_access*/, false /*unaligned*/, is_mismatched));
+    Node* st = phase->transform_later(
+        StoreNode::make(phase->igvn(), ctrl, mm->memory_at(d_alias_idx), payload_dst, d_adr_type,
+                        sval, T_INT, MemNode::unordered));
+    if (is_mismatched) {
+      st->as_Store()->set_mismatched_access();
+    }
+    mm->set_memory_at(d_alias_idx, st);
+
+    // We've copied the prefix, bump the pointers.
+    payload_src = phase->basic_plus_adr(src, payload_src, BytesPerInt);
+    payload_dst = phase->basic_plus_adr(dest, payload_dst, BytesPerInt);
   }
 
   const char* copyfunc_name = "arraycopy";
   address     copyfunc_addr = phase->basictype2arraycopy(T_LONG, nullptr, nullptr, true, copyfunc_name, true);
 
-  tty->print("clone_at_expansion: should_copy_int_prefix=%d", ac->should_copy_int_prefix());
-  if (src_offset->is_Con()) tty->print(" src_off=%ld", src_offset->get_long());
-  else tty->print(" src_off=non-const");
-  if (length->is_Con()) tty->print(" length_longs=%ld", length->get_long());
-  else tty->print(" length_longs=non-const");
-  tty->print_cr(" copyfunc=%s", copyfunc_name);
+  if (UseNewCode2) {
+    tty->print("clone_at_expansion: ");
+    if (src_offset->is_Con()) tty->print(" src_off=%ld", src_offset->get_long());
+    else tty->print(" src_off=non-const");
+    if (length->is_Con()) tty->print(" length_longs=%ld", length->get_long());
+    else tty->print(" length_longs=non-const");
+    tty->print_cr(" copyfunc=%s", copyfunc_name);
+  }
+
 
   const TypePtr* raw_adr_type = TypeRawPtr::BOTTOM;
   const TypeFunc* call_type = OptoRuntime::fast_arraycopy_Type();
