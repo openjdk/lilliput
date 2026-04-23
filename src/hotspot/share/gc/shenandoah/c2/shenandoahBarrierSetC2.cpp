@@ -955,9 +955,7 @@ void ShenandoahBarrierSetC2::clone_at_expansion(PhaseMacroExpand* phase, ArrayCo
     ctrl = phase->transform_later(region);
     mem = phase->transform_later(mem_phi);
 
-    int base_off = arraycopy_payload_base_offset(ac->is_clone_array());
-    if (!is_aligned(base_off, BytesPerLong)) {
-      guarantee(is_aligned(base_off, BytesPerInt), "must be 4-bytes aligned");
+    if (should_copy_int_prefix(phase, ac)) {
       mem = arraycopy_copy_int_prefix(phase, ctrl, mem, src, dest);
 
       // We've copied the prefix, bump the pointers.

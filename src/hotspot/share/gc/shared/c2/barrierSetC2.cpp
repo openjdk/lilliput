@@ -891,9 +891,7 @@ void BarrierSetC2::clone_at_expansion(PhaseMacroExpand* phase, ArrayCopyNode* ac
   Node* payload_src = phase->basic_plus_adr(src, src_offset);
   Node* payload_dst = phase->basic_plus_adr(dest, dest_offset);
 
-  int base_off = arraycopy_payload_base_offset(ac->is_clone_array());
-  if (!is_aligned(base_off, BytesPerLong)) {
-    guarantee(is_aligned(base_off, BytesPerInt), "must be 4-bytes aligned");
+  if (should_copy_int_prefix(phase, ac)) {
     mem = arraycopy_copy_int_prefix(phase, ctrl, mem, payload_src, payload_dst);
 
     // We've copied the prefix, bump the pointers.
@@ -914,15 +912,36 @@ void BarrierSetC2::clone_at_expansion(PhaseMacroExpand* phase, ArrayCopyNode* ac
   phase->igvn().replace_node(ac, call);
 }
 
-MergeMemNode* BarrierSetC2::arraycopy_copy_int_prefix(PhaseMacroExpand* phase, Node* ctrl, Node* mem, Node* src, Node* dst) const {
+bool BarrierSetC2::should_copy_int_prefix(PhaseMacroExpand* phase, ArrayCopyNode* ac) const {
     // We do our bulk copy in longs. If base offset is not aligned, then we must copy the prefix separately.
     // With CompactObjectHeaders, the base offset for an instance is 4 bytes.
     // We cannot simply expand the copy to the previous long-alignment, as that will copy the object header,
     // which is stateful with COH - it contains hash and lock bits that are specific to the instance.
-    guarantee(UseCompactObjectHeaders, "non-aligned arraycopy only possible with compact object headers");
 
+    // Skip this when src has an array type. With StressReflectiveCode, the
+    // instance path of the clone can be live in the IR even when the type system
+    // knows src_base is an array. The pre-copy is unnecessary on such paths (they
+    // are unreachable at runtime), and creating a LoadNode at the array length
+    // offset would assert (LoadRangeNode required).
+    Node* src = ac->in(ArrayCopyNode::Src);
+    if (phase->igvn().type(src)->isa_aryptr()) {
+      return false;
+    }
+
+    int base_off = arraycopy_payload_base_offset(ac->is_clone_array());
+    if (is_aligned(base_off, BytesPerLong)) {
+      // We're aligned, no need to copy anything separately.
+      return false;
+    }
+
+    guarantee(UseCompactObjectHeaders, "non-aligned base offset only possible with compact object headers");
+    guarantee(is_aligned(base_off, BytesPerInt), "must be 4-bytes aligned");
+    return true;
+}
+
+MergeMemNode* BarrierSetC2::arraycopy_copy_int_prefix(PhaseMacroExpand* phase, Node* ctrl, Node* mem, Node* src, Node* dst) const {
     // Manual load/store of one int.
-    MergeMemNode* mm = MergeMemNode::make(mem);
+    MergeMemNode* mm = phase->transform_later(MergeMemNode::make(mem))->as_MergeMem();
     const TypePtr* s_adr_type = phase->igvn().type(src)->is_ptr();
     const TypePtr* d_adr_type = phase->igvn().type(dst)->is_ptr();
     uint s_alias_idx = phase->C->get_alias_index(s_adr_type);
