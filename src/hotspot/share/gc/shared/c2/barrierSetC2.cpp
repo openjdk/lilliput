@@ -860,7 +860,7 @@ void BarrierSetC2::clone_in_runtime(PhaseMacroExpand* phase, ArrayCopyNode* ac,
   // Add header/offset size to payload size to get object size.
 
   // If not aligned, round *up*.
-  Node* const base_offset = phase->MakeConX((arraycopy_payload_base_offset(ac->is_clone_array()) + (BitsPerLong - 1)) >> LogBytesPerLong);
+  Node* const base_offset = phase->MakeConX((arraycopy_payload_base_offset(ac->is_clone_array()) + (BytesPerLong - 1)) >> LogBytesPerLong);
   Node* full_size = phase->transform_later(new AddXNode(size, base_offset));
 
   // HeapAccess<>::clone expects size in heap words.
