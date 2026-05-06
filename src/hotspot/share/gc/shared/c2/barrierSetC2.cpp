@@ -913,52 +913,52 @@ void BarrierSetC2::clone_at_expansion(PhaseMacroExpand* phase, ArrayCopyNode* ac
 }
 
 bool BarrierSetC2::should_copy_int_prefix(PhaseMacroExpand* phase, ArrayCopyNode* ac) const {
-    // We do our bulk copy in longs. If base offset is not aligned, then we must copy the prefix separately.
-    // With CompactObjectHeaders, the base offset for an instance is 4 bytes.
-    // We cannot simply expand the copy to the previous long-alignment, as that will copy the object header,
-    // which is stateful with COH - it contains hash and lock bits that are specific to the instance.
+  // We do our bulk copy in longs. If base offset is not aligned, then we must copy the prefix separately.
+  // With CompactObjectHeaders, the base offset for an instance is 4 bytes.
+  // We cannot simply expand the copy to the previous long-alignment, as that will copy the object header,
+  // which is stateful with COH - it contains hash and lock bits that are specific to the instance.
 
-    // Skip this when src has an array type. With StressReflectiveCode, the
-    // instance path of the clone can be live in the IR even when the type system
-    // knows src_base is an array. The pre-copy is unnecessary on such paths (they
-    // are unreachable at runtime), and creating a LoadNode at the array length
-    // offset would assert (LoadRangeNode required).
-    Node* src = ac->in(ArrayCopyNode::Src);
-    if (phase->igvn().type(src)->isa_aryptr()) {
-      return false;
-    }
+  // Skip this when src has an array type. With StressReflectiveCode, the
+  // instance path of the clone can be live in the IR even when the type system
+  // knows src_base is an array. The pre-copy is unnecessary on such paths (they
+  // are unreachable at runtime), and creating a LoadNode at the array length
+  // offset would assert (LoadRangeNode required).
+  Node* src = ac->in(ArrayCopyNode::Src);
+  if (phase->igvn().type(src)->isa_aryptr()) {
+    return false;
+  }
 
-    int base_off = arraycopy_payload_base_offset(ac->is_clone_array());
-    if (is_aligned(base_off, BytesPerLong)) {
-      // We're aligned, no need to copy anything separately.
-      return false;
-    }
+  int base_off = arraycopy_payload_base_offset(ac->is_clone_array());
+  if (is_aligned(base_off, BytesPerLong)) {
+    // We're aligned, no need to copy anything separately.
+    return false;
+  }
 
-    guarantee(UseCompactObjectHeaders, "non-aligned base offset only possible with compact object headers");
-    guarantee(is_aligned(base_off, BytesPerInt), "must be 4-bytes aligned");
-    return true;
+  guarantee(UseCompactObjectHeaders, "non-aligned base offset only possible with compact object headers");
+  guarantee(is_aligned(base_off, BytesPerInt), "must be 4-bytes aligned");
+  return true;
 }
 
 MergeMemNode* BarrierSetC2::arraycopy_copy_int_prefix(PhaseMacroExpand* phase, Node* ctrl, Node* mem, Node* src, Node* dst) const {
-    // Manual load/store of one int.
-    MergeMemNode* mm = phase->transform_later(MergeMemNode::make(mem))->as_MergeMem();
-    const TypePtr* s_adr_type = phase->igvn().type(src)->is_ptr();
-    const TypePtr* d_adr_type = phase->igvn().type(dst)->is_ptr();
-    uint s_alias_idx = phase->C->get_alias_index(s_adr_type);
-    uint d_alias_idx = phase->C->get_alias_index(d_adr_type);
-    // This copies the first 4 bytes after the compact header (hash field or first instance field) as a raw int.
-    // The actual field at this offset may be a narrowOop, so the load/store must be marked as mismatched to
-    // avoid StoreN-vs-StoreI assertion failures during IGVN.
-    Node* load_prefix = phase->transform_later(
-        LoadNode::make(phase->igvn(), ctrl, mm->memory_at(s_alias_idx), src, s_adr_type,
-                        TypeInt::INT, T_INT, MemNode::unordered, LoadNode::DependsOnlyOnTest,
-                        false /*require_atomic_access*/, false /*unaligned*/, true /*mismatched*/));
-    Node* store_prefix = phase->transform_later(
-        StoreNode::make(phase->igvn(), ctrl, mm->memory_at(d_alias_idx), dst, d_adr_type,
-                        load_prefix, T_INT, MemNode::unordered));
-    store_prefix->as_Store()->set_mismatched_access();
-    mm->set_memory_at(d_alias_idx, store_prefix);
-    return mm;
+  // Manual load/store of one int.
+  MergeMemNode* mm = phase->transform_later(MergeMemNode::make(mem))->as_MergeMem();
+  const TypePtr* s_adr_type = phase->igvn().type(src)->is_ptr();
+  const TypePtr* d_adr_type = phase->igvn().type(dst)->is_ptr();
+  uint s_alias_idx = phase->C->get_alias_index(s_adr_type);
+  uint d_alias_idx = phase->C->get_alias_index(d_adr_type);
+  // This copies the first 4 bytes after the compact header (hash field or first instance field) as a raw int.
+  // The actual field at this offset may be a narrowOop, so the load/store must be marked as mismatched to
+  // avoid StoreN-vs-StoreI assertion failures during IGVN.
+  Node* load_prefix = phase->transform_later(
+      LoadNode::make(phase->igvn(), ctrl, mm->memory_at(s_alias_idx), src, s_adr_type,
+                      TypeInt::INT, T_INT, MemNode::unordered, LoadNode::DependsOnlyOnTest,
+                      false /*require_atomic_access*/, false /*unaligned*/, true /*mismatched*/));
+  Node* store_prefix = phase->transform_later(
+      StoreNode::make(phase->igvn(), ctrl, mm->memory_at(d_alias_idx), dst, d_adr_type,
+                      load_prefix, T_INT, MemNode::unordered));
+  store_prefix->as_Store()->set_mismatched_access();
+  mm->set_memory_at(d_alias_idx, store_prefix);
+  return mm;
 }
 
 #undef XTOP
