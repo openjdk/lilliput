@@ -318,8 +318,8 @@ public:
 
   virtual bool array_copy_requires_gc_barriers(bool tightly_coupled_alloc, BasicType type, bool is_clone, bool is_clone_instance, ArrayCopyPhase phase) const { return false; }
   virtual void clone_at_expansion(PhaseMacroExpand* phase, ArrayCopyNode* ac) const;
-  virtual bool should_copy_int_prefix(PhaseMacroExpand* phase, ArrayCopyNode* ac) const;
-  virtual MergeMemNode* arraycopy_copy_int_prefix(PhaseMacroExpand* phase, Node* ctrl, Node* mem, Node* src, Node* dst) const;
+  bool should_copy_int_prefix(PhaseMacroExpand* phase, ArrayCopyNode* ac) const;
+  MergeMemNode* arraycopy_copy_int_prefix(PhaseMacroExpand* phase, Node* ctrl, Node* mem, Node* src, Node* dst) const;
 
   // Support for GC barriers emitted during parsing
   virtual bool has_load_barrier_nodes() const { return false; }

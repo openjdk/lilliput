@@ -859,9 +859,10 @@ void BarrierSetC2::clone_in_runtime(PhaseMacroExpand* phase, ArrayCopyNode* ac,
   // The native clone we are calling here expects the object size in words.
   // Add header/offset size to payload size to get object size.
 
-  // If not aligned, round *up*.
+  // We need the full object size - payload (already aligned) plus base offset (which is not always aligned, so round *up*),
+  // because clone_in_runtime copies the whole object from 0 to end.
   Node* const base_offset = phase->MakeConX((arraycopy_payload_base_offset(ac->is_clone_array()) + (BytesPerLong - 1)) >> LogBytesPerLong);
-  Node* full_size = phase->transform_later(new AddXNode(size, base_offset));
+  Node* const full_size = phase->transform_later(new AddXNode(size, base_offset));
 
   // HeapAccess<>::clone expects size in heap words.
   // For 64-bits platforms, this is a no-operation.
@@ -920,7 +921,7 @@ bool BarrierSetC2::should_copy_int_prefix(PhaseMacroExpand* phase, ArrayCopyNode
 
   // Skip this when src has an array type. With StressReflectiveCode, the
   // instance path of the clone can be live in the IR even when the type system
-  // knows src_base is an array. The pre-copy is unnecessary on such paths (they
+  // knows src is an array. The pre-copy is unnecessary on such paths (they
   // are unreachable at runtime), and creating a LoadNode at the array length
   // offset would assert (LoadRangeNode required).
   Node* src = ac->in(ArrayCopyNode::Src);
