@@ -935,8 +935,8 @@ bool BarrierSetC2::should_copy_int_prefix(PhaseMacroExpand* phase, ArrayCopyNode
     return false;
   }
 
-  guarantee(UseCompactObjectHeaders, "non-aligned base offset only possible with compact object headers");
-  guarantee(is_aligned(base_off, BytesPerInt), "must be 4-bytes aligned");
+  assert(UseCompactObjectHeaders, "non-aligned base offset only possible with compact object headers");
+  assert(is_aligned(base_off, BytesPerInt), "must be 4-bytes aligned");
   return true;
 }
 
