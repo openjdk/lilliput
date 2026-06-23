@@ -4807,7 +4807,14 @@ bool LibraryCallKit::inline_native_hashcode(bool is_virtual, bool is_static) {
       Node* M = _gvn.intcon(0x337954D5);
       Node* A = _gvn.intcon(0xAAAAAAAA);
       // Split object address into lo and hi 32 bits.
-      Node* obj_addr = _gvn.transform(new CastP2XNode(nullptr, obj));
+      // Pin the address materialization to the current control (the post-check,
+      // post-safepoint branch). With a null control input this CastP2X (and the
+      // pure FastHash arithmetic that consumes it) is free-floating, so Global
+      // Code Motion may hoist it above an intervening GC safepoint. If the GC
+      // relocates the object, the oop reference is updated but the already
+      // materialized raw address is not, and the recomputed hash would be based
+      // on the stale pre-relocation address - violating identity-hash stability.
+      Node* obj_addr = _gvn.transform(new CastP2XNode(control(), obj));
       Node* x = _gvn.transform(new ConvL2INode(obj_addr));
       Node* upper_addr = _gvn.transform(new URShiftLNode(obj_addr, _gvn.intcon(32)));
       Node* y = _gvn.transform(new ConvL2INode(upper_addr));
