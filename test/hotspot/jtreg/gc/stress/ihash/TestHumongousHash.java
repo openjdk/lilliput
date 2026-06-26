@@ -37,6 +37,37 @@ package gc.stress.ihash;
  *      gc.stress.ihash.TestHumongousHash
  */
 
+/*
+ * @test id=Shenandoah
+ * @bug 8387285
+ * @summary Stress test: does humongous object compaction corrupt hash-code or other objects?
+ * @requires vm.gc.Shenandoah
+ * @key stress
+ * @run main/othervm/timeout=300
+ *      -XX:+UseCompactObjectHeaders -XX:+UseShenandoahGC
+ *      -XX:+UnlockDiagnosticVMOptions -XX:+VerifyDuringGC
+ *      -XX:-ExplicitGCInvokesConcurrent
+ *      -Xmx512m
+ *      -XX:+UnlockExperimentalVMOptions -XX:ShenandoahRegionSize=512K
+ *      gc.stress.ihash.TestHumongousHash
+ */
+
+/*
+ * @test id=Shenandoah-aggressive
+ * @bug 8387285
+ * @summary Stress test: does humongous object compaction corrupt hash-code or other objects?
+ * @requires vm.gc.Shenandoah
+ * @key stress
+ * @run main/othervm/timeout=300
+ *      -XX:+UseCompactObjectHeaders -XX:+UseShenandoahGC
+ *      -XX:+UnlockDiagnosticVMOptions -XX:+VerifyDuringGC
+ *      -XX:-ExplicitGCInvokesConcurrent
+ *      -XX:ShenandoahGCHeuristics=aggressive
+ *      -Xmx512m
+ *      -XX:+UnlockExperimentalVMOptions -XX:ShenandoahRegionSize=512K
+ *      gc.stress.ihash.TestHumongousHash
+ */
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
