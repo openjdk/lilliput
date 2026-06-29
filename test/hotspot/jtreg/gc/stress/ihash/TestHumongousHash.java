@@ -94,7 +94,9 @@ public class TestHumongousHash {
         // Check for corruption in hash-code, length or data.
         boolean fail = false;
         for (int i = 0; i < numObjects; i++) {
-            if (i % 2 == 0) continue;
+            if (i % 2 == 0) {
+                continue;
+            }
             byte[] largeObject = largeObjects.get(i);
             if (System.identityHashCode(largeObject) != hashes.get(i)) {
                 System.out.println("hash mismatch at " + i);
@@ -112,7 +114,7 @@ public class TestHumongousHash {
             }
         }
         if (fail) {
-           throw new RuntimeException("Identity hash-code, length or data corruption detected.");
+            throw new RuntimeException("Identity hash-code, length or data corruption detected.");
         }
     }
 }

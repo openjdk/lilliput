@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2025, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2026, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -125,6 +125,14 @@ void G1FullGCCompactTask::compact_humongous_obj(G1HeapRegion* src_hr) {
 
   uint src_num_regions = (uint)G1CollectedHeap::humongous_obj_size_in_regions(src_word_size);
   uint dest_num_regions = (uint)G1CollectedHeap::humongous_obj_size_in_regions(dest_word_size);
+  if (dest_num_regions > src_num_regions) {
+    // If the object has grown just over the region boundary, due to hash-code expansion, we'll
+    // need a new region. Track it for heuristics.
+    assert(UseCompactObjectHeaders, "only possible through hash-code expansion");
+    uint new_regions = dest_num_regions - src_num_regions;
+    assert(new_regions == 1, "can only possibly grow by 1 region");
+    _g1h->policy()->old_gen_alloc_tracker()->record_collection_pause_humongous_allocation(G1HeapRegion::GrainBytes);
+  }
   HeapWord* destination = cast_from_oop<HeapWord*>(FullGCForwarding::forwardee(obj));
 
   assert(collector()->mark_bitmap()->is_marked(obj), "Should only compact marked objects");

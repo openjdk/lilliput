@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2025, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2026, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -74,6 +74,8 @@ private:
   inline MutatorAllocRegion* mutator_alloc_region(uint node_index);
   inline SurvivorGCAllocRegion* survivor_gc_alloc_region(uint node_index);
   inline OldGCAllocRegion* old_gc_alloc_region();
+
+  void assert_not_humongous(size_t word_size) NOT_DEBUG_RETURN;
 
   // Allocation attempt during GC for a survivor object / PLAB.
   HeapWord* survivor_attempt_allocation(uint node_index,
