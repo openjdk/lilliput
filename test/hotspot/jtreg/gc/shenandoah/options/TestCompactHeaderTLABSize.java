@@ -44,7 +44,6 @@ public class TestCompactHeaderTLABSize {
     // Minimum Shenandoah region size; the only size at which the un-capped max TLAB
     // would otherwise equal the region size.
     static final String REGION_SIZE = "256K";
-    static final String REGION_TLAB = "256k"; // == region size
 
     public static void main(String[] args) throws Exception {
         // With compact object headers, the max TLAB is capped one word below the
@@ -55,7 +54,7 @@ public class TestCompactHeaderTLABSize {
                 "-XX:+UseShenandoahGC",
                 "-XX:+UseCompactObjectHeaders",
                 "-XX:ShenandoahRegionSize=" + REGION_SIZE,
-                "-XX:TLABSize=" + REGION_TLAB,
+                "-XX:TLABSize=" + REGION_SIZE,
                 "-Xmx512m",
                 "-version");
         coh.shouldContain("must be less than or equal to ergonomic TLAB maximum size");
@@ -69,7 +68,7 @@ public class TestCompactHeaderTLABSize {
                 "-XX:+UseShenandoahGC",
                 "-XX:-UseCompactObjectHeaders",
                 "-XX:ShenandoahRegionSize=" + REGION_SIZE,
-                "-XX:TLABSize=" + REGION_TLAB,
+                "-XX:TLABSize=" + REGION_SIZE,
                 "-Xmx512m",
                 "-version");
         noCoh.shouldHaveExitValue(0);

@@ -567,14 +567,14 @@ private:
   // While holding the heap lock, allocate memory for a single object or LAB  which is to be entirely contained
   // within a single HeapRegion as characterized by req.
   //
-  // Precondition: !ShenandoahHeapRegion::requires_humongous(req.size())
+  // Precondition: !ShenandoahHeapRegion::requires_humongous(req.size(), req.type() == _alloc_shared)
   HeapWord* allocate_single(ShenandoahAllocRequest& req, bool& in_new_region);
 
   // While holding the heap lock, allocate memory for a humongous object which spans one or more regions that
   // were previously empty.  Regions that represent humongous objects are entirely dedicated to the humongous
   // object.  No other objects are packed into these regions.
   //
-  // Precondition: ShenandoahHeapRegion::requires_humongous(req.size())
+  // Precondition: ShenandoahHeapRegion::requires_humongous(req.size(), req.type() == _alloc_shared)
   HeapWord* allocate_contiguous(ShenandoahAllocRequest& req, bool is_humongous);
 
   bool transfer_one_region_from_mutator_to_old_collector(size_t idx, size_t alloc_capacity);

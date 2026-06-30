@@ -309,12 +309,12 @@ public:
   // when an identity hash-code is injected as it is copied during GC (see
   // oopDesc::copy_size). In that case we reserve the extra word up front so the
   // object is routed to the humongous path if its expanded form would overflow a
-  // region. It must be false (the default) for every size that is already final:
+  // region. It must be false for every size that is already final:
   //   - the live size of an existing object (obj->size()), which already includes
   //     the hash word once the object has been expanded by a prior GC copy;
   //   - an evacuation/promotion copy size (copy_size()), which is already expanded;
   //   - a raw LAB buffer (TLAB/GCLAB/PLAB), which never grows.
-  inline static bool requires_humongous(size_t words, bool may_expand_for_hash = false) {
+  inline static bool requires_humongous(size_t words, bool may_expand_for_hash) {
     if (UseCompactObjectHeaders && may_expand_for_hash) {
       words = align_object_size(words + 1);
     }
