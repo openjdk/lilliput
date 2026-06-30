@@ -68,6 +68,41 @@ package gc.stress.ihash;
  *      gc.stress.ihash.TestHumongousHash
  */
 
+/*
+ * @test id=Shenandoah-min-region
+ * @bug 8387285
+ * @summary Stress test at the minimum (256K) region size, where the hash-expansion
+ *          humongous routing actually binds (an exact-region-multiple object needs
+ *          N+1 regions after expansion).
+ * @requires vm.gc.Shenandoah
+ * @key stress
+ * @run main/othervm/timeout=300
+ *      -XX:+UseCompactObjectHeaders -XX:+UseShenandoahGC
+ *      -XX:+UnlockDiagnosticVMOptions -XX:+VerifyDuringGC
+ *      -XX:-ExplicitGCInvokesConcurrent
+ *      -Xmx512m
+ *      -XX:+UnlockExperimentalVMOptions -XX:ShenandoahRegionSize=256K
+ *      gc.stress.ihash.TestHumongousHash
+ */
+
+/*
+ * @test id=Shenandoah-min-region-aggressive
+ * @bug 8387285
+ * @summary Stress test at the minimum (256K) region size, where the hash-expansion
+ *          humongous routing actually binds (an exact-region-multiple object needs
+ *          N+1 regions after expansion).
+ * @requires vm.gc.Shenandoah
+ * @key stress
+ * @run main/othervm/timeout=300
+ *      -XX:+UseCompactObjectHeaders -XX:+UseShenandoahGC
+ *      -XX:+UnlockDiagnosticVMOptions -XX:+VerifyDuringGC
+ *      -XX:-ExplicitGCInvokesConcurrent
+ *      -XX:ShenandoahGCHeuristics=aggressive
+ *      -Xmx512m
+ *      -XX:+UnlockExperimentalVMOptions -XX:ShenandoahRegionSize=256K
+ *      gc.stress.ihash.TestHumongousHash
+ */
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
