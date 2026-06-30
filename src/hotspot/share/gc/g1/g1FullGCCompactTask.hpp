@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2026, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -42,7 +42,7 @@ class G1FullGCCompactTask : public G1FullGCTask {
 
   void compact_region(G1HeapRegion* hr);
   void compact_humongous_obj(G1HeapRegion* hr);
-  void free_non_overlapping_regions(uint src_start_idx, uint dest_start_idx, uint num_regions);
+  void free_non_overlapping_regions(uint src_start_idx, uint dest_start_idx, uint src_num_regions, uint dest_num_regions);
 
   static void copy_object_to_new_location(oop obj);
 

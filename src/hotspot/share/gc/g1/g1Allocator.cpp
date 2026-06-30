@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2025, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2026, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -246,12 +246,22 @@ HeapWord* G1Allocator::par_allocate_during_gc(G1HeapRegionAttr dest,
   }
 }
 
+#ifdef ASSERT
+void G1Allocator::assert_not_humongous(size_t word_size) {
+  // With CompactObjectHeaders, objects can expand during copy to accomodate hashcode.
+  // It's possible this expansion crosses the humongous threshold. In this case, we allow
+  // that and just treat it as not humongous.
+  size_t pre_expansion_size = UseCompactObjectHeaders ? word_size - 1 : word_size;
+  assert(!_g1h->is_humongous(pre_expansion_size),
+          "we should not be seeing humongous-size allocations in this path");
+}
+#endif
+
 HeapWord* G1Allocator::survivor_attempt_allocation(uint node_index,
                                                    size_t min_word_size,
                                                    size_t desired_word_size,
                                                    size_t* actual_word_size) {
-  assert(!_g1h->is_humongous(desired_word_size),
-         "we should not be seeing humongous-size allocations in this path");
+  assert_not_humongous(desired_word_size);
 
   HeapWord* result = survivor_gc_alloc_region(node_index)->attempt_allocation(min_word_size,
                                                                               desired_word_size,
@@ -276,8 +286,7 @@ HeapWord* G1Allocator::survivor_attempt_allocation(uint node_index,
 HeapWord* G1Allocator::old_attempt_allocation(size_t min_word_size,
                                               size_t desired_word_size,
                                               size_t* actual_word_size) {
-  assert(!_g1h->is_humongous(desired_word_size),
-         "we should not be seeing humongous-size allocations in this path");
+  assert_not_humongous(desired_word_size);
 
   HeapWord* result = old_gc_alloc_region()->attempt_allocation(min_word_size,
                                                                desired_word_size,
