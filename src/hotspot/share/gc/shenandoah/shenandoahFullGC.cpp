@@ -519,14 +519,20 @@ void ShenandoahFullGC::calculate_target_humongous_objects() {
       size_t new_words_size = old_obj->copy_size(old_obj->size(), old_obj->mark());
       size_t num_regions = ShenandoahHeapRegion::required_regions(new_words_size * HeapWordSize);
 
-      size_t start = to_end - num_regions;
-
-      if (start >= to_begin && start != r->index()) {
-        // Fits into current window, and the move is non-trivial. Record the move then, and continue scan.
-        _preserved_marks->get(0)->push_if_necessary(old_obj, old_obj->mark());
-        FullGCForwarding::forward_to(old_obj, cast_to_oop(heap->get_region(start)->bottom()));
-        to_end = start;
-        continue;
+      // Test the fit before computing the slide target. With compact object headers
+      // the expanded size can require one region more than the object currently
+      // occupies, so num_regions may exceed the available window. Comparing against
+      // the window size (to_end - to_begin) avoids the unsigned underflow that
+      // "to_end - num_regions" would suffer when the object does not fit.
+      if (num_regions <= to_end - to_begin) {
+        size_t start = to_end - num_regions;
+        if (start != r->index()) {
+          // Fits into current window, and the move is non-trivial. Record the move then, and continue scan.
+          _preserved_marks->get(0)->push_if_necessary(old_obj, old_obj->mark());
+          FullGCForwarding::forward_to(old_obj, cast_to_oop(heap->get_region(start)->bottom()));
+          to_end = start;
+          continue;
+        }
       }
     }
 
