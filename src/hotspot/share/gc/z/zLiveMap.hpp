@@ -45,6 +45,7 @@ private:
   Atomic<uint32_t>  _seqnum;
   Atomic<uint32_t>  _live_objects;
   Atomic<size_t>    _live_bytes;
+  Atomic<uint32_t>  _will_expand_objects;
   BitMap::bm_word_t _segment_live_bits;
   BitMap::bm_word_t _segment_claim_bits;
   ZBitMap           _bitmap;
@@ -87,11 +88,13 @@ public:
 
   uint32_t live_objects() const;
   size_t live_bytes() const;
+  uint32_t will_expand_objects() const;
 
   bool get(ZGenerationId id, BitMap::idx_t index) const;
   bool set(ZGenerationId id, BitMap::idx_t index, bool finalizable, bool& inc_live);
 
   void inc_live(uint32_t objects, size_t bytes);
+  void inc_will_expand(uint32_t objects);
 
   template <typename Function>
   void iterate(ZGenerationId id, Function function);

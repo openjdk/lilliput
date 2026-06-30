@@ -38,7 +38,7 @@ inline oop ShenandoahForwarding::get_forwardee_raw(oop obj) {
 }
 
 static HeapWord* to_forwardee(markWord mark) {
-  return reinterpret_cast<HeapWord*>(mark.value() & ~(markWord::lock_mask_in_place | markWord::self_fwd_mask_in_place));
+  return reinterpret_cast<HeapWord*>(mark.value() & ~(markWord::lock_mask_in_place | markWord::self_fwd_bit_in_place));
 }
 
 inline bool ShenandoahForwarding::has_forwardee(markWord m) {
@@ -83,10 +83,6 @@ inline oop ShenandoahForwarding::get_forwardee_mutator(oop obj) {
 inline oop ShenandoahForwarding::get_forwardee(oop obj) {
   shenandoah_assert_correct(nullptr, obj);
   return get_forwardee_raw_unchecked(obj);
-}
-
-inline bool ShenandoahForwarding::is_forwarded(markWord m) {
-  return (m.value() & (markWord::lock_mask_in_place | markWord::self_fwd_mask_in_place)) > markWord::monitor_value;
 }
 
 inline bool ShenandoahForwarding::is_forwarded(oop obj) {

@@ -216,7 +216,14 @@ oop AOTStreamedHeapLoader::allocate_object(oopDesc* archive_object, markWord mar
   Klass* klass = archive_object->klass();
   assert(!(UseCompactObjectHeaders && mark.is_hashed_not_expanded()), "Must not be hashed/not-expanded");
   if (klass->is_mirror_instance_klass()) {
-    size_t base_size = size;
+    // The oop_size field must hold the *un-expanded* base size: oopDesc::size()
+    // re-adds the identity-hash expansion word for an expanded mark, so passing
+    // the expanded total (`size`) here leaves the mirror transiently oversized
+    // (size() > allocated) between allocation and the payload copy. A GC during
+    // CDS heap load (far more likely at large ObjectAlignmentInBytes, which bloats
+    // the heap) can observe that and desync the heap walk. The archive object's
+    // own oop_size field already holds the correct base size.
+    size_t base_size = (size_t)java_lang_Class::oop_size(cast_to_oop(archive_object));
     assert(!(UseCompactObjectHeaders && mark.is_not_hashed_expanded()), "should not happen");
     heap_object = Universe::heap()->class_allocate(klass, size, base_size, CHECK_NULL);
   } else if (klass->is_instance_klass()) {

@@ -135,6 +135,7 @@ public:
   bool mark_object(zaddress addr, bool finalizable, bool& inc_live);
 
   void inc_live(uint32_t objects, size_t bytes);
+  void inc_will_expand(uint32_t objects);
   uint32_t live_objects() const;
   size_t live_bytes() const;
 
@@ -192,7 +193,7 @@ public:
   // Verification
   bool was_remembered(volatile zpointer* p);
   bool is_remembered(volatile zpointer* p);
-  void verify_live(uint32_t live_objects, size_t live_bytes, bool in_place) const;
+  void verify_live(uint32_t live_objects, size_t live_bytes, uint32_t no_move_expand_count, bool in_place) const;
 
   void fatal_msg(const char* msg) const;
 };

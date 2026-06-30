@@ -60,7 +60,6 @@ public:
    * false otherwise.
    */
   static inline bool is_forwarded(oop obj);
-  static inline bool is_forwarded(markWord m);
 
   /**
    * Returns true iff the mark word's lock bits are marked_value (0b11),

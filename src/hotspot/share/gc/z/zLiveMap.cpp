@@ -40,6 +40,7 @@ ZLiveMap::ZLiveMap(uint32_t object_max_count)
     _seqnum(0),
     _live_objects(0),
     _live_bytes(0),
+    _will_expand_objects(0),
     _segment_live_bits(0),
     _segment_claim_bits(0),
     _bitmap(0) {}
@@ -71,6 +72,7 @@ void ZLiveMap::reset(ZGenerationId id) {
         // Reset marking information
         _live_bytes.store_relaxed(0u);
         _live_objects.store_relaxed(0u);
+        _will_expand_objects.store_relaxed(0u);
 
         // Clear segment claimed/live bits
         segment_live_bits().clear();

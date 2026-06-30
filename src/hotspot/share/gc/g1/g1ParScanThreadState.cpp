@@ -533,7 +533,7 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
       const uint young_index = from_region->young_index_in_cset();
       assert((from_region->is_young() && young_index >  0) ||
              (!from_region->is_young() && young_index == 0), "invariant" );
-      _surviving_young_words[young_index] += word_sz;
+      _surviving_young_words[young_index] += old_size;
     }
 
     obj->initialize_hash_if_necessary(old);

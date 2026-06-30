@@ -110,6 +110,19 @@ void CDSConfig::ergo_initialize() {
   AOTMapLogger::ergo_initialize();
 
   setup_compiler_args();
+
+  if (is_dumping_full_module_graph()) {
+    precond(allow_only_single_java_thread());
+
+    // The AttachListenerThread may execute Java code or load new classes. It might see
+    // unexpected results after HeapShared::prepare_for_archiving().
+    //
+    // We disable all new incoming attach requests, so you can't use jcmd, etc, on this JVM.
+    // Since we are not running any application code in this JVM and only executed a very
+    // limited set of Java code (for module system init, class loading, indy resolution,
+    // etc), there is usually no need to attach to this JVM.
+    FLAG_SET_ERGO(DisableAttachMechanism, true);
+  }
 }
 
 const char* CDSConfig::default_archive_path() {
@@ -462,7 +475,7 @@ void CDSConfig::check_aot_flags() {
   // At least one AOT flag has been used
   _new_aot_flags_used = true;
 
-  if (FLAG_IS_DEFAULT(AOTMode) || strcmp(AOTMode, "auto") == 0 || strcmp(AOTMode, "on") == 0) {
+  if (FLAG_IS_DEFAULT(AOTMode) || strcmp(AOTMode, "auto") == 0 || strcmp(AOTMode, "on") == 0 || strcmp(AOTMode, "required") == 0) {
     check_aotmode_auto_or_on();
   } else if (strcmp(AOTMode, "off") == 0) {
     check_aotmode_off();
@@ -489,7 +502,7 @@ void CDSConfig::check_aotmode_auto_or_on() {
   if (FLAG_IS_DEFAULT(AOTMode) || (strcmp(AOTMode, "auto") == 0)) {
     RequireSharedSpaces = false;
   } else {
-    assert(strcmp(AOTMode, "on") == 0, "already checked");
+    assert(strcmp(AOTMode, "on") == 0 || strcmp(AOTMode, "required") == 0 , "already checked");
     RequireSharedSpaces = true;
   }
 }

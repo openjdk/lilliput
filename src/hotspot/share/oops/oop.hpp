@@ -46,7 +46,6 @@
 
 class oopDesc {
   friend class VMStructs;
-  friend class JVMCIVMStructs;
  private:
   volatile markWord _mark;
   narrowKlass _compressed_klass;
@@ -103,6 +102,7 @@ class oopDesc {
 
   void set_narrow_klass(narrowKlass nk) NOT_CDS_JAVA_HEAP_RETURN;
   inline narrowKlass narrow_klass() const;
+  inline narrowKlass narrow_klass_acquire() const;
   inline void set_klass(Klass* k);
   static inline void release_set_klass(HeapWord* mem, Klass* k);
 

@@ -236,7 +236,7 @@
   nonstatic_field(MethodData,                  _method,                                       Method*)                               \
   nonstatic_field(MethodCounters,              _invoke_mask,                                  int)                                   \
   nonstatic_field(MethodCounters,              _backedge_mask,                                int)                                   \
-  COMPILER2_OR_JVMCI_PRESENT(nonstatic_field(MethodCounters, _interpreter_throwout_count,     u2))                                   \
+  COMPILER2_PRESENT(nonstatic_field(MethodCounters, _interpreter_throwout_count,              u2))                                   \
   JVMTI_ONLY(nonstatic_field(MethodCounters,   _number_of_breakpoints,                        u2))                                   \
   nonstatic_field(MethodCounters,              _invocation_counter,                           InvocationCounter)                     \
   nonstatic_field(MethodCounters,              _backedge_counter,                             InvocationCounter)                     \
@@ -1018,7 +1018,7 @@
         declare_type(StringDedupThread, JavaThread)                       \
         declare_type(AttachListenerThread, JavaThread)                    \
         declare_type(JfrRecorderThread, JavaThread)                       \
-        DEBUG_ONLY(COMPILER2_OR_JVMCI_PRESENT(                            \
+        DEBUG_ONLY(COMPILER2_PRESENT(                                     \
           declare_type(DeoptimizeObjectsALotThread, JavaThread)))         \
   declare_toplevel_type(OSThread)                                         \
   declare_toplevel_type(JavaFrameAnchor)                                  \
@@ -1578,9 +1578,6 @@
   declare_constant(Deoptimization::Reason_unstable_fused_if)              \
   declare_constant(Deoptimization::Reason_receiver_constraint)            \
   declare_constant(Deoptimization::Reason_not_compiled_exception_handler) \
-  NOT_ZERO(JVMCI_ONLY(declare_constant(Deoptimization::Reason_transfer_to_interpreter)))        \
-  NOT_ZERO(JVMCI_ONLY(declare_constant(Deoptimization::Reason_unresolved)))                     \
-  NOT_ZERO(JVMCI_ONLY(declare_constant(Deoptimization::Reason_jsr_mismatch)))                   \
   declare_constant(Deoptimization::Reason_tenured)                        \
   declare_constant(Deoptimization::Reason_LIMIT)                          \
   declare_constant(Deoptimization::Reason_RECORDED_LIMIT)                 \
@@ -1599,10 +1596,8 @@
                                                                           \
   declare_constant(Deoptimization::_action_bits)                          \
   declare_constant(Deoptimization::_reason_bits)                          \
-  declare_constant(Deoptimization::_debug_id_bits)                        \
   declare_constant(Deoptimization::_action_shift)                         \
   declare_constant(Deoptimization::_reason_shift)                         \
-  declare_constant(Deoptimization::_debug_id_shift)                       \
                                                                           \
   /******************************************/                            \
   /* BasicType enum (globalDefinitions.hpp) */                            \
@@ -1760,12 +1755,6 @@
   declare_constant(PerfData::U_Hertz)                                     \
                                                                           \
   /****************/                                                      \
-  /* JVMCI */                                                             \
-  /****************/                                                      \
-                                                                          \
-  declare_preprocessor_constant("INCLUDE_JVMCI", INCLUDE_JVMCI)           \
-                                                                          \
-  /****************/                                                      \
   /*  VMRegImpl   */                                                      \
   /****************/                                                      \
   declare_constant(VMRegImpl::stack_slot_size)                            \
@@ -1827,7 +1816,6 @@
   declare_constant(markWord::age_mask_in_place)                           \
   declare_constant(markWord::hash_mask)                                   \
   declare_constant(markWord::hash_mask_in_place)                          \
-  declare_constant(markWord::hashctrl_mask)                               \
   declare_constant(markWord::hashctrl_mask_in_place)                      \
   declare_constant(markWord::hashctrl_hashed_mask_in_place)               \
   declare_constant(markWord::hashctrl_expanded_mask_in_place)             \

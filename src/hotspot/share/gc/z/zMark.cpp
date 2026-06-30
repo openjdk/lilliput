@@ -419,9 +419,16 @@ void ZMark::mark_and_follow(ZMarkContext* context, ZMarkStackEntry entry) {
     // Update live objects/bytes for page. We use the aligned object
     // size since that is the actual number of bytes used on the page
     // and alignment paddings can never be reclaimed.
+    const oop obj = to_oop(addr);
     const size_t size = ZUtils::object_size(addr);
     const size_t aligned_size = align_up(size, page->object_alignment());
     context->cache()->inc_live(page, aligned_size);
+    // Track objects that will expand by one HeapWord during relocation due to compact
+    // identity hashcode: their FROM size is one word smaller than their TO size.
+    if (UseCompactObjectHeaders && obj->mark().is_hashed_not_expanded()
+        && obj->klass()->expand_for_hash(obj, obj->mark())) {
+      page->inc_will_expand(1);
+    }
   }
 
   // Follow

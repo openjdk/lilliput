@@ -79,9 +79,6 @@
 #include "utilities/events.hpp"
 #include "utilities/formatBuffer.hpp"
 #include "utilities/macros.hpp"
-#if INCLUDE_JVMCI
-#include "jvmci/jvmci.hpp"
-#endif
 
 SpaceInfoNew PSParallelCompactNew::_space_info[PSParallelCompactNew::last_space_id];
 
@@ -365,7 +362,7 @@ void PSParallelCompactNew::post_compact()
 
   heap->prune_scavengable_nmethods();
 
-#if COMPILER2_OR_JVMCI
+#ifdef COMPILER2
   DerivedPointerTable::update_pointers();
 #endif
 
@@ -541,7 +538,7 @@ bool PSParallelCompactNew::invoke(bool clear_all_soft_refs, bool should_do_max_c
     // Let the size policy know we're starting
     size_policy->major_collection_begin();
 
-#if COMPILER2_OR_JVMCI
+#ifdef COMPILER2
     DerivedPointerTable::clear();
 #endif
 
@@ -555,7 +552,7 @@ bool PSParallelCompactNew::invoke(bool clear_all_soft_refs, bool should_do_max_c
 
     summary_phase();
 
-#if COMPILER2_OR_JVMCI
+#ifdef COMPILER2
     assert(DerivedPointerTable::is_active(), "Sanity");
     DerivedPointerTable::set_active(false);
 #endif
@@ -793,9 +790,6 @@ void PSParallelCompactNew::marking_phase(ParallelOldTracer *gc_tracer) {
 
     // Prune dead klasses from subklass/sibling/implementor lists.
     Klass::clean_weak_klass_links(unloading_occurred);
-
-    // Clean JVMCI metadata handles.
-    JVMCI_ONLY(JVMCI::do_unloading(unloading_occurred));
   }
 
   {

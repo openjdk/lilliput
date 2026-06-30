@@ -30,6 +30,7 @@
 #include "oops/compressedKlass.hpp"
 #include "oops/oopsHierarchy.hpp"
 #include "runtime/globals.hpp"
+#include "utilities/powerOfTwo.hpp"
 
 // The markWord describes the header of an object.
 //
@@ -37,11 +38,11 @@
 //
 //  32 bits:
 //  --------
-//             hash:25 ------------>| age:4  self-fwd:1  lock:2 (normal object)
+//             hash:25              age:4  self-fwd:1  lock:2
 //
-//  64 bits:
-//  --------
-//  unused:22 hash:31 -->| unused_gap:4  age:4  self-fwd:1  lock:2 (normal object)
+//  64 bits (without compact headers):
+//  ----------------------------------
+//  unused:22  hash:31  valhalla:4  age:4  self-fwd:1  lock:2
 //
 //  64 bits (with compact headers):
 //  -------------------------------
@@ -67,17 +68,34 @@
 //         necessary, for the object copy, and install 11.
 //    11 - read hashcode from field
 //
-//  - the two lock bits are used to describe three states: locked/unlocked and monitor.
+//  - lock bits are used to describe lock states: locked/unlocked/monitor-locked
+//    and to indicate that an object has been GC marked / forwarded.
 //
 //    [header          | 00]  locked             locked regular object header (fast-locking in use)
 //    [header          | 01]  unlocked           regular object header
-//    [ptr             | 10]  monitor            inflated lock (header is swapped out, UseObjectMonitorTable == false)
 //    [header          | 10]  monitor            inflated lock (UseObjectMonitorTable == true)
-//    [ptr             | 11]  marked             used to mark an object
+//    [ptr             | 10]  monitor            inflated lock (UseObjectMonitorTable == false, header is swapped out)
+//    [ptr             | 11]  marked             used to mark an object (header is swapped out)
+//
+//  - self-fwd - used by some GCs to indicate in-place forwarding.
+//
+//    Note the position of 'self-fwd' is not by accident. When forwarding an
+//    object to a new heap position, HeapWord alignment guarantees the lower
+//    bits, including 'self-fwd' are 0. "is_self_forwarded()" will be correctly
+//    set to false. Otherwise encode_pointer_as_mark() may have 'self-fwd' set.
+//
+//  - age - used by some GCs to track the age of objects.
+//
+//  - valhalla - reserved for valhalla
+//
+//  - hash - contains the identity hash value: largest value is 31 bits, see
+//    os::random().  Also, 64-bit VMs require a hash value no bigger than 32
+//    bits because they will not properly generate a mask larger than that:
+//    see library_call.cpp
+//
+//  - klass - klass identifier used when UseCompactObjectHeaders == true
 
-class BasicLock;
 class ObjectMonitor;
-class JavaThread;
 class outputStream;
 
 class markWord {
@@ -113,33 +131,41 @@ class markWord {
   uintptr_t value() const { return _value; }
   uint32_t value32() const { return (uint32_t)_value; }
 
-  // Constants
-  static const int age_bits                       = 4;
+  // Constants, in least significant bit order
+
+  // Number of bits
   static const int lock_bits                      = 2;
   static const int self_fwd_bits                  = 1;
-  static const int max_hash_bits                  = BitsPerWord - age_bits - lock_bits - self_fwd_bits;
+  static const int age_bits                       = 4;
+  static const int valhalla_reserved_bits         = LP64_ONLY(4) NOT_LP64(0);
+  static const int max_hash_bits                  = BitsPerWord - age_bits - lock_bits - self_fwd_bits - valhalla_reserved_bits;
   static const int hash_bits                      = max_hash_bits > 31 ? 31 : max_hash_bits;
-  static const int unused_gap_bits                = LP64_ONLY(4) NOT_LP64(0); // Reserved for Valhalla.
   static const int hashctrl_bits                  = 2;
 
+  // Shifts
   static const int lock_shift                     = 0;
   static const int self_fwd_shift                 = lock_shift + lock_bits;
   static const int age_shift                      = self_fwd_shift + self_fwd_bits;
-  static const int hash_shift                     = age_shift + age_bits + unused_gap_bits;
-  static const int hashctrl_shift                 = age_shift + age_bits + unused_gap_bits;
+  static const int valhalla_reserved_shift        = age_shift + age_bits;
+  static const int hash_shift                     = valhalla_reserved_shift + valhalla_reserved_bits;
+  static const int hashctrl_shift                 = valhalla_reserved_shift + valhalla_reserved_bits;;
 
-  static const uintptr_t lock_mask                = right_n_bits(lock_bits);
-  static const uintptr_t lock_mask_in_place       = lock_mask << lock_shift;
-  static const uintptr_t self_fwd_mask            = right_n_bits(self_fwd_bits);
-  static const uintptr_t self_fwd_mask_in_place   = self_fwd_mask << self_fwd_shift;
-  static const uintptr_t age_mask                 = right_n_bits(age_bits);
-  static const uintptr_t age_mask_in_place        = age_mask << age_shift;
-  static const uintptr_t hash_mask                = right_n_bits(hash_bits);
-  static const uintptr_t hash_mask_in_place       = hash_mask << hash_shift;
-  static const uintptr_t hashctrl_mask            = right_n_bits(hashctrl_bits);
-  static const uintptr_t hashctrl_mask_in_place   = hashctrl_mask << hashctrl_shift;
+  // Masks (in-place)
+  static const uintptr_t lock_mask_in_place       = right_n_bits(lock_bits) << lock_shift;
+  static const uintptr_t self_fwd_bit_in_place    = right_n_bits(self_fwd_bits) << self_fwd_shift;
+  static const uintptr_t age_mask_in_place        = right_n_bits(age_bits) << age_shift;
+  static const uintptr_t hash_mask_in_place       = right_n_bits(hash_bits) << hash_shift;
+  static const uintptr_t hashctrl_mask_in_place   = right_n_bits(hashctrl_bits) << hashctrl_shift;
   static const uintptr_t hashctrl_hashed_mask_in_place    = ((uintptr_t)1) << hashctrl_shift;
   static const uintptr_t hashctrl_expanded_mask_in_place  = ((uintptr_t)2) << hashctrl_shift;
+
+  // Verify that _bit_in_place refers to constants with only one bit.
+  static_assert(is_power_of_2(self_fwd_bit_in_place));
+
+  // Masks (unshifted)
+  static const uintptr_t lock_mask                = lock_mask_in_place >> lock_shift;
+  static const uintptr_t age_mask                 = age_mask_in_place >> age_shift;
+  static const uintptr_t hash_mask                = hash_mask_in_place >> hash_shift;
 
 #ifdef _LP64
   // Used only with compact headers:
@@ -164,7 +190,6 @@ class markWord {
   static constexpr uintptr_t klass_mask_in_place  = klass_mask << klass_shift;
 #endif
 
-
   static const uintptr_t locked_value             = 0;
   static const uintptr_t unlocked_value           = 1;
   static const uintptr_t monitor_value            = 2;
@@ -188,22 +213,24 @@ class markWord {
     return (mask_bits(value(), lock_mask_in_place) == unlocked_value);
   }
   bool is_marked()   const {
-    return (value() & (self_fwd_mask_in_place | lock_mask_in_place)) > monitor_value;
+    return (value() & (self_fwd_bit_in_place | lock_mask_in_place)) > monitor_value;
   }
-  bool is_forwarded() const {
-    // Returns true for normal forwarded (0b011) and self-forwarded (0b1xx).
-    return mask_bits(value(), lock_mask_in_place | self_fwd_mask_in_place) >= static_cast<intptr_t>(marked_value);
-  }
+
   bool is_neutral()  const {  // Not locked, or marked - a "clean" neutral state
     return (mask_bits(value(), lock_mask_in_place) == unlocked_value);
   }
 
+  bool is_forwarded() const {
+    // Returns true for normal forwarded (0b011) and self-forwarded (0b1xx).
+    return mask_bits(value(), lock_mask_in_place | self_fwd_bit_in_place) >= static_cast<intptr_t>(marked_value);
+  }
+
   markWord set_forward_expanded() {
-    assert((value() & (lock_mask_in_place | self_fwd_mask_in_place)) == marked_value, "must be normal-forwarded here");
+    assert((value() & (lock_mask_in_place | self_fwd_bit_in_place)) == marked_value, "must be normal-forwarded here");
     return markWord(value() | forward_expanded_value);
   }
   bool is_forward_expanded() {
-    return (value() & (lock_mask_in_place | self_fwd_mask_in_place)) == forward_expanded_value;
+    return (value() & (lock_mask_in_place | self_fwd_bit_in_place)) == forward_expanded_value;
   }
 
   // Should this header be preserved during GC?
@@ -245,15 +272,19 @@ class markWord {
     return markWord(tmp | monitor_value);
   }
 
-  bool has_displaced_mark_helper() const {
+  bool has_monitor_pointer() const {
     intptr_t lockbits = value() & lock_mask_in_place;
     return !UseObjectMonitorTable && lockbits == monitor_value;
+  }
+
+  bool has_displaced_mark_helper() const {
+    return has_monitor_pointer();
   }
   markWord displaced_mark_helper() const;
   void set_displaced_mark_helper(markWord m) const;
 
   // used to encode pointers during GC
-  markWord clear_lock_bits() const { return markWord(value() & ~(lock_mask_in_place | self_fwd_mask_in_place)); }
+  markWord clear_lock_bits() const { return markWord(value() & ~(lock_mask_in_place | self_fwd_bit_in_place)); }
 
   // age operations
   markWord set_marked()   { return markWord((value() & ~lock_mask_in_place) | marked_value); }
@@ -354,11 +385,7 @@ class markWord {
 
   // Prototype mark for initialization
   static markWord prototype() {
-    if (UseCompactObjectHeaders) {
-      return markWord(no_lock_in_place);
-    } else {
-      return markWord(no_hash_in_place | no_lock_in_place);
-    }
+    return markWord(unlocked_value);
   }
 
   // Debugging
@@ -372,15 +399,15 @@ class markWord {
 
   inline bool is_self_forwarded() const {
     // Match 100, 101, 110 but not 111.
-    return mask_bits(value() + 1, (lock_mask_in_place | self_fwd_mask_in_place)) > 4;
+    return mask_bits(value() + 1, (lock_mask_in_place | self_fwd_bit_in_place)) > 4;
   }
 
   inline markWord set_self_forwarded() const {
-    return markWord(value() | self_fwd_mask_in_place);
+    return markWord(value() | self_fwd_bit_in_place);
   }
 
   inline markWord unset_self_forwarded() const {
-    return markWord(value() & ~self_fwd_mask_in_place);
+    return markWord(value() & ~self_fwd_bit_in_place);
   }
 
   inline oop forwardee() const {
