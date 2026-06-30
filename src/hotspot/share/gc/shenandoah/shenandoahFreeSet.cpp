@@ -3248,7 +3248,13 @@ void ShenandoahFreeSet::decrease_humongous_waste_for_regular_bypass(ShenandoahHe
 
 HeapWord* ShenandoahFreeSet::allocate(ShenandoahAllocRequest& req, bool& in_new_region) {
   shenandoah_assert_heaplocked();
-  if (ShenandoahHeapRegion::requires_humongous(req.size())) {
+  // A freshly allocated mutator object is not yet hashed and may grow by one word
+  // when an identity hash-code is injected during a future GC copy, so reserve that
+  // headroom up front. Every other request carries an already-final size: a GC copy
+  // (_alloc_shared_gc*) uses an already-expanded copy_size(), and a LAB buffer
+  // (TLAB/GCLAB/PLAB, bounded by max_tlab_size_words() <= region size) never grows.
+  const bool may_expand_for_hash = (req.type() == ShenandoahAllocRequest::_alloc_shared);
+  if (ShenandoahHeapRegion::requires_humongous(req.size(), may_expand_for_hash)) {
     switch (req.type()) {
       case ShenandoahAllocRequest::_alloc_shared:
       case ShenandoahAllocRequest::_alloc_shared_gc:

@@ -159,6 +159,37 @@
  *      TestResizeTLAB
  */
 
+/*
+ * @test id=compact-headers
+ * @key randomness
+ * @summary Region-sized TLABs must allocate with compact headers. At the minimum
+ *          region size (256K) the max TLAB size equals the region size, so a TLAB
+ *          request can be exactly one region. With -XX:+UseCompactObjectHeaders the
+ *          allocator reserves a word of identity-hash headroom for objects; that
+ *          headroom must not be applied to TLAB buffers (which never grow), or a
+ *          region-sized TLAB is misrouted as humongous and allocation always fails.
+ * @requires vm.gc.Shenandoah
+ * @library /test/lib
+ *
+ * @comment Deterministic: a fixed, non-resizing TLAB of exactly one region size.
+ * @comment ShenandoahVerify with the minimum region size is heavy, so cap the
+ *          allocation target; the edge case triggers on the first region-sized TLAB.
+ * @run main/othervm -Dtarget=2000 -Xmx1g -Xms1g -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions
+ *      -XX:+UseShenandoahGC -XX:ShenandoahGCHeuristics=adaptive
+ *      -XX:+UseCompactObjectHeaders -XX:ShenandoahRegionSize=256K
+ *      -XX:+ShenandoahVerify
+ *      -XX:-ResizeTLAB -XX:TLABSize=256k
+ *      TestResizeTLAB
+ *
+ * @comment Adaptive resizing drives the TLAB up to the region-sized maximum.
+ * @run main/othervm -Dtarget=2000 -Xmx1g -Xms1g -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions
+ *      -XX:+UseShenandoahGC -XX:ShenandoahGCHeuristics=adaptive
+ *      -XX:+UseCompactObjectHeaders -XX:ShenandoahRegionSize=256K
+ *      -XX:+ShenandoahVerify
+ *      -XX:+ResizeTLAB
+ *      TestResizeTLAB
+ */
+
 import java.util.Random;
 import jdk.test.lib.Utils;
 
