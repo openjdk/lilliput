@@ -55,7 +55,7 @@ instanceOop InstanceMirrorKlass::allocate_instance(Klass* k, bool extend, TRAPS)
   size_t base_size = instance_size(k);
   size_t size = base_size;
   if (extend && UseCompactObjectHeaders) {
-    size = align_object_size(size + 1);
+    size = oopDesc::hash_expanded_size(size);
   }
   assert(base_size > 0, "base object size must be non-zero: %zu", base_size);
 

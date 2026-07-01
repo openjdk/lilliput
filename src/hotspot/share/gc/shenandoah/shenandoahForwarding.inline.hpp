@@ -170,7 +170,7 @@ inline size_t ShenandoahForwarding::size(oop obj) {
     if (UseCompactObjectHeaders) {
       if ((mark.value() & FWDED_HASH_TRANSITION) != FWDED_HASH_TRANSITION) {
         if (fwd_mark.is_expanded() && klass->expand_for_hash(fwd, fwd_mark)) {
-          size = align_object_size(size + 1);
+          size = oopDesc::hash_expanded_size(size);
         }
       }
     }
