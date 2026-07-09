@@ -516,17 +516,23 @@ void ShenandoahFullGC::calculate_target_humongous_objects() {
     if (r->is_humongous_start() && r->is_stw_move_allowed()) {
       // From-region candidate: movable humongous region
       oop old_obj = cast_to_oop(r->bottom());
-      size_t words_size = old_obj->size();
-      size_t num_regions = ShenandoahHeapRegion::required_regions(words_size * HeapWordSize);
+      size_t new_words_size = old_obj->copy_size(old_obj->size(), old_obj->mark());
+      size_t num_regions = ShenandoahHeapRegion::required_regions(new_words_size * HeapWordSize);
 
-      size_t start = to_end - num_regions;
-
-      if (start >= to_begin && start != r->index()) {
-        // Fits into current window, and the move is non-trivial. Record the move then, and continue scan.
-        _preserved_marks->get(0)->push_if_necessary(old_obj, old_obj->mark());
-        FullGCForwarding::forward_to(old_obj, cast_to_oop(heap->get_region(start)->bottom()));
-        to_end = start;
-        continue;
+      // Test the fit before computing the slide target. With compact object headers
+      // the expanded size can require one region more than the object currently
+      // occupies, so num_regions may exceed the available window. Comparing against
+      // the window size (to_end - to_begin) avoids the unsigned underflow that
+      // "to_end - num_regions" would suffer when the object does not fit.
+      if (num_regions <= to_end - to_begin) {
+        size_t start = to_end - num_regions;
+        if (start != r->index()) {
+          // Fits into current window, and the move is non-trivial. Record the move then, and continue scan.
+          _preserved_marks->get(0)->push_if_necessary(old_obj, old_obj->mark());
+          FullGCForwarding::forward_to(old_obj, cast_to_oop(heap->get_region(start)->bottom()));
+          to_end = start;
+          continue;
+        }
       }
     }
 
@@ -1020,22 +1026,25 @@ void ShenandoahFullGC::compact_humongous_objects() {
         // No need to move the object, it stays at the same slot
         continue;
       }
-      size_t words_size = old_obj->size();
-      size_t num_regions = ShenandoahHeapRegion::required_regions(words_size * HeapWordSize);
+      size_t old_words_size = old_obj->size();
+      size_t new_words_size = old_obj->copy_size(old_words_size, old_obj->mark());
+      size_t old_num_regions = ShenandoahHeapRegion::required_regions(old_words_size * HeapWordSize);
+      size_t new_num_regions = ShenandoahHeapRegion::required_regions(new_words_size * HeapWordSize);
 
       size_t old_start = r->index();
-      size_t old_end   = old_start + num_regions - 1;
+      size_t old_end   = old_start + old_num_regions - 1;
       size_t new_start = heap->heap_region_index_containing(FullGCForwarding::forwardee(old_obj));
-      size_t new_end   = new_start + num_regions - 1;
+      size_t new_end   = new_start + new_num_regions - 1;
       assert(old_start != new_start, "must be real move");
       assert(r->is_stw_move_allowed(), "Region %zu should be movable", r->index());
 
       log_debug(gc)("Full GC compaction moves humongous object from region %zu to region %zu", old_start, new_start);
-      Copy::aligned_conjoint_words(r->bottom(), heap->get_region(new_start)->bottom(), words_size);
+      Copy::aligned_conjoint_words(r->bottom(), heap->get_region(new_start)->bottom(), old_words_size);
       ContinuationGCSupport::relativize_stack_chunk(cast_to_oop<HeapWord*>(r->bottom()));
 
       oop new_obj = cast_to_oop(heap->get_region(new_start)->bottom());
       new_obj->reinit_mark();
+      new_obj->initialize_hash_if_necessary(old_obj);
 
       {
         ShenandoahAffiliation original_affiliation = r->affiliation();
@@ -1055,7 +1064,7 @@ void ShenandoahFullGC::compact_humongous_objects() {
           }
 
           // Trailing region may be non-full, record the remainder there
-          size_t remainder = words_size & ShenandoahHeapRegion::region_size_words_mask();
+          size_t remainder = new_words_size & ShenandoahHeapRegion::region_size_words_mask();
           if ((c == new_end) && (remainder != 0)) {
             r->set_top(r->bottom() + remainder);
           } else {

@@ -164,7 +164,10 @@ public:
       // Update region liveness data
       ShenandoahHeapRegion* region = heap->heap_region_containing(invisible_root);
       if (region->is_regular_or_regular_pinned()) {
-        assert(!ShenandoahHeapRegion::requires_humongous(invisible_root_word_size), "Must not be humongous.");
+        // The invisible root is a freshly allocated, not-yet-hashed mutator object
+        // array (see ShenandoahObjArrayAllocator), so it is classified for the
+        // humongous path with hash-expansion headroom, just like its allocation.
+        assert(!ShenandoahHeapRegion::requires_humongous(invisible_root_word_size, true /* may_expand_for_hash */), "Must not be humongous.");
         region->increase_live_data_alloc_words(invisible_root_word_size);
       } else if (region->is_humongous_start()) {
         DEBUG_ONLY(size_t total_live_words = 0;)

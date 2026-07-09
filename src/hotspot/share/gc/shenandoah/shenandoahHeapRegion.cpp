@@ -761,8 +761,16 @@ size_t ShenandoahHeapRegion::setup_sizes(size_t max_heap_size) {
 
   // Limit TLAB size for better startup behavior and more equitable distribution of memory between contending mutator threads.
   guarantee(MaxTLABSizeWords == 0, "we should only set it once");
-  MaxTLABSizeWords = align_down(MIN2(RegionSizeWords, MAX2(RegionSizeWords / 32, (size_t) (256 * 1024) / HeapWordSize)),
-                                MinObjAlignment);
+  // With compact object headers an object may grow by one word when an identity
+  // hash-code is injected during a GC copy. Never let the max TLAB equal a whole
+  // region: a region-sized TLAB could serve a region-sized object (bypassing the
+  // humongous path) and would itself be a region-sized LAB allocation request. Cap
+  // it one (object-aligned) word below the region so neither can happen.
+  size_t max_tlab_words = MIN2(RegionSizeWords, MAX2(RegionSizeWords / 32, (size_t) (256 * 1024) / HeapWordSize));
+  if (UseCompactObjectHeaders) {
+    max_tlab_words = MIN2(max_tlab_words, RegionSizeWords - align_object_size(1));
+  }
+  MaxTLABSizeWords = align_down(max_tlab_words, MinObjAlignment);
 
   guarantee(MaxTLABSizeBytes == 0, "we should only set it once");
   MaxTLABSizeBytes = MaxTLABSizeWords * HeapWordSize;

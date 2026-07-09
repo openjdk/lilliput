@@ -41,7 +41,11 @@ size_t ShenandoahController::get_gc_id() {
 void ShenandoahController::handle_alloc_failure(const ShenandoahAllocRequest& req, bool block) {
   assert(current()->is_Java_thread(), "expect Java thread here");
 
-  const bool is_humongous = ShenandoahHeapRegion::requires_humongous(req.size());
+  // Classify the failure consistently with how ShenandoahFreeSet::allocate would
+  // route this request: a fresh mutator object (_alloc_shared) may expand for an
+  // identity hash-code, every other request carries an already-final size.
+  const bool may_expand_for_hash = (req.type() == ShenandoahAllocRequest::_alloc_shared);
+  const bool is_humongous = ShenandoahHeapRegion::requires_humongous(req.size(), may_expand_for_hash);
   const GCCause::Cause cause = is_humongous ? GCCause::_shenandoah_humongous_allocation_failure : GCCause::_allocation_failure;
 
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
@@ -63,7 +67,7 @@ void ShenandoahController::handle_alloc_failure(const ShenandoahAllocRequest& re
 void ShenandoahController::handle_alloc_failure_evac(size_t words) {
 
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
-  const bool is_humongous = ShenandoahHeapRegion::requires_humongous(words);
+  const bool is_humongous = ShenandoahHeapRegion::requires_humongous(words, false /* may_expand_for_hash */);
   const GCCause::Cause cause = is_humongous ? GCCause::_shenandoah_humongous_allocation_failure : GCCause::_shenandoah_allocation_failure_evac;
 
   if (heap->cancel_gc(cause)) {

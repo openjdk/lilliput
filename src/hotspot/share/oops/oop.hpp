@@ -124,8 +124,11 @@ class oopDesc {
   // Returns the actual oop size of the object in machine words
   inline size_t size();
 
+  // Returns hash expanded size for given words, assuming it uses 1 word to accommodate the identity hash-code.
+  static size_t hash_expanded_size(size_t words) { return align_object_size(words + 1); }
+
   // Returns the size that a copy of this object requires, in machine words.
-  // It can be 1 word larger than its current size to accomodate
+  // It can be 1 word larger than its current size to accommodate
   // an additional 4-byte-field for the identity hash-code.
   //
   // size: the current size of this object, we're passing this here for performance
