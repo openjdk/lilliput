@@ -263,36 +263,43 @@ jobs:
       - name: 'Create or update draft PR'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LILLIPUT_COMMITS: ${{ needs.merge.outputs.lilliput-commits }}
+          UPSTREAM_TAG: ${{ needs.merge.outputs.upstream-tag }}
+          MERGE_BRANCH: ${{ needs.merge.outputs.merge-branch }}
         run: |
-          TAG="${{ needs.merge.outputs.upstream-tag }}"
-          BRANCH="${{ needs.merge.outputs.merge-branch }}"
-          TITLE="Merge jdk:${TAG}"
-          BODY="Automated merge of upstream tag \`${TAG}\` into Lilliput master.
+          TITLE="Merge jdk:${UPSTREAM_TAG}"
+
+          cat > /tmp/pr-body.md << 'PR_EOF'
+          Automated merge of upstream tag `${UPSTREAM_TAG}` into Lilliput master.
 
           ## Lilliput patches transplanted
-          \`\`\`
-          ${{ needs.merge.outputs.lilliput-commits }}
-          \`\`\`
+          ```
+          ${LILLIPUT_COMMITS}
+          ```
 
           ## Testing
           - [x] Tier1 (default) — passed
           - [x] Tier1 (+UseCompactObjectHeaders) — passed
 
           ---
-          *This PR was created automatically by the sync workflow.*"
+          *This PR was created automatically by the sync workflow.*
+          PR_EOF
+
+          # Substitute environment variables into the template
+          envsubst < /tmp/pr-body.md > /tmp/pr-body-final.md
 
           # Check if a PR already exists for this branch
-          EXISTING_PR=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number' || true)
+          EXISTING_PR=$(gh pr list --head "$MERGE_BRANCH" --json number --jq '.[0].number' || true)
           if [[ -n "$EXISTING_PR" ]]; then
             echo "Updating existing PR #$EXISTING_PR"
-            gh pr edit "$EXISTING_PR" --title "$TITLE" --body "$BODY"
+            gh pr edit "$EXISTING_PR" --title "$TITLE" --body-file /tmp/pr-body-final.md
           else
             echo "Creating new draft PR"
             gh pr create \
               --title "$TITLE" \
-              --body "$BODY" \
+              --body-file /tmp/pr-body-final.md \
               --base "${{ env.TARGET_BRANCH }}" \
-              --head "$BRANCH" \
+              --head "$MERGE_BRANCH" \
               --draft
           fi
 
@@ -312,41 +319,49 @@ jobs:
       - name: 'Create issue for manual resolution'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CONFLICT_DETAILS: ${{ needs.merge.outputs.conflict-details }}
+          LILLIPUT_COMMITS: ${{ needs.merge.outputs.lilliput-commits }}
+          UPSTREAM_TAG: ${{ needs.merge.outputs.upstream-tag }}
         run: |
-          TAG="${{ needs.merge.outputs.upstream-tag }}"
-          TITLE="[Merge Conflict] Upstream sync with ${TAG} requires manual intervention"
-          BODY="The automated sync from \`openjdk/jdk:${TAG}\` encountered merge conflicts
+          TITLE="[Merge Conflict] Upstream sync with ${UPSTREAM_TAG} requires manual intervention"
+
+          cat > /tmp/issue-body.md << 'ISSUE_EOF'
+          The automated sync from `openjdk/jdk:${UPSTREAM_TAG}` encountered merge conflicts
           when transplanting Lilliput patches.
 
           ## Conflict Details
-          \`\`\`
-          ${{ needs.merge.outputs.conflict-details }}
-          \`\`\`
+          ```
+          ${CONFLICT_DETAILS}
+          ```
 
           ## Lilliput Patches (in order)
-          \`\`\`
-          ${{ needs.merge.outputs.lilliput-commits }}
-          \`\`\`
+          ```
+          ${LILLIPUT_COMMITS}
+          ```
 
           ## Manual Resolution Steps
           See: https://wiki.openjdk.org/spaces/lilliput/pages/191168526/Merging+upstream+changes
 
           Summary:
-          1. Create branch from tag: \`git checkout -b merge-${TAG} ${TAG}\`
-          2. Merge with ours strategy: \`git merge -s ours master\`
-          3. Fix \`.jcheck/conf\` (project=lilliput, committers=1)
+          1. Create branch from tag: `git checkout -b merge-${UPSTREAM_TAG} ${UPSTREAM_TAG}`
+          2. Merge with ours strategy: `git merge -s ours master`
+          3. Fix `.jcheck/conf` (project=lilliput, committers=1)
           4. Cherry-pick Lilliput patches, resolving conflicts
           5. Build and test (tier1 with/without +UCOH)
-          6. Push branch and create PR titled \`Merge jdk:${TAG}\`
+          6. Push branch and create PR titled `Merge jdk:${UPSTREAM_TAG}`
 
           ---
-          *This issue was created automatically by the sync workflow.*"
+          *This issue was created automatically by the sync workflow.*
+          ISSUE_EOF
+
+          # Substitute environment variables into the template
+          envsubst < /tmp/issue-body.md > /tmp/issue-body-final.md
 
           # Avoid duplicate issues
-          EXISTING=$(gh issue list --search "in:title \"[Merge Conflict] Upstream sync with ${TAG}\"" --json number --jq '.[0].number' || true)
+          EXISTING=$(gh issue list --search "in:title \"[Merge Conflict] Upstream sync with ${UPSTREAM_TAG}\"" --json number --jq '.[0].number' || true)
           if [[ -n "$EXISTING" ]]; then
             echo "Issue already exists: #$EXISTING"
-            gh issue comment "$EXISTING" --body "Sync workflow re-ran and conflicts persist."
+            gh issue comment "$EXISTING" --body-file /tmp/issue-body-final.md
           else
-            gh issue create --title "$TITLE" --body "$BODY" --label "merge-conflict"
+            gh issue create --title "$TITLE" --body-file /tmp/issue-body-final.md --label "merge-conflict"
           fi
