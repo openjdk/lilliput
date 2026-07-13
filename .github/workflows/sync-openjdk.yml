@@ -1,0 +1,352 @@
+#
+# Copyright (c) 2025, 2026, Oracle and/or its affiliates. All rights reserved.
+# DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+#
+# This code is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License version 2 only, as
+# published by the Free Software Foundation.  Oracle designates this
+# particular file as subject to the "Classpath" exception as provided
+# by Oracle in the LICENSE file that accompanied this code.
+#
+# This code is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+# version 2 for more details (a copy is included in the LICENSE file that
+# accompanied this code).
+#
+# You should have received a copy of the GNU General Public License version
+# 2 along with this work; if not, write to the Free Software Foundation,
+# Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+#
+# Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+# or visit www.oracle.com if you need additional information or have any
+# questions.
+#
+
+name: 'Sync from OpenJDK upstream'
+
+# Trigger weekly (Monday 8am UTC) or manually with an explicit tag
+on:
+  schedule:
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+    inputs:
+      upstream-tag:
+        description: 'Upstream tag to merge (e.g. jdk-27+26). If empty, uses the latest jdk-* tag.'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+env:
+  UPSTREAM_REPO: https://github.com/openjdk/jdk.git
+  TARGET_BRANCH: master
+
+jobs:
+
+  ###
+  ### Attempt the merge using the Lilliput merge procedure
+  ###
+
+  merge:
+    name: 'Merge upstream'
+    runs-on: ubuntu-24.04
+    outputs:
+      status: ${{ steps.result.outputs.status }}
+      upstream-tag: ${{ steps.find-tag.outputs.tag }}
+      merge-branch: ${{ steps.find-tag.outputs.merge-branch }}
+      conflict-details: ${{ steps.cherry-pick.outputs.conflict-details }}
+      lilliput-commits: ${{ steps.identify-patches.outputs.commits }}
+
+    steps:
+      - name: 'Checkout lilliput'
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ env.TARGET_BRANCH }}
+
+      - name: 'Configure git'
+        run: |
+          git config user.email "actions@github.com"
+          git config user.name "github-actions[bot]"
+
+      - name: 'Fetch upstream'
+        run: git remote add upstream ${{ env.UPSTREAM_REPO }} && git fetch upstream --tags
+
+      - name: 'Find target upstream tag'
+        id: find-tag
+        run: |
+          if [[ -n "${{ inputs.upstream-tag }}" ]]; then
+            TAG="${{ inputs.upstream-tag }}"
+          else
+            # Find the latest weekly jdk tag (format: jdk-NN+NN)
+            TAG=$(git tag -l 'jdk-*+*' --sort=-version:refname | head -1)
+          fi
+
+          if [[ -z "$TAG" ]]; then
+            echo "::error::No upstream tag found"
+            exit 1
+          fi
+
+          # Check if we already merged this tag
+          LAST_MERGE_MSG=$(git log --merges -1 --format=%s ${{ env.TARGET_BRANCH }})
+          if echo "$LAST_MERGE_MSG" | grep -qF "$TAG"; then
+            echo "::notice::Tag $TAG already merged (last merge: $LAST_MERGE_MSG)"
+            echo "already-merged=true" >> $GITHUB_OUTPUT
+            echo "tag=$TAG" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "merge-branch=merge-$TAG" >> $GITHUB_OUTPUT
+          echo "already-merged=false" >> $GITHUB_OUTPUT
+          echo "Targeting upstream tag: $TAG"
+
+      - name: 'Identify Lilliput patches'
+        id: identify-patches
+        if: steps.find-tag.outputs.already-merged != 'true'
+        run: |
+          # Lilliput patches sit on top of the last merge commit.
+          # Find the most recent merge commit on master.
+          LAST_MERGE=$(git log --merges -1 --format=%H ${{ env.TARGET_BRANCH }})
+          echo "Last merge commit: $LAST_MERGE"
+
+          # Lilliput-specific commits are everything after the merge
+          COMMITS=$(git rev-list --reverse ${LAST_MERGE}..${{ env.TARGET_BRANCH }})
+          COUNT=$(echo "$COMMITS" | grep -c . || true)
+          echo "Found $COUNT Lilliput patch(es) to transplant"
+
+          # Save commits to file for later use
+          echo "$COMMITS" > /tmp/lilliput-commits.txt
+          echo "commits<<EOF" >> $GITHUB_OUTPUT
+          git log --oneline ${LAST_MERGE}..${{ env.TARGET_BRANCH }} >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: 'Create merge branch from upstream tag'
+        id: create-branch
+        if: steps.find-tag.outputs.already-merged != 'true'
+        run: |
+          TAG="${{ steps.find-tag.outputs.tag }}"
+          MERGE_BRANCH="${{ steps.find-tag.outputs.merge-branch }}"
+
+          # Create branch from the upstream tag (no Lilliput changes)
+          git checkout -b "$MERGE_BRANCH" "$TAG"
+
+          # Merge lilliput master using -s ours:
+          # This records the merge but keeps the tree identical to the upstream tag.
+          git merge -s ours ${{ env.TARGET_BRANCH }} -m "Merge"
+
+          # Fix .jcheck/conf for Lilliput project settings
+          sed -i 's/^project=jdk$/project=lilliput/' .jcheck/conf
+          sed -i 's/^reviewers=1$/committers=1/' .jcheck/conf
+
+          git add .jcheck/conf
+          git commit --amend --no-edit
+
+      - name: 'Cherry-pick Lilliput patches'
+        id: cherry-pick
+        if: steps.find-tag.outputs.already-merged != 'true'
+        run: |
+          FAILED=""
+          SUCCEEDED=0
+
+          while IFS= read -r COMMIT; do
+            [[ -z "$COMMIT" ]] && continue
+            SUBJECT=$(git log -1 --format=%s "$COMMIT")
+            echo "Cherry-picking: $SUBJECT ($COMMIT)"
+
+            if git cherry-pick "$COMMIT" --no-edit; then
+              SUCCEEDED=$((SUCCEEDED + 1))
+              echo "  ✓ Success"
+            else
+              # Record the conflict details
+              CONFLICTING_FILES=$(git diff --name-only --diff-filter=U 2>/dev/null || true)
+              FAILED="${FAILED}COMMIT: ${COMMIT}\nSUBJECT: ${SUBJECT}\nCONFLICTING FILES:\n${CONFLICTING_FILES}\n---\n"
+              echo "  ✗ Conflict in: $CONFLICTING_FILES"
+              git cherry-pick --abort
+              break
+            fi
+          done < /tmp/lilliput-commits.txt
+
+          echo "Successfully cherry-picked: $SUCCEEDED"
+
+          if [[ -n "$FAILED" ]]; then
+            echo "status=conflict" >> $GITHUB_OUTPUT
+            # Escape for multiline output
+            echo "conflict-details<<EOF" >> $GITHUB_OUTPUT
+            echo -e "$FAILED" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "status=clean" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 'Push merge branch'
+        if: steps.find-tag.outputs.already-merged != 'true' && steps.cherry-pick.outputs.status == 'clean'
+        run: |
+          MERGE_BRANCH="${{ steps.find-tag.outputs.merge-branch }}"
+          git push origin "$MERGE_BRANCH" --force
+
+      - name: 'Set result'
+        id: result
+        run: |
+          if [[ "${{ steps.find-tag.outputs.already-merged }}" == "true" ]]; then
+            echo "status=already-merged" >> $GITHUB_OUTPUT
+          elif [[ "${{ steps.cherry-pick.outputs.status }}" == "clean" ]]; then
+            echo "status=clean" >> $GITHUB_OUTPUT
+          else
+            echo "status=conflict" >> $GITHUB_OUTPUT
+          fi
+
+  ###
+  ### On clean merge: build and run tier1 tests (with and without UCOH)
+  ###
+
+  build-for-test:
+    name: 'Build linux-x64'
+    needs: merge
+    if: needs.merge.outputs.status == 'clean'
+    uses: ./.github/workflows/build-linux.yml
+    with:
+      platform: linux-x64
+      gcc-major-version: '10'
+      dry-run: false
+      ref: ${{ needs.merge.outputs.merge-branch }}
+
+  test-tier1:
+    name: 'Tier1 tests (default)'
+    needs:
+      - merge
+      - build-for-test
+    if: needs.merge.outputs.status == 'clean'
+    uses: ./.github/workflows/test.yml
+    with:
+      platform: linux-x64
+      bootjdk-platform: linux-x64
+      runs-on: ubuntu-24.04
+      debug-suffix: -debug
+      ref: ${{ needs.merge.outputs.merge-branch }}
+
+  test-tier1-ucoh:
+    name: 'Tier1 tests (+UseCompactObjectHeaders)'
+    needs:
+      - merge
+      - build-for-test
+    if: needs.merge.outputs.status == 'clean'
+    uses: ./.github/workflows/test.yml
+    with:
+      platform: linux-x64
+      bootjdk-platform: linux-x64
+      runs-on: ubuntu-24.04
+      debug-suffix: -debug
+      test-vm-opts: '-XX:+UseCompactObjectHeaders'
+      ref: ${{ needs.merge.outputs.merge-branch }}
+
+  ###
+  ### On clean merge + tests pass: open a draft PR
+  ###
+
+  open-pr:
+    name: 'Open merge PR'
+    needs:
+      - merge
+      - test-tier1
+      - test-tier1-ucoh
+    if: needs.merge.outputs.status == 'clean'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: 'Checkout'
+        uses: actions/checkout@v6
+
+      - name: 'Create or update draft PR'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ needs.merge.outputs.upstream-tag }}"
+          BRANCH="${{ needs.merge.outputs.merge-branch }}"
+          TITLE="Merge jdk:${TAG}"
+          BODY="Automated merge of upstream tag \`${TAG}\` into Lilliput master.
+
+          ## Lilliput patches transplanted
+          \`\`\`
+          ${{ needs.merge.outputs.lilliput-commits }}
+          \`\`\`
+
+          ## Testing
+          - [x] Tier1 (default) — passed
+          - [x] Tier1 (+UseCompactObjectHeaders) — passed
+
+          ---
+          *This PR was created automatically by the sync workflow.*"
+
+          # Check if a PR already exists for this branch
+          EXISTING_PR=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number' || true)
+          if [[ -n "$EXISTING_PR" ]]; then
+            echo "Updating existing PR #$EXISTING_PR"
+            gh pr edit "$EXISTING_PR" --title "$TITLE" --body "$BODY"
+          else
+            echo "Creating new draft PR"
+            gh pr create \
+              --title "$TITLE" \
+              --body "$BODY" \
+              --base "${{ env.TARGET_BRANCH }}" \
+              --head "$BRANCH" \
+              --draft
+          fi
+
+  ###
+  ### On conflict: file an issue
+  ###
+
+  file-issue:
+    name: 'File conflict issue'
+    needs: merge
+    if: needs.merge.outputs.status == 'conflict'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: 'Checkout'
+        uses: actions/checkout@v6
+
+      - name: 'Create issue for manual resolution'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ needs.merge.outputs.upstream-tag }}"
+          TITLE="[Merge Conflict] Upstream sync with ${TAG} requires manual intervention"
+          BODY="The automated sync from \`openjdk/jdk:${TAG}\` encountered merge conflicts
+          when transplanting Lilliput patches.
+
+          ## Conflict Details
+          \`\`\`
+          ${{ needs.merge.outputs.conflict-details }}
+          \`\`\`
+
+          ## Lilliput Patches (in order)
+          \`\`\`
+          ${{ needs.merge.outputs.lilliput-commits }}
+          \`\`\`
+
+          ## Manual Resolution Steps
+          See: https://wiki.openjdk.org/spaces/lilliput/pages/191168526/Merging+upstream+changes
+
+          Summary:
+          1. Create branch from tag: \`git checkout -b merge-${TAG} ${TAG}\`
+          2. Merge with ours strategy: \`git merge -s ours master\`
+          3. Fix \`.jcheck/conf\` (project=lilliput, committers=1)
+          4. Cherry-pick Lilliput patches, resolving conflicts
+          5. Build and test (tier1 with/without +UCOH)
+          6. Push branch and create PR titled \`Merge jdk:${TAG}\`
+
+          ---
+          *This issue was created automatically by the sync workflow.*"
+
+          # Avoid duplicate issues
+          EXISTING=$(gh issue list --search "in:title \"[Merge Conflict] Upstream sync with ${TAG}\"" --json number --jq '.[0].number' || true)
+          if [[ -n "$EXISTING" ]]; then
+            echo "Issue already exists: #$EXISTING"
+            gh issue comment "$EXISTING" --body "Sync workflow re-ran and conflicts persist."
+          else
+            gh issue create --title "$TITLE" --body "$BODY" --label "merge-conflict"
+          fi
