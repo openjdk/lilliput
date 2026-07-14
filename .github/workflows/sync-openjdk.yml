@@ -91,10 +91,9 @@ jobs:
             exit 1
           fi
 
-          # Check if we already merged this tag
-          LAST_MERGE_MSG=$(git log --merges -1 --format=%s ${{ env.TARGET_BRANCH }})
-          if echo "$LAST_MERGE_MSG" | grep -qF "$TAG"; then
-            echo "::notice::Tag $TAG already merged (last merge: $LAST_MERGE_MSG)"
+          # Check if we already merged this tag (tag is ancestor of current master)
+          if git merge-base --is-ancestor "$TAG" HEAD; then
+            echo "::notice::Tag $TAG is already an ancestor of ${{ env.TARGET_BRANCH }}"
             echo "already-merged=true" >> $GITHUB_OUTPUT
             echo "tag=$TAG" >> $GITHUB_OUTPUT
             exit 0
