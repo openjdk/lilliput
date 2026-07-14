@@ -79,6 +79,10 @@ on:
       static-suffix:
         required: false
         type: string
+      ref:
+        required: false
+        type: string
+        description: 'Git ref to checkout (defaults to the triggering ref)'
 
 jobs:
   build-linux:
@@ -93,6 +97,8 @@ jobs:
     steps:
       - name: 'Checkout the JDK source'
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || '' }}
 
       - name: 'Get the BootJDK'
         id: bootjdk
