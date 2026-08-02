@@ -53,6 +53,14 @@ on:
       static-suffix:
         required: false
         type: string
+      test-vm-opts:
+        required: false
+        type: string
+        description: 'Additional VM options passed via TEST_VM_OPTS (e.g. -XX:+UseCompactObjectHeaders)'
+      ref:
+        required: false
+        type: string
+        description: 'Git ref to checkout (defaults to the triggering ref)'
 
 env:
   # These are needed to make the MSYS2 bash work properly
@@ -132,6 +140,8 @@ jobs:
     steps:
       - name: 'Checkout the JDK source'
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || '' }}
 
       - name: 'Get MSYS2'
         uses: ./.github/actions/get-msys2
@@ -193,6 +203,11 @@ jobs:
             echo "extra-problem-lists=EXTRA_PROBLEM_LISTS=${{ steps.path.outputs.static-hotspot-problemlist-path }}%20${{ steps.path.outputs.static-jdk-problemlist-path }}%20${{ steps.path.outputs.static-langtools-problemlist-path }}%20${{ steps.path.outputs.static-lib-test-problemlist-path }}" >> $GITHUB_OUTPUT
           fi
 
+          # Pass TEST_VM_OPTS if specified
+          if [[ -n '${{ inputs.test-vm-opts }}' ]]; then
+            echo "test-vm-opts=TEST_VM_OPTS=${{ inputs.test-vm-opts }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: 'Run tests'
         id: run-tests
         run: >
@@ -205,6 +220,7 @@ jobs:
           TEST_IMAGE_DIR=${{ steps.bundles.outputs.tests-path }}
           ${{ steps.extra-options.outputs.test-jdk }}
           ${{ steps.extra-options.outputs.compile-jdk }}
+          ${{ steps.extra-options.outputs.test-vm-opts }}
           JTREG='JAVA_OPTIONS=-XX:-CreateCoredumpOnCrash;VERBOSE=fail,error,time;KEYWORDS=!headful;${{ steps.extra-options.outputs.extra-problem-lists }}'
           && bash ./.github/scripts/gen-test-summary.sh "$GITHUB_STEP_SUMMARY" "$GITHUB_OUTPUT"
         env:
