@@ -25,10 +25,10 @@
 
 name: 'Sync from OpenJDK upstream'
 
-# Trigger weekly (Monday 8am UTC) or manually with an explicit tag
+# Trigger weekly on Friday (day after typical Thursday tag) at 8am UTC, or manually
 on:
   schedule:
-    - cron: '0 8 * * 1'
+    - cron: '0 8 * * 5'
   workflow_dispatch:
     inputs:
       upstream-tag:
