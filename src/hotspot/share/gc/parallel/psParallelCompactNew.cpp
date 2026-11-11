@@ -426,10 +426,10 @@ size_t PSParallelCompactNew::calculate_region_size() {
     total_heap_words += _space_info[i].space()->capacity_in_words();
   }
 
-  // Per-worker region count for dynamic region sizing
-  static const uint REGIONS_PER_WORKER = 20;  // Based on 5% boundary waste threshold
+  // Target a fixed number of regions per worker. Tradeoff: objects larger than a region hamper compaction (JDK-8375467),
+  // but larger regions increase maximum waste from each worker's final partially full region after compaction.
   const uint max_workers = ParallelScavengeHeap::heap()->workers().max_workers();
-  const size_t total_regions_count = (size_t)max_workers * REGIONS_PER_WORKER;
+  const size_t total_regions_count = (size_t)max_workers * ParallelCompactRegionsPerWorker;
   const size_t dynamic_region_size_words = total_heap_words / total_regions_count;
   return round_up_power_of_2(MAX2(dynamic_region_size_words, FLOOR_REGION_SIZE_WORDS));
 }
