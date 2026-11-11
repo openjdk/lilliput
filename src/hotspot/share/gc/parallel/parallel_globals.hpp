@@ -46,7 +46,13 @@
                                                                             \
   product(bool, UseMaximumCompactionOnSystemGC, true,                       \
           "Use maximum compaction in the Parallel Old garbage collector "   \
-          "for a system GC")
+          "for a system GC")                                                \
+                                                                            \
+  product(uintx, ParallelCompactRegionsPerWorker, 20, EXPERIMENTAL,         \
+          "Target number of regions to assign to each worker during "       \
+          "Parallel GC compaction (Full GC). Only applicable with "         \
+          "UseCompactObjectHeaders enabled")                                \
+          range(1, 1024)
 
 // end of GC_PARALLEL_FLAGS
 
