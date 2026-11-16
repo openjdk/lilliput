@@ -37,6 +37,7 @@
 #include "oops/oop.hpp"
 #include "runtime/atomic.hpp"
 #include "runtime/orderAccess.hpp"
+#include "utilities/growableArray.hpp"
 
 class ParallelScavengeHeap;
 class PSAdaptiveSizePolicy;
@@ -179,17 +180,18 @@ class PCRegionData /*: public CHeapObj<mtGC> */ {
   // The next compaction address
   HeapWord* _new_top;
 
-  // Points to the next region in the GC-worker-local work-list
-  PCRegionData* _local_next;
+  bool const _is_pinned;
+
+  bool _do_not_move;
 
   // Parallel workers claiming protocol, used during adjust-references phase.
   volatile bool _claimed;
 
 public:
 
-  PCRegionData(size_t idx, HeapWord* bottom, HeapWord* top, HeapWord* end) :
+  PCRegionData(size_t idx, HeapWord* bottom, HeapWord* top, HeapWord* end, bool is_pinned) :
     _idx(idx), _bottom(bottom), _top(top), _end(end), _new_top(bottom),
-          _local_next(nullptr), _claimed(false) {}
+          _is_pinned(is_pinned), _do_not_move(false), _claimed(false) {}
 
   size_t idx() const { return _idx; };
 
@@ -197,14 +199,20 @@ public:
   HeapWord* top() const { return _top; }
   HeapWord* end()   const { return _end;   }
 
-  PCRegionData*  local_next() const { return _local_next; }
-  PCRegionData** local_next_addr() { return &_local_next; }
-
   HeapWord* new_top() const {
     return _new_top;
   }
   void set_new_top(HeapWord* new_top) {
     _new_top = new_top;
+  }
+
+  bool is_pinned() const { return _is_pinned; }
+
+  bool do_not_move() const {
+    return _do_not_move;
+  }
+  void set_do_not_move() {
+    _do_not_move = true;
   }
 
   bool contains(oop obj) {
@@ -219,6 +227,37 @@ public:
       return false;
     }
     return !AtomicAccess::cmpxchg(&_claimed, false, true);
+  }
+};
+
+class RegionSet {
+  GrowableArray<PCRegionData*>* const _src_regions;
+  GrowableArray<PCRegionData*>* const _dst_regions;
+  uint const _num_workers;
+
+public:
+  RegionSet(GrowableArray<PCRegionData*>* src_regions, GrowableArray<PCRegionData*>* dst_regions, uint num_workers) :
+    _src_regions(src_regions), _dst_regions(dst_regions), _num_workers(num_workers) {}
+
+  PCRegionData* src_region_for_worker(uint worker_id, size_t idx) {
+    return region_for_worker(worker_id, idx, _src_regions);
+  }
+
+  PCRegionData* dst_region_for_worker(uint worker_id, size_t idx) {
+    return region_for_worker(worker_id, idx, _dst_regions);
+  }
+
+  uint num_workers() const {
+    return _num_workers;
+  }
+
+private:
+  PCRegionData* region_for_worker(uint worker_id, uint idx, GrowableArray<PCRegionData*>* regions) {
+    size_t position = _num_workers * idx + worker_id;
+    if (position >= (size_t)regions->length()) {
+      return nullptr;
+    }
+    return regions->at(position);
   }
 };
 
@@ -248,10 +287,14 @@ private:
   // The head of the global region data list.
   static size_t               _num_regions;
   static PCRegionData*        _region_data_array;
-  static PCRegionData**       _per_worker_region_data;
+  static GrowableArray<PCRegionData*>* _normal_regions;
+  static GrowableArray<PCRegionData*>* _pinned_regions;
+  static GrowableArray<PCRegionData*>* _destination_regions_for_pinned_pass;
+  static PCRegionData* _global_top_parallel_region;
 
   static size_t               _num_regions_serial;
   static PCRegionData*        _region_data_array_serial;
+  static GrowableArray<PCRegionData*>* _serial_regions;
   static bool                 _serial;
 
   // Reference processing (used in ...follow_contents)
@@ -274,6 +317,8 @@ private:
 
   static void pre_compact();
 
+  static void synchronize_regions();
+
   static void post_compact();
 
   static bool check_maximum_compaction(bool should_do_max_compaction);
@@ -287,10 +332,10 @@ private:
   static void setup_regions_serial();
 
   static void adjust_pointers();
-  static void forward_to_new_addr();
+  static void forward_to_new_addr(RegionSet* regions);
 
   // Move objects to new locations.
-  static void compact();
+  static void compact(RegionSet* regions, uint num_workers);
 
 public:
   static bool invoke(bool maximum_heap_compaction, bool should_do_max_compaction);
