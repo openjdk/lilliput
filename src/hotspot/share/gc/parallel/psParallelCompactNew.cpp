@@ -1027,15 +1027,18 @@ void PSParallelCompactNew::forward_to_new_addr(RegionSet* regions) {
     }
 
     void forward_objs_in_region(ParCompactionManagerNew* cm, PCRegionData* region) {
+      if (region->is_pinned() && region->do_not_move()) {
+        // This region contains only one object, which doesn't need to move.
+        assert(_mark_bitmap.is_marked(region->bottom()), "must be marked");
+        assert(pointer_delta(region->top(), region->bottom()) == cast_to_oop(region->bottom())->size(), "must be fully occupied by one object");
+        return;
+      }
       ensure_compaction_point();
       HeapWord* end = region->end();
       HeapWord* current = _mark_bitmap.find_obj_beg(region->bottom(), end);
       while (current < end) {
+        assert(_compaction_point >= _compaction_region->bottom() && _compaction_point <= _compaction_region->end(), "compaction point must be in compaction region");
         assert(_mark_bitmap.is_marked(current), "must be marked");
-        if (region->is_pinned() && region->do_not_move()) {
-          // This region contains only one object, which doesn't need to move.
-          return;
-        }
         oop obj = cast_to_oop(current);
         assert(region->contains(obj), "object must not cross region boundary: obj: " PTR_FORMAT ", obj_end: " PTR_FORMAT ", region start: " PTR_FORMAT ", region end: " PTR_FORMAT, p2i(obj), p2i(cast_from_oop<HeapWord*>(obj) + obj->size()), p2i(region->bottom()), p2i(region->end()));
         size_t old_size = obj->size();
@@ -1044,16 +1047,32 @@ void PSParallelCompactNew::forward_to_new_addr(RegionSet* regions) {
         bool should_move = current != _compaction_point;
         size_t new_size = should_move ? copy_size : old_size;
 
-        if (should_move) {
-          // Find compaction region
-          while (new_size > available()) {
-            _compaction_region->set_new_top(_compaction_point);
-            _compaction_region = _regions->dst_region_for_worker(_worker_id, ++_compaction_region_idx);
-            assert(_compaction_region != nullptr, "must find a compaction region");
-            _compaction_point = _compaction_region->new_top();
-            should_move = current != _compaction_point;
-            new_size = should_move ? copy_size : old_size;
-          }
+        // TODO: consider a slightly different loop layout
+        // START
+        // 1. Object is above compaction point.
+        //  1a. its copy size fits in available
+        //     GOTO FWD (copy_size)
+        //  1b. its copy size does not fit in available.
+        //     advance target region, compaction point resets to target region start
+        //     GOTO START
+        // 2. Object is at compaction point.
+        //     (A) It must fit by definition (but no harm in checking/asserting)
+        //     (B) available is 0, so actually it doesn't fit.
+        //     GOTO FWD (old_size)
+        // FWD
+        // advance compaction point.
+        // (A) if compaction point is end of region, advance region.
+        // (B) no need to check for end of region, available = 0 will cover that.
+
+        // Find compaction region
+        while (new_size > available()) {
+          // TODO: inclusive/exclusive checks?
+          _compaction_region->set_new_top(_compaction_point);
+          _compaction_region = _regions->dst_region_for_worker(_worker_id, ++_compaction_region_idx);
+          assert(_compaction_region != nullptr, "must find a compaction region");
+          _compaction_point = _compaction_region->new_top();
+          should_move = current != _compaction_point;
+          new_size = should_move ? copy_size : old_size;
         }
         if (should_move) {
           // Forward
