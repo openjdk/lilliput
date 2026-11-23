@@ -294,36 +294,39 @@ void PSParallelCompactNew::post_compact()
 
   // Fill gaps and count stats
   if (_serial) {
-    for (PCRegionData* serial_region : *_serial_regions) {
-      total_live += pointer_delta(serial_region->new_top(), serial_region->bottom());
+    for (PCRegionData* region : *_serial_regions) {
+      total_live += pointer_delta(region->new_top(), region->bottom());
       // No waste/gaps (perfect compaction within each space).
     }
   } else {
     // Fill gaps in parallel regions below global top
-    for (PCRegionData* parallel_region : *_normal_regions) {
-      size_t live = pointer_delta(parallel_region->new_top(), parallel_region->bottom());
+    for (PCRegionData* region : *_normal_regions) {
+      size_t live = pointer_delta(region->new_top(), region->bottom());
       total_live += live;
 
-      if (parallel_region == _global_top_parallel_region) {
+      if (region == _global_top_parallel_region) {
         // No waste beyond here. Either perfectly compacted pinned objects, or free space.
         break;
       }
 
-      HeapWord* waste_start = parallel_region->new_top();
-      HeapWord* waste_end = parallel_region->end();
+      HeapWord* waste_start = region->new_top();
+      HeapWord* waste_end = region->end();
       size_t waste = pointer_delta(waste_end, waste_start);
       total_waste += waste;
 
       if (waste > 0) {
-        ObjectStartArray* sa = start_array(space_id(parallel_region->bottom()));
+        ObjectStartArray* sa = start_array(space_id(region->bottom()));
         if (sa != nullptr) {
           sa->update_for_block(waste_start, waste_end);
         }
-        // TODO: assert gap <= max object size?
         ParallelScavengeHeap::heap()->fill_with_dummy_object(waste_start, waste_end, false);
       }
+
+      log_develop_trace(gc, compaction)(
+              "Live compaction region, #%zu: [" PTR_FORMAT ", " PTR_FORMAT "), new_top: " PTR_FORMAT ", live: %zu, waste: %zu",
+              region->idx(), p2i(region->bottom()), p2i(region->end()), p2i(region->new_top()), live, waste);
     }
-    // Account for pinned objects in live count.
+    // Account for pinned objects in live count. Each region represents a single live object.
     for (PCRegionData* pinned_region : *_pinned_regions) {
       total_live += pointer_delta(pinned_region->end(), pinned_region->bottom());
     }
@@ -331,20 +334,6 @@ void PSParallelCompactNew::post_compact()
 
   log_debug(gc, compaction)("total live: %zu, total waste: %zu, ratio: %f", total_live, total_waste, ((float)total_waste)/((float)(total_live + total_waste)));
 
-    // TODO: logs we've removed
-          //   log_develop_trace(gc, compaction)("Last live for space: %u: %zu", space_id, idx);
-      // log_develop_trace(gc, compaction)("post-compact region: idx: %zu, bottom: " PTR_FORMAT ", new_top: " PTR_FORMAT ", end: " PTR_FORMAT, rd->idx(), p2i(rd->bottom()), p2i(rd->new_top()), p2i(rd->end()));
-      //   log_develop_trace(gc, compaction)("Bump last live for space: %u", space_id);
-
-      //   log_develop_trace(gc, compaction)(
-      //           "Last live region in space: %u, compaction region, " PTR_FORMAT ", #%zu: [" PTR_FORMAT ", " PTR_FORMAT "), new_top: " PTR_FORMAT,
-      //           i, p2i(rd), rd->idx(),
-      //           p2i(rd->bottom()), p2i(rd->end()), p2i(rd->new_top()));
-
-        // log_develop_trace(gc, compaction)(
-        //         "Live compaction region, #%zu: [" PTR_FORMAT ", " PTR_FORMAT "), new_top: " PTR_FORMAT ", live: %zu, waste: %zu",
-        //         rd->idx(),
-        //         p2i(rd->bottom()), p2i(rd->end()), p2i(rd->new_top()), live, waste);
   {
     FREE_C_HEAP_ARRAY(_region_data_array);
     FREE_C_HEAP_ARRAY(_region_data_array_serial);
@@ -463,17 +452,16 @@ void PSParallelCompactNew::setup_regions_parallel() {
       if (pinned_obj_start != nullptr) {
         // We have a pinned object at the end. Split into two regions.
         // 1. Normal prefix
-        // TODO: top is not precise here. Check if that's okay.
-        new (_region_data_array + region_idx) PCRegionData(region_idx, addr, pinned_obj_start, pinned_obj_start, false);
+        new (_region_data_array + region_idx) PCRegionData(region_idx, addr, pinned_obj_start, pinned_obj_start);
         _normal_regions->append(&_region_data_array[region_idx]);
         region_idx++;
         // 2. Pinned suffix
-        new (_region_data_array + region_idx) PCRegionData(region_idx, pinned_obj_start, pinned_obj_end, pinned_obj_end, true);
+        new (_region_data_array + region_idx) PCRegionData(region_idx, pinned_obj_start, pinned_obj_end, pinned_obj_end);
         _pinned_regions->append(&_region_data_array[region_idx]);
         region_idx++;
         addr = pinned_obj_end;
       } else {
-        new (_region_data_array + region_idx) PCRegionData(region_idx, addr, top, end, false);
+        new (_region_data_array + region_idx) PCRegionData(region_idx, addr, top, end);
         _normal_regions->append(&_region_data_array[region_idx]);
         region_idx++;
         addr = end;
@@ -485,7 +473,7 @@ void PSParallelCompactNew::setup_regions_parallel() {
   int num_pinned_regions = _pinned_regions->length();
   assert((size_t)num_normal_regions <= num_regions, "must not exceed number of regions: normal_regions: %d, num_regions: %zu", num_normal_regions, num_regions);
   assert(num_pinned_regions <= num_normal_regions, "max one pinned region per normal region: pinned_regions: %d, normal_regions: %d", num_pinned_regions, num_normal_regions);
-  log_info(gc)("Number of regions: %zu (normal: %d, pinned: %d), region size: " EXACTFMT, _num_regions, num_normal_regions, num_pinned_regions, EXACTFMTARGS(region_size_words * HeapWordSize));
+  log_debug(gc)("Number of regions: %zu (normal: %d, pinned: %d), region size: " EXACTFMT, _num_regions, num_normal_regions, num_pinned_regions, EXACTFMTARGS(region_size_words * HeapWordSize));
 }
 
 size_t PSParallelCompactNew::calculate_region_size() {
@@ -507,10 +495,10 @@ size_t PSParallelCompactNew::calculate_region_size() {
 void PSParallelCompactNew::setup_regions_serial() {
   _num_regions_serial = last_space_id;
   _region_data_array_serial = NEW_C_HEAP_ARRAY(PCRegionData, _num_regions_serial, mtGC);
-  new (_region_data_array_serial + old_space_id)  PCRegionData(old_space_id, space(old_space_id)->bottom(), space(old_space_id)->top(), space(old_space_id)->end(), false);
-  new (_region_data_array_serial + eden_space_id) PCRegionData(eden_space_id, space(eden_space_id)->bottom(), space(eden_space_id)->top(), space(eden_space_id)->end(), false);
-  new (_region_data_array_serial + from_space_id) PCRegionData(from_space_id, space(from_space_id)->bottom(), space(from_space_id)->top(), space(from_space_id)->end(), false);
-  new (_region_data_array_serial + to_space_id)   PCRegionData(to_space_id, space(to_space_id)->bottom(), space(to_space_id)->top(), space(to_space_id)->end(), false);
+  new (_region_data_array_serial + old_space_id)  PCRegionData(old_space_id, space(old_space_id)->bottom(), space(old_space_id)->top(), space(old_space_id)->end());
+  new (_region_data_array_serial + eden_space_id) PCRegionData(eden_space_id, space(eden_space_id)->bottom(), space(eden_space_id)->top(), space(eden_space_id)->end());
+  new (_region_data_array_serial + from_space_id) PCRegionData(from_space_id, space(from_space_id)->bottom(), space(from_space_id)->top(), space(from_space_id)->end());
+  new (_region_data_array_serial + to_space_id)   PCRegionData(to_space_id, space(to_space_id)->bottom(), space(to_space_id)->top(), space(to_space_id)->end());
   _serial_regions = new (mtGC) GrowableArray<PCRegionData*>(_num_regions_serial, mtGC);
   _serial_regions->append(&_region_data_array_serial[old_space_id]);
   _serial_regions->append(&_region_data_array_serial[eden_space_id]);
@@ -634,42 +622,28 @@ bool PSParallelCompactNew::invoke(bool clear_all_soft_refs, bool should_do_max_c
 
     FullGCForwarding::begin();
 
-    RegionSet serial_pass { _serial_regions, _serial_regions, 1 };
-    RegionSet parallel_pass { _normal_regions, _normal_regions, get_num_workers() };
-    RegionSet pinned_objects_pass { _pinned_regions, _destination_regions_for_pinned_pass, 1 };
-
     if (_serial) {
+      RegionSet serial_pass { _serial_regions, _serial_regions, 1 };
       forward_to_new_addr(&serial_pass);
+      adjust_pointers();
+      compact(&serial_pass, 1, "Compaction Phase (maximum compaction)");
     } else {
+      RegionSet parallel_pass { _normal_regions, _normal_regions, get_num_workers() };
+      RegionSet pinned_objects_pass { _pinned_regions, _destination_regions_for_pinned_pass, 1 };
       forward_to_new_addr(&parallel_pass);
       synchronize_regions();
       if (_pinned_regions->length() > 0) {
         // A separate serial pass for large objects which couldn't be compacted during the parallel pass.
         forward_to_new_addr(&pinned_objects_pass);
+        for (PCRegionData* region : *_pinned_regions) {
+          log_develop_trace(gc, compaction)("Pinned object region #%zu: [" PTR_FORMAT ", " PTR_FORMAT ")",
+                                region->idx(), p2i(region->bottom()), p2i(region->end()));
+        }
       }
-    }
-
-    for (PCRegionData* region : *_normal_regions) {
-      log_develop_trace(gc, compaction)("Compaction region #%zu: [" PTR_FORMAT ", " PTR_FORMAT "), new_top: " PTR_FORMAT, region->idx(),
-                            p2i(region->bottom()), p2i(region->end()), p2i(region->new_top()));
-    }
-    for (PCRegionData* region : *_pinned_regions) {
-      log_develop_trace(gc, compaction)("Compaction region [pinned] #%zu: [" PTR_FORMAT ", " PTR_FORMAT "), new_top: " PTR_FORMAT, region->idx(),
-                            p2i(region->bottom()), p2i(region->end()), p2i(region->new_top()));
-    }
-    for (PCRegionData* region : *_serial_regions) {
-      log_develop_trace(gc, compaction)("Compaction region [serial] #%zu: [" PTR_FORMAT ", " PTR_FORMAT "), new_top: " PTR_FORMAT, region->idx(),
-                            p2i(region->bottom()), p2i(region->end()), p2i(region->new_top()));
-    }
-
-    adjust_pointers();
-
-    if (_serial) {
-      compact(&serial_pass, 1);
-    } else {
-      compact(&parallel_pass, get_num_workers());
+      adjust_pointers();
+      compact(&parallel_pass, get_num_workers(), "Compaction Phase (normal objects)");
       if (_pinned_regions->length() > 0) {
-        compact(&pinned_objects_pass, 1);
+        compact(&pinned_objects_pass, 1, "Compaction Phase (pinned objects)");
       }
     }
 
@@ -1008,7 +982,7 @@ void PSParallelCompactNew::forward_to_new_addr(RegionSet* regions) {
     void ensure_compaction_point() {
       if (_compaction_point == nullptr) {
         assert(_compaction_region == nullptr, "invariant");
-        _compaction_region = _regions->dst_region_for_worker(_worker_id, 0); // TODO: handle empty?
+        _compaction_region = _regions->dst_region_for_worker(_worker_id, 0);
         assert(_compaction_region != nullptr, "invariant");
         _compaction_point = _compaction_region->new_top();
       }
@@ -1027,14 +1001,14 @@ void PSParallelCompactNew::forward_to_new_addr(RegionSet* regions) {
     }
 
     void forward_objs_in_region(ParCompactionManagerNew* cm, PCRegionData* region) {
-      if (region->is_pinned() && region->do_not_move()) {
+      if (region->do_not_move()) {
         // This region contains only one object, which doesn't need to move.
         assert(_mark_bitmap.is_marked(region->bottom()), "must be marked");
         assert(pointer_delta(region->top(), region->bottom()) == cast_to_oop(region->bottom())->size(), "must be fully occupied by one object");
         return;
       }
       ensure_compaction_point();
-      HeapWord* end = region->end();
+      HeapWord* end = region->top();
       HeapWord* current = _mark_bitmap.find_obj_beg(region->bottom(), end);
       while (current < end) {
         assert(_compaction_point >= _compaction_region->bottom() && _compaction_point <= _compaction_region->end(), "compaction point must be in compaction region");
@@ -1047,26 +1021,8 @@ void PSParallelCompactNew::forward_to_new_addr(RegionSet* regions) {
         bool should_move = current != _compaction_point;
         size_t new_size = should_move ? copy_size : old_size;
 
-        // TODO: consider a slightly different loop layout
-        // START
-        // 1. Object is above compaction point.
-        //  1a. its copy size fits in available
-        //     GOTO FWD (copy_size)
-        //  1b. its copy size does not fit in available.
-        //     advance target region, compaction point resets to target region start
-        //     GOTO START
-        // 2. Object is at compaction point.
-        //     (A) It must fit by definition (but no harm in checking/asserting)
-        //     (B) available is 0, so actually it doesn't fit.
-        //     GOTO FWD (old_size)
-        // FWD
-        // advance compaction point.
-        // (A) if compaction point is end of region, advance region.
-        // (B) no need to check for end of region, available = 0 will cover that.
-
         // Find compaction region
         while (new_size > available()) {
-          // TODO: inclusive/exclusive checks?
           _compaction_region->set_new_top(_compaction_point);
           _compaction_region = _regions->dst_region_for_worker(_worker_id, ++_compaction_region_idx);
           assert(_compaction_region != nullptr, "must find a compaction region");
@@ -1094,8 +1050,6 @@ void PSParallelCompactNew::forward_to_new_addr(RegionSet* regions) {
     }
   };
 
-
-
   struct ForwardTask final : public WorkerTask {
     RegionSet* _regions;
     ForwardTask(RegionSet* regions) : WorkerTask("PSForward task"), _regions(regions) {}
@@ -1107,6 +1061,8 @@ void PSParallelCompactNew::forward_to_new_addr(RegionSet* regions) {
       PCRegionData* next_region = _regions->src_region_for_worker(worker_id, i);
       while (next_region != nullptr) {
         state.forward_objs_in_region(cm, next_region);
+        log_develop_trace(gc, compaction)("Compaction region, worker: %d, #%zu: [" PTR_FORMAT ", " PTR_FORMAT "), new_top: " PTR_FORMAT,
+                                  worker_id, next_region->idx(), p2i(next_region->bottom()), p2i(next_region->end()), p2i(next_region->new_top()));
         next_region = _regions->src_region_for_worker(worker_id, ++i);
       }
       state.finish();
@@ -1117,20 +1073,10 @@ void PSParallelCompactNew::forward_to_new_addr(RegionSet* regions) {
   ParallelScavengeHeap::heap()->workers().set_active_workers(regions->num_workers());
   ParallelScavengeHeap::heap()->workers().run_task(&task);
   ParallelScavengeHeap::heap()->workers().set_active_workers(par_workers);
-
-#ifndef PRODUCT
-  // TODO: update
-  // for (uint wid = 0; wid < num_workers; wid++) {
-  //   for (PCRegionData* rd = _per_worker_region_data[wid]; rd != nullptr; rd = rd->local_next()) {
-  //     log_develop_trace(gc, compaction)("Per worker compaction region, worker: %d, #%zu: [" PTR_FORMAT ", " PTR_FORMAT "), new_top: " PTR_FORMAT, wid, rd->idx(),
-  //                                       p2i(rd->bottom()), p2i(rd->end()), p2i(rd->new_top()));
-  //   }
-  // }
-#endif
 }
 
-void PSParallelCompactNew::compact(RegionSet* regions, uint num_workers) {
-  GCTraceTime(Info, gc, phases) tm("Compaction Phase", &_gc_timer);
+void PSParallelCompactNew::compact(RegionSet* regions, uint num_workers, const char* phase_name) {
+  GCTraceTime(Info, gc, phases) tm(phase_name, &_gc_timer);
   class CompactTask final : public WorkerTask {
     RegionSet* _regions;
     static void compact_region(PCRegionData* region) {

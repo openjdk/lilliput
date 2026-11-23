@@ -87,16 +87,11 @@ private:
 //      - move the objects to their destination
 //      - update some references and reinitialize some variables
 //
-// A space that is being collected is divided into regions and with each region
-// is associated an object of type PCRegionData. Regions are targeted to be of
-// a mostly uniform size, but if an object would cross a region boundary, then
-// the boundary is adjusted to be after the end of that object.
-//
 // The marking phase does a complete marking of all live objects in the heap.
 // The marking phase uses multiple GC threads and marking is done in a bit
 // array of type ParMarkBitMap.  The marking of the bit map is done atomically.
 //
-// The summary phase sets up the regions, such that region covers roughly
+// The summary phase sets up the regions, such that regions cover roughly
 // uniform memory regions (currently same size as SpaceAlignment). However,
 // if that would result in an object crossing a region boundary, then
 // the upper bounds is adjusted such that the region ends after that object.
@@ -108,20 +103,21 @@ private:
 // maximum compaction at the expense of parallelism during the forwarding
 // compaction phases.
 //
-// The forwarding phase calculates the new address of each live
-// object and records old-addr-to-new-addr association. It does this using
-// multiple GC threads. Each thread 'claims' a source region and appends it to a
-// local work-list. The region is also set as the current compaction region
-// for that thread. All live objects in the region are then visited and its
-// new location calculated by tracking the compaction point in the compaction
-// region. Once the source region is exhausted, the next source region is
-// claimed from the global pool and appended to the end of the local work-list.
-// Once the compaction region is exhausted, the top of the old compaction region
-// is recorded, and the next compaction region is fetched from the front of the
-// local work-list (which is guaranteed to already have finished processing, or
-// is the same as the source region). This way, each worker forms a local
-// list of regions in which the worker can compact as if it were a serial
-// compaction.
+// Large objects can hamper parallel compaction so we given them special treatment.
+// 1. Initial parallel region creation isolates each large object in its own
+//    region. These are ignored in the first forwarding pass, so other objects
+//    can slide past these 'pinned' objects.
+// 2. After parallel forwarding, pinned objects are forwarded separately in a
+//    dedicated serial pass.
+// 3. After parallel compaction, pinned objects are compacted separately in a
+//    dedicated serial pass.
+//
+// The forwarding phase calculates the new address of each live object and records
+// old-addr-to-new-addr association. It does this using multiple GC threads.
+// Each worker operates on its own independent set of staggered regions, thus
+// can treat its own set as an independent serial compaction.
+// Regions are not (necessarily) contiguous, so objects cannot cross region
+// boundaries.
 //
 // The adjust pointers phase remaps all pointers to reflect the new address of each
 // object. Again, this uses multiple GC worker threads. Each thread claims
@@ -130,10 +126,9 @@ private:
 // all regions have been processed.
 //
 // The compaction phase moves objects to their new location. Again, this uses
-// multiple GC worker threads. Each worker processes the local work-list that
-// has been set-up during the forwarding phase and processes it from bottom
-// to top, copying each live object to its new location (which is guaranteed
-// to be lower in that threads parts of the heap, and thus would never overwrite
+// multiple GC worker threads. Each worker processes its same set used for
+// forwarding, copying each live object to its new location (which is guaranteed
+// to be lower in that thread's parts of the heap, and thus would never overwrite
 // other objects).
 //
 // This algorithm will usually leave gaps of non-fillable memory at the end
@@ -141,26 +136,22 @@ private:
 // The post-compaction phase fills those gaps with filler objects to ensure
 // that the heap remains parsable.
 //
-// In some situations, this inefficiency of leaving gaps can lead to a
-// situation where after a full GC, it is still not possible to satisfy an
-// allocation, even though there should be enough memory available. When
-// that happens, the collector switches to a serial mode, where we only
-// have 4 regions which correspond exaxtly to the 4 spaces, and the forwarding
-// and compaction phases are executed using only a single thread. This
-// achieves maximum compaction. This serial mode is also invoked when
-// System.gc() is called *and* UseMaximumCompactionOnSystemGC is set to
-// true (which is the default), or when the number of full GCs exceeds
-// the HeapMaximumCompactionInterval.
+// Parallel compaction can leave gaps. In some cases, so called maximum
+// compaction is requested, which we implement as a serial mode. 
+// The 4 heap spaces are treated as a single set of regions, and forwarding
+// and compaction handle these with a single thread, achieving maximum
+// compaction.
+// Maximum compaction triggers include System.gc() (when UseMaximumCompactionOnSystemGC
+// is enabled), or when Parallel GC's heuristics determine it to be needed.
 //
 // Possible improvements to the algorithm include:
 // - Identify and ignore a 'dense prefix'. This requires that we collect
 //   liveness data during marking, or that we scan the prefix object-by-object
 //   during the summary phase.
-// - When an object does not fit into a remaining gap of a region, and the
-//   object is rather large, we could attempt to forward/compact subsequent
-//   objects 'around' that large object in an attempt to minimize the
-//   resulting gap. This could be achieved by reconfiguring the regions
-//   to exclude the large object.
+// - We compact around some large objects, but not all, so there can still be
+//   significant waste at the end of regions that later objects could fit in.
+// - Add parallelism to large object handling.
+// - Don't move large objects if it is not worth it (e.g. sliding 100MB object a few bytes).
 // - Instead of finding out *after* the whole compaction that an allocation
 //   can still not be satisfied, and then re-running the whole compaction
 //   serially, we could determine that after the forwarding phase, and
@@ -172,15 +163,14 @@ class PCRegionData /*: public CHeapObj<mtGC> */ {
 
   // The start of the region
   HeapWord* const _bottom;
-  // The top of the region. (first word after last live object in containing space)
+  // The top of the region (the last word of the last live object in this region is somewhere below this word).
+  // Not necessarily a tight upper bound (there may be dead space between live object and recorded top).
   HeapWord* const _top;
   // The end of the region (first word after last word of the region)
   HeapWord* const _end;
 
   // The next compaction address
   HeapWord* _new_top;
-
-  bool const _is_pinned;
 
   bool _do_not_move;
 
@@ -189,9 +179,9 @@ class PCRegionData /*: public CHeapObj<mtGC> */ {
 
 public:
 
-  PCRegionData(size_t idx, HeapWord* bottom, HeapWord* top, HeapWord* end, bool is_pinned) :
+  PCRegionData(size_t idx, HeapWord* bottom, HeapWord* top, HeapWord* end) :
     _idx(idx), _bottom(bottom), _top(top), _end(end), _new_top(bottom),
-          _is_pinned(is_pinned), _do_not_move(false), _claimed(false) {}
+          _do_not_move(false), _claimed(false) {}
 
   size_t idx() const { return _idx; };
 
@@ -205,8 +195,6 @@ public:
   void set_new_top(HeapWord* new_top) {
     _new_top = new_top;
   }
-
-  bool is_pinned() const { return _is_pinned; }
 
   bool do_not_move() const {
     return _do_not_move;
@@ -335,7 +323,7 @@ private:
   static void forward_to_new_addr(RegionSet* regions);
 
   // Move objects to new locations.
-  static void compact(RegionSet* regions, uint num_workers);
+  static void compact(RegionSet* regions, uint num_workers, const char* phase_name);
 
 public:
   static bool invoke(bool maximum_heap_compaction, bool should_do_max_compaction);
