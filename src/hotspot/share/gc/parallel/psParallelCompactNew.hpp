@@ -137,7 +137,7 @@ private:
 // that the heap remains parsable.
 //
 // Parallel compaction can leave gaps. In some cases, so called maximum
-// compaction is requested, which we implement as a serial mode. 
+// compaction is requested, which we implement as a serial mode.
 // The 4 heap spaces are treated as a single set of regions, and forwarding
 // and compaction handle these with a single thread, achieving maximum
 // compaction.
