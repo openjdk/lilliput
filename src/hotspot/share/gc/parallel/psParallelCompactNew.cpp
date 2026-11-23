@@ -84,7 +84,7 @@ SpaceInfoNew PSParallelCompactNew::_space_info[PSParallelCompactNew::last_space_
 
 size_t PSParallelCompactNew::_num_regions;
 PCRegionData* PSParallelCompactNew::_region_data_array;
-GrowableArray<PCRegionData*>* PSParallelCompactNew::_normal_regions;
+GrowableArray<PCRegionData*>* PSParallelCompactNew::_parallel_regions;
 GrowableArray<PCRegionData*>* PSParallelCompactNew::_pinned_regions;
 GrowableArray<PCRegionData*>* PSParallelCompactNew::_destination_regions_for_pinned_pass;
 PCRegionData* PSParallelCompactNew::_global_top_parallel_region;
@@ -222,17 +222,16 @@ void PSParallelCompactNew::pre_compact()
 
 void PSParallelCompactNew::synchronize_regions()
 {
-  // We have two overlapping sets of regions. One for parallel work, where spaces are split into smaller regions.
-  //  (this is further divided into normal and pinned regions)
-  // And one for serial work, which has one region fully covering each space.
-  // Synchronize the state of these regions.
+  // We have overlapping sets of regions which cover the spaces.
+  // One set of (parallel and pinned) regions, and one set of serial regions.
+  // Synchronize the state of both sets, so each correctly reflects the same global state.
 
   assert(_global_top_parallel_region == nullptr, "Can only run once per cycle");
 
   _global_top_parallel_region = &_region_data_array[0];
 
   // Update new_top for serial regions to reflect parallel forwarding.
-  for (PCRegionData* parallel_region : *_normal_regions) {
+  for (PCRegionData* parallel_region : *_parallel_regions) {
     SpaceId current_space_id = space_id(parallel_region->bottom());
     PCRegionData* serial_region = &_region_data_array_serial[current_space_id];
     if (parallel_region->new_top() == parallel_region->bottom()) {
@@ -300,12 +299,15 @@ void PSParallelCompactNew::post_compact()
     }
   } else {
     // Fill gaps in parallel regions below global top
-    for (PCRegionData* region : *_normal_regions) {
+    for (PCRegionData* region : *_parallel_regions) {
       size_t live = pointer_delta(region->new_top(), region->bottom());
       total_live += live;
 
       if (region == _global_top_parallel_region) {
         // No waste beyond here. Either perfectly compacted pinned objects, or free space.
+        log_develop_trace(gc, compaction)(
+              "Live compaction region (final), #%zu: [" PTR_FORMAT ", " PTR_FORMAT "), new_top: " PTR_FORMAT ", live: %zu, waste: 0",
+              region->idx(), p2i(region->bottom()), p2i(region->end()), p2i(region->new_top()), live);
         break;
       }
 
@@ -313,7 +315,6 @@ void PSParallelCompactNew::post_compact()
       HeapWord* waste_end = region->end();
       size_t waste = pointer_delta(waste_end, waste_start);
       total_waste += waste;
-
       if (waste > 0) {
         ObjectStartArray* sa = start_array(space_id(region->bottom()));
         if (sa != nullptr) {
@@ -337,7 +338,7 @@ void PSParallelCompactNew::post_compact()
   {
     FREE_C_HEAP_ARRAY(_region_data_array);
     FREE_C_HEAP_ARRAY(_region_data_array_serial);
-    delete _normal_regions;
+    delete _parallel_regions;
     delete _pinned_regions;
     delete _destination_regions_for_pinned_pass;
     delete _serial_regions;
@@ -402,7 +403,7 @@ void PSParallelCompactNew::setup_regions_parallel() {
     num_regions += align_up(space_size_words, region_size_words) / region_size_words;
   }
   _region_data_array = NEW_C_HEAP_ARRAY(PCRegionData, num_regions * 2, mtGC);
-  _normal_regions = new (mtGC) GrowableArray<PCRegionData*>(num_regions, mtGC);
+  _parallel_regions = new (mtGC) GrowableArray<PCRegionData*>(num_regions, mtGC);
   _pinned_regions = new (mtGC) GrowableArray<PCRegionData*>(0, mtGC);
   _destination_regions_for_pinned_pass = new (mtGC) GrowableArray<PCRegionData*>(0, mtGC);
   _global_top_parallel_region = nullptr;
@@ -453,7 +454,7 @@ void PSParallelCompactNew::setup_regions_parallel() {
         // We have a pinned object at the end. Split into two regions.
         // 1. Normal prefix
         new (_region_data_array + region_idx) PCRegionData(region_idx, addr, pinned_obj_start, pinned_obj_start);
-        _normal_regions->append(&_region_data_array[region_idx]);
+        _parallel_regions->append(&_region_data_array[region_idx]);
         region_idx++;
         // 2. Pinned suffix
         new (_region_data_array + region_idx) PCRegionData(region_idx, pinned_obj_start, pinned_obj_end, pinned_obj_end);
@@ -462,18 +463,18 @@ void PSParallelCompactNew::setup_regions_parallel() {
         addr = pinned_obj_end;
       } else {
         new (_region_data_array + region_idx) PCRegionData(region_idx, addr, top, end);
-        _normal_regions->append(&_region_data_array[region_idx]);
+        _parallel_regions->append(&_region_data_array[region_idx]);
         region_idx++;
         addr = end;
       }
     }
   }
   _num_regions = region_idx;
-  int num_normal_regions = _normal_regions->length();
+  int num_parallel_regions = _parallel_regions->length();
   int num_pinned_regions = _pinned_regions->length();
-  assert((size_t)num_normal_regions <= num_regions, "must not exceed number of regions: normal_regions: %d, num_regions: %zu", num_normal_regions, num_regions);
-  assert(num_pinned_regions <= num_normal_regions, "max one pinned region per normal region: pinned_regions: %d, normal_regions: %d", num_pinned_regions, num_normal_regions);
-  log_debug(gc)("Number of regions: %zu (normal: %d, pinned: %d), region size: " EXACTFMT, _num_regions, num_normal_regions, num_pinned_regions, EXACTFMTARGS(region_size_words * HeapWordSize));
+  assert((size_t)num_parallel_regions <= num_regions, "must not exceed number of regions: parallel_regions: %d, num_regions: %zu", num_parallel_regions, num_regions);
+  assert(num_pinned_regions <= num_parallel_regions, "max one pinned region per parallel region: pinned_regions: %d, parallel_regions: %d", num_pinned_regions, num_parallel_regions);
+  log_debug(gc)("Number of regions: %zu (parallel: %d, pinned: %d), region size: " EXACTFMT, _num_regions, num_parallel_regions, num_pinned_regions, EXACTFMTARGS(region_size_words * HeapWordSize));
 }
 
 size_t PSParallelCompactNew::calculate_region_size() {
@@ -525,10 +526,17 @@ void PSParallelCompactNew::summary_phase() {
   setup_regions_parallel();
 
 #ifndef PRODUCT
-  for (size_t idx = 0; idx < _num_regions; idx++) {
-    PCRegionData* rd = &_region_data_array[idx];
-    log_develop_trace(gc, compaction)("Compaction region #%zu: [" PTR_FORMAT ", " PTR_FORMAT ")", rd->idx(), p2i(
-            rd->bottom()), p2i(rd->end()));
+  for (PCRegionData* region : *_serial_regions) {
+    log_develop_trace(gc, compaction)("Compaction region (serial) #%zu: [" PTR_FORMAT ", " PTR_FORMAT ")",
+                          region->idx(), p2i(region->bottom()), p2i(region->end()));
+  }
+  for (PCRegionData* region : *_parallel_regions) {
+    log_develop_trace(gc, compaction)("Compaction region (parallel) #%zu: [" PTR_FORMAT ", " PTR_FORMAT ")",
+                          region->idx(), p2i(region->bottom()), p2i(region->end()));
+  }
+  for (PCRegionData* region : *_pinned_regions) {
+    log_develop_trace(gc, compaction)("Compaction region (pinned) #%zu: [" PTR_FORMAT ", " PTR_FORMAT ")",
+                          region->idx(), p2i(region->bottom()), p2i(region->end()));
   }
 #endif
 }
@@ -628,17 +636,13 @@ bool PSParallelCompactNew::invoke(bool clear_all_soft_refs, bool should_do_max_c
       adjust_pointers();
       compact(&serial_pass, "Compaction Phase (maximum compaction)");
     } else {
-      RegionSet parallel_pass { _normal_regions, _normal_regions, get_num_workers() };
+      RegionSet parallel_pass { _parallel_regions, _parallel_regions, get_num_workers() };
       RegionSet pinned_objects_pass { _pinned_regions, _destination_regions_for_pinned_pass, 1 };
       forward_to_new_addr(&parallel_pass);
       synchronize_regions();
       if (_pinned_regions->length() > 0) {
         // A separate serial pass for large objects which couldn't be compacted during the parallel pass.
         forward_to_new_addr(&pinned_objects_pass);
-        for (PCRegionData* region : *_pinned_regions) {
-          log_develop_trace(gc, compaction)("Pinned object region #%zu: [" PTR_FORMAT ", " PTR_FORMAT ")",
-                                region->idx(), p2i(region->bottom()), p2i(region->end()));
-        }
       }
       adjust_pointers();
       compact(&parallel_pass, "Compaction Phase (normal objects)");
@@ -1024,6 +1028,8 @@ void PSParallelCompactNew::forward_to_new_addr(RegionSet* regions) {
         // Find compaction region
         while (new_size > available()) {
           _compaction_region->set_new_top(_compaction_point);
+          log_develop_trace(gc, compaction)("Compaction region, worker: %u, #%zu: [" PTR_FORMAT ", " PTR_FORMAT "), new_top: " PTR_FORMAT,
+                          _worker_id, _compaction_region->idx(), p2i(_compaction_region->bottom()), p2i(_compaction_region->end()), p2i(_compaction_region->new_top()));
           _compaction_region = _regions->dst_region_for_worker(_worker_id, ++_compaction_region_idx);
           assert(_compaction_region != nullptr, "must find a compaction region");
           _compaction_point = _compaction_region->new_top();
@@ -1046,6 +1052,8 @@ void PSParallelCompactNew::forward_to_new_addr(RegionSet* regions) {
     void finish() {
       if (_compaction_region != nullptr) {
         _compaction_region->set_new_top(_compaction_point);
+        log_develop_trace(gc, compaction)("Compaction region (final), worker: %u, #%zu: [" PTR_FORMAT ", " PTR_FORMAT "), new_top: " PTR_FORMAT,
+                _worker_id, _compaction_region->idx(), p2i(_compaction_region->bottom()), p2i(_compaction_region->end()), p2i(_compaction_region->new_top()));
       }
     }
   };
@@ -1061,8 +1069,6 @@ void PSParallelCompactNew::forward_to_new_addr(RegionSet* regions) {
       PCRegionData* next_region = _regions->src_region_for_worker(worker_id, i);
       while (next_region != nullptr) {
         state.forward_objs_in_region(cm, next_region);
-        log_develop_trace(gc, compaction)("Compaction region, worker: %d, #%zu: [" PTR_FORMAT ", " PTR_FORMAT "), new_top: " PTR_FORMAT,
-                                  worker_id, next_region->idx(), p2i(next_region->bottom()), p2i(next_region->end()), p2i(next_region->new_top()));
         next_region = _regions->src_region_for_worker(worker_id, ++i);
       }
       state.finish();

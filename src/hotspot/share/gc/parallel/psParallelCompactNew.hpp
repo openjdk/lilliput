@@ -275,7 +275,7 @@ private:
   // The head of the global region data list.
   static size_t               _num_regions;
   static PCRegionData*        _region_data_array;
-  static GrowableArray<PCRegionData*>* _normal_regions;
+  static GrowableArray<PCRegionData*>* _parallel_regions;
   static GrowableArray<PCRegionData*>* _pinned_regions;
   static GrowableArray<PCRegionData*>* _destination_regions_for_pinned_pass;
   static PCRegionData* _global_top_parallel_region;
