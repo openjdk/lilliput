@@ -626,7 +626,7 @@ bool PSParallelCompactNew::invoke(bool clear_all_soft_refs, bool should_do_max_c
       RegionSet serial_pass { _serial_regions, _serial_regions, 1 };
       forward_to_new_addr(&serial_pass);
       adjust_pointers();
-      compact(&serial_pass, 1, "Compaction Phase (maximum compaction)");
+      compact(&serial_pass, "Compaction Phase (maximum compaction)");
     } else {
       RegionSet parallel_pass { _normal_regions, _normal_regions, get_num_workers() };
       RegionSet pinned_objects_pass { _pinned_regions, _destination_regions_for_pinned_pass, 1 };
@@ -641,9 +641,9 @@ bool PSParallelCompactNew::invoke(bool clear_all_soft_refs, bool should_do_max_c
         }
       }
       adjust_pointers();
-      compact(&parallel_pass, get_num_workers(), "Compaction Phase (normal objects)");
+      compact(&parallel_pass, "Compaction Phase (normal objects)");
       if (_pinned_regions->length() > 0) {
-        compact(&pinned_objects_pass, 1, "Compaction Phase (pinned objects)");
+        compact(&pinned_objects_pass, "Compaction Phase (pinned objects)");
       }
     }
 
@@ -1075,7 +1075,7 @@ void PSParallelCompactNew::forward_to_new_addr(RegionSet* regions) {
   ParallelScavengeHeap::heap()->workers().set_active_workers(par_workers);
 }
 
-void PSParallelCompactNew::compact(RegionSet* regions, uint num_workers, const char* phase_name) {
+void PSParallelCompactNew::compact(RegionSet* regions, const char* phase_name) {
   GCTraceTime(Info, gc, phases) tm(phase_name, &_gc_timer);
   class CompactTask final : public WorkerTask {
     RegionSet* _regions;
@@ -1126,7 +1126,7 @@ void PSParallelCompactNew::compact(RegionSet* regions, uint num_workers, const c
   } task(regions);
 
   uint par_workers = ParallelScavengeHeap::heap()->workers().active_workers();
-  ParallelScavengeHeap::heap()->workers().set_active_workers(num_workers);
+  ParallelScavengeHeap::heap()->workers().set_active_workers(regions->num_workers());
   ParallelScavengeHeap::heap()->workers().run_task(&task);
   ParallelScavengeHeap::heap()->workers().set_active_workers(par_workers);
 }

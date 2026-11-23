@@ -323,7 +323,7 @@ private:
   static void forward_to_new_addr(RegionSet* regions);
 
   // Move objects to new locations.
-  static void compact(RegionSet* regions, uint num_workers, const char* phase_name);
+  static void compact(RegionSet* regions, const char* phase_name);
 
 public:
   static bool invoke(bool maximum_heap_compaction, bool should_do_max_compaction);
