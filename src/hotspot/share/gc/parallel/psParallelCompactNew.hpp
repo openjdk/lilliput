@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2005, 2026, Oracle and/or its affiliates. All rights reserved.
  * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -65,6 +65,11 @@ private:
   ObjectStartArray* _start_array;
 };
 
+typedef enum {
+  old_space_id, eden_space_id,
+  from_space_id, to_space_id, last_space_id
+} SpaceId;
+
 // The Parallel compaction collector is a stop-the-world garbage collector that
 // does parts of the collection using parallel threads.  The collection includes
 // the tenured generation and the young generation.
@@ -106,10 +111,10 @@ private:
 // Large objects can hamper parallel compaction so we given them special treatment.
 // 1. Initial parallel region creation isolates each large object in its own
 //    region. These are ignored in the first forwarding pass, so other objects
-//    can slide past these 'pinned' objects.
-// 2. After parallel forwarding, pinned objects are forwarded separately in a
+//    can slide past these temporarily pinned objects.
+// 2. After parallel forwarding, large objects are forwarded separately in a
 //    dedicated serial pass.
-// 3. After parallel compaction, pinned objects are compacted separately in a
+// 3. After parallel compaction, large objects are compacted separately in a
 //    dedicated serial pass.
 //
 // The forwarding phase calculates the new address of each live object and records
@@ -160,6 +165,8 @@ private:
 class PCRegionData /*: public CHeapObj<mtGC> */ {
   // A region index
   size_t const _idx;
+  // Which space this region sits it
+  SpaceId const _space_id;
 
   // The start of the region
   HeapWord* const _bottom;
@@ -172,18 +179,16 @@ class PCRegionData /*: public CHeapObj<mtGC> */ {
   // The next compaction address
   HeapWord* _new_top;
 
-  bool _do_not_move;
-
   // Parallel workers claiming protocol, used during adjust-references phase.
   volatile bool _claimed;
 
 public:
 
-  PCRegionData(size_t idx, HeapWord* bottom, HeapWord* top, HeapWord* end) :
-    _idx(idx), _bottom(bottom), _top(top), _end(end), _new_top(bottom),
-          _do_not_move(false), _claimed(false) {}
+  PCRegionData(size_t idx, SpaceId space_id, HeapWord* bottom, HeapWord* top, HeapWord* end) :
+    _idx(idx), _space_id(space_id), _bottom(bottom), _top(top), _end(end), _new_top(bottom), _claimed(false) {}
 
-  size_t idx() const { return _idx; };
+  size_t idx() const { return _idx; }
+  SpaceId space_id() const { return _space_id; }
 
   HeapWord* bottom() const { return _bottom; }
   HeapWord* top() const { return _top; }
@@ -194,13 +199,6 @@ public:
   }
   void set_new_top(HeapWord* new_top) {
     _new_top = new_top;
-  }
-
-  bool do_not_move() const {
-    return _do_not_move;
-  }
-  void set_do_not_move() {
-    _do_not_move = true;
   }
 
   bool contains(oop obj) {
@@ -219,43 +217,26 @@ public:
 };
 
 class RegionSet {
-  GrowableArray<PCRegionData*>* const _src_regions;
-  GrowableArray<PCRegionData*>* const _dst_regions;
+  GrowableArray<PCRegionData*>* const _regions;
   uint const _num_workers;
 
 public:
-  RegionSet(GrowableArray<PCRegionData*>* src_regions, GrowableArray<PCRegionData*>* dst_regions, uint num_workers) :
-    _src_regions(src_regions), _dst_regions(dst_regions), _num_workers(num_workers) {}
+  RegionSet(GrowableArray<PCRegionData*>* regions, uint num_workers) : _regions(regions), _num_workers(num_workers) {}
 
-  PCRegionData* src_region_for_worker(uint worker_id, size_t idx) {
-    return region_for_worker(worker_id, idx, _src_regions);
-  }
-
-  PCRegionData* dst_region_for_worker(uint worker_id, size_t idx) {
-    return region_for_worker(worker_id, idx, _dst_regions);
+  PCRegionData* region_for_worker(uint worker_id, uint idx) {
+    size_t position = _num_workers * idx + worker_id;
+    if (position >= (size_t)_regions->length()) {
+      return nullptr;
+    }
+    return _regions->at(position);
   }
 
   uint num_workers() const {
     return _num_workers;
   }
-
-private:
-  PCRegionData* region_for_worker(uint worker_id, uint idx, GrowableArray<PCRegionData*>* regions) {
-    size_t position = _num_workers * idx + worker_id;
-    if (position >= (size_t)regions->length()) {
-      return nullptr;
-    }
-    return regions->at(position);
-  }
 };
 
 class PSParallelCompactNew : AllStatic {
-public:
-  typedef enum {
-    old_space_id, eden_space_id,
-    from_space_id, to_space_id, last_space_id
-  } SpaceId;
-
 public:
   class IsAliveClosure: public BoolObjectClosure {
   public:
@@ -276,13 +257,12 @@ private:
   static size_t               _num_regions;
   static PCRegionData*        _region_data_array;
   static GrowableArray<PCRegionData*>* _parallel_regions;
-  static GrowableArray<PCRegionData*>* _pinned_regions;
-  static GrowableArray<PCRegionData*>* _destination_regions_for_pinned_pass;
-  static PCRegionData* _global_top_parallel_region;
+  static GrowableArray<PCRegionData*>* _large_object_regions;
 
   static size_t               _num_regions_serial;
   static PCRegionData*        _region_data_array_serial;
   static GrowableArray<PCRegionData*>* _serial_regions;
+  static PCRegionData**       _top_parallel_region_array;
   static bool                 _serial;
 
   // Reference processing (used in ...follow_contents)
@@ -320,7 +300,8 @@ private:
   static void setup_regions_serial();
 
   static void adjust_pointers();
-  static void forward_to_new_addr(RegionSet* regions);
+  static void forward_normal_objects(RegionSet* regions);
+  static void forward_large_objects();
 
   // Move objects to new locations.
   static void compact(RegionSet* regions, const char* phase_name);
