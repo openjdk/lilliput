@@ -461,7 +461,7 @@ size_t PSParallelCompactNew::calculate_region_size() {
   }
 
   // Per-worker region count for dynamic region sizing
-  static const uint REGIONS_PER_WORKER = 100;  // Based on 1% boundary waste threshold
+  static const uint REGIONS_PER_WORKER = 20;  // Based on 5% boundary waste threshold
   const uint max_workers = ParallelScavengeHeap::heap()->workers().max_workers();
   const size_t total_regions_count = (size_t)max_workers * REGIONS_PER_WORKER;
   const size_t dynamic_region_size_words = total_heap_words / total_regions_count;
