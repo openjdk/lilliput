@@ -619,15 +619,10 @@ bool PSParallelCompactNew::invoke(bool clear_all_soft_refs, bool should_do_max_c
       RegionSet large_objects_pass { _large_object_regions, 1 };
       forward_normal_objects(&parallel_pass);
       synchronize_regions();
-      if (_large_object_regions->length() > 0) { // TODO: needed?
-        // A separate serial pass for large objects which couldn't be compacted during the parallel pass.
-        forward_large_objects();
-      }
+      forward_large_objects();
       adjust_pointers();
       compact(&parallel_pass, "Compaction Phase (normal objects)");
-      if (_large_object_regions->length() > 0) {
-        compact(&large_objects_pass, "Compaction Phase (large objects)");
-      }
+      compact(&large_objects_pass, "Compaction Phase (large objects)");
     }
 
     FullGCForwarding::end();
