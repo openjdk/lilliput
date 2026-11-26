@@ -97,9 +97,9 @@ typedef enum {
 // array of type ParMarkBitMap.  The marking of the bit map is done atomically.
 //
 // The summary phase sets up the regions, such that regions cover roughly
-// uniform memory regions (currently same size as SpaceAlignment). However,
-// if that would result in an object crossing a region boundary, then
-// the upper bounds is adjusted such that the region ends after that object.
+// uniform memory regions.
+// However, if that would result in an object crossing a region boundary, then
+// the upper bound is adjusted such that the region ends after that object.
 // This way we can ensure that a GC worker thread can fully 'own' a region
 // during the forwarding, adjustment and compaction phases, without worrying
 // about other threads messing with parts of the object. The summary phase
@@ -108,7 +108,7 @@ typedef enum {
 // maximum compaction at the expense of parallelism during the forwarding
 // compaction phases.
 //
-// Large objects can hamper parallel compaction so we given them special treatment.
+// Large objects can hamper parallel compaction so we give them special treatment.
 // 1. Initial parallel region creation isolates each large object in its own
 //    region. These are ignored in the first forwarding pass, so other objects
 //    can slide past these temporarily pinned objects.
@@ -162,6 +162,8 @@ typedef enum {
 //   serially, we could determine that after the forwarding phase, and
 //   re-do only forwarding serially, thus avoiding running marking,
 //   adjusting references and compaction twice.
+// - Randomize region assignment between cycles to avoided perpetuating worker liveness
+//   imbalance. Smaller regions also alleviates this somewhat.
 class PCRegionData /*: public CHeapObj<mtGC> */ {
   // A region index
   size_t const _idx;
