@@ -167,7 +167,7 @@ typedef enum {
 class PCRegionData /*: public CHeapObj<mtGC> */ {
   // A region index
   size_t const _idx;
-  // Which space this region sits it
+  // Which space this region sits in
   SpaceId const _space_id;
 
   // The start of the region

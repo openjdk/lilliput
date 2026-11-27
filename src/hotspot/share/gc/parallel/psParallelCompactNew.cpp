@@ -266,7 +266,6 @@ void PSParallelCompactNew::post_compact()
   } else {
     // Fill gaps in parallel regions below each space's top.
     for (uint space_id = old_space_id; space_id < last_space_id; ++space_id) {
-      PCRegionData* serial_region = &_region_data_array_serial[space_id];
       for (PCRegionData* region : *_parallel_regions) {
         if (region->space_id() != space_id) {
           continue;
@@ -1053,6 +1052,11 @@ void PSParallelCompactNew::forward_large_objects() {
   GCTraceTime(Info, gc, phases) tm("Forward (large objects)", &_gc_timer);
   ParCompactionManagerNew* cm = ParCompactionManagerNew::get_vmthread_cm();
   for (PCRegionData* region : *_large_object_regions) {
+    if (region->end() < _region_data_array_serial[region->space_id()].new_top()) {
+      // If there are normal objects above us in the current serial region,
+      // then there's no benefit from moving, plus we'd have to fill the gap.
+      continue;
+    }
     oop obj = cast_to_oop(region->bottom());
     size_t copy_size = obj->copy_size(obj->size(), obj->mark());
     PCRegionData* dst_region = nullptr;
@@ -1163,12 +1167,4 @@ SpaceId PSParallelCompactNew::space_id(HeapWord* addr) {
 
   assert(false, "no space contains the addr");
   return last_space_id;
-}
-
-PCRegionData* region_for_worker(uint worker_id, uint num_workers, uint idx, GrowableArray<PCRegionData*>* regions) {
-  size_t position = num_workers * idx + worker_id;
-  if (position >= (size_t)regions->length()) {
-    return nullptr;
-  }
-  return regions->at(position);
 }
