@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2005, 2026, Oracle and/or its affiliates. All rights reserved.
  * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -37,6 +37,7 @@
 #include "oops/oop.hpp"
 #include "runtime/atomic.hpp"
 #include "runtime/orderAccess.hpp"
+#include "utilities/growableArray.hpp"
 
 class ParallelScavengeHeap;
 class PSAdaptiveSizePolicy;
@@ -64,6 +65,11 @@ private:
   ObjectStartArray* _start_array;
 };
 
+typedef enum {
+  old_space_id, eden_space_id,
+  from_space_id, to_space_id, last_space_id
+} SpaceId;
+
 // The Parallel compaction collector is a stop-the-world garbage collector that
 // does parts of the collection using parallel threads.  The collection includes
 // the tenured generation and the young generation.
@@ -86,19 +92,14 @@ private:
 //      - move the objects to their destination
 //      - update some references and reinitialize some variables
 //
-// A space that is being collected is divided into regions and with each region
-// is associated an object of type PCRegionData. Regions are targeted to be of
-// a mostly uniform size, but if an object would cross a region boundary, then
-// the boundary is adjusted to be after the end of that object.
-//
 // The marking phase does a complete marking of all live objects in the heap.
 // The marking phase uses multiple GC threads and marking is done in a bit
 // array of type ParMarkBitMap.  The marking of the bit map is done atomically.
 //
-// The summary phase sets up the regions, such that region covers roughly
-// uniform memory regions (currently same size as SpaceAlignment). However,
-// if that would result in an object crossing a region boundary, then
-// the upper bounds is adjusted such that the region ends after that object.
+// The summary phase sets up the regions, such that regions cover roughly
+// uniform memory regions.
+// However, if that would result in an object crossing a region boundary, then
+// the upper bound is adjusted such that the region ends after that object.
 // This way we can ensure that a GC worker thread can fully 'own' a region
 // during the forwarding, adjustment and compaction phases, without worrying
 // about other threads messing with parts of the object. The summary phase
@@ -107,20 +108,21 @@ private:
 // maximum compaction at the expense of parallelism during the forwarding
 // compaction phases.
 //
-// The forwarding phase calculates the new address of each live
-// object and records old-addr-to-new-addr association. It does this using
-// multiple GC threads. Each thread 'claims' a source region and appends it to a
-// local work-list. The region is also set as the current compaction region
-// for that thread. All live objects in the region are then visited and its
-// new location calculated by tracking the compaction point in the compaction
-// region. Once the source region is exhausted, the next source region is
-// claimed from the global pool and appended to the end of the local work-list.
-// Once the compaction region is exhausted, the top of the old compaction region
-// is recorded, and the next compaction region is fetched from the front of the
-// local work-list (which is guaranteed to already have finished processing, or
-// is the same as the source region). This way, each worker forms a local
-// list of regions in which the worker can compact as if it were a serial
-// compaction.
+// Large objects can hamper parallel compaction so we give them special treatment.
+// 1. Initial parallel region creation isolates each large object in its own
+//    region. These are ignored in the first forwarding pass, so other objects
+//    can slide past these temporarily pinned objects.
+// 2. After parallel forwarding, large objects are forwarded separately in a
+//    dedicated serial pass.
+// 3. After parallel compaction, large objects are compacted separately in a
+//    dedicated serial pass.
+//
+// The forwarding phase calculates the new address of each live object and records
+// old-addr-to-new-addr association. It does this using multiple GC threads.
+// Each worker operates on its own independent set of staggered regions, thus
+// can treat its own set as an independent serial compaction.
+// Regions are not (necessarily) contiguous, so objects cannot cross region
+// boundaries.
 //
 // The adjust pointers phase remaps all pointers to reflect the new address of each
 // object. Again, this uses multiple GC worker threads. Each thread claims
@@ -129,10 +131,9 @@ private:
 // all regions have been processed.
 //
 // The compaction phase moves objects to their new location. Again, this uses
-// multiple GC worker threads. Each worker processes the local work-list that
-// has been set-up during the forwarding phase and processes it from bottom
-// to top, copying each live object to its new location (which is guaranteed
-// to be lower in that threads parts of the heap, and thus would never overwrite
+// multiple GC worker threads. Each worker processes its same set used for
+// forwarding, copying each live object to its new location (which is guaranteed
+// to be lower in that thread's parts of the heap, and thus would never overwrite
 // other objects).
 //
 // This algorithm will usually leave gaps of non-fillable memory at the end
@@ -140,38 +141,39 @@ private:
 // The post-compaction phase fills those gaps with filler objects to ensure
 // that the heap remains parsable.
 //
-// In some situations, this inefficiency of leaving gaps can lead to a
-// situation where after a full GC, it is still not possible to satisfy an
-// allocation, even though there should be enough memory available. When
-// that happens, the collector switches to a serial mode, where we only
-// have 4 regions which correspond exaxtly to the 4 spaces, and the forwarding
-// and compaction phases are executed using only a single thread. This
-// achieves maximum compaction. This serial mode is also invoked when
-// System.gc() is called *and* UseMaximumCompactionOnSystemGC is set to
-// true (which is the default), or when the number of full GCs exceeds
-// the HeapMaximumCompactionInterval.
+// Parallel compaction can leave gaps. In some cases, so called maximum
+// compaction is requested, which we implement as a serial mode.
+// The 4 heap spaces are treated as a single set of regions, and forwarding
+// and compaction handle these with a single thread, achieving maximum
+// compaction.
+// Maximum compaction triggers include System.gc() (when UseMaximumCompactionOnSystemGC
+// is enabled), or when Parallel GC's heuristics determine it to be needed.
 //
 // Possible improvements to the algorithm include:
 // - Identify and ignore a 'dense prefix'. This requires that we collect
 //   liveness data during marking, or that we scan the prefix object-by-object
 //   during the summary phase.
-// - When an object does not fit into a remaining gap of a region, and the
-//   object is rather large, we could attempt to forward/compact subsequent
-//   objects 'around' that large object in an attempt to minimize the
-//   resulting gap. This could be achieved by reconfiguring the regions
-//   to exclude the large object.
+// - We compact around some large objects, but not all, so there can still be
+//   significant waste at the end of regions that later objects could fit in.
+// - Add parallelism to large object handling.
+// - Don't move large objects if it is not worth it (e.g. sliding 100MB object a few bytes).
 // - Instead of finding out *after* the whole compaction that an allocation
 //   can still not be satisfied, and then re-running the whole compaction
 //   serially, we could determine that after the forwarding phase, and
 //   re-do only forwarding serially, thus avoiding running marking,
 //   adjusting references and compaction twice.
+// - Randomize region assignment between cycles to avoided perpetuating worker liveness
+//   imbalance. Smaller regions also alleviates this somewhat.
 class PCRegionData /*: public CHeapObj<mtGC> */ {
   // A region index
   size_t const _idx;
+  // Which space this region sits in
+  SpaceId const _space_id;
 
   // The start of the region
   HeapWord* const _bottom;
-  // The top of the region. (first word after last live object in containing space)
+  // The top of the region (the last word of the last live object in this region is somewhere below this word).
+  // Not necessarily a tight upper bound (there may be dead space between live object and recorded top).
   HeapWord* const _top;
   // The end of the region (first word after last word of the region)
   HeapWord* const _end;
@@ -179,26 +181,20 @@ class PCRegionData /*: public CHeapObj<mtGC> */ {
   // The next compaction address
   HeapWord* _new_top;
 
-  // Points to the next region in the GC-worker-local work-list
-  PCRegionData* _local_next;
-
   // Parallel workers claiming protocol, used during adjust-references phase.
   volatile bool _claimed;
 
 public:
 
-  PCRegionData(size_t idx, HeapWord* bottom, HeapWord* top, HeapWord* end) :
-    _idx(idx), _bottom(bottom), _top(top), _end(end), _new_top(bottom),
-          _local_next(nullptr), _claimed(false) {}
+  PCRegionData(size_t idx, SpaceId space_id, HeapWord* bottom, HeapWord* top, HeapWord* end) :
+    _idx(idx), _space_id(space_id), _bottom(bottom), _top(top), _end(end), _new_top(bottom), _claimed(false) {}
 
-  size_t idx() const { return _idx; };
+  size_t idx() const { return _idx; }
+  SpaceId space_id() const { return _space_id; }
 
   HeapWord* bottom() const { return _bottom; }
   HeapWord* top() const { return _top; }
   HeapWord* end()   const { return _end;   }
-
-  PCRegionData*  local_next() const { return _local_next; }
-  PCRegionData** local_next_addr() { return &_local_next; }
 
   HeapWord* new_top() const {
     return _new_top;
@@ -222,13 +218,27 @@ public:
   }
 };
 
-class PSParallelCompactNew : AllStatic {
-public:
-  typedef enum {
-    old_space_id, eden_space_id,
-    from_space_id, to_space_id, last_space_id
-  } SpaceId;
+class RegionSet {
+  GrowableArray<PCRegionData*>* const _regions;
+  uint const _num_workers;
 
+public:
+  RegionSet(GrowableArray<PCRegionData*>* regions, uint num_workers) : _regions(regions), _num_workers(num_workers) {}
+
+  PCRegionData* region_for_worker(uint worker_id, uint idx) {
+    size_t position = _num_workers * idx + worker_id;
+    if (position >= (size_t)_regions->length()) {
+      return nullptr;
+    }
+    return _regions->at(position);
+  }
+
+  uint num_workers() const {
+    return _num_workers;
+  }
+};
+
+class PSParallelCompactNew : AllStatic {
 public:
   class IsAliveClosure: public BoolObjectClosure {
   public:
@@ -248,10 +258,13 @@ private:
   // The head of the global region data list.
   static size_t               _num_regions;
   static PCRegionData*        _region_data_array;
-  static PCRegionData**       _per_worker_region_data;
+  static GrowableArray<PCRegionData*>* _parallel_regions;
+  static GrowableArray<PCRegionData*>* _large_object_regions;
 
   static size_t               _num_regions_serial;
   static PCRegionData*        _region_data_array_serial;
+  static GrowableArray<PCRegionData*>* _serial_regions;
+  static PCRegionData**       _top_parallel_region_array;
   static bool                 _serial;
 
   // Reference processing (used in ...follow_contents)
@@ -274,6 +287,8 @@ private:
 
   static void pre_compact();
 
+  static void synchronize_regions();
+
   static void post_compact();
 
   static bool check_maximum_compaction(bool should_do_max_compaction);
@@ -287,10 +302,11 @@ private:
   static void setup_regions_serial();
 
   static void adjust_pointers();
-  static void forward_to_new_addr();
+  static void forward_normal_objects(RegionSet* regions);
+  static void forward_large_objects();
 
   // Move objects to new locations.
-  static void compact();
+  static void compact(RegionSet* regions, const char* phase_name);
 
 public:
   static bool invoke(bool maximum_heap_compaction, bool should_do_max_compaction);
